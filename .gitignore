@@ -24,3 +24,6 @@ logs/
 versions/*/.gradle/
 versions/*/build/
 versions/*/run/
+
+# MTR reference source (research only, not ours)
+mtr-src/
