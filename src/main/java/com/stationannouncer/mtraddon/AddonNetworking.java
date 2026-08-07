@@ -25,16 +25,36 @@ import java.util.Map;
  *       Requires op level {@code editPermissionLevel} (default 2) — these are
  *       dashboard-style dispatch settings, not block edits, so there is no
  *       block-distance check.</li>
+ *   <li>{@code station_announcer:addon_dwell_overrides} (S2C) — the full
+ *       per-route dwell override map (Feature 2), sent on join and re-broadcast
+ *       after every change so the GUI opens with current data.</li>
+ *   <li>{@code station_announcer:addon_update_dwell_overrides} (C2S) — the
+ *       per-route dwell GUI's Save. Always carries the FULL set of overridden
+ *       routes for one platform (an empty list clears the platform). Same
+ *       permission model as the hold-rule packet; route count capped, dwell
+ *       clamped to MTR's own platform dwell range (1 s – 600 s).</li>
  * </ul>
  */
 public final class AddonNetworking {
     public static final Identifier HOLD_RULES_S2C = StationAnnouncer.id("addon_hold_rules");
     public static final Identifier UPDATE_HOLD_RULE_C2S = StationAnnouncer.id("addon_update_hold_rule");
+    public static final Identifier DWELL_OVERRIDES_S2C = StationAnnouncer.id("addon_dwell_overrides");
+    public static final Identifier UPDATE_DWELL_OVERRIDES_C2S = StationAnnouncer.id("addon_update_dwell_overrides");
 
     /** Cap on watched platforms per rule (also the GUI's picker cap). */
     public static final int MAX_WATCHED = 16;
     public static final int MIN_HOLD_WINDOW_SECONDS = 5;
     public static final int MAX_HOLD_WINDOW_SECONDS = 120;
+
+    /** Cap on overridden routes per platform in one save packet. */
+    public static final int MAX_ROUTE_OVERRIDES = 32;
+    /**
+     * Dwell clamp, mirroring MTR's own platform dwell range: the PlatformScreen
+     * sliders allow 0.5 s – 600 s (MAX_DWELL_TIME = 1200 half-seconds); we floor
+     * at a full second per the addon spec.
+     */
+    public static final int MIN_DWELL_MILLIS = 1_000;
+    public static final int MAX_DWELL_MILLIS = 600_000;
 
     private AddonNetworking() {
     }
@@ -63,6 +83,35 @@ public final class AddonNetworking {
                     AddonStore.setHoldRule(platformId, dedupe(watched, platformId), clamped);
                 }
                 broadcastHoldRules(server);
+            });
+        });
+
+        ServerPlayNetworking.registerGlobalReceiver(UPDATE_DWELL_OVERRIDES_C2S, (server, player, handler, buf, responseSender) -> {
+            long platformId = buf.readLong();
+            int count = buf.readVarInt();
+            if (count < 0 || count > MAX_ROUTE_OVERRIDES) {
+                return; // malformed — drop without touching anything
+            }
+            long[] routeIds = new long[count];
+            int[] millis = new int[count];
+            for (int i = 0; i < count; i++) {
+                routeIds[i] = buf.readLong();
+                millis[i] = buf.readVarInt();
+            }
+
+            server.execute(() -> {
+                if (!player.hasPermissionLevel(AddonServerConfig.get().editPermissionLevel)) {
+                    return;
+                }
+                // LinkedHashMap keeps the GUI's order and drops duplicate route ids
+                // (last write wins). Clamp to MTR's own dwell range.
+                Map<Long, Long> byRoute = new java.util.LinkedHashMap<>();
+                for (int i = 0; i < routeIds.length; i++) {
+                    long clamped = Math.max(MIN_DWELL_MILLIS, Math.min(MAX_DWELL_MILLIS, millis[i]));
+                    byRoute.put(routeIds[i], clamped);
+                }
+                AddonStore.setDwellOverrides(platformId, byRoute);
+                broadcastDwellOverrides(server);
             });
         });
     }
@@ -111,6 +160,33 @@ public final class AddonNetworking {
             for (long watched : rule.watched()) {
                 buf.writeLong(watched);
             }
+        });
+        return buf;
+    }
+
+    /** On join, through the connection event's sender. */
+    public static void syncDwellOverridesTo(PacketSender sender) {
+        sender.sendPacket(DWELL_OVERRIDES_S2C, buildDwellOverridesBuf());
+    }
+
+    /** After a change, to everyone (a few longs per configured platform). */
+    public static void broadcastDwellOverrides(MinecraftServer server) {
+        for (ServerPlayerEntity player : server.getPlayerManager().getPlayerList()) {
+            ServerPlayNetworking.send(player, DWELL_OVERRIDES_S2C, buildDwellOverridesBuf());
+        }
+    }
+
+    private static PacketByteBuf buildDwellOverridesBuf() {
+        Map<Long, java.util.LinkedHashMap<Long, Long>> overrides = AddonStore.dwellOverridesView();
+        PacketByteBuf buf = PacketByteBufs.create();
+        buf.writeVarInt(overrides.size());
+        overrides.forEach((platformId, byRoute) -> {
+            buf.writeLong(platformId);
+            buf.writeVarInt(byRoute.size());
+            byRoute.forEach((routeId, millis) -> {
+                buf.writeLong(routeId);
+                buf.writeVarInt(millis.intValue());
+            });
         });
         return buf;
     }

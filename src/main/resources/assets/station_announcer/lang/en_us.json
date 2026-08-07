@@ -178,5 +178,15 @@
   "gui.station_announcer.hold_rules.seconds": "Approach window: %ss",
   "gui.station_announcer.hold_rules.clear": "Clear rule",
   "gui.station_announcer.hold_rules.hint_none": "No platforms watched — trains depart normally",
-  "gui.station_announcer.hold_rules.hint_active": "Watching %s platform(s)"
+  "gui.station_announcer.hold_rules.hint_active": "Watching %s platform(s)",
+  "gui.station_announcer.route_dwell.button": "Per-route dwell...",
+  "gui.station_announcer.route_dwell.title": "Per-Route Dwell Times",
+  "gui.station_announcer.route_dwell.override": "Override",
+  "gui.station_announcer.route_dwell.default": "Default",
+  "gui.station_announcer.route_dwell.min": "%s min",
+  "gui.station_announcer.route_dwell.sec": "%s s",
+  "gui.station_announcer.route_dwell.hint": "Changes apply after the depot regenerates its paths",
+  "gui.station_announcer.route_dwell.regenerate": "Regenerate depots serving this platform",
+  "gui.station_announcer.route_dwell.regenerate_sent": "Regeneration requested",
+  "gui.station_announcer.route_dwell.no_routes": "No routes call at this platform"
 }

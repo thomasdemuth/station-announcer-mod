@@ -27,6 +27,9 @@ public class AddonServerConfig {
     /** Feature 1 — hold trains at a platform while a connecting train is approaching a watched platform. */
     public HoldRules holdRules = new HoldRules();
 
+    /** Feature 2 — per-route dwell time overrides at platforms. */
+    public DwellOverrides dwellOverrides = new DwellOverrides();
+
     public static class HoldRules {
         /** Master switch; when false the startUp mixin no-ops with a single field read. */
         public boolean enabled = true;
@@ -36,6 +39,16 @@ public class AddonServerConfig {
 
         /** Deadlock guard: a train is never held longer than this per stop, rule or not. */
         public int maxHoldSeconds = 120;
+    }
+
+    public static class DwellOverrides {
+        /**
+         * Master switch; when false the Siding path-generation mixins no-op with a
+         * single field read. Turning it off leaves already-baked overrides in MTR's
+         * saved siding paths until the next depot regeneration (the path is baked —
+         * same rule as editing an override).
+         */
+        public boolean enabled = true;
     }
 
     public static AddonServerConfig get() {
@@ -76,6 +89,9 @@ public class AddonServerConfig {
         editPermissionLevel = Math.max(0, Math.min(4, editPermissionLevel));
         if (holdRules == null) {
             holdRules = new HoldRules();
+        }
+        if (dwellOverrides == null) {
+            dwellOverrides = new DwellOverrides();
         }
         holdRules.holdArrivalCacheMillis = Math.max(50, Math.min(10_000, holdRules.holdArrivalCacheMillis));
         holdRules.maxHoldSeconds = Math.max(5, Math.min(3_600, holdRules.maxHoldSeconds));

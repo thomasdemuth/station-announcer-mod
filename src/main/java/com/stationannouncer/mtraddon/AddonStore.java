@@ -31,9 +31,11 @@ import java.util.concurrent.atomic.AtomicBoolean;
  * save executor serializes under {@code LOCK} so it never sees a half-applied
  * edit, and file I/O never runs on a server or simulator tick.</p>
  *
- * <p>The {@code dwellOverrides} / {@code liftDoors} / {@code platformGroups}
- * sections belong to later feature agents; they are preserved verbatim across
- * load/save so those features can formalize them without a migration.</p>
+ * <p>The {@code liftDoors} / {@code platformGroups} sections belong to later
+ * feature agents; they are preserved verbatim across load/save so those features
+ * can formalize them without a migration. {@code dwellOverrides} (Feature 2) is
+ * fully typed: {@code {"<platformId>": {"<routeId>": dwellMillis}}} — the same
+ * shape the raw passthrough preserved, so no migration was needed.</p>
  */
 public final class AddonStore {
     private static final Gson GSON = new GsonBuilder().setPrettyPrinting().create();
@@ -49,8 +51,9 @@ public final class AddonStore {
 
     private static Path dataPath;
     private static final Map<Long, AddonSnapshots.HoldRule> holdRules = new LinkedHashMap<>();
+    /** Feature 2: platform id → (route id → dwell millis). */
+    private static final Map<Long, LinkedHashMap<Long, Long>> dwellOverrides = new LinkedHashMap<>();
     /** Sections owned by later feature agents — carried through untouched. */
-    private static JsonObject dwellOverrides = new JsonObject();
     private static JsonObject liftDoors = new JsonObject();
     private static JsonObject platformGroups = new JsonObject();
 
@@ -66,14 +69,14 @@ public final class AddonStore {
         synchronized (LOCK) {
             dataPath = path;
             holdRules.clear();
-            dwellOverrides = new JsonObject();
+            dwellOverrides.clear();
             liftDoors = new JsonObject();
             platformGroups = new JsonObject();
             try {
                 if (Files.exists(path)) {
                     JsonObject root = JsonParser.parseString(Files.readString(path)).getAsJsonObject();
                     readHoldRules(root.getAsJsonObject("holdRules"));
-                    dwellOverrides = objectOrEmpty(root, "dwellOverrides");
+                    readDwellOverrides(root.getAsJsonObject("dwellOverrides"));
                     liftDoors = objectOrEmpty(root, "liftDoors");
                     platformGroups = objectOrEmpty(root, "platformGroups");
                 }
@@ -82,7 +85,9 @@ public final class AddonStore {
             }
         }
         publish();
-        StationAnnouncer.LOGGER.info("Addon store loaded ({} hold rules)", holdRuleCount());
+        publishDwell();
+        StationAnnouncer.LOGGER.info("Addon store loaded ({} hold rules, {} platforms with dwell overrides)",
+                holdRuleCount(), dwellOverridePlatformCount());
     }
 
     /** SERVER_STOPPING: write the current state right now, on the calling thread. */
@@ -128,10 +133,73 @@ public final class AddonStore {
         markDirty();
     }
 
+    // -------------------------------------------- Feature 2: dwell overrides
+
+    public static int dwellOverridePlatformCount() {
+        synchronized (LOCK) {
+            return dwellOverrides.size();
+        }
+    }
+
+    /** Server thread: a deep copy safe to iterate while building sync packets. */
+    public static Map<Long, LinkedHashMap<Long, Long>> dwellOverridesView() {
+        synchronized (LOCK) {
+            Map<Long, LinkedHashMap<Long, Long>> copy = new LinkedHashMap<>(dwellOverrides.size());
+            dwellOverrides.forEach((platformId, byRoute) -> copy.put(platformId, new LinkedHashMap<>(byRoute)));
+            return copy;
+        }
+    }
+
+    /**
+     * Server thread: replace ALL of one platform's route overrides (the GUI always
+     * sends the full per-platform set), then republish + save. An empty map removes
+     * the platform's entry entirely.
+     */
+    public static void setDwellOverrides(long platformId, Map<Long, Long> routeToMillis) {
+        synchronized (LOCK) {
+            if (routeToMillis.isEmpty()) {
+                if (dwellOverrides.remove(platformId) == null) {
+                    return;
+                }
+            } else {
+                dwellOverrides.put(platformId, new LinkedHashMap<>(routeToMillis));
+            }
+        }
+        publishDwell();
+        markDirty();
+    }
+
     // ------------------------------------------------------------- internals
 
     private static void publish() {
         AddonSnapshots.publishHoldRules(holdRulesView());
+    }
+
+    private static void publishDwell() {
+        AddonSnapshots.publishDwellOverrides(dwellOverridesView());
+    }
+
+    private static void readDwellOverrides(JsonObject overridesJson) {
+        if (overridesJson == null) {
+            return;
+        }
+        for (Map.Entry<String, JsonElement> entry : overridesJson.entrySet()) {
+            try {
+                long platformId = Long.parseLong(entry.getKey());
+                LinkedHashMap<Long, Long> byRoute = new LinkedHashMap<>();
+                for (Map.Entry<String, JsonElement> routeEntry : entry.getValue().getAsJsonObject().entrySet()) {
+                    long millis = routeEntry.getValue().getAsLong();
+                    if (millis > 0) {
+                        byRoute.put(Long.parseLong(routeEntry.getKey()), millis);
+                    }
+                }
+                if (!byRoute.isEmpty()) {
+                    dwellOverrides.put(platformId, byRoute);
+                }
+            } catch (Exception e) {
+                StationAnnouncer.LOGGER.warn("Skipping malformed dwell override '{}'", entry.getKey(), e);
+            }
+        }
     }
 
     private static void readHoldRules(JsonObject rulesJson) {
@@ -193,7 +261,13 @@ public final class AddonStore {
                 rulesJson.add(Long.toString(platformId), ruleJson);
             });
             root.add("holdRules", rulesJson);
-            root.add("dwellOverrides", dwellOverrides);
+            JsonObject overridesJson = new JsonObject();
+            dwellOverrides.forEach((platformId, byRoute) -> {
+                JsonObject byRouteJson = new JsonObject();
+                byRoute.forEach((routeId, millis) -> byRouteJson.addProperty(Long.toString(routeId), millis));
+                overridesJson.add(Long.toString(platformId), byRouteJson);
+            });
+            root.add("dwellOverrides", overridesJson);
             root.add("liftDoors", liftDoors);
             root.add("platformGroups", platformGroups);
             json = GSON.toJson(root);

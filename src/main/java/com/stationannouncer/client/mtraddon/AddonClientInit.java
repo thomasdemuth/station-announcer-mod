@@ -67,7 +67,13 @@ public final class AddonClientInit {
                     client.execute(() -> ClientHoldRules.replace(rules));
                 });
 
-        ClientPlayConnectionEvents.DISCONNECT.register((handler, client) -> ClientHoldRules.clear());
+        ClientPlayConnectionEvents.DISCONNECT.register((handler, client) -> {
+            ClientHoldRules.clear();
+            ClientDwellOverrides.clear();
+        });
+
+        registerDwellOverrideSync();
+        registerRouteDwellButton();
 
         ScreenEvents.AFTER_INIT.register((client, screen, scaledWidth, scaledHeight) -> {
             if (!(screen instanceof PlatformScreen) || !AddonClientConfig.get().showHoldRulesButton) {
@@ -86,6 +92,60 @@ public final class AddonClientInit {
                             Text.translatable("gui.station_announcer.hold_rules.button"),
                             button -> client.setScreen(new HoldRuleScreen(platform, screen)))
                     .dimensions(screen.width - 104, screen.height - 24, 100, 20)
+                    .build());
+        });
+    }
+
+    // -------------------------------------------- Feature 2: per-route dwell
+
+    /** Server → client dwell-override sync (join + after each edit). */
+    private static void registerDwellOverrideSync() {
+        ClientPlayNetworking.registerGlobalReceiver(AddonNetworking.DWELL_OVERRIDES_S2C,
+                (client, handler, buf, responseSender) -> {
+                    int platformCount = buf.readVarInt();
+                    if (platformCount < 0 || platformCount > 10_000) {
+                        return;
+                    }
+                    Map<Long, Map<Long, Long>> overrides = new HashMap<>(Math.max(1, platformCount));
+                    for (int i = 0; i < platformCount; i++) {
+                        long platformId = buf.readLong();
+                        int routeCount = buf.readVarInt();
+                        if (routeCount < 0 || routeCount > AddonNetworking.MAX_ROUTE_OVERRIDES) {
+                            return;
+                        }
+                        Map<Long, Long> byRoute = new HashMap<>(Math.max(1, routeCount));
+                        for (int j = 0; j < routeCount; j++) {
+                            long routeId = buf.readLong();
+                            long millis = buf.readVarInt();
+                            byRoute.put(routeId, millis);
+                        }
+                        overrides.put(platformId, byRoute);
+                    }
+                    client.execute(() -> ClientDwellOverrides.replace(overrides));
+                });
+    }
+
+    /**
+     * The "Per-route dwell…" button on MTR's {@code PlatformScreen}, one slot
+     * above Feature 1's "Hold rules…" button. Registered as its own
+     * {@code AFTER_INIT} callback so Feature 1's stays untouched.
+     */
+    private static void registerRouteDwellButton() {
+        ScreenEvents.AFTER_INIT.register((client, screen, scaledWidth, scaledHeight) -> {
+            if (!(screen instanceof PlatformScreen) || !AddonClientConfig.get().showRouteDwellButton) {
+                return;
+            }
+            if (!MinecraftClientData.hasPermission()) {
+                return;
+            }
+            Platform platform = readPlatform(screen);
+            if (platform == null) {
+                return;
+            }
+            Screens.getButtons(screen).add(ButtonWidget.builder(
+                            Text.translatable("gui.station_announcer.route_dwell.button"),
+                            button -> client.setScreen(new RouteDwellScreen(platform, screen)))
+                    .dimensions(screen.width - 104, screen.height - 48, 100, 20)
                     .build());
         });
     }

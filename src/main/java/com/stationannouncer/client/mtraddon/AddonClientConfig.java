@@ -23,6 +23,9 @@ public class AddonClientConfig {
     /** Show the "Hold rules…" button on MTR's platform screen (it only appears with dashboard permission anyway). */
     public boolean showHoldRulesButton = true;
 
+    /** Show the "Per-route dwell…" button on MTR's platform screen (same permission gating). */
+    public boolean showRouteDwellButton = true;
+
     public static synchronized AddonClientConfig get() {
         if (instance == null) {
             instance = load();
