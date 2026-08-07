@@ -19,6 +19,9 @@
       "com.stationannouncer.client.StationAnnouncerClient"
     ]
   },
+  "mixins": [
+    "station_announcer.mixins.json"
+  ],
   "depends": {
     "fabricloader": ">=0.15.0",
     "fabric-api": "*",

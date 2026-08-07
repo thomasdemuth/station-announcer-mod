@@ -96,6 +96,7 @@ public class StationAnnouncerClient implements ClientModInitializer {
         // NYC PIDS renderers; class only touched when MTR is present.
         if (FabricLoader.getInstance().isModLoaded("mtr")) {
             com.stationannouncer.client.mtr.MtrPidsClient.register();
+            com.stationannouncer.client.mtraddon.AddonClientInit.register();
         }
 
         ClientPlayNetworking.registerGlobalReceiver(AnnouncerNetworking.ANNOUNCE_S2C,

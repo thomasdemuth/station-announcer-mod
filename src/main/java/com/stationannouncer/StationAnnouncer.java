@@ -39,6 +39,7 @@ public class StationAnnouncer implements ModInitializer {
             com.stationannouncer.mtr.MtrPids.register();
             com.stationannouncer.mtr.MtrPillars.register();
             com.stationannouncer.mtr.MtrStationDecor.register();
+            com.stationannouncer.mtraddon.AddonInit.register();
             LOGGER.info("MTR detected — NYC PIDS, Pillar Creators and station decor enabled");
         }
 

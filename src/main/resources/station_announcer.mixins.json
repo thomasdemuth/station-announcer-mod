@@ -1,0 +1,14 @@
+{
+  "required": true,
+  "minVersion": "0.8",
+  "package": "com.stationannouncer.mixin",
+  "compatibilityLevel": "JAVA_17",
+  "mixins": [
+    "VehicleMixin"
+  ],
+  "client": [],
+  "server": [],
+  "injectors": {
+    "defaultRequire": 1
+  }
+}
