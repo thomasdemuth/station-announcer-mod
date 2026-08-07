@@ -2,6 +2,7 @@ package com.stationannouncer.client.mtraddon;
 
 import com.stationannouncer.StationAnnouncer;
 import com.stationannouncer.mtraddon.AddonNetworking;
+import com.stationannouncer.mtraddon.LiftDoorSides;
 import net.fabricmc.api.EnvType;
 import net.fabricmc.api.Environment;
 import net.fabricmc.fabric.api.client.networking.v1.ClientPlayConnectionEvents;
@@ -11,8 +12,10 @@ import net.fabricmc.fabric.api.client.screen.v1.Screens;
 import net.minecraft.client.gui.screen.Screen;
 import net.minecraft.client.gui.widget.ButtonWidget;
 import net.minecraft.text.Text;
+import org.mtr.core.data.Lift;
 import org.mtr.core.data.Platform;
 import org.mtr.mod.client.MinecraftClientData;
+import org.mtr.mod.screen.LiftCustomizationScreen;
 import org.mtr.mod.screen.PlatformScreen;
 import org.mtr.mod.screen.SavedRailScreenBase;
 import java.lang.reflect.Field;
@@ -38,6 +41,10 @@ public final class AddonClientInit {
     /** Cached accessor for {@code SavedRailScreenBase.savedRailBase}; null after a lookup failure. */
     private static Field savedRailBaseField;
     private static boolean savedRailBaseLookupFailed;
+
+    /** Cached accessor for {@code LiftCustomizationScreen.lift}; null after a lookup failure. */
+    private static Field liftField;
+    private static boolean liftLookupFailed;
 
     private AddonClientInit() {
     }
@@ -70,10 +77,13 @@ public final class AddonClientInit {
         ClientPlayConnectionEvents.DISCONNECT.register((handler, client) -> {
             ClientHoldRules.clear();
             ClientDwellOverrides.clear();
+            ClientLiftDoors.clear();
         });
 
         registerDwellOverrideSync();
         registerRouteDwellButton();
+        registerLiftDoorSync();
+        registerLiftDoorSidesButton();
 
         ScreenEvents.AFTER_INIT.register((client, screen, scaledWidth, scaledHeight) -> {
             if (!(screen instanceof PlatformScreen) || !AddonClientConfig.get().showHoldRulesButton) {
@@ -148,6 +158,76 @@ public final class AddonClientInit {
                     .dimensions(screen.width - 104, screen.height - 48, 100, 20)
                     .build());
         });
+    }
+
+    // -------------------------------------------- Feature 3: lift door sides
+
+    /**
+     * Server → client lift door-side sync (join + after each edit). The map is
+     * replaced wholesale on the client thread — the same thread the render
+     * mixin reads it from.
+     */
+    private static void registerLiftDoorSync() {
+        ClientPlayNetworking.registerGlobalReceiver(AddonNetworking.LIFT_DOORS_S2C,
+                (client, handler, buf, responseSender) -> {
+                    int liftCount = buf.readVarInt();
+                    if (liftCount < 0 || liftCount > 10_000) {
+                        return;
+                    }
+                    Map<Long, LiftDoorSides> doors = new HashMap<>(Math.max(1, liftCount));
+                    for (int i = 0; i < liftCount; i++) {
+                        long liftId = buf.readLong();
+                        LiftDoorSides sides = LiftDoorSides.fromMask(buf.readByte() & 0x0F);
+                        if (sides.any()) {
+                            doors.put(liftId, sides);
+                        }
+                    }
+                    client.execute(() -> ClientLiftDoors.replace(doors));
+                });
+    }
+
+    /**
+     * The "Door sides…" button on MTR's {@code LiftCustomizationScreen}
+     * (which IS a vanilla screen through the mapping layer, like PlatformScreen).
+     * The edited {@link Lift} sits in that screen's private final {@code lift}
+     * field (javap-verified against 4.0.1), read by cached reflection.
+     */
+    private static void registerLiftDoorSidesButton() {
+        ScreenEvents.AFTER_INIT.register((client, screen, scaledWidth, scaledHeight) -> {
+            if (!(screen instanceof LiftCustomizationScreen) || !AddonClientConfig.get().showLiftDoorSidesButton) {
+                return;
+            }
+            if (!MinecraftClientData.hasPermission()) {
+                return;
+            }
+            Lift lift = readLift(screen);
+            if (lift == null) {
+                return;
+            }
+            Screens.getButtons(screen).add(ButtonWidget.builder(
+                            Text.translatable("gui.station_announcer.lift_doors.button"),
+                            button -> client.setScreen(new LiftDoorSidesScreen(lift, screen)))
+                    .dimensions(screen.width - 104, screen.height - 24, 100, 20)
+                    .build());
+        });
+    }
+
+    private static Lift readLift(Screen screen) {
+        try {
+            if (liftField == null) {
+                if (liftLookupFailed) {
+                    return null;
+                }
+                liftField = LiftCustomizationScreen.class.getDeclaredField("lift");
+                liftField.setAccessible(true);
+            }
+            Object value = liftField.get(screen);
+            return value instanceof Lift ? (Lift) value : null;
+        } catch (Exception e) {
+            liftLookupFailed = true;
+            StationAnnouncer.LOGGER.warn("Could not read LiftCustomizationScreen's lift; door-sides button disabled", e);
+            return null;
+        }
     }
 
     private static Platform readPlatform(Screen screen) {

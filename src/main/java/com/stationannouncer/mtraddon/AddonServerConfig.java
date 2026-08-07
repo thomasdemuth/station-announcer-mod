@@ -30,6 +30,9 @@ public class AddonServerConfig {
     /** Feature 2 — per-route dwell time overrides at platforms. */
     public DwellOverrides dwellOverrides = new DwellOverrides();
 
+    /** Feature 3 — multi-sided, multi-door elevators. */
+    public MultiDoorLifts multiDoorLifts = new MultiDoorLifts();
+
     public static class HoldRules {
         /** Master switch; when false the startUp mixin no-ops with a single field read. */
         public boolean enabled = true;
@@ -47,6 +50,17 @@ public class AddonServerConfig {
          * single field read. Turning it off leaves already-baked overrides in MTR's
          * saved siding paths until the next depot regeneration (the path is baked —
          * same rule as editing an override).
+         */
+        public boolean enabled = true;
+    }
+
+    public static class MultiDoorLifts {
+        /**
+         * Master switch; when false the C2S save packet is ignored and the S2C
+         * sync sends an empty map, so clients (whose render mixin only takes
+         * over while at least one lift is configured) fall back to MTR's stock
+         * lift rendering entirely. Read at startup like the other flags —
+         * changing it needs a server restart plus client rejoin.
          */
         public boolean enabled = true;
     }
@@ -92,6 +106,9 @@ public class AddonServerConfig {
         }
         if (dwellOverrides == null) {
             dwellOverrides = new DwellOverrides();
+        }
+        if (multiDoorLifts == null) {
+            multiDoorLifts = new MultiDoorLifts();
         }
         holdRules.holdArrivalCacheMillis = Math.max(50, Math.min(10_000, holdRules.holdArrivalCacheMillis));
         holdRules.maxHoldSeconds = Math.max(5, Math.min(3_600, holdRules.maxHoldSeconds));

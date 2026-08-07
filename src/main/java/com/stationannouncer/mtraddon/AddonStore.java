@@ -31,11 +31,13 @@ import java.util.concurrent.atomic.AtomicBoolean;
  * save executor serializes under {@code LOCK} so it never sees a half-applied
  * edit, and file I/O never runs on a server or simulator tick.</p>
  *
- * <p>The {@code liftDoors} / {@code platformGroups} sections belong to later
- * feature agents; they are preserved verbatim across load/save so those features
- * can formalize them without a migration. {@code dwellOverrides} (Feature 2) is
- * fully typed: {@code {"<platformId>": {"<routeId>": dwellMillis}}} — the same
- * shape the raw passthrough preserved, so no migration was needed.</p>
+ * <p>The {@code platformGroups} section belongs to a later feature agent; it is
+ * preserved verbatim across load/save so that feature can formalize it without a
+ * migration. {@code dwellOverrides} (Feature 2) and {@code liftDoors} (Feature 3)
+ * are fully typed — {@code {"<platformId>": {"<routeId>": dwellMillis}}} and
+ * {@code {"<liftId>": {"front": true, "back": false, "left": true, "right": false}}}
+ * respectively — the same shapes the raw passthrough preserved, so no migration
+ * was needed.</p>
  */
 public final class AddonStore {
     private static final Gson GSON = new GsonBuilder().setPrettyPrinting().create();
@@ -53,8 +55,9 @@ public final class AddonStore {
     private static final Map<Long, AddonSnapshots.HoldRule> holdRules = new LinkedHashMap<>();
     /** Feature 2: platform id → (route id → dwell millis). */
     private static final Map<Long, LinkedHashMap<Long, Long>> dwellOverrides = new LinkedHashMap<>();
-    /** Sections owned by later feature agents — carried through untouched. */
-    private static JsonObject liftDoors = new JsonObject();
+    /** Feature 3: lift id → configured door sides. */
+    private static final Map<Long, LiftDoorSides> liftDoors = new LinkedHashMap<>();
+    /** Section owned by a later feature agent — carried through untouched. */
     private static JsonObject platformGroups = new JsonObject();
 
     private AddonStore() {
@@ -70,14 +73,14 @@ public final class AddonStore {
             dataPath = path;
             holdRules.clear();
             dwellOverrides.clear();
-            liftDoors = new JsonObject();
+            liftDoors.clear();
             platformGroups = new JsonObject();
             try {
                 if (Files.exists(path)) {
                     JsonObject root = JsonParser.parseString(Files.readString(path)).getAsJsonObject();
                     readHoldRules(root.getAsJsonObject("holdRules"));
                     readDwellOverrides(root.getAsJsonObject("dwellOverrides"));
-                    liftDoors = objectOrEmpty(root, "liftDoors");
+                    readLiftDoors(root.getAsJsonObject("liftDoors"));
                     platformGroups = objectOrEmpty(root, "platformGroups");
                 }
             } catch (Exception e) {
@@ -86,8 +89,8 @@ public final class AddonStore {
         }
         publish();
         publishDwell();
-        StationAnnouncer.LOGGER.info("Addon store loaded ({} hold rules, {} platforms with dwell overrides)",
-                holdRuleCount(), dwellOverridePlatformCount());
+        StationAnnouncer.LOGGER.info("Addon store loaded ({} hold rules, {} platforms with dwell overrides, {} lift door configs)",
+                holdRuleCount(), dwellOverridePlatformCount(), liftDoorCount());
     }
 
     /** SERVER_STOPPING: write the current state right now, on the calling thread. */
@@ -169,6 +172,41 @@ public final class AddonStore {
         markDirty();
     }
 
+    // ------------------------------------------------ Feature 3: lift doors
+
+    public static int liftDoorCount() {
+        synchronized (LOCK) {
+            return liftDoors.size();
+        }
+    }
+
+    /** Server thread: a copy safe to iterate while building sync packets. */
+    public static Map<Long, LiftDoorSides> liftDoorsView() {
+        synchronized (LOCK) {
+            return new LinkedHashMap<>(liftDoors);
+        }
+    }
+
+    /**
+     * Server thread: set or clear one lift's door sides, then save. {@code null}
+     * or an all-off value removes the entry (the lift falls back to stock MTR
+     * behavior). No simulator snapshot is republished — lift door sides are pure
+     * client presentation, nothing server-side ever reads them; the caller
+     * rebroadcasts the S2C sync instead.
+     */
+    public static void setLiftDoors(long liftId, LiftDoorSides sides) {
+        synchronized (LOCK) {
+            if (sides == null || !sides.any()) {
+                if (liftDoors.remove(liftId) == null) {
+                    return;
+                }
+            } else {
+                liftDoors.put(liftId, sides);
+            }
+        }
+        markDirty();
+    }
+
     // ------------------------------------------------------------- internals
 
     private static void publish() {
@@ -225,6 +263,33 @@ public final class AddonStore {
         }
     }
 
+    private static void readLiftDoors(JsonObject liftDoorsJson) {
+        if (liftDoorsJson == null) {
+            return;
+        }
+        for (Map.Entry<String, JsonElement> entry : liftDoorsJson.entrySet()) {
+            try {
+                long liftId = Long.parseLong(entry.getKey());
+                JsonObject sidesJson = entry.getValue().getAsJsonObject();
+                LiftDoorSides sides = new LiftDoorSides(
+                        booleanOrFalse(sidesJson, "front"),
+                        booleanOrFalse(sidesJson, "back"),
+                        booleanOrFalse(sidesJson, "left"),
+                        booleanOrFalse(sidesJson, "right"));
+                if (sides.any()) {
+                    liftDoors.put(liftId, sides);
+                }
+            } catch (Exception e) {
+                StationAnnouncer.LOGGER.warn("Skipping malformed lift door config '{}'", entry.getKey(), e);
+            }
+        }
+    }
+
+    private static boolean booleanOrFalse(JsonObject json, String key) {
+        JsonElement value = json.get(key);
+        return value != null && value.getAsBoolean();
+    }
+
     private static JsonObject objectOrEmpty(JsonObject root, String key) {
         JsonObject value = root.getAsJsonObject(key);
         return value == null ? new JsonObject() : value;
@@ -268,7 +333,16 @@ public final class AddonStore {
                 overridesJson.add(Long.toString(platformId), byRouteJson);
             });
             root.add("dwellOverrides", overridesJson);
-            root.add("liftDoors", liftDoors);
+            JsonObject liftDoorsJson = new JsonObject();
+            liftDoors.forEach((liftId, sides) -> {
+                JsonObject sidesJson = new JsonObject();
+                sidesJson.addProperty("front", sides.front());
+                sidesJson.addProperty("back", sides.back());
+                sidesJson.addProperty("left", sides.left());
+                sidesJson.addProperty("right", sides.right());
+                liftDoorsJson.add(Long.toString(liftId), sidesJson);
+            });
+            root.add("liftDoors", liftDoorsJson);
             root.add("platformGroups", platformGroups);
             json = GSON.toJson(root);
         }

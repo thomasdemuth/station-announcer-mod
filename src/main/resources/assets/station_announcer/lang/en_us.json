@@ -188,5 +188,14 @@
   "gui.station_announcer.route_dwell.hint": "Changes apply after the depot regenerates its paths",
   "gui.station_announcer.route_dwell.regenerate": "Regenerate depots serving this platform",
   "gui.station_announcer.route_dwell.regenerate_sent": "Regeneration requested",
-  "gui.station_announcer.route_dwell.no_routes": "No routes call at this platform"
+  "gui.station_announcer.route_dwell.no_routes": "No routes call at this platform",
+  "gui.station_announcer.lift_doors.button": "Door sides...",
+  "gui.station_announcer.lift_doors.title": "Lift Door Sides",
+  "gui.station_announcer.lift_doors.front": "Front doors",
+  "gui.station_announcer.lift_doors.back": "Back doors",
+  "gui.station_announcer.lift_doors.left": "Left doors",
+  "gui.station_announcer.lift_doors.right": "Right doors",
+  "gui.station_announcer.lift_doors.hint": "Doors only open on sides facing that floor's landing",
+  "gui.station_announcer.lift_doors.hint2": "Call buttons and panels are unchanged MTR blocks",
+  "gui.station_announcer.lift_doors.reset": "Use MTR default (front + back if double-sided)"
 }

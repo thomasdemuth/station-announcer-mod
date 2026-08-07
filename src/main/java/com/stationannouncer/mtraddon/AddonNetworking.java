@@ -33,6 +33,14 @@ import java.util.Map;
  *       routes for one platform (an empty list clears the platform). Same
  *       permission model as the hold-rule packet; route count capped, dwell
  *       clamped to MTR's own platform dwell range (1 s – 600 s).</li>
+ *   <li>{@code station_announcer:addon_lift_doors} (S2C) — the full lift door-side
+ *       map (Feature 3), sent on join and re-broadcast after every change. One
+ *       long + one byte per configured lift. Sent EMPTY when
+ *       {@code multiDoorLifts.enabled} is off, which is what keeps the client's
+ *       lift-render mixin on the stock path.</li>
+ *   <li>{@code station_announcer:addon_update_lift_doors} (C2S) — the door-sides
+ *       GUI's Save/Reset: lift id + a 4-bit side mask; mask 0 clears the entry
+ *       (back to stock MTR behavior). Same permission model as the others.</li>
  * </ul>
  */
 public final class AddonNetworking {
@@ -40,6 +48,8 @@ public final class AddonNetworking {
     public static final Identifier UPDATE_HOLD_RULE_C2S = StationAnnouncer.id("addon_update_hold_rule");
     public static final Identifier DWELL_OVERRIDES_S2C = StationAnnouncer.id("addon_dwell_overrides");
     public static final Identifier UPDATE_DWELL_OVERRIDES_C2S = StationAnnouncer.id("addon_update_dwell_overrides");
+    public static final Identifier LIFT_DOORS_S2C = StationAnnouncer.id("addon_lift_doors");
+    public static final Identifier UPDATE_LIFT_DOORS_C2S = StationAnnouncer.id("addon_update_lift_doors");
 
     /** Cap on watched platforms per rule (also the GUI's picker cap). */
     public static final int MAX_WATCHED = 16;
@@ -114,6 +124,21 @@ public final class AddonNetworking {
                 broadcastDwellOverrides(server);
             });
         });
+
+        ServerPlayNetworking.registerGlobalReceiver(UPDATE_LIFT_DOORS_C2S, (server, player, handler, buf, responseSender) -> {
+            long liftId = buf.readLong();
+            int mask = buf.readByte() & 0x0F;
+
+            server.execute(() -> {
+                if (!AddonServerConfig.get().multiDoorLifts.enabled
+                        || !player.hasPermissionLevel(AddonServerConfig.get().editPermissionLevel)) {
+                    return;
+                }
+                // mask 0 clears the entry (setLiftDoors treats all-off as clear).
+                AddonStore.setLiftDoors(liftId, LiftDoorSides.fromMask(mask));
+                broadcastLiftDoors(server);
+            });
+        });
     }
 
     /** Drops duplicates and the ruled platform itself (watching yourself is meaningless). */
@@ -174,6 +199,34 @@ public final class AddonNetworking {
         for (ServerPlayerEntity player : server.getPlayerManager().getPlayerList()) {
             ServerPlayNetworking.send(player, DWELL_OVERRIDES_S2C, buildDwellOverridesBuf());
         }
+    }
+
+    /** On join, through the connection event's sender. */
+    public static void syncLiftDoorsTo(PacketSender sender) {
+        sender.sendPacket(LIFT_DOORS_S2C, buildLiftDoorsBuf());
+    }
+
+    /** After a change, to everyone (one long + one byte per configured lift). */
+    public static void broadcastLiftDoors(MinecraftServer server) {
+        for (ServerPlayerEntity player : server.getPlayerManager().getPlayerList()) {
+            ServerPlayNetworking.send(player, LIFT_DOORS_S2C, buildLiftDoorsBuf());
+        }
+    }
+
+    private static PacketByteBuf buildLiftDoorsBuf() {
+        PacketByteBuf buf = PacketByteBufs.create();
+        if (!AddonServerConfig.get().multiDoorLifts.enabled) {
+            // Feature off: an empty map keeps every client on MTR's stock render path.
+            buf.writeVarInt(0);
+            return buf;
+        }
+        Map<Long, LiftDoorSides> doors = AddonStore.liftDoorsView();
+        buf.writeVarInt(doors.size());
+        doors.forEach((liftId, sides) -> {
+            buf.writeLong(liftId);
+            buf.writeByte(sides.mask());
+        });
+        return buf;
     }
 
     private static PacketByteBuf buildDwellOverridesBuf() {

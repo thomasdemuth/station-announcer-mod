@@ -268,3 +268,159 @@ Modified (extending Agent 1's skeleton as intended):
 `client/mtraddon/{AddonClientInit,AddonClientConfig}.java`,
 `resources/station_announcer.mixins.json` (+2 entries),
 `assets/station_announcer/lang/en_us.json` (+11 keys).
+
+---
+
+## Feature Agent 3 — Multi-sided, multi-door elevators — 2026-08-07
+
+### What was built
+
+MTR lifts hardcode doors on the cab's front (-Z), plus the back (+Z) when
+"double-sided". Feature 3 lets each lift have doors on any of the four cab
+sides (front/back/left/right, cab space before the lift's world rotation);
+which sides actually OPEN at a floor stays automatic — every doorway is checked
+per frame with MTR's own `RenderVehicleHelper.canOpenDoors`, exactly how stock
+decides front vs back, so a side's doors open only when that floor's landing is
+in front of them. Boarding works from every configured side because ALL open
+doorway boxes are passed to `VehicleRidingMovement.startRiding`/`movePlayer`
+exactly as stock passes its one or two.
+
+**Server: no simulation changes at all.** Lift motion, instruction queue and
+door timing remain MTR's; door sides are client presentation + boarding boxes.
+The server's only involvement is storing and syncing the config.
+
+**Render path** — `mixin/RenderLiftsMixin.java` (client section of the mixin
+config) + `client/mtraddon/AddonRenderLifts.java`:
+
+- The mixin HEAD-cancels `RenderLifts.render(JLorg/mtr/mapping/holder/Vector3d;)V`
+  (javap-verified static method, `remap = false`) ONLY when the client's
+  door-config map is non-empty — a single static `ClientLiftDoors.isEmpty()`
+  read is the O(1) bail, and it is false both when the feature is disabled
+  (server then syncs an empty map) and when no lift is configured, so MTR's
+  stock path runs untouched in the idle case. The delegate is wrapped in
+  catch-Throwable: on the first failure the takeover disarms for the session
+  (logged) and every frame falls through to stock — the render loop cannot be
+  crashed by this feature.
+- `AddonRenderLifts` is a faithful adaptation of MTR 4.0.1's ~160-line method
+  (read line-by-line from mtr-src; every member used — LiftWrapper.shouldRender,
+  RenderVehicles.getRenderPositionAndRotation/getStoredMatrixTransformations,
+  MainRenderer.WORKER_THREAD.scheduleLifts, OptimizedRenderer.renderingShadows,
+  ItemLiftRefresher.findPath, the lift-refresher debug path, occlusion culling
+  via the RELOCATED `org.mtr.libraries.com.logisticscraft.occlusionculling.*` —
+  javap-verified public). Unconfigured lifts take logic identical to stock
+  including the same `new ModelLift1(...)` cab. Configured lifts get: a doorway
+  box per enabled side (±X boxes mirror the stock ±Z ones with width/depth
+  swapped: `Box(±(w/2 - 0.25), 0, -0.75, ±w/2, 0, 0.75)`), an `AddonModelLift`
+  cab, and an in-cab floor display above EVERY door side (stock behavior —
+  front rotated 180°, back unrotated — extended with ±90° for the sides, via
+  the public `RenderLifts.renderLiftDisplay`).
+
+**Model** — `client/mtraddon/AddonModelLift.java`: `ModelLift1` could not be
+extended (all parts private, door layout hardcoded in its protected render), so
+this is a full copy of its geometry (every cuboid/UV/pivot verbatim from
+source, which matches the 4.0.1 jar) parameterized by four door booleans,
+reusing MTR's lift textures via `RenderLifts.getLiftResource`:
+
+- Extends `ModelTrainBase` and REUSES its public final render for the stage
+  scheduling (LIGHT/INTERIOR/EXTERIOR/ALWAYS_ON_LIGHT layering identical to
+  stock). The base class only carries two door-value channels, so
+  `renderMultiDoor(...)` maps front/back onto them and stashes the side doors'
+  slide amounts (computed with the same `DoorAnimationType.getDoorAnimationZ`
+  call the base makes) on the instance before delegating — safe because one
+  model instance is created per lift per frame, like stock.
+- Each wall renders either the stock door assembly or the stock solid-wall
+  piece layout. Side-door assemblies are the stock front/back assemblies
+  rotated ±90° about the cab centre (pivot translations transformed by
+  (x,y,z)→(z,y,−x) since ModelPart pivots translate in the parent frame, wall
+  distance switched from depth·8 to width·8); solid front walls reuse the stock
+  back-wall cell layout flipped. Corner posts keep stock positions/rotations
+  and are suppressed exactly per stock's generalized rule (an adjacent wall
+  whose door spans the whole 2-block wall). Stock's `wall_patch` (side stubs
+  beside a full-width door) is split into its two halves so a stub is skipped
+  when it would land inside an adjacent full-width doorway (2x2 cab with
+  adjacent doors).
+
+**Storage / sync** (extending Agents 1–2's skeleton, no refactors):
+
+- `mtraddon/LiftDoorSides.java` — shared immutable record (front/back/left/
+  right) with a 4-bit wire mask.
+- `AddonStore`: `liftDoors` formalized from the raw-JSON passthrough to
+  `Map<Long, LiftDoorSides>`; same §4 JSON shape
+  (`{"<liftId>": {"front": true, ...}}`), so existing files load unchanged.
+  New: `liftDoorsView()`, `setLiftDoors(liftId, sides)` (all-off/null clears),
+  `liftDoorCount()`. Deliberately NO `AddonSnapshots` entry: nothing on the
+  server/simulator side ever reads door sides (pure client presentation), so
+  there is no simulator-thread reader to snapshot for — the client mirror is
+  the render-thread copy.
+- `AddonNetworking`: `addon_lift_doors` S2C full map (join + rebroadcast after
+  every change; one long + one byte per configured lift; sent EMPTY while the
+  feature is disabled) and `addon_update_lift_doors` C2S (lift id + mask;
+  mask 0 clears; op level `editPermissionLevel`, feature-flag checked
+  server-side). `AddonInit`'s JOIN handler sends the new sync.
+- `client/mtraddon/ClientLiftDoors.java` — render-thread mirror, replaced
+  wholesale on the client thread by the packet, cleared on disconnect.
+
+**Config keys** (`config/station-announcer-addon.json`):
+`multiDoorLifts.enabled` (default true). Read at startup like the other
+features; when off, saves are refused and the S2C sync is empty, which is what
+keeps every client's mixin on the stock path (rejoin required after toggling).
+Client: `showLiftDoorSidesButton` in `station-announcer-addon-client.json`.
+
+**GUI entry point:** a "Door sides…" button on MTR's `LiftCustomizationScreen`
+(same `ScreenEvents.AFTER_INIT` + vanilla-`instanceof` pattern as Agents 1–2 —
+that screen IS a vanilla screen through the mapping layer; the edited `Lift` is
+its `private final Lift lift` field, javap-verified, read via cached
+reflection; permission-gated by `MinecraftClientData.hasPermission()`). Opens
+`client/mtraddon/LiftDoorSidesScreen`: four vanilla on/off cycling buttons
+seeded from the current config (default when unconfigured: front on, back =
+`lift.getIsDoubleSided()`), Done/Cancel, and "Use MTR default" (clears the
+config; only active when one exists). Done with all four off falls back to
+front-only, per spec. Lang keys under `gui.station_announcer.lift_doors.*`.
+
+### Thread-safety notes
+
+- The mixin and everything it delegates to run on the RENDER thread — the same
+  thread stock `RenderLifts.render` runs on; only MTR client data plus the
+  `ClientLiftDoors` map (swapped wholesale on that same thread) are read. No
+  simulator or server state is touched.
+- Store mutations stay on the server thread; file I/O stays on Agent 1's
+  debounced executor.
+
+### Known limitations / gaps
+
+- **Lift call buttons/panels remain MTR's blocks** — no per-side call buttons
+  are added; landings call the cab exactly as before. (Documented spec gap.)
+- Door sides are cab-space; which world direction "left" faces depends on the
+  lift's rotation set in the customization screen. The in-cab display's ±90°
+  rotation direction for side doors (left vs right wall) is derived from the
+  GraphicsHolder yaw convention, not visually verified — if swapped in game,
+  negate the two ±90 values in `AddonRenderLifts.renderDisplays`.
+- A 2x2 cab with doors on adjacent walls suppresses the shared corner post and
+  the overlapping wall-patch stubs; the doorway frames still meet at the corner
+  but that extreme case (and side doors generally) has not been seen in game.
+- Configured lifts always render through `AddonModelLift`, even when the chosen
+  sides equal stock (front, or front+back on a double-sided lift). The solid
+  walls/doors replicate stock piece-for-piece, but "pixel-identical to stock"
+  is only guaranteed for UNCONFIGURED lifts, which keep `ModelLift1` and the
+  stock code path.
+- MTR renders a lift cab even mid-travel between floors; open-side detection
+  per doorway happens only while `hasCoolDown()` (stopped at a floor), same as
+  stock, so no behavior change there.
+- Toggling `multiDoorLifts.enabled` requires a server restart (config is read
+  once) and clients keep their last-synced map until the next sync/rejoin.
+- Not compiled or in-game tested by this agent (no-Gradle rule); orchestrator
+  to verify. The rotation math for side-door assemblies (pivot transform
+  (x,y,z)→(z,y,−x) with rotation −π/2, and the mirrored +π/2 case) was derived
+  from and cross-checked against ModelLift1's own edge/corner usage, not
+  rendered.
+
+### Files touched
+
+New: `mtraddon/LiftDoorSides.java`,
+`client/mtraddon/{ClientLiftDoors,AddonModelLift,AddonRenderLifts,LiftDoorSidesScreen}.java`,
+`mixin/RenderLiftsMixin.java`.
+Modified (extending the shared skeleton as intended):
+`mtraddon/{AddonServerConfig,AddonStore,AddonNetworking,AddonInit}.java`,
+`client/mtraddon/{AddonClientInit,AddonClientConfig}.java`,
+`resources/station_announcer.mixins.json` (client section +1),
+`assets/station_announcer/lang/en_us.json` (+10 keys).

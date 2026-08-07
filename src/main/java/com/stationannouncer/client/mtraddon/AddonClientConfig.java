@@ -26,6 +26,9 @@ public class AddonClientConfig {
     /** Show the "Per-route dwell…" button on MTR's platform screen (same permission gating). */
     public boolean showRouteDwellButton = true;
 
+    /** Show the "Door sides…" button on MTR's lift customization screen (same permission gating). */
+    public boolean showLiftDoorSidesButton = true;
+
     public static synchronized AddonClientConfig get() {
         if (instance == null) {
             instance = load();

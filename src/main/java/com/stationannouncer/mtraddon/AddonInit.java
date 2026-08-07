@@ -29,6 +29,7 @@ public final class AddonInit {
         ServerPlayConnectionEvents.JOIN.register((handler, sender, server) -> {
             AddonNetworking.syncHoldRulesTo(sender);
             AddonNetworking.syncDwellOverridesTo(sender);
+            AddonNetworking.syncLiftDoorsTo(sender);
         });
 
         StationAnnouncer.LOGGER.info("MTR dispatch addon initialized");
