@@ -29,6 +29,50 @@ public class AddonClientConfig {
     /** Show the "Door sides…" button on MTR's lift customization screen (same permission gating). */
     public boolean showLiftDoorSidesButton = true;
 
+    // ---- Feature 4: advanced manual driving HUD (all read on the client thread) ----
+
+    /** Master toggle for the driving HUD overlay. */
+    public boolean hudEnabled = true;
+
+    /** Show upcoming speed-limit changes on the HUD. */
+    public boolean hudShowSpeedLimits = true;
+
+    /** Show upcoming signal blocks (and the obstruction cue) on the HUD. */
+    public boolean hudShowSignals = true;
+
+    /** Show the next stop (name, distance, ETA) on the HUD. */
+    public boolean hudShowNextStop = true;
+
+    /** Show the EARLY / ON TIME / LATE schedule indicator on the HUD. */
+    public boolean hudShowOnTime = true;
+
+    /** Lookahead recomputes per second (clamped 1–20; rendering itself only draws the cache). */
+    public int hudUpdateHz = 4;
+
+    /** How far ahead the path is scanned, in meters (clamped 100–20000). */
+    public int hudLookaheadMeters = 2000;
+
+    /** Minimum age before the on-time arrivals fetch is repeated, in milliseconds (min 250). */
+    public int hudArrivalsCacheMillis = 1000;
+
+    /** |deviation| at or below this many seconds reads ON TIME. */
+    public int hudOnTimeThresholdSeconds = 15;
+
+    /** Panel corner: top_left, top_right, bottom_left or bottom_right (MTR's speedometer owns bottom-right). */
+    public String hudCorner = "top_left";
+
+    /** Panel distance from the screen edges, in GUI pixels (clamped 0–64). */
+    public int hudMargin = 6;
+
+    /** Writes the current settings to disk (used by the HUD settings screen's Done button). */
+    public static synchronized void persist() {
+        get().save(configPath());
+    }
+
+    private static Path configPath() {
+        return FabricLoader.getInstance().getConfigDir().resolve("station-announcer-addon-client.json");
+    }
+
     public static synchronized AddonClientConfig get() {
         if (instance == null) {
             instance = load();

@@ -84,6 +84,7 @@ public final class AddonClientInit {
         registerRouteDwellButton();
         registerLiftDoorSync();
         registerLiftDoorSidesButton();
+        DrivingHud.register(); // Feature 4 — driving HUD (registers its own disconnect cleanup)
 
         ScreenEvents.AFTER_INIT.register((client, screen, scaledWidth, scaledHeight) -> {
             if (!(screen instanceof PlatformScreen) || !AddonClientConfig.get().showHoldRulesButton) {

@@ -424,3 +424,128 @@ Modified (extending the shared skeleton as intended):
 `client/mtraddon/{AddonClientInit,AddonClientConfig}.java`,
 `resources/station_announcer.mixins.json` (client section +1),
 `assets/station_announcer/lang/en_us.json` (+10 keys).
+
+---
+
+## Feature Agent 4 — Advanced manual driving HUD — 2026-08-07
+
+### What was built
+
+A client-only HUD overlay (NO mixins, no server code, no packets) shown while
+the player is driving: riding a vehicle AND holding a valid driver key for its
+depot — the exact visibility condition of MTR's own `DrivingGuiRenderer`
+(`MinecraftClientData.getInstance().vehicles` scan +
+`VehicleRidingMovement.isRiding(id)` +
+`VehicleRidingMovement.getValidHoldingKey(depotId) != null`, all
+javap-verified). It complements MTR's speedometer (bottom-right) from a
+configurable corner, default top-left. Sections, each individually toggleable:
+
+- **Next stop** — name, distance, ETA. The upcoming platform is the first path
+  segment ahead of the head index with `dwellTime > 0 && savedRailBaseId != 0`
+  (excluding the siding id, like `VehicleExtension`'s stopping-details loop).
+  Name comes from `platformIdMap` → `platform.area` station name FIRST, with
+  `vehicleExtraData.getNextStationName()` as fallback — deliberate inversion of
+  the spec's order: MTR's this/next labels flip one station ahead the moment
+  the head enters the platform segment (stopIndex changes at the dwell
+  segment), while the platform-map name always matches the platform whose
+  distance is displayed. ETA = cruise at current speed then brake at
+  `vehicleExtraData.getDeceleration()` (constant-decel time when already
+  inside braking distance); "--" while effectively stationary.
+- **Schedule status** — EARLY / ON TIME / LATE with signed seconds, colored
+  green / white / red. Reuses the v2.3 `RailroadRouteData` trick: cached
+  `ArrivalsCacheClient.INSTANCE.requestArrivals` fetch for the next platform
+  id, match our run by `getThisRouteId() + vehicle.getDepartureIndex()`, read
+  `getDeviation()` (positive = late). `departureIndex == -1` (manual sidings)
+  or no match → "Schedule: --".
+- **Speed limits** — up to 3 upcoming `getSpeedLimitKilometersPerHour()`
+  changes as "in 432 m → 60 km/h"; amber when the new limit is below the
+  CURRENT speed (braking due), white otherwise.
+- **Signals** — up to 3 signal blocks ahead (segments with non-empty
+  `getSignalColors()`; consecutive segments with the same aspect merge into
+  one entry) with a colored square + CLEAR / CAUTION / OCCUPIED. Aspect from
+  the same client maps MTR's wayside signals read:
+  `railIdToCurrentlyBlockedSignalColors` / `railIdToPreBlockedSignalColors`
+  (keyed by the canonical rail hex id — one of `PathData.getHexId(false/true)`,
+  both tried) intersected with the segment's own signal colours, plus
+  `blockedRailIds` occupancy via both directional ids. Self-detection guard:
+  our own vehicle writes its rails into `blockedRailIds` up to its braking
+  padding (`0.5·v²/decel + transportMode.stoppingSpace`, mirroring
+  `VehicleExtension`'s "Write signals" block), so occupancy hits inside that
+  zone are ignored. Plus an **OBSTRUCTION AHEAD** row whenever
+  `vehicleExtraData.getStoppingPoint()` lands short of the next platform's end
+  distance (a signal held against us or a vehicle ahead).
+
+**Performance** (ARCHITECTURE §6): the lookahead walk runs in a
+`ClientTickEvents.END_CLIENT_TICK` handler throttled to `hudUpdateHz` (default
+4 Hz, clamped 1–20) over at most `hudLookaheadMeters` (default 2000) of
+`immutablePath`; the `HudRenderCallback` only draws the cached snapshot of
+pre-built text rows (a few `getWidth` calls + fills per frame). Arrivals fetch
+cached ≥ `hudArrivalsCacheMillis` (default 1000, min 250). Nobody driving →
+one small vehicle-set scan per update and nothing rendered; `hudEnabled` off →
+zero work. The head index / stopped-at-platform math is
+`Utilities.getIndexFromConditionalList` — the same binary search MTR itself
+uses. `railProgress` (protected on `VehicleSchema`, no 4.0.1 getter) is read
+via one cached reflection `Field`; on lookup failure the HUD disables itself
+for the session (logged) instead of erroring per tick. The whole compute is
+wrapped in try/catch (MTR data can be swapped mid-sync — RailroadRouteData
+precedent).
+
+**Settings screen** (`DrivingHudScreen`): opened by a NEW keybinding —
+default **H** (vanilla and MTR both leave H unbound; MTR uses Z + arrows +
+keypad), category "Station Announcer", registered with Fabric's
+`KeyBindingHelper`, works in-game or over another screen. Left column: master
+toggle + the four element toggles (vanilla `CyclingButtonWidget.onOffBuilder`,
+same pattern as `LiftDoorSidesScreen`); right column: shared
+`com.stationannouncer.client.gui.IntSlider`s for update rate (1–10 Hz),
+lookahead (250–5000 m), on-time window (±5–60 s), and a corner cycler
+(top_left / top_right / bottom_left / bottom_right). Edits apply live (the
+HUD previews behind the non-pausing screen); Done persists via the new
+`AddonClientConfig.persist()`, Cancel restores the values captured at open.
+No gear button on the panel (HUD is non-interactive, per plan).
+
+**Config keys** (`station-announcer-addon-client.json`, all new):
+`hudEnabled`, `hudShowSpeedLimits`, `hudShowSignals`, `hudShowNextStop`,
+`hudShowOnTime` (all true), `hudUpdateHz` (4), `hudLookaheadMeters` (2000),
+`hudArrivalsCacheMillis` (1000), `hudOnTimeThresholdSeconds` (15),
+`hudCorner` ("top_left"), `hudMargin` (6). Unknown `hudCorner` values render
+as top-left.
+
+### Thread-safety notes
+
+- Everything runs on the CLIENT thread: tick handler, render callback, screen.
+  All state is static and cleared by the feature's own
+  `ClientPlayConnectionEvents.DISCONNECT` handler (snapshot, arrivals cache,
+  update timer); the cached reflection `Field` survives (it is process-wide).
+- No server/simulator state, no MTR mutation — `requestArrivals` is the same
+  read MTR's own PIDS make; it also keeps MTR's platform request queue warm.
+
+### Known limitations
+
+- **Repeat-infinitely routes**: the lookahead simply stops at path end instead
+  of wrapping to `getRepeatIndex1()` (protected in 4.0.1, and a wrap would need
+  distance rebasing). After the final stop of a looping route the lists go
+  quiet until MTR advances the path — chosen as the documented simpler-correct
+  option offered by the spec.
+- Manual-mode schedule deviation exists only when MTR itself predicts the run
+  (`departureIndex >= 0`); manual sidings show "--" by design.
+- The aspect estimate mirrors wayside signals: a block still held by OUR own
+  signal reservation reads OCCUPIED (only `blockedRailIds` self-hits are
+  filtered, since those are indistinguishable from another train by id). The
+  hidden-while-a-screen-is-open rule matches `DrivingGuiRenderer` (chat is the
+  exception); F1 hides it with the rest of the HUD.
+- The ETA is naive (no speed-limit integration along the way) — intentional
+  per spec.
+- Signal-block grouping merges CONSECUTIVE same-aspect signalled segments; two
+  distinct blocks that happen to touch with the same aspect read as one entry.
+- Not compiled or in-game tested by this agent (no-Gradle rule); orchestrator
+  to verify. Rendering positions/colors are vanilla-convention but unseen; the
+  "→" and "±" glyphs render with vanilla's font (project precedent: PIDS
+  arrows), swap for ASCII if they ever show as boxes.
+
+### Files touched
+
+New: `client/mtraddon/{DrivingHud,DrivingHudScreen}.java`.
+Modified (extending the shared skeleton as intended):
+`client/mtraddon/AddonClientConfig.java` (new fields + `persist()` only),
+`client/mtraddon/AddonClientInit.java` (+1 line: `DrivingHud.register()`),
+`assets/station_announcer/lang/en_us.json` (+31 keys).
