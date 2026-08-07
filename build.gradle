@@ -1,0 +1,66 @@
+plugins {
+    id 'fabric-loom' version '1.10.5'
+}
+
+version = project.mod_version
+group = project.maven_group
+
+base {
+    archivesName = project.archives_base_name
+}
+
+repositories {
+    // Loom adds the Fabric and Mojang repositories automatically.
+    mavenCentral()
+    exclusiveContent {
+        forRepository {
+            maven {
+                name = "Modrinth"
+                url = "https://api.modrinth.com/maven"
+            }
+        }
+        filter {
+            includeGroup "maven.modrinth"
+        }
+    }
+}
+
+dependencies {
+    minecraft "com.mojang:minecraft:${project.minecraft_version}"
+    mappings "net.fabricmc:yarn:${project.yarn_mappings}:v2"
+    modImplementation "net.fabricmc:fabric-loader:${project.loader_version}"
+    modImplementation "net.fabricmc.fabric-api:fabric-api:${project.fabric_version}"
+
+    // Minecraft Transit Railway — optional at runtime (the PIDS blocks only
+    // register when MTR is present); compile-only keeps the base mod standalone.
+    // localRuntime puts it on the DEV runs only (runClient/runServer visual
+    // testing) without adding a hard dependency to the shipped jar.
+    modCompileOnly "maven.modrinth:minecraft-transit-railway:${project.mtr_version}"
+    modLocalRuntime "maven.modrinth:minecraft-transit-railway:${project.mtr_version}"
+    // JSR-305 annotations referenced by MTR's class files.
+    compileOnly "com.google.code.findbugs:jsr305:3.0.2"
+}
+
+processResources {
+    inputs.property "version", project.version
+
+    filesMatching("fabric.mod.json") {
+        expand "version": project.version
+    }
+}
+
+tasks.withType(JavaCompile).configureEach {
+    it.options.release = 17
+}
+
+java {
+    withSourcesJar()
+    sourceCompatibility = JavaVersion.VERSION_17
+    targetCompatibility = JavaVersion.VERSION_17
+}
+
+jar {
+    from("LICENSE") {
+        rename { "${it}_${project.base.archivesName.get()}" }
+    }
+}

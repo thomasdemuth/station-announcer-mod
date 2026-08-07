@@ -1,0 +1,85 @@
+{
+  "parent": "minecraft:block/block",
+  "textures": {
+    "t": "station_announcer:block/column_plate_tint",
+    "particle": "station_announcer:block/column_plate_tint"
+  },
+  "elements": [
+    {
+      "from": [
+        2.5,
+        12,
+        3.5
+      ],
+      "to": [
+        13.5,
+        14,
+        12.5
+      ],
+      "faces": {
+        "north": {
+          "texture": "#t",
+          "tintindex": 0
+        },
+        "south": {
+          "texture": "#t",
+          "tintindex": 0
+        },
+        "east": {
+          "texture": "#t",
+          "tintindex": 0
+        },
+        "west": {
+          "texture": "#t",
+          "tintindex": 0
+        },
+        "up": {
+          "texture": "#t",
+          "tintindex": 0
+        },
+        "down": {
+          "texture": "#t",
+          "tintindex": 0
+        }
+      }
+    },
+    {
+      "from": [
+        1.5,
+        14,
+        2.5
+      ],
+      "to": [
+        14.5,
+        16,
+        13.5
+      ],
+      "faces": {
+        "north": {
+          "texture": "#t",
+          "tintindex": 0
+        },
+        "south": {
+          "texture": "#t",
+          "tintindex": 0
+        },
+        "east": {
+          "texture": "#t",
+          "tintindex": 0
+        },
+        "west": {
+          "texture": "#t",
+          "tintindex": 0
+        },
+        "up": {
+          "texture": "#t",
+          "tintindex": 0
+        },
+        "down": {
+          "texture": "#t",
+          "tintindex": 0
+        }
+      }
+    }
+  ]
+}

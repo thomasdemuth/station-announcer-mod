@@ -1,0 +1,21 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(java -version)",
+      "Bash(gradle --version)",
+      "Bash(curl -s --max-time 15 \"https://meta.fabricmc.net/v2/versions/loader/1.20.4\")",
+      "Bash(curl -s --max-time 15 \"https://meta.fabricmc.net/v2/versions/yarn/1.20.4\")",
+      "Bash(curl -s --max-time 15 'https://api.modrinth.com/v2/project/fabric-api/version?game_versions=%5B%221.20.4%22%5D&loaders=%5B%22fabric%22%5D')",
+      "Bash(python3 -c \"import json,sys; vs=json.load\\(sys.stdin\\); print\\('\\\\n'.join\\(v['version_number'] for v in vs[:5]\\)\\)\")",
+      "Bash(curl -s --max-time 15 \"https://maven.fabricmc.net/net/fabricmc/fabric-loom/maven-metadata.xml\")",
+      "Bash(python3 -c ' *)",
+      "Bash(curl -sL --max-time 60 -o gradle/wrapper/gradle-wrapper.jar \"https://raw.githubusercontent.com/gradle/gradle/v8.7.0/gradle/wrapper/gradle-wrapper.jar\")",
+      "Bash(curl -sL --max-time 60 -o gradlew \"https://raw.githubusercontent.com/gradle/gradle/v8.7.0/gradlew\")",
+      "Bash(chmod +x gradlew)",
+      "Bash(export JAVA_HOME=\"$HOME/Library/Application Support/minecraft/runtime/java-runtime-gamma/mac-os-arm64/java-runtime-gamma/jre.bundle/Contents/Home\")",
+      "Bash(./gradlew build *)",
+      "Bash(npm --version)",
+      "Read(//opt/homebrew/bin/**)"
+    ]
+  }
+}

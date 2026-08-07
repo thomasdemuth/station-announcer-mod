@@ -1,0 +1,29 @@
+{
+  "schemaVersion": 1,
+  "id": "station_announcer",
+  "version": "${version}",
+  "name": "Station Announcer",
+  "description": "A public-address system for train stations: configurable announcer blocks with client-side text-to-speech, redstone and command triggering. Designed to sit alongside Minecraft Transit Railway (MTR).",
+  "authors": [
+    "Thomas Demuth"
+  ],
+  "contact": {},
+  "license": "MIT",
+  "icon": "assets/station_announcer/icon.png",
+  "environment": "*",
+  "entrypoints": {
+    "main": [
+      "com.stationannouncer.StationAnnouncer"
+    ],
+    "client": [
+      "com.stationannouncer.client.StationAnnouncerClient"
+    ]
+  },
+  "depends": {
+    "fabricloader": ">=0.15.0",
+    "fabric-api": "*",
+    "minecraft": "~1.21.4",
+    "java": ">=21",
+    "mtr": ">=4.0.0"
+  }
+}

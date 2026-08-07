@@ -1,0 +1,31 @@
+{
+  "type": "minecraft:crafting_shaped",
+  "category": "building",
+  "key": {
+    "R": {
+      "item": "station_announcer:entrance_railing"
+    },
+    "K": {
+      "item": "minecraft:black_dye"
+    },
+    "W": {
+      "item": "minecraft:white_dye"
+    }
+  },
+  "pattern": [
+    "K",
+    "W",
+    "R"
+  ],
+  "result": {
+    "item": "station_announcer:entrance_railing_sign"
+  },
+  "fabric:load_conditions": [
+    {
+      "condition": "fabric:all_mods_loaded",
+      "values": [
+        "mtr"
+      ]
+    }
+  ]
+}

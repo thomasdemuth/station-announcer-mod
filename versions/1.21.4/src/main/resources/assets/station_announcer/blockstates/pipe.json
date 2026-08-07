@@ -1,0 +1,832 @@
+{
+  "multipart": [
+    {
+      "when": {
+        "size": "1",
+        "pipes": "1"
+      },
+      "apply": {
+        "model": "station_announcer:block/pipe_core_s1_n1"
+      }
+    },
+    {
+      "when": {
+        "size": "1",
+        "pipes": "1",
+        "north": "true"
+      },
+      "apply": {
+        "model": "station_announcer:block/pipe_arm_north_s1_n1"
+      }
+    },
+    {
+      "when": {
+        "size": "1",
+        "pipes": "1",
+        "south": "true"
+      },
+      "apply": {
+        "model": "station_announcer:block/pipe_arm_south_s1_n1"
+      }
+    },
+    {
+      "when": {
+        "size": "1",
+        "pipes": "1",
+        "east": "true"
+      },
+      "apply": {
+        "model": "station_announcer:block/pipe_arm_east_s1_n1"
+      }
+    },
+    {
+      "when": {
+        "size": "1",
+        "pipes": "1",
+        "west": "true"
+      },
+      "apply": {
+        "model": "station_announcer:block/pipe_arm_west_s1_n1"
+      }
+    },
+    {
+      "when": {
+        "size": "1",
+        "pipes": "1",
+        "up": "true"
+      },
+      "apply": {
+        "model": "station_announcer:block/pipe_arm_up_s1_n1"
+      }
+    },
+    {
+      "when": {
+        "size": "1",
+        "pipes": "1",
+        "down": "true"
+      },
+      "apply": {
+        "model": "station_announcer:block/pipe_arm_down_s1_n1"
+      }
+    },
+    {
+      "when": {
+        "size": "1",
+        "pipes": "2"
+      },
+      "apply": {
+        "model": "station_announcer:block/pipe_core_s1_n2"
+      }
+    },
+    {
+      "when": {
+        "size": "1",
+        "pipes": "2",
+        "north": "true"
+      },
+      "apply": {
+        "model": "station_announcer:block/pipe_arm_north_s1_n2"
+      }
+    },
+    {
+      "when": {
+        "size": "1",
+        "pipes": "2",
+        "south": "true"
+      },
+      "apply": {
+        "model": "station_announcer:block/pipe_arm_south_s1_n2"
+      }
+    },
+    {
+      "when": {
+        "size": "1",
+        "pipes": "2",
+        "east": "true"
+      },
+      "apply": {
+        "model": "station_announcer:block/pipe_arm_east_s1_n2"
+      }
+    },
+    {
+      "when": {
+        "size": "1",
+        "pipes": "2",
+        "west": "true"
+      },
+      "apply": {
+        "model": "station_announcer:block/pipe_arm_west_s1_n2"
+      }
+    },
+    {
+      "when": {
+        "size": "1",
+        "pipes": "2",
+        "up": "true"
+      },
+      "apply": {
+        "model": "station_announcer:block/pipe_arm_up_s1_n2"
+      }
+    },
+    {
+      "when": {
+        "size": "1",
+        "pipes": "2",
+        "down": "true"
+      },
+      "apply": {
+        "model": "station_announcer:block/pipe_arm_down_s1_n2"
+      }
+    },
+    {
+      "when": {
+        "size": "1",
+        "pipes": "3"
+      },
+      "apply": {
+        "model": "station_announcer:block/pipe_core_s1_n3"
+      }
+    },
+    {
+      "when": {
+        "size": "1",
+        "pipes": "3",
+        "north": "true"
+      },
+      "apply": {
+        "model": "station_announcer:block/pipe_arm_north_s1_n3"
+      }
+    },
+    {
+      "when": {
+        "size": "1",
+        "pipes": "3",
+        "south": "true"
+      },
+      "apply": {
+        "model": "station_announcer:block/pipe_arm_south_s1_n3"
+      }
+    },
+    {
+      "when": {
+        "size": "1",
+        "pipes": "3",
+        "east": "true"
+      },
+      "apply": {
+        "model": "station_announcer:block/pipe_arm_east_s1_n3"
+      }
+    },
+    {
+      "when": {
+        "size": "1",
+        "pipes": "3",
+        "west": "true"
+      },
+      "apply": {
+        "model": "station_announcer:block/pipe_arm_west_s1_n3"
+      }
+    },
+    {
+      "when": {
+        "size": "1",
+        "pipes": "3",
+        "up": "true"
+      },
+      "apply": {
+        "model": "station_announcer:block/pipe_arm_up_s1_n3"
+      }
+    },
+    {
+      "when": {
+        "size": "1",
+        "pipes": "3",
+        "down": "true"
+      },
+      "apply": {
+        "model": "station_announcer:block/pipe_arm_down_s1_n3"
+      }
+    },
+    {
+      "when": {
+        "size": "1",
+        "pipes": "4"
+      },
+      "apply": {
+        "model": "station_announcer:block/pipe_core_s1_n4"
+      }
+    },
+    {
+      "when": {
+        "size": "1",
+        "pipes": "4",
+        "north": "true"
+      },
+      "apply": {
+        "model": "station_announcer:block/pipe_arm_north_s1_n4"
+      }
+    },
+    {
+      "when": {
+        "size": "1",
+        "pipes": "4",
+        "south": "true"
+      },
+      "apply": {
+        "model": "station_announcer:block/pipe_arm_south_s1_n4"
+      }
+    },
+    {
+      "when": {
+        "size": "1",
+        "pipes": "4",
+        "east": "true"
+      },
+      "apply": {
+        "model": "station_announcer:block/pipe_arm_east_s1_n4"
+      }
+    },
+    {
+      "when": {
+        "size": "1",
+        "pipes": "4",
+        "west": "true"
+      },
+      "apply": {
+        "model": "station_announcer:block/pipe_arm_west_s1_n4"
+      }
+    },
+    {
+      "when": {
+        "size": "1",
+        "pipes": "4",
+        "up": "true"
+      },
+      "apply": {
+        "model": "station_announcer:block/pipe_arm_up_s1_n4"
+      }
+    },
+    {
+      "when": {
+        "size": "1",
+        "pipes": "4",
+        "down": "true"
+      },
+      "apply": {
+        "model": "station_announcer:block/pipe_arm_down_s1_n4"
+      }
+    },
+    {
+      "when": {
+        "size": "2",
+        "pipes": "1"
+      },
+      "apply": {
+        "model": "station_announcer:block/pipe_core_s2_n1"
+      }
+    },
+    {
+      "when": {
+        "size": "2",
+        "pipes": "1",
+        "north": "true"
+      },
+      "apply": {
+        "model": "station_announcer:block/pipe_arm_north_s2_n1"
+      }
+    },
+    {
+      "when": {
+        "size": "2",
+        "pipes": "1",
+        "south": "true"
+      },
+      "apply": {
+        "model": "station_announcer:block/pipe_arm_south_s2_n1"
+      }
+    },
+    {
+      "when": {
+        "size": "2",
+        "pipes": "1",
+        "east": "true"
+      },
+      "apply": {
+        "model": "station_announcer:block/pipe_arm_east_s2_n1"
+      }
+    },
+    {
+      "when": {
+        "size": "2",
+        "pipes": "1",
+        "west": "true"
+      },
+      "apply": {
+        "model": "station_announcer:block/pipe_arm_west_s2_n1"
+      }
+    },
+    {
+      "when": {
+        "size": "2",
+        "pipes": "1",
+        "up": "true"
+      },
+      "apply": {
+        "model": "station_announcer:block/pipe_arm_up_s2_n1"
+      }
+    },
+    {
+      "when": {
+        "size": "2",
+        "pipes": "1",
+        "down": "true"
+      },
+      "apply": {
+        "model": "station_announcer:block/pipe_arm_down_s2_n1"
+      }
+    },
+    {
+      "when": {
+        "size": "2",
+        "pipes": "2"
+      },
+      "apply": {
+        "model": "station_announcer:block/pipe_core_s2_n2"
+      }
+    },
+    {
+      "when": {
+        "size": "2",
+        "pipes": "2",
+        "north": "true"
+      },
+      "apply": {
+        "model": "station_announcer:block/pipe_arm_north_s2_n2"
+      }
+    },
+    {
+      "when": {
+        "size": "2",
+        "pipes": "2",
+        "south": "true"
+      },
+      "apply": {
+        "model": "station_announcer:block/pipe_arm_south_s2_n2"
+      }
+    },
+    {
+      "when": {
+        "size": "2",
+        "pipes": "2",
+        "east": "true"
+      },
+      "apply": {
+        "model": "station_announcer:block/pipe_arm_east_s2_n2"
+      }
+    },
+    {
+      "when": {
+        "size": "2",
+        "pipes": "2",
+        "west": "true"
+      },
+      "apply": {
+        "model": "station_announcer:block/pipe_arm_west_s2_n2"
+      }
+    },
+    {
+      "when": {
+        "size": "2",
+        "pipes": "2",
+        "up": "true"
+      },
+      "apply": {
+        "model": "station_announcer:block/pipe_arm_up_s2_n2"
+      }
+    },
+    {
+      "when": {
+        "size": "2",
+        "pipes": "2",
+        "down": "true"
+      },
+      "apply": {
+        "model": "station_announcer:block/pipe_arm_down_s2_n2"
+      }
+    },
+    {
+      "when": {
+        "size": "2",
+        "pipes": "3"
+      },
+      "apply": {
+        "model": "station_announcer:block/pipe_core_s2_n3"
+      }
+    },
+    {
+      "when": {
+        "size": "2",
+        "pipes": "3",
+        "north": "true"
+      },
+      "apply": {
+        "model": "station_announcer:block/pipe_arm_north_s2_n3"
+      }
+    },
+    {
+      "when": {
+        "size": "2",
+        "pipes": "3",
+        "south": "true"
+      },
+      "apply": {
+        "model": "station_announcer:block/pipe_arm_south_s2_n3"
+      }
+    },
+    {
+      "when": {
+        "size": "2",
+        "pipes": "3",
+        "east": "true"
+      },
+      "apply": {
+        "model": "station_announcer:block/pipe_arm_east_s2_n3"
+      }
+    },
+    {
+      "when": {
+        "size": "2",
+        "pipes": "3",
+        "west": "true"
+      },
+      "apply": {
+        "model": "station_announcer:block/pipe_arm_west_s2_n3"
+      }
+    },
+    {
+      "when": {
+        "size": "2",
+        "pipes": "3",
+        "up": "true"
+      },
+      "apply": {
+        "model": "station_announcer:block/pipe_arm_up_s2_n3"
+      }
+    },
+    {
+      "when": {
+        "size": "2",
+        "pipes": "3",
+        "down": "true"
+      },
+      "apply": {
+        "model": "station_announcer:block/pipe_arm_down_s2_n3"
+      }
+    },
+    {
+      "when": {
+        "size": "2",
+        "pipes": "4"
+      },
+      "apply": {
+        "model": "station_announcer:block/pipe_core_s2_n4"
+      }
+    },
+    {
+      "when": {
+        "size": "2",
+        "pipes": "4",
+        "north": "true"
+      },
+      "apply": {
+        "model": "station_announcer:block/pipe_arm_north_s2_n4"
+      }
+    },
+    {
+      "when": {
+        "size": "2",
+        "pipes": "4",
+        "south": "true"
+      },
+      "apply": {
+        "model": "station_announcer:block/pipe_arm_south_s2_n4"
+      }
+    },
+    {
+      "when": {
+        "size": "2",
+        "pipes": "4",
+        "east": "true"
+      },
+      "apply": {
+        "model": "station_announcer:block/pipe_arm_east_s2_n4"
+      }
+    },
+    {
+      "when": {
+        "size": "2",
+        "pipes": "4",
+        "west": "true"
+      },
+      "apply": {
+        "model": "station_announcer:block/pipe_arm_west_s2_n4"
+      }
+    },
+    {
+      "when": {
+        "size": "2",
+        "pipes": "4",
+        "up": "true"
+      },
+      "apply": {
+        "model": "station_announcer:block/pipe_arm_up_s2_n4"
+      }
+    },
+    {
+      "when": {
+        "size": "2",
+        "pipes": "4",
+        "down": "true"
+      },
+      "apply": {
+        "model": "station_announcer:block/pipe_arm_down_s2_n4"
+      }
+    },
+    {
+      "when": {
+        "size": "3",
+        "pipes": "1"
+      },
+      "apply": {
+        "model": "station_announcer:block/pipe_core_s3_n1"
+      }
+    },
+    {
+      "when": {
+        "size": "3",
+        "pipes": "1",
+        "north": "true"
+      },
+      "apply": {
+        "model": "station_announcer:block/pipe_arm_north_s3_n1"
+      }
+    },
+    {
+      "when": {
+        "size": "3",
+        "pipes": "1",
+        "south": "true"
+      },
+      "apply": {
+        "model": "station_announcer:block/pipe_arm_south_s3_n1"
+      }
+    },
+    {
+      "when": {
+        "size": "3",
+        "pipes": "1",
+        "east": "true"
+      },
+      "apply": {
+        "model": "station_announcer:block/pipe_arm_east_s3_n1"
+      }
+    },
+    {
+      "when": {
+        "size": "3",
+        "pipes": "1",
+        "west": "true"
+      },
+      "apply": {
+        "model": "station_announcer:block/pipe_arm_west_s3_n1"
+      }
+    },
+    {
+      "when": {
+        "size": "3",
+        "pipes": "1",
+        "up": "true"
+      },
+      "apply": {
+        "model": "station_announcer:block/pipe_arm_up_s3_n1"
+      }
+    },
+    {
+      "when": {
+        "size": "3",
+        "pipes": "1",
+        "down": "true"
+      },
+      "apply": {
+        "model": "station_announcer:block/pipe_arm_down_s3_n1"
+      }
+    },
+    {
+      "when": {
+        "size": "3",
+        "pipes": "2"
+      },
+      "apply": {
+        "model": "station_announcer:block/pipe_core_s3_n2"
+      }
+    },
+    {
+      "when": {
+        "size": "3",
+        "pipes": "2",
+        "north": "true"
+      },
+      "apply": {
+        "model": "station_announcer:block/pipe_arm_north_s3_n2"
+      }
+    },
+    {
+      "when": {
+        "size": "3",
+        "pipes": "2",
+        "south": "true"
+      },
+      "apply": {
+        "model": "station_announcer:block/pipe_arm_south_s3_n2"
+      }
+    },
+    {
+      "when": {
+        "size": "3",
+        "pipes": "2",
+        "east": "true"
+      },
+      "apply": {
+        "model": "station_announcer:block/pipe_arm_east_s3_n2"
+      }
+    },
+    {
+      "when": {
+        "size": "3",
+        "pipes": "2",
+        "west": "true"
+      },
+      "apply": {
+        "model": "station_announcer:block/pipe_arm_west_s3_n2"
+      }
+    },
+    {
+      "when": {
+        "size": "3",
+        "pipes": "2",
+        "up": "true"
+      },
+      "apply": {
+        "model": "station_announcer:block/pipe_arm_up_s3_n2"
+      }
+    },
+    {
+      "when": {
+        "size": "3",
+        "pipes": "2",
+        "down": "true"
+      },
+      "apply": {
+        "model": "station_announcer:block/pipe_arm_down_s3_n2"
+      }
+    },
+    {
+      "when": {
+        "size": "3",
+        "pipes": "3"
+      },
+      "apply": {
+        "model": "station_announcer:block/pipe_core_s3_n3"
+      }
+    },
+    {
+      "when": {
+        "size": "3",
+        "pipes": "3",
+        "north": "true"
+      },
+      "apply": {
+        "model": "station_announcer:block/pipe_arm_north_s3_n3"
+      }
+    },
+    {
+      "when": {
+        "size": "3",
+        "pipes": "3",
+        "south": "true"
+      },
+      "apply": {
+        "model": "station_announcer:block/pipe_arm_south_s3_n3"
+      }
+    },
+    {
+      "when": {
+        "size": "3",
+        "pipes": "3",
+        "east": "true"
+      },
+      "apply": {
+        "model": "station_announcer:block/pipe_arm_east_s3_n3"
+      }
+    },
+    {
+      "when": {
+        "size": "3",
+        "pipes": "3",
+        "west": "true"
+      },
+      "apply": {
+        "model": "station_announcer:block/pipe_arm_west_s3_n3"
+      }
+    },
+    {
+      "when": {
+        "size": "3",
+        "pipes": "3",
+        "up": "true"
+      },
+      "apply": {
+        "model": "station_announcer:block/pipe_arm_up_s3_n3"
+      }
+    },
+    {
+      "when": {
+        "size": "3",
+        "pipes": "3",
+        "down": "true"
+      },
+      "apply": {
+        "model": "station_announcer:block/pipe_arm_down_s3_n3"
+      }
+    },
+    {
+      "when": {
+        "size": "3",
+        "pipes": "4"
+      },
+      "apply": {
+        "model": "station_announcer:block/pipe_core_s3_n4"
+      }
+    },
+    {
+      "when": {
+        "size": "3",
+        "pipes": "4",
+        "north": "true"
+      },
+      "apply": {
+        "model": "station_announcer:block/pipe_arm_north_s3_n4"
+      }
+    },
+    {
+      "when": {
+        "size": "3",
+        "pipes": "4",
+        "south": "true"
+      },
+      "apply": {
+        "model": "station_announcer:block/pipe_arm_south_s3_n4"
+      }
+    },
+    {
+      "when": {
+        "size": "3",
+        "pipes": "4",
+        "east": "true"
+      },
+      "apply": {
+        "model": "station_announcer:block/pipe_arm_east_s3_n4"
+      }
+    },
+    {
+      "when": {
+        "size": "3",
+        "pipes": "4",
+        "west": "true"
+      },
+      "apply": {
+        "model": "station_announcer:block/pipe_arm_west_s3_n4"
+      }
+    },
+    {
+      "when": {
+        "size": "3",
+        "pipes": "4",
+        "up": "true"
+      },
+      "apply": {
+        "model": "station_announcer:block/pipe_arm_up_s3_n4"
+      }
+    },
+    {
+      "when": {
+        "size": "3",
+        "pipes": "4",
+        "down": "true"
+      },
+      "apply": {
+        "model": "station_announcer:block/pipe_arm_down_s3_n4"
+      }
+    }
+  ]
+}

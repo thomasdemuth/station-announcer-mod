@@ -1,0 +1,42 @@
+{
+  "parent": "minecraft:block/block",
+  "textures": {
+    "frame": "station_announcer:block/pids_frame",
+    "particle": "station_announcer:block/pids_frame"
+  },
+  "elements": [
+    {
+      "from": [
+        7,
+        14,
+        7
+      ],
+      "to": [
+        9,
+        16,
+        9
+      ],
+      "faces": {
+        "north": {
+          "texture": "#frame"
+        },
+        "south": {
+          "texture": "#frame"
+        },
+        "east": {
+          "texture": "#frame"
+        },
+        "west": {
+          "texture": "#frame"
+        },
+        "down": {
+          "texture": "#frame"
+        },
+        "up": {
+          "texture": "#frame",
+          "cullface": "up"
+        }
+      }
+    }
+  ]
+}

@@ -1,0 +1,14 @@
+{
+  "modelYOffset": 1,
+  "parts": [
+    {
+      "names": [
+        "int_end_blind"
+      ],
+      "positionDefinitions": [
+        "end1"
+      ],
+      "renderStage": "INTERIOR"
+    }
+  ]
+}

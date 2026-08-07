@@ -1,0 +1,78 @@
+{
+  "parent": "minecraft:block/block",
+  "textures": {
+    "front": "station_announcer:block/fare_machine_front_bottom",
+    "side": "station_announcer:block/fare_machine_side",
+    "particle": "station_announcer:block/fare_machine_side"
+  },
+  "elements": [
+    {
+      "from": [
+        1,
+        0,
+        8
+      ],
+      "to": [
+        15,
+        16,
+        16
+      ],
+      "faces": {
+        "north": {
+          "texture": "#front",
+          "uv": [
+            1,
+            0,
+            15,
+            16
+          ]
+        },
+        "south": {
+          "texture": "#side",
+          "uv": [
+            8,
+            0,
+            16,
+            16
+          ]
+        },
+        "east": {
+          "texture": "#side",
+          "uv": [
+            0,
+            0,
+            8,
+            16
+          ]
+        },
+        "west": {
+          "texture": "#side",
+          "uv": [
+            0,
+            0,
+            8,
+            16
+          ]
+        },
+        "up": {
+          "texture": "#side",
+          "uv": [
+            8,
+            0,
+            16,
+            8
+          ]
+        },
+        "down": {
+          "texture": "#side",
+          "uv": [
+            8,
+            0,
+            16,
+            8
+          ]
+        }
+      }
+    }
+  ]
+}

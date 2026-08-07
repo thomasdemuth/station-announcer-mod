@@ -1,0 +1,77 @@
+{
+  "parent": "minecraft:block/block",
+  "textures": {
+    "s": "station_announcer:block/pids_pole",
+    "particle": "station_announcer:block/pids_pole"
+  },
+  "elements": [
+    {
+      "from": [
+        6.5,
+        0,
+        6.5
+      ],
+      "to": [
+        9.5,
+        16,
+        9.5
+      ],
+      "faces": {
+        "north": {
+          "texture": "#s",
+          "uv": [
+            0,
+            0,
+            3.0,
+            16
+          ]
+        },
+        "south": {
+          "texture": "#s",
+          "uv": [
+            0,
+            0,
+            3.0,
+            16
+          ]
+        },
+        "east": {
+          "texture": "#s",
+          "uv": [
+            0,
+            0,
+            3.0,
+            16
+          ]
+        },
+        "west": {
+          "texture": "#s",
+          "uv": [
+            0,
+            0,
+            3.0,
+            16
+          ]
+        },
+        "up": {
+          "texture": "#s",
+          "uv": [
+            0,
+            0,
+            3.0,
+            3.0
+          ]
+        },
+        "down": {
+          "texture": "#s",
+          "uv": [
+            0,
+            0,
+            3.0,
+            3.0
+          ]
+        }
+      }
+    }
+  ]
+}

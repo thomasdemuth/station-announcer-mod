@@ -1,0 +1,68 @@
+{
+  "modelYOffset": 1,
+  "parts": [
+    {
+      "names": [
+        "window_exterior"
+      ],
+      "positionDefinitions": [
+        "window"
+      ],
+      "renderStage": "EXTERIOR"
+    },
+    {
+      "names": [
+        "roof"
+      ],
+      "positionDefinitions": [
+        "window"
+      ],
+      "renderStage": "EXTERIOR"
+    },
+    {
+      "names": [
+        "door_exterior"
+      ],
+      "positionDefinitions": [
+        "door"
+      ],
+      "renderStage": "EXTERIOR"
+    },
+    {
+      "names": [
+        "roof_door"
+      ],
+      "positionDefinitions": [
+        "door"
+      ],
+      "renderStage": "EXTERIOR"
+    },
+    {
+      "names": [
+        "door_threshold"
+      ],
+      "positionDefinitions": [
+        "door"
+      ],
+      "renderStage": "EXTERIOR"
+    },
+    {
+      "names": [
+        "underframe"
+      ],
+      "positionDefinitions": [
+        "underframe"
+      ],
+      "renderStage": "EXTERIOR"
+    },
+    {
+      "names": [
+        "underframe_mini"
+      ],
+      "positionDefinitions": [
+        "underframeMini"
+      ],
+      "renderStage": "EXTERIOR"
+    }
+  ]
+}

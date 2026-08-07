@@ -1,0 +1,23 @@
+{
+  "modelYOffset": 1,
+  "parts": [
+    {
+      "names": [
+        "end_gangway_exterior"
+      ],
+      "positionDefinitions": [
+        "end2"
+      ],
+      "renderStage": "EXTERIOR"
+    },
+    {
+      "names": [
+        "end_gangway_exterior_mini"
+      ],
+      "positionDefinitions": [
+        "end2Mini"
+      ],
+      "renderStage": "EXTERIOR"
+    }
+  ]
+}

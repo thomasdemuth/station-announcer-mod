@@ -1,0 +1,23 @@
+{
+  "modelYOffset": 1,
+  "parts": [
+    {
+      "names": [
+        "panel_exterior"
+      ],
+      "positionDefinitions": [
+        "panel"
+      ],
+      "renderStage": "EXTERIOR"
+    },
+    {
+      "names": [
+        "door_exterior"
+      ],
+      "positionDefinitions": [
+        "door"
+      ],
+      "renderStage": "EXTERIOR"
+    }
+  ]
+}

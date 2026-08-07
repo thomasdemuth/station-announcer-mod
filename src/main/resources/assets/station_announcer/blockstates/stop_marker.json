@@ -1,0 +1,94 @@
+{
+  "variants": {
+    "mount=ceiling,standoff=false,facing=north": {
+      "model": "station_announcer:block/stop_marker_vertical"
+    },
+    "mount=ceiling,standoff=false,facing=east": {
+      "model": "station_announcer:block/stop_marker_vertical",
+      "y": 90
+    },
+    "mount=ceiling,standoff=false,facing=south": {
+      "model": "station_announcer:block/stop_marker_vertical",
+      "y": 180
+    },
+    "mount=ceiling,standoff=false,facing=west": {
+      "model": "station_announcer:block/stop_marker_vertical",
+      "y": 270
+    },
+    "mount=ceiling,standoff=true,facing=north": {
+      "model": "station_announcer:block/stop_marker_vertical"
+    },
+    "mount=ceiling,standoff=true,facing=east": {
+      "model": "station_announcer:block/stop_marker_vertical",
+      "y": 90
+    },
+    "mount=ceiling,standoff=true,facing=south": {
+      "model": "station_announcer:block/stop_marker_vertical",
+      "y": 180
+    },
+    "mount=ceiling,standoff=true,facing=west": {
+      "model": "station_announcer:block/stop_marker_vertical",
+      "y": 270
+    },
+    "mount=wall,standoff=false,facing=north": {
+      "model": "station_announcer:block/stop_marker_wall"
+    },
+    "mount=wall,standoff=false,facing=east": {
+      "model": "station_announcer:block/stop_marker_wall",
+      "y": 90
+    },
+    "mount=wall,standoff=false,facing=south": {
+      "model": "station_announcer:block/stop_marker_wall",
+      "y": 180
+    },
+    "mount=wall,standoff=false,facing=west": {
+      "model": "station_announcer:block/stop_marker_wall",
+      "y": 270
+    },
+    "mount=wall,standoff=true,facing=north": {
+      "model": "station_announcer:block/stop_marker_wall_bracket"
+    },
+    "mount=wall,standoff=true,facing=east": {
+      "model": "station_announcer:block/stop_marker_wall_bracket",
+      "y": 90
+    },
+    "mount=wall,standoff=true,facing=south": {
+      "model": "station_announcer:block/stop_marker_wall_bracket",
+      "y": 180
+    },
+    "mount=wall,standoff=true,facing=west": {
+      "model": "station_announcer:block/stop_marker_wall_bracket",
+      "y": 270
+    },
+    "mount=floor,standoff=false,facing=north": {
+      "model": "station_announcer:block/stop_marker_vertical"
+    },
+    "mount=floor,standoff=false,facing=east": {
+      "model": "station_announcer:block/stop_marker_vertical",
+      "y": 90
+    },
+    "mount=floor,standoff=false,facing=south": {
+      "model": "station_announcer:block/stop_marker_vertical",
+      "y": 180
+    },
+    "mount=floor,standoff=false,facing=west": {
+      "model": "station_announcer:block/stop_marker_vertical",
+      "y": 270
+    },
+    "mount=floor,standoff=true,facing=north": {
+      "model": "station_announcer:block/stop_marker_vertical"
+    },
+    "mount=floor,standoff=true,facing=east": {
+      "model": "station_announcer:block/stop_marker_vertical",
+      "y": 90
+    },
+    "mount=floor,standoff=true,facing=south": {
+      "model": "station_announcer:block/stop_marker_vertical",
+      "y": 180
+    },
+    "mount=floor,standoff=true,facing=west": {
+      "model": "station_announcer:block/stop_marker_vertical",
+      "y": 270
+    }
+  }
+}

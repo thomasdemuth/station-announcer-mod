@@ -1,0 +1,26 @@
+{
+  "type": "minecraft:crafting_shaped",
+  "category": "building",
+  "key": {
+    "I": {
+      "item": "minecraft:iron_ingot"
+    }
+  },
+  "pattern": [
+    "II",
+    "II",
+    "II"
+  ],
+  "result": {
+    "item": "station_announcer:turnstile_cap",
+    "count": 2
+  },
+  "fabric:load_conditions": [
+    {
+      "condition": "fabric:all_mods_loaded",
+      "values": [
+        "mtr"
+      ]
+    }
+  ]
+}

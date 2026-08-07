@@ -1,0 +1,23 @@
+{
+  "modelYOffset": 1,
+  "parts": [
+    {
+      "names": [
+        "int_end_gangway"
+      ],
+      "positionDefinitions": [
+        "intEnd1"
+      ],
+      "renderStage": "INTERIOR"
+    },
+    {
+      "names": [
+        "int_end_gangway_mini"
+      ],
+      "positionDefinitions": [
+        "intEnd1Mini"
+      ],
+      "renderStage": "INTERIOR"
+    }
+  ]
+}

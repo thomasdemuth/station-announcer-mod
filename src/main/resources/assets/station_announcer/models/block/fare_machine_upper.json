@@ -1,0 +1,146 @@
+{
+  "parent": "minecraft:block/block",
+  "textures": {
+    "front": "station_announcer:block/fare_machine_front_top",
+    "side": "station_announcer:block/fare_machine_side",
+    "particle": "station_announcer:block/fare_machine_side"
+  },
+  "elements": [
+    {
+      "from": [
+        1,
+        0,
+        8
+      ],
+      "to": [
+        15,
+        12,
+        16
+      ],
+      "faces": {
+        "north": {
+          "texture": "#front",
+          "uv": [
+            1,
+            4,
+            15,
+            16
+          ]
+        },
+        "south": {
+          "texture": "#side",
+          "uv": [
+            8,
+            4,
+            16,
+            16
+          ]
+        },
+        "east": {
+          "texture": "#side",
+          "uv": [
+            0,
+            4,
+            8,
+            16
+          ]
+        },
+        "west": {
+          "texture": "#side",
+          "uv": [
+            0,
+            4,
+            8,
+            16
+          ]
+        },
+        "up": {
+          "texture": "#side",
+          "uv": [
+            8,
+            0,
+            16,
+            8
+          ]
+        },
+        "down": {
+          "texture": "#side",
+          "uv": [
+            8,
+            0,
+            16,
+            8
+          ]
+        }
+      }
+    },
+    {
+      "from": [
+        2,
+        12,
+        10
+      ],
+      "to": [
+        14,
+        14,
+        16
+      ],
+      "faces": {
+        "north": {
+          "texture": "#side",
+          "uv": [
+            8,
+            0,
+            16,
+            2
+          ]
+        },
+        "south": {
+          "texture": "#side",
+          "uv": [
+            8,
+            0,
+            16,
+            2
+          ]
+        },
+        "east": {
+          "texture": "#side",
+          "uv": [
+            8,
+            0,
+            16,
+            2
+          ]
+        },
+        "west": {
+          "texture": "#side",
+          "uv": [
+            8,
+            0,
+            16,
+            2
+          ]
+        },
+        "up": {
+          "texture": "#side",
+          "uv": [
+            8,
+            0,
+            16,
+            2
+          ]
+        },
+        "down": {
+          "texture": "#side",
+          "uv": [
+            8,
+            0,
+            16,
+            2
+          ]
+        }
+      }
+    }
+  ]
+}

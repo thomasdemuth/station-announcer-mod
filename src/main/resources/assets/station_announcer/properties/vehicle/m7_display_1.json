@@ -1,0 +1,69 @@
+{
+  "modelYOffset": 1,
+  "parts": [
+    {
+      "names": [
+        "front_destination_display"
+      ],
+      "positionDefinitions": [
+        "bbEnd1"
+      ],
+      "type": "DISPLAY",
+      "displayType": "DESTINATION",
+      "displayOptions": [
+        "UPPER_CASE",
+        "CYCLE_LANGUAGES",
+        "SINGLE_LINE",
+        "SCROLL_NORMAL"
+      ],
+      "displayColor": "FF9900",
+      "displayDefaultText": "Not In Service",
+      "displayXPadding": 0.25,
+      "displayYPadding": 0.25
+    },
+    {
+      "names": [
+        "front_destination_display_mini"
+      ],
+      "positionDefinitions": [
+        "bbEnd1Mini"
+      ],
+      "type": "DISPLAY",
+      "displayType": "DESTINATION",
+      "displayOptions": [
+        "UPPER_CASE",
+        "CYCLE_LANGUAGES",
+        "SINGLE_LINE",
+        "SCROLL_NORMAL"
+      ],
+      "displayColor": "FF9900",
+      "displayDefaultText": "Not In Service",
+      "displayXPadding": 0.25,
+      "displayYPadding": 0.25
+    },
+    {
+      "names": [
+        "front_route_color"
+      ],
+      "positionDefinitions": [
+        "bbEnd1"
+      ],
+      "type": "DISPLAY",
+      "displayType": "ROUTE_COLOR",
+      "displayXPadding": 0,
+      "displayYPadding": 0
+    },
+    {
+      "names": [
+        "front_route_color_mini"
+      ],
+      "positionDefinitions": [
+        "bbEnd1Mini"
+      ],
+      "type": "DISPLAY",
+      "displayType": "ROUTE_COLOR",
+      "displayXPadding": 0,
+      "displayYPadding": 0
+    }
+  ]
+}

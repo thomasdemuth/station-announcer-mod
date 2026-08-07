@@ -1,0 +1,25 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "sign-maker",
+      "runtimeExecutable": "node",
+      "runtimeArgs": ["/private/tmp/claude-501/-Users-thomasdemuth-Documents-Station-Announcer-Mod/85ddb505-5392-41e3-8fe3-bc581e65681b/scratchpad/serve.js"],
+      "port": 8741
+    },
+    {
+      "name": "bathroom-reports",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": [
+        "--prefix",
+        "/Users/thomasdemuth/Documents/bathroom-reports",
+        "run",
+        "dev",
+        "--",
+        "-p",
+        "3100"
+      ],
+      "port": 3100
+    }
+  ]
+}

@@ -1,0 +1,282 @@
+{
+  "parent": "minecraft:block/block",
+  "textures": {
+    "green": "station_announcer:block/railing_green",
+    "conc": "station_announcer:block/railing_concrete",
+    "particle": "station_announcer:block/railing_green"
+  },
+  "elements": [
+    {
+      "from": [
+        3,
+        0,
+        3
+      ],
+      "to": [
+        13,
+        2,
+        13
+      ],
+      "faces": {
+        "north": {
+          "texture": "#conc",
+          "uv": [
+            0,
+            0,
+            10.0,
+            2.0
+          ]
+        },
+        "south": {
+          "texture": "#conc",
+          "uv": [
+            0,
+            0,
+            10.0,
+            2.0
+          ]
+        },
+        "east": {
+          "texture": "#conc",
+          "uv": [
+            0,
+            0,
+            10.0,
+            2.0
+          ]
+        },
+        "west": {
+          "texture": "#conc",
+          "uv": [
+            0,
+            0,
+            10.0,
+            2.0
+          ]
+        },
+        "up": {
+          "texture": "#conc",
+          "uv": [
+            0,
+            0,
+            10.0,
+            10.0
+          ]
+        },
+        "down": {
+          "texture": "#conc",
+          "uv": [
+            0,
+            0,
+            10.0,
+            10.0
+          ]
+        }
+      }
+    },
+    {
+      "from": [
+        4.5,
+        2,
+        4.5
+      ],
+      "to": [
+        11.5,
+        22,
+        11.5
+      ],
+      "faces": {
+        "north": {
+          "texture": "#green",
+          "uv": [
+            0,
+            0,
+            7.0,
+            16
+          ]
+        },
+        "south": {
+          "texture": "#green",
+          "uv": [
+            0,
+            0,
+            7.0,
+            16
+          ]
+        },
+        "east": {
+          "texture": "#green",
+          "uv": [
+            0,
+            0,
+            7.0,
+            16
+          ]
+        },
+        "west": {
+          "texture": "#green",
+          "uv": [
+            0,
+            0,
+            7.0,
+            16
+          ]
+        },
+        "up": {
+          "texture": "#green",
+          "uv": [
+            0,
+            0,
+            7.0,
+            7.0
+          ]
+        },
+        "down": {
+          "texture": "#green",
+          "uv": [
+            0,
+            0,
+            7.0,
+            7.0
+          ]
+        }
+      }
+    },
+    {
+      "from": [
+        3.5,
+        22,
+        3.5
+      ],
+      "to": [
+        12.5,
+        23.5,
+        12.5
+      ],
+      "faces": {
+        "north": {
+          "texture": "#green",
+          "uv": [
+            0,
+            0,
+            9.0,
+            1.5
+          ]
+        },
+        "south": {
+          "texture": "#green",
+          "uv": [
+            0,
+            0,
+            9.0,
+            1.5
+          ]
+        },
+        "east": {
+          "texture": "#green",
+          "uv": [
+            0,
+            0,
+            9.0,
+            1.5
+          ]
+        },
+        "west": {
+          "texture": "#green",
+          "uv": [
+            0,
+            0,
+            9.0,
+            1.5
+          ]
+        },
+        "up": {
+          "texture": "#green",
+          "uv": [
+            0,
+            0,
+            9.0,
+            9.0
+          ]
+        },
+        "down": {
+          "texture": "#green",
+          "uv": [
+            0,
+            0,
+            9.0,
+            9.0
+          ]
+        }
+      }
+    },
+    {
+      "from": [
+        5,
+        23.5,
+        5
+      ],
+      "to": [
+        11,
+        24,
+        11
+      ],
+      "faces": {
+        "north": {
+          "texture": "#green",
+          "uv": [
+            0,
+            0,
+            6.0,
+            0.5
+          ]
+        },
+        "south": {
+          "texture": "#green",
+          "uv": [
+            0,
+            0,
+            6.0,
+            0.5
+          ]
+        },
+        "east": {
+          "texture": "#green",
+          "uv": [
+            0,
+            0,
+            6.0,
+            0.5
+          ]
+        },
+        "west": {
+          "texture": "#green",
+          "uv": [
+            0,
+            0,
+            6.0,
+            0.5
+          ]
+        },
+        "up": {
+          "texture": "#green",
+          "uv": [
+            0,
+            0,
+            6.0,
+            6.0
+          ]
+        },
+        "down": {
+          "texture": "#green",
+          "uv": [
+            0,
+            0,
+            6.0,
+            6.0
+          ]
+        }
+      }
+    }
+  ]
+}

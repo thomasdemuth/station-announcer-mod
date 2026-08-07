@@ -1,0 +1,38 @@
+{
+  "type": "minecraft:crafting_shaped",
+  "category": "misc",
+  "key": {
+    "G": {
+      "item": "minecraft:glass_pane"
+    },
+    "Q": {
+      "item": "minecraft:quartz"
+    },
+    "I": {
+      "item": "minecraft:iron_ingot"
+    },
+    "R": {
+      "item": "minecraft:redstone"
+    },
+    "C": {
+      "item": "minecraft:chain"
+    }
+  },
+  "pattern": [
+    "CIC",
+    "GQG",
+    "GRG"
+  ],
+  "result": {
+    "item": "station_announcer:railroad_pids_hanging",
+    "count": 1
+  },
+  "fabric:load_conditions": [
+    {
+      "condition": "fabric:all_mods_loaded",
+      "values": [
+        "mtr"
+      ]
+    }
+  ]
+}

@@ -1,0 +1,6 @@
+{
+  "parent": "minecraft:item/generated",
+  "textures": {
+    "layer0": "station_announcer:item/station_name_mosaic"
+  }
+}

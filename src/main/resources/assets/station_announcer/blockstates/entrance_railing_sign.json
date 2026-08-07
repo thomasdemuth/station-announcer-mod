@@ -1,0 +1,47 @@
+{
+  "multipart": [
+    {
+      "when": {
+        "post": "true"
+      },
+      "apply": {
+        "model": "station_announcer:block/railing_post"
+      }
+    },
+    {
+      "when": {
+        "north": "true"
+      },
+      "apply": {
+        "model": "station_announcer:block/railing_arm_plain"
+      }
+    },
+    {
+      "when": {
+        "east": "true"
+      },
+      "apply": {
+        "model": "station_announcer:block/railing_arm_plain",
+        "y": 90
+      }
+    },
+    {
+      "when": {
+        "south": "true"
+      },
+      "apply": {
+        "model": "station_announcer:block/railing_arm_plain",
+        "y": 180
+      }
+    },
+    {
+      "when": {
+        "west": "true"
+      },
+      "apply": {
+        "model": "station_announcer:block/railing_arm_plain",
+        "y": 270
+      }
+    }
+  ]
+}

@@ -1,0 +1,83 @@
+{
+  "parent": "minecraft:block/block",
+  "textures": {
+    "p": "station_announcer:block/pipe_gray",
+    "particle": "station_announcer:block/pipe_gray"
+  },
+  "elements": [
+    {
+      "from": [
+        6.5,
+        13.0,
+        6.5
+      ],
+      "to": [
+        9.5,
+        16,
+        9.5
+      ],
+      "faces": {
+        "north": {
+          "texture": "#p",
+          "uv": [
+            0,
+            0,
+            3.0,
+            3.0
+          ],
+          "tintindex": 0
+        },
+        "south": {
+          "texture": "#p",
+          "uv": [
+            0,
+            0,
+            3.0,
+            3.0
+          ],
+          "tintindex": 0
+        },
+        "east": {
+          "texture": "#p",
+          "uv": [
+            0,
+            0,
+            3.0,
+            3.0
+          ],
+          "tintindex": 0
+        },
+        "west": {
+          "texture": "#p",
+          "uv": [
+            0,
+            0,
+            3.0,
+            3.0
+          ],
+          "tintindex": 0
+        },
+        "up": {
+          "texture": "#p",
+          "uv": [
+            0,
+            0,
+            3.0,
+            3.0
+          ],
+          "tintindex": 0
+        },
+        "down": {
+          "texture": "#p",
+          "uv": [
+            0,
+            0,
+            3.0,
+            3.0
+          ],
+          "tintindex": 0
+        }
+      }
+    }
+  ]
+}

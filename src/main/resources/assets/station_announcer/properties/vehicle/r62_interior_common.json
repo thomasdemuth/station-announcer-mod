@@ -1,0 +1,23 @@
+{
+  "modelYOffset": 1,
+  "parts": [
+    {
+      "names": [
+        "int_panel"
+      ],
+      "positionDefinitions": [
+        "panel"
+      ],
+      "renderStage": "INTERIOR"
+    },
+    {
+      "names": [
+        "int_door"
+      ],
+      "positionDefinitions": [
+        "door"
+      ],
+      "renderStage": "INTERIOR"
+    }
+  ]
+}

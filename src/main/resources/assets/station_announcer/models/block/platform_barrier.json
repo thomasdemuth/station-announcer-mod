@@ -1,0 +1,129 @@
+{
+  "parent": "minecraft:block/block",
+  "textures": {
+    "steel": "station_announcer:block/platform_barrier_steel",
+    "post": "station_announcer:block/platform_barrier_post",
+    "mesh": "station_announcer:block/platform_barrier_mesh",
+    "particle": "station_announcer:block/platform_barrier_steel"
+  },
+  "__comment": "Nothing but the posts may end exactly on x=0/16: at the end of a run every face on that plane is visible at once. Panel parts stop 0.05-0.1 short (their ends hide inside the posts), the hand-rail core overshoots so runs still join seamlessly.",
+  "elements": [
+    {
+      "__comment": "woven wire infill",
+      "from": [0.1, 2.6, 7.6],
+      "to": [15.9, 12.4, 8.4],
+      "faces": {
+        "north": { "texture": "#mesh" },
+        "south": { "texture": "#mesh" },
+        "up": { "texture": "#mesh" },
+        "down": { "texture": "#mesh" },
+        "east": { "texture": "#mesh" },
+        "west": { "texture": "#mesh" }
+      }
+    },
+    {
+      "__comment": "bottom frame rail",
+      "from": [0.05, 1.5, 6.9],
+      "to": [15.95, 2.8, 9.1],
+      "faces": {
+        "north": { "texture": "#steel" },
+        "south": { "texture": "#steel" },
+        "up": { "texture": "#steel" },
+        "down": { "texture": "#steel" },
+        "east": { "texture": "#steel", "uv": [0, 9, 3, 12] },
+        "west": { "texture": "#steel", "uv": [0, 9, 3, 12] }
+      }
+    },
+    {
+      "__comment": "top frame rail, carries the mesh panel",
+      "from": [0.07, 12.2, 6.9],
+      "to": [15.93, 13.7, 9.1],
+      "faces": {
+        "north": { "texture": "#steel" },
+        "south": { "texture": "#steel" },
+        "up": { "texture": "#steel" },
+        "down": { "texture": "#steel" },
+        "east": { "texture": "#steel", "uv": [0, 9, 3, 12] },
+        "west": { "texture": "#steel", "uv": [0, 9, 3, 12] }
+      }
+    },
+    {
+      "__comment": "hand rail tube: wide slab of the octagonal section",
+      "from": [0.05, 13.6, 6.6],
+      "to": [15.95, 15.6, 9.4],
+      "faces": {
+        "north": { "texture": "#steel" },
+        "south": { "texture": "#steel" },
+        "up": { "texture": "#steel" },
+        "down": { "texture": "#steel" },
+        "east": { "texture": "#steel", "uv": [0, 9, 3, 12] },
+        "west": { "texture": "#steel", "uv": [0, 9, 3, 12] }
+      }
+    },
+    {
+      "__comment": "hand rail tube: tall slab of the octagonal section; overshoots both block edges so neighbouring rails interpenetrate instead of meeting face to face (explicit uv - auto-uv would sample outside the sprite past x=16)",
+      "from": [-0.05, 13.2, 7.0],
+      "to": [16.05, 15.9, 9.0],
+      "faces": {
+        "north": { "texture": "#steel", "uv": [0, 0.1, 16, 2.8] },
+        "south": { "texture": "#steel", "uv": [0, 0.1, 16, 2.8] },
+        "up": { "texture": "#steel", "uv": [0, 7, 16, 9] },
+        "down": { "texture": "#steel", "uv": [0, 7, 16, 9] },
+        "east": { "texture": "#steel", "uv": [0, 9, 3, 12] },
+        "west": { "texture": "#steel", "uv": [0, 9, 3, 12] }
+      }
+    },
+    {
+      "__comment": "left post",
+      "from": [0, 0.4, 6.7],
+      "to": [1.6, 14.8, 9.3],
+      "faces": {
+        "north": { "texture": "#post" },
+        "south": { "texture": "#post" },
+        "east": { "texture": "#post" },
+        "west": { "texture": "#post" },
+        "up": { "texture": "#post" },
+        "down": { "texture": "#post" }
+      }
+    },
+    {
+      "__comment": "right post",
+      "from": [14.4, 0.4, 6.7],
+      "to": [16, 14.8, 9.3],
+      "faces": {
+        "north": { "texture": "#post" },
+        "south": { "texture": "#post" },
+        "east": { "texture": "#post" },
+        "west": { "texture": "#post" },
+        "up": { "texture": "#post" },
+        "down": { "texture": "#post" }
+      }
+    },
+    {
+      "__comment": "left foot plate; overshoots the block edge so it never shares the post's end plane (explicit uv on the x-dependent faces)",
+      "from": [-0.05, 0, 5.4],
+      "to": [2, 0.8, 10.6],
+      "faces": {
+        "north": { "texture": "#post", "uv": [14, 15.2, 16, 16] },
+        "south": { "texture": "#post", "uv": [0, 15.2, 2, 16] },
+        "east": { "texture": "#post" },
+        "west": { "texture": "#post" },
+        "up": { "texture": "#post", "uv": [0, 5.4, 2, 10.6] },
+        "down": { "texture": "#post", "uv": [0, 5.4, 2, 10.6], "cullface": "down" }
+      }
+    },
+    {
+      "__comment": "right foot plate; butts exactly against the next block's overshooting left plate, so the merged pad has no overlapping top faces",
+      "from": [14, 0, 5.4],
+      "to": [15.95, 0.8, 10.6],
+      "faces": {
+        "north": { "texture": "#post", "uv": [0, 15.2, 2, 16] },
+        "south": { "texture": "#post", "uv": [14, 15.2, 16, 16] },
+        "east": { "texture": "#post" },
+        "west": { "texture": "#post" },
+        "up": { "texture": "#post", "uv": [14, 5.4, 16, 10.6] },
+        "down": { "texture": "#post", "uv": [14, 5.4, 16, 10.6], "cullface": "down" }
+      }
+    }
+  ]
+}

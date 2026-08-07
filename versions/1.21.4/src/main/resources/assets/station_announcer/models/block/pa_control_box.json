@@ -1,0 +1,7 @@
+{
+  "parent": "minecraft:block/cube_column",
+  "textures": {
+    "end": "station_announcer:block/control_box_top",
+    "side": "station_announcer:block/control_box_side"
+  }
+}

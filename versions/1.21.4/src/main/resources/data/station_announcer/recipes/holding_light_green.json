@@ -1,0 +1,32 @@
+{
+  "type": "minecraft:crafting_shaped",
+  "category": "redstone",
+  "key": {
+    "I": {
+      "item": "minecraft:iron_ingot"
+    },
+    "G": {
+      "item": "minecraft:glowstone_dust"
+    },
+    "D": {
+      "item": "minecraft:green_dye"
+    }
+  },
+  "pattern": [
+    "I",
+    "D",
+    "G"
+  ],
+  "result": {
+    "item": "station_announcer:holding_light_green",
+    "count": 2
+  },
+  "fabric:load_conditions": [
+    {
+      "condition": "fabric:all_mods_loaded",
+      "values": [
+        "mtr"
+      ]
+    }
+  ]
+}

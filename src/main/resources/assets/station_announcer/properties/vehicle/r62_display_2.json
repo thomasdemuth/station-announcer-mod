@@ -1,0 +1,34 @@
+{
+  "modelYOffset": 1,
+  "parts": [
+    {
+      "names": [
+        "front_route_color"
+      ],
+      "positionDefinitions": [
+        "bbEnd2"
+      ],
+      "type": "DISPLAY",
+      "displayType": "ROUTE_COLOR_ROUNDED",
+      "displayXPadding": 0.0,
+      "displayYPadding": 0.0
+    },
+    {
+      "names": [
+        "front_route_number"
+      ],
+      "positionDefinitions": [
+        "bbEnd2"
+      ],
+      "type": "DISPLAY",
+      "displayType": "ROUTE_NUMBER",
+      "displayXPadding": 0.25,
+      "displayYPadding": 0.25,
+      "displayOptions": [
+        "UPPER_CASE"
+      ],
+      "displayColor": "FFFFFF",
+      "displayDefaultText": ""
+    }
+  ]
+}

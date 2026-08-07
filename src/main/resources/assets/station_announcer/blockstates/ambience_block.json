@@ -1,0 +1,7 @@
+{
+  "variants": {
+    "": {
+      "model": "station_announcer:block/ambience_block"
+    }
+  }
+}

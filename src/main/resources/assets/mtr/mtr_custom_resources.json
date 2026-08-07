@@ -1,0 +1,914 @@
+{
+  "vehicles": [
+    {
+      "id": "m7_trailer",
+      "name": "LIRR M7 Trailer (Normal)",
+      "color": "B9BDC2",
+      "transportMode": "TRAIN",
+      "width": 2,
+      "couplingPadding1": 0,
+      "couplingPadding2": 0,
+      "wikipediaArticle": "M7_(railcar)",
+      "tags": [
+        "family:m7",
+        "iso_3166:US",
+        "doors:4",
+        "type:trailer"
+      ],
+      "models": [
+        {
+          "modelResource": "station_announcer:models/vehicle/m7.obj",
+          "textureResource": "station_announcer:textures/vehicle/m7/default.png",
+          "modelPropertiesResource": "station_announcer:properties/vehicle/m7_common.json",
+          "positionDefinitionsResource": "station_announcer:properties/definition/m7.json"
+        },
+        {
+          "modelResource": "station_announcer:models/vehicle/m7.obj",
+          "textureResource": "station_announcer:textures/vehicle/m7/default.png",
+          "modelPropertiesResource": "station_announcer:properties/vehicle/m7_end_1.json",
+          "positionDefinitionsResource": "station_announcer:properties/definition/m7.json"
+        },
+        {
+          "modelResource": "station_announcer:models/vehicle/m7.obj",
+          "textureResource": "station_announcer:textures/vehicle/m7/default.png",
+          "modelPropertiesResource": "station_announcer:properties/vehicle/m7_end_2.json",
+          "positionDefinitionsResource": "station_announcer:properties/definition/m7.json"
+        },
+        {
+          "modelResource": "station_announcer:models/vehicle/m7_doors.bbmodel",
+          "textureResource": "station_announcer:textures/vehicle/m7/doors_box.png",
+          "modelPropertiesResource": "station_announcer:properties/vehicle/m7_doors.json",
+          "positionDefinitionsResource": "station_announcer:properties/definition/m7.json"
+        },
+        {
+          "modelResource": "station_announcer:models/vehicle/m7_interior.obj",
+          "textureResource": "station_announcer:textures/vehicle/m7/default.png",
+          "modelPropertiesResource": "station_announcer:properties/vehicle/m7_interior_common.json",
+          "positionDefinitionsResource": "station_announcer:properties/definition/m7.json"
+        },
+        {
+          "modelResource": "station_announcer:models/vehicle/m7_interior.obj",
+          "textureResource": "station_announcer:textures/vehicle/m7/default.png",
+          "modelPropertiesResource": "station_announcer:properties/vehicle/m7_interior_end_1.json",
+          "positionDefinitionsResource": "station_announcer:properties/definition/m7.json"
+        },
+        {
+          "modelResource": "station_announcer:models/vehicle/m7_interior.obj",
+          "textureResource": "station_announcer:textures/vehicle/m7/default.png",
+          "modelPropertiesResource": "station_announcer:properties/vehicle/m7_interior_end_2.json",
+          "positionDefinitionsResource": "station_announcer:properties/definition/m7.json"
+        }
+      ],
+      "bogie1Models": [
+        {
+          "modelResource": "mtr:models/vehicle/bogie_1.bbmodel",
+          "textureResource": "mtr:textures/vehicle/bogie_1.png",
+          "modelPropertiesResource": "mtr:properties/vehicle/bogie_1.json",
+          "positionDefinitionsResource": "mtr:properties/definition/origin.json"
+        }
+      ],
+      "bogie2Models": [
+        {
+          "modelResource": "mtr:models/vehicle/bogie_1.bbmodel",
+          "textureResource": "mtr:textures/vehicle/bogie_1.png",
+          "modelPropertiesResource": "mtr:properties/vehicle/bogie_1.json",
+          "positionDefinitionsResource": "mtr:properties/definition/origin.json"
+        }
+      ],
+      "hasGangway1": true,
+      "hasGangway2": true,
+      "hasBarrier1": true,
+      "hasBarrier2": true,
+      "bveSoundBaseResource": "station_announcer:m7",
+      "length": 26.0,
+      "bogie1Position": -9.88,
+      "bogie2Position": 9.88
+    },
+    {
+      "id": "m7_cab_1",
+      "name": "LIRR M7 Cab (Forwards) (Normal)",
+      "color": "B9BDC2",
+      "transportMode": "TRAIN",
+      "width": 2,
+      "couplingPadding1": 0,
+      "couplingPadding2": 0,
+      "wikipediaArticle": "M7_(railcar)",
+      "tags": [
+        "family:m7",
+        "iso_3166:US",
+        "doors:4",
+        "type:cab_1"
+      ],
+      "models": [
+        {
+          "modelResource": "station_announcer:models/vehicle/m7.obj",
+          "textureResource": "station_announcer:textures/vehicle/m7/default.png",
+          "modelPropertiesResource": "station_announcer:properties/vehicle/m7_common.json",
+          "positionDefinitionsResource": "station_announcer:properties/definition/m7.json"
+        },
+        {
+          "modelResource": "station_announcer:models/vehicle/m7.obj",
+          "textureResource": "station_announcer:textures/vehicle/m7/default.png",
+          "modelPropertiesResource": "station_announcer:properties/vehicle/m7_cab_1.json",
+          "positionDefinitionsResource": "station_announcer:properties/definition/m7.json"
+        },
+        {
+          "modelResource": "station_announcer:models/vehicle/m7.obj",
+          "textureResource": "station_announcer:textures/vehicle/m7/default.png",
+          "modelPropertiesResource": "station_announcer:properties/vehicle/m7_end_2.json",
+          "positionDefinitionsResource": "station_announcer:properties/definition/m7.json"
+        },
+        {
+          "modelResource": "station_announcer:models/vehicle/m7_doors.bbmodel",
+          "textureResource": "station_announcer:textures/vehicle/m7/doors_box.png",
+          "modelPropertiesResource": "station_announcer:properties/vehicle/m7_doors.json",
+          "positionDefinitionsResource": "station_announcer:properties/definition/m7.json"
+        },
+        {
+          "modelResource": "station_announcer:models/vehicle/m7_doors.bbmodel",
+          "textureResource": "station_announcer:textures/vehicle/m7/doors_box.png",
+          "modelPropertiesResource": "station_announcer:properties/vehicle/m7_display_1.json",
+          "positionDefinitionsResource": "station_announcer:properties/definition/m7.json"
+        },
+        {
+          "modelResource": "station_announcer:models/vehicle/m7_interior.obj",
+          "textureResource": "station_announcer:textures/vehicle/m7/default.png",
+          "modelPropertiesResource": "station_announcer:properties/vehicle/m7_interior_common.json",
+          "positionDefinitionsResource": "station_announcer:properties/definition/m7.json"
+        },
+        {
+          "modelResource": "station_announcer:models/vehicle/m7_interior.obj",
+          "textureResource": "station_announcer:textures/vehicle/m7/default.png",
+          "modelPropertiesResource": "station_announcer:properties/vehicle/m7_interior_cab_1.json",
+          "positionDefinitionsResource": "station_announcer:properties/definition/m7.json"
+        },
+        {
+          "modelResource": "station_announcer:models/vehicle/m7_interior.obj",
+          "textureResource": "station_announcer:textures/vehicle/m7/default.png",
+          "modelPropertiesResource": "station_announcer:properties/vehicle/m7_interior_end_2.json",
+          "positionDefinitionsResource": "station_announcer:properties/definition/m7.json"
+        }
+      ],
+      "bogie1Models": [
+        {
+          "modelResource": "mtr:models/vehicle/bogie_1.bbmodel",
+          "textureResource": "mtr:textures/vehicle/bogie_1.png",
+          "modelPropertiesResource": "mtr:properties/vehicle/bogie_1.json",
+          "positionDefinitionsResource": "mtr:properties/definition/origin.json"
+        }
+      ],
+      "bogie2Models": [
+        {
+          "modelResource": "mtr:models/vehicle/bogie_1.bbmodel",
+          "textureResource": "mtr:textures/vehicle/bogie_1.png",
+          "modelPropertiesResource": "mtr:properties/vehicle/bogie_1.json",
+          "positionDefinitionsResource": "mtr:properties/definition/origin.json"
+        }
+      ],
+      "hasGangway1": true,
+      "hasGangway2": true,
+      "hasBarrier1": true,
+      "hasBarrier2": true,
+      "bveSoundBaseResource": "station_announcer:m7",
+      "length": 26.0,
+      "bogie1Position": -9.88,
+      "bogie2Position": 9.88
+    },
+    {
+      "id": "m7_cab_2",
+      "name": "LIRR M7 Cab (Backwards) (Normal)",
+      "color": "B9BDC2",
+      "transportMode": "TRAIN",
+      "width": 2,
+      "couplingPadding1": 0,
+      "couplingPadding2": 0,
+      "wikipediaArticle": "M7_(railcar)",
+      "tags": [
+        "family:m7",
+        "iso_3166:US",
+        "doors:4",
+        "type:cab_2"
+      ],
+      "models": [
+        {
+          "modelResource": "station_announcer:models/vehicle/m7.obj",
+          "textureResource": "station_announcer:textures/vehicle/m7/default.png",
+          "modelPropertiesResource": "station_announcer:properties/vehicle/m7_common.json",
+          "positionDefinitionsResource": "station_announcer:properties/definition/m7.json"
+        },
+        {
+          "modelResource": "station_announcer:models/vehicle/m7.obj",
+          "textureResource": "station_announcer:textures/vehicle/m7/default.png",
+          "modelPropertiesResource": "station_announcer:properties/vehicle/m7_end_1.json",
+          "positionDefinitionsResource": "station_announcer:properties/definition/m7.json"
+        },
+        {
+          "modelResource": "station_announcer:models/vehicle/m7.obj",
+          "textureResource": "station_announcer:textures/vehicle/m7/default.png",
+          "modelPropertiesResource": "station_announcer:properties/vehicle/m7_cab_2.json",
+          "positionDefinitionsResource": "station_announcer:properties/definition/m7.json"
+        },
+        {
+          "modelResource": "station_announcer:models/vehicle/m7_doors.bbmodel",
+          "textureResource": "station_announcer:textures/vehicle/m7/doors_box.png",
+          "modelPropertiesResource": "station_announcer:properties/vehicle/m7_doors.json",
+          "positionDefinitionsResource": "station_announcer:properties/definition/m7.json"
+        },
+        {
+          "modelResource": "station_announcer:models/vehicle/m7_doors.bbmodel",
+          "textureResource": "station_announcer:textures/vehicle/m7/doors_box.png",
+          "modelPropertiesResource": "station_announcer:properties/vehicle/m7_display_2.json",
+          "positionDefinitionsResource": "station_announcer:properties/definition/m7.json"
+        },
+        {
+          "modelResource": "station_announcer:models/vehicle/m7_interior.obj",
+          "textureResource": "station_announcer:textures/vehicle/m7/default.png",
+          "modelPropertiesResource": "station_announcer:properties/vehicle/m7_interior_common.json",
+          "positionDefinitionsResource": "station_announcer:properties/definition/m7.json"
+        },
+        {
+          "modelResource": "station_announcer:models/vehicle/m7_interior.obj",
+          "textureResource": "station_announcer:textures/vehicle/m7/default.png",
+          "modelPropertiesResource": "station_announcer:properties/vehicle/m7_interior_end_1.json",
+          "positionDefinitionsResource": "station_announcer:properties/definition/m7.json"
+        },
+        {
+          "modelResource": "station_announcer:models/vehicle/m7_interior.obj",
+          "textureResource": "station_announcer:textures/vehicle/m7/default.png",
+          "modelPropertiesResource": "station_announcer:properties/vehicle/m7_interior_cab_2.json",
+          "positionDefinitionsResource": "station_announcer:properties/definition/m7.json"
+        }
+      ],
+      "bogie1Models": [
+        {
+          "modelResource": "mtr:models/vehicle/bogie_1.bbmodel",
+          "textureResource": "mtr:textures/vehicle/bogie_1.png",
+          "modelPropertiesResource": "mtr:properties/vehicle/bogie_1.json",
+          "positionDefinitionsResource": "mtr:properties/definition/origin.json"
+        }
+      ],
+      "bogie2Models": [
+        {
+          "modelResource": "mtr:models/vehicle/bogie_1.bbmodel",
+          "textureResource": "mtr:textures/vehicle/bogie_1.png",
+          "modelPropertiesResource": "mtr:properties/vehicle/bogie_1.json",
+          "positionDefinitionsResource": "mtr:properties/definition/origin.json"
+        }
+      ],
+      "hasGangway1": true,
+      "hasGangway2": true,
+      "hasBarrier1": true,
+      "hasBarrier2": true,
+      "bveSoundBaseResource": "station_announcer:m7",
+      "length": 26.0,
+      "bogie1Position": -9.88,
+      "bogie2Position": 9.88
+    },
+    {
+      "id": "m7_cab_3",
+      "name": "LIRR M7 Cab (Double) (Normal)",
+      "color": "B9BDC2",
+      "transportMode": "TRAIN",
+      "width": 2,
+      "couplingPadding1": 0,
+      "couplingPadding2": 0,
+      "wikipediaArticle": "M7_(railcar)",
+      "tags": [
+        "family:m7",
+        "iso_3166:US",
+        "doors:4",
+        "type:cab_3"
+      ],
+      "models": [
+        {
+          "modelResource": "station_announcer:models/vehicle/m7.obj",
+          "textureResource": "station_announcer:textures/vehicle/m7/default.png",
+          "modelPropertiesResource": "station_announcer:properties/vehicle/m7_common.json",
+          "positionDefinitionsResource": "station_announcer:properties/definition/m7.json"
+        },
+        {
+          "modelResource": "station_announcer:models/vehicle/m7.obj",
+          "textureResource": "station_announcer:textures/vehicle/m7/default.png",
+          "modelPropertiesResource": "station_announcer:properties/vehicle/m7_cab_1.json",
+          "positionDefinitionsResource": "station_announcer:properties/definition/m7.json"
+        },
+        {
+          "modelResource": "station_announcer:models/vehicle/m7.obj",
+          "textureResource": "station_announcer:textures/vehicle/m7/default.png",
+          "modelPropertiesResource": "station_announcer:properties/vehicle/m7_cab_2.json",
+          "positionDefinitionsResource": "station_announcer:properties/definition/m7.json"
+        },
+        {
+          "modelResource": "station_announcer:models/vehicle/m7_doors.bbmodel",
+          "textureResource": "station_announcer:textures/vehicle/m7/doors_box.png",
+          "modelPropertiesResource": "station_announcer:properties/vehicle/m7_doors.json",
+          "positionDefinitionsResource": "station_announcer:properties/definition/m7.json"
+        },
+        {
+          "modelResource": "station_announcer:models/vehicle/m7_doors.bbmodel",
+          "textureResource": "station_announcer:textures/vehicle/m7/doors_box.png",
+          "modelPropertiesResource": "station_announcer:properties/vehicle/m7_display_1.json",
+          "positionDefinitionsResource": "station_announcer:properties/definition/m7.json"
+        },
+        {
+          "modelResource": "station_announcer:models/vehicle/m7_doors.bbmodel",
+          "textureResource": "station_announcer:textures/vehicle/m7/doors_box.png",
+          "modelPropertiesResource": "station_announcer:properties/vehicle/m7_display_2.json",
+          "positionDefinitionsResource": "station_announcer:properties/definition/m7.json"
+        },
+        {
+          "modelResource": "station_announcer:models/vehicle/m7_interior.obj",
+          "textureResource": "station_announcer:textures/vehicle/m7/default.png",
+          "modelPropertiesResource": "station_announcer:properties/vehicle/m7_interior_common.json",
+          "positionDefinitionsResource": "station_announcer:properties/definition/m7.json"
+        },
+        {
+          "modelResource": "station_announcer:models/vehicle/m7_interior.obj",
+          "textureResource": "station_announcer:textures/vehicle/m7/default.png",
+          "modelPropertiesResource": "station_announcer:properties/vehicle/m7_interior_cab_1.json",
+          "positionDefinitionsResource": "station_announcer:properties/definition/m7.json"
+        },
+        {
+          "modelResource": "station_announcer:models/vehicle/m7_interior.obj",
+          "textureResource": "station_announcer:textures/vehicle/m7/default.png",
+          "modelPropertiesResource": "station_announcer:properties/vehicle/m7_interior_cab_2.json",
+          "positionDefinitionsResource": "station_announcer:properties/definition/m7.json"
+        }
+      ],
+      "bogie1Models": [
+        {
+          "modelResource": "mtr:models/vehicle/bogie_1.bbmodel",
+          "textureResource": "mtr:textures/vehicle/bogie_1.png",
+          "modelPropertiesResource": "mtr:properties/vehicle/bogie_1.json",
+          "positionDefinitionsResource": "mtr:properties/definition/origin.json"
+        }
+      ],
+      "bogie2Models": [
+        {
+          "modelResource": "mtr:models/vehicle/bogie_1.bbmodel",
+          "textureResource": "mtr:textures/vehicle/bogie_1.png",
+          "modelPropertiesResource": "mtr:properties/vehicle/bogie_1.json",
+          "positionDefinitionsResource": "mtr:properties/definition/origin.json"
+        }
+      ],
+      "hasGangway1": true,
+      "hasGangway2": true,
+      "hasBarrier1": true,
+      "hasBarrier2": true,
+      "bveSoundBaseResource": "station_announcer:m7",
+      "length": 26.0,
+      "bogie1Position": -9.88,
+      "bogie2Position": 9.88
+    },
+    {
+      "id": "m7_mini_trailer",
+      "name": "LIRR M7 Trailer (Mini)",
+      "color": "B9BDC2",
+      "transportMode": "TRAIN",
+      "width": 2,
+      "couplingPadding1": 0,
+      "couplingPadding2": 0,
+      "wikipediaArticle": "M7_(railcar)",
+      "tags": [
+        "family:m7",
+        "iso_3166:US",
+        "doors:4",
+        "type:trailer"
+      ],
+      "models": [
+        {
+          "modelResource": "station_announcer:models/vehicle/m7.obj",
+          "textureResource": "station_announcer:textures/vehicle/m7/default.png",
+          "modelPropertiesResource": "station_announcer:properties/vehicle/m7_common.json",
+          "positionDefinitionsResource": "station_announcer:properties/definition/m7_mini.json"
+        },
+        {
+          "modelResource": "station_announcer:models/vehicle/m7.obj",
+          "textureResource": "station_announcer:textures/vehicle/m7/default.png",
+          "modelPropertiesResource": "station_announcer:properties/vehicle/m7_end_1.json",
+          "positionDefinitionsResource": "station_announcer:properties/definition/m7_mini.json"
+        },
+        {
+          "modelResource": "station_announcer:models/vehicle/m7.obj",
+          "textureResource": "station_announcer:textures/vehicle/m7/default.png",
+          "modelPropertiesResource": "station_announcer:properties/vehicle/m7_end_2.json",
+          "positionDefinitionsResource": "station_announcer:properties/definition/m7_mini.json"
+        },
+        {
+          "modelResource": "station_announcer:models/vehicle/m7_doors.bbmodel",
+          "textureResource": "station_announcer:textures/vehicle/m7/doors_box.png",
+          "modelPropertiesResource": "station_announcer:properties/vehicle/m7_doors.json",
+          "positionDefinitionsResource": "station_announcer:properties/definition/m7_mini.json"
+        },
+        {
+          "modelResource": "station_announcer:models/vehicle/m7_interior.obj",
+          "textureResource": "station_announcer:textures/vehicle/m7/default.png",
+          "modelPropertiesResource": "station_announcer:properties/vehicle/m7_interior_common.json",
+          "positionDefinitionsResource": "station_announcer:properties/definition/m7_mini.json"
+        },
+        {
+          "modelResource": "station_announcer:models/vehicle/m7_interior.obj",
+          "textureResource": "station_announcer:textures/vehicle/m7/default.png",
+          "modelPropertiesResource": "station_announcer:properties/vehicle/m7_interior_end_1.json",
+          "positionDefinitionsResource": "station_announcer:properties/definition/m7_mini.json"
+        },
+        {
+          "modelResource": "station_announcer:models/vehicle/m7_interior.obj",
+          "textureResource": "station_announcer:textures/vehicle/m7/default.png",
+          "modelPropertiesResource": "station_announcer:properties/vehicle/m7_interior_end_2.json",
+          "positionDefinitionsResource": "station_announcer:properties/definition/m7_mini.json"
+        }
+      ],
+      "bogie1Models": [
+        {
+          "modelResource": "mtr:models/vehicle/bogie_1.bbmodel",
+          "textureResource": "mtr:textures/vehicle/bogie_1.png",
+          "modelPropertiesResource": "mtr:properties/vehicle/bogie_1.json",
+          "positionDefinitionsResource": "mtr:properties/definition/origin.json"
+        }
+      ],
+      "bogie2Models": [
+        {
+          "modelResource": "mtr:models/vehicle/bogie_1.bbmodel",
+          "textureResource": "mtr:textures/vehicle/bogie_1.png",
+          "modelPropertiesResource": "mtr:properties/vehicle/bogie_1.json",
+          "positionDefinitionsResource": "mtr:properties/definition/origin.json"
+        }
+      ],
+      "hasGangway1": true,
+      "hasGangway2": true,
+      "hasBarrier1": true,
+      "hasBarrier2": true,
+      "bveSoundBaseResource": "station_announcer:m7",
+      "length": 15.0,
+      "bogie1Position": -5.7,
+      "bogie2Position": 5.7
+    },
+    {
+      "id": "m7_mini_cab_1",
+      "name": "LIRR M7 Cab (Forwards) (Mini)",
+      "color": "B9BDC2",
+      "transportMode": "TRAIN",
+      "width": 2,
+      "couplingPadding1": 0,
+      "couplingPadding2": 0,
+      "wikipediaArticle": "M7_(railcar)",
+      "tags": [
+        "family:m7",
+        "iso_3166:US",
+        "doors:4",
+        "type:cab_1"
+      ],
+      "models": [
+        {
+          "modelResource": "station_announcer:models/vehicle/m7.obj",
+          "textureResource": "station_announcer:textures/vehicle/m7/default.png",
+          "modelPropertiesResource": "station_announcer:properties/vehicle/m7_common.json",
+          "positionDefinitionsResource": "station_announcer:properties/definition/m7_mini.json"
+        },
+        {
+          "modelResource": "station_announcer:models/vehicle/m7.obj",
+          "textureResource": "station_announcer:textures/vehicle/m7/default.png",
+          "modelPropertiesResource": "station_announcer:properties/vehicle/m7_cab_1.json",
+          "positionDefinitionsResource": "station_announcer:properties/definition/m7_mini.json"
+        },
+        {
+          "modelResource": "station_announcer:models/vehicle/m7.obj",
+          "textureResource": "station_announcer:textures/vehicle/m7/default.png",
+          "modelPropertiesResource": "station_announcer:properties/vehicle/m7_end_2.json",
+          "positionDefinitionsResource": "station_announcer:properties/definition/m7_mini.json"
+        },
+        {
+          "modelResource": "station_announcer:models/vehicle/m7_doors.bbmodel",
+          "textureResource": "station_announcer:textures/vehicle/m7/doors_box.png",
+          "modelPropertiesResource": "station_announcer:properties/vehicle/m7_doors.json",
+          "positionDefinitionsResource": "station_announcer:properties/definition/m7_mini.json"
+        },
+        {
+          "modelResource": "station_announcer:models/vehicle/m7_doors.bbmodel",
+          "textureResource": "station_announcer:textures/vehicle/m7/doors_box.png",
+          "modelPropertiesResource": "station_announcer:properties/vehicle/m7_display_1.json",
+          "positionDefinitionsResource": "station_announcer:properties/definition/m7_mini.json"
+        },
+        {
+          "modelResource": "station_announcer:models/vehicle/m7_interior.obj",
+          "textureResource": "station_announcer:textures/vehicle/m7/default.png",
+          "modelPropertiesResource": "station_announcer:properties/vehicle/m7_interior_common.json",
+          "positionDefinitionsResource": "station_announcer:properties/definition/m7_mini.json"
+        },
+        {
+          "modelResource": "station_announcer:models/vehicle/m7_interior.obj",
+          "textureResource": "station_announcer:textures/vehicle/m7/default.png",
+          "modelPropertiesResource": "station_announcer:properties/vehicle/m7_interior_cab_1.json",
+          "positionDefinitionsResource": "station_announcer:properties/definition/m7_mini.json"
+        },
+        {
+          "modelResource": "station_announcer:models/vehicle/m7_interior.obj",
+          "textureResource": "station_announcer:textures/vehicle/m7/default.png",
+          "modelPropertiesResource": "station_announcer:properties/vehicle/m7_interior_end_2.json",
+          "positionDefinitionsResource": "station_announcer:properties/definition/m7_mini.json"
+        }
+      ],
+      "bogie1Models": [
+        {
+          "modelResource": "mtr:models/vehicle/bogie_1.bbmodel",
+          "textureResource": "mtr:textures/vehicle/bogie_1.png",
+          "modelPropertiesResource": "mtr:properties/vehicle/bogie_1.json",
+          "positionDefinitionsResource": "mtr:properties/definition/origin.json"
+        }
+      ],
+      "bogie2Models": [
+        {
+          "modelResource": "mtr:models/vehicle/bogie_1.bbmodel",
+          "textureResource": "mtr:textures/vehicle/bogie_1.png",
+          "modelPropertiesResource": "mtr:properties/vehicle/bogie_1.json",
+          "positionDefinitionsResource": "mtr:properties/definition/origin.json"
+        }
+      ],
+      "hasGangway1": true,
+      "hasGangway2": true,
+      "hasBarrier1": true,
+      "hasBarrier2": true,
+      "bveSoundBaseResource": "station_announcer:m7",
+      "length": 15.0,
+      "bogie1Position": -5.7,
+      "bogie2Position": 5.7
+    },
+    {
+      "id": "m7_mini_cab_2",
+      "name": "LIRR M7 Cab (Backwards) (Mini)",
+      "color": "B9BDC2",
+      "transportMode": "TRAIN",
+      "width": 2,
+      "couplingPadding1": 0,
+      "couplingPadding2": 0,
+      "wikipediaArticle": "M7_(railcar)",
+      "tags": [
+        "family:m7",
+        "iso_3166:US",
+        "doors:4",
+        "type:cab_2"
+      ],
+      "models": [
+        {
+          "modelResource": "station_announcer:models/vehicle/m7.obj",
+          "textureResource": "station_announcer:textures/vehicle/m7/default.png",
+          "modelPropertiesResource": "station_announcer:properties/vehicle/m7_common.json",
+          "positionDefinitionsResource": "station_announcer:properties/definition/m7_mini.json"
+        },
+        {
+          "modelResource": "station_announcer:models/vehicle/m7.obj",
+          "textureResource": "station_announcer:textures/vehicle/m7/default.png",
+          "modelPropertiesResource": "station_announcer:properties/vehicle/m7_end_1.json",
+          "positionDefinitionsResource": "station_announcer:properties/definition/m7_mini.json"
+        },
+        {
+          "modelResource": "station_announcer:models/vehicle/m7.obj",
+          "textureResource": "station_announcer:textures/vehicle/m7/default.png",
+          "modelPropertiesResource": "station_announcer:properties/vehicle/m7_cab_2.json",
+          "positionDefinitionsResource": "station_announcer:properties/definition/m7_mini.json"
+        },
+        {
+          "modelResource": "station_announcer:models/vehicle/m7_doors.bbmodel",
+          "textureResource": "station_announcer:textures/vehicle/m7/doors_box.png",
+          "modelPropertiesResource": "station_announcer:properties/vehicle/m7_doors.json",
+          "positionDefinitionsResource": "station_announcer:properties/definition/m7_mini.json"
+        },
+        {
+          "modelResource": "station_announcer:models/vehicle/m7_doors.bbmodel",
+          "textureResource": "station_announcer:textures/vehicle/m7/doors_box.png",
+          "modelPropertiesResource": "station_announcer:properties/vehicle/m7_display_2.json",
+          "positionDefinitionsResource": "station_announcer:properties/definition/m7_mini.json"
+        },
+        {
+          "modelResource": "station_announcer:models/vehicle/m7_interior.obj",
+          "textureResource": "station_announcer:textures/vehicle/m7/default.png",
+          "modelPropertiesResource": "station_announcer:properties/vehicle/m7_interior_common.json",
+          "positionDefinitionsResource": "station_announcer:properties/definition/m7_mini.json"
+        },
+        {
+          "modelResource": "station_announcer:models/vehicle/m7_interior.obj",
+          "textureResource": "station_announcer:textures/vehicle/m7/default.png",
+          "modelPropertiesResource": "station_announcer:properties/vehicle/m7_interior_end_1.json",
+          "positionDefinitionsResource": "station_announcer:properties/definition/m7_mini.json"
+        },
+        {
+          "modelResource": "station_announcer:models/vehicle/m7_interior.obj",
+          "textureResource": "station_announcer:textures/vehicle/m7/default.png",
+          "modelPropertiesResource": "station_announcer:properties/vehicle/m7_interior_cab_2.json",
+          "positionDefinitionsResource": "station_announcer:properties/definition/m7_mini.json"
+        }
+      ],
+      "bogie1Models": [
+        {
+          "modelResource": "mtr:models/vehicle/bogie_1.bbmodel",
+          "textureResource": "mtr:textures/vehicle/bogie_1.png",
+          "modelPropertiesResource": "mtr:properties/vehicle/bogie_1.json",
+          "positionDefinitionsResource": "mtr:properties/definition/origin.json"
+        }
+      ],
+      "bogie2Models": [
+        {
+          "modelResource": "mtr:models/vehicle/bogie_1.bbmodel",
+          "textureResource": "mtr:textures/vehicle/bogie_1.png",
+          "modelPropertiesResource": "mtr:properties/vehicle/bogie_1.json",
+          "positionDefinitionsResource": "mtr:properties/definition/origin.json"
+        }
+      ],
+      "hasGangway1": true,
+      "hasGangway2": true,
+      "hasBarrier1": true,
+      "hasBarrier2": true,
+      "bveSoundBaseResource": "station_announcer:m7",
+      "length": 15.0,
+      "bogie1Position": -5.7,
+      "bogie2Position": 5.7
+    },
+    {
+      "id": "m7_mini_cab_3",
+      "name": "LIRR M7 Cab (Double) (Mini)",
+      "color": "B9BDC2",
+      "transportMode": "TRAIN",
+      "width": 2,
+      "couplingPadding1": 0,
+      "couplingPadding2": 0,
+      "wikipediaArticle": "M7_(railcar)",
+      "tags": [
+        "family:m7",
+        "iso_3166:US",
+        "doors:4",
+        "type:cab_3"
+      ],
+      "models": [
+        {
+          "modelResource": "station_announcer:models/vehicle/m7.obj",
+          "textureResource": "station_announcer:textures/vehicle/m7/default.png",
+          "modelPropertiesResource": "station_announcer:properties/vehicle/m7_common.json",
+          "positionDefinitionsResource": "station_announcer:properties/definition/m7_mini.json"
+        },
+        {
+          "modelResource": "station_announcer:models/vehicle/m7.obj",
+          "textureResource": "station_announcer:textures/vehicle/m7/default.png",
+          "modelPropertiesResource": "station_announcer:properties/vehicle/m7_cab_1.json",
+          "positionDefinitionsResource": "station_announcer:properties/definition/m7_mini.json"
+        },
+        {
+          "modelResource": "station_announcer:models/vehicle/m7.obj",
+          "textureResource": "station_announcer:textures/vehicle/m7/default.png",
+          "modelPropertiesResource": "station_announcer:properties/vehicle/m7_cab_2.json",
+          "positionDefinitionsResource": "station_announcer:properties/definition/m7_mini.json"
+        },
+        {
+          "modelResource": "station_announcer:models/vehicle/m7_doors.bbmodel",
+          "textureResource": "station_announcer:textures/vehicle/m7/doors_box.png",
+          "modelPropertiesResource": "station_announcer:properties/vehicle/m7_doors.json",
+          "positionDefinitionsResource": "station_announcer:properties/definition/m7_mini.json"
+        },
+        {
+          "modelResource": "station_announcer:models/vehicle/m7_doors.bbmodel",
+          "textureResource": "station_announcer:textures/vehicle/m7/doors_box.png",
+          "modelPropertiesResource": "station_announcer:properties/vehicle/m7_display_1.json",
+          "positionDefinitionsResource": "station_announcer:properties/definition/m7_mini.json"
+        },
+        {
+          "modelResource": "station_announcer:models/vehicle/m7_doors.bbmodel",
+          "textureResource": "station_announcer:textures/vehicle/m7/doors_box.png",
+          "modelPropertiesResource": "station_announcer:properties/vehicle/m7_display_2.json",
+          "positionDefinitionsResource": "station_announcer:properties/definition/m7_mini.json"
+        },
+        {
+          "modelResource": "station_announcer:models/vehicle/m7_interior.obj",
+          "textureResource": "station_announcer:textures/vehicle/m7/default.png",
+          "modelPropertiesResource": "station_announcer:properties/vehicle/m7_interior_common.json",
+          "positionDefinitionsResource": "station_announcer:properties/definition/m7_mini.json"
+        },
+        {
+          "modelResource": "station_announcer:models/vehicle/m7_interior.obj",
+          "textureResource": "station_announcer:textures/vehicle/m7/default.png",
+          "modelPropertiesResource": "station_announcer:properties/vehicle/m7_interior_cab_1.json",
+          "positionDefinitionsResource": "station_announcer:properties/definition/m7_mini.json"
+        },
+        {
+          "modelResource": "station_announcer:models/vehicle/m7_interior.obj",
+          "textureResource": "station_announcer:textures/vehicle/m7/default.png",
+          "modelPropertiesResource": "station_announcer:properties/vehicle/m7_interior_cab_2.json",
+          "positionDefinitionsResource": "station_announcer:properties/definition/m7_mini.json"
+        }
+      ],
+      "bogie1Models": [
+        {
+          "modelResource": "mtr:models/vehicle/bogie_1.bbmodel",
+          "textureResource": "mtr:textures/vehicle/bogie_1.png",
+          "modelPropertiesResource": "mtr:properties/vehicle/bogie_1.json",
+          "positionDefinitionsResource": "mtr:properties/definition/origin.json"
+        }
+      ],
+      "bogie2Models": [
+        {
+          "modelResource": "mtr:models/vehicle/bogie_1.bbmodel",
+          "textureResource": "mtr:textures/vehicle/bogie_1.png",
+          "modelPropertiesResource": "mtr:properties/vehicle/bogie_1.json",
+          "positionDefinitionsResource": "mtr:properties/definition/origin.json"
+        }
+      ],
+      "hasGangway1": true,
+      "hasGangway2": true,
+      "hasBarrier1": true,
+      "hasBarrier2": true,
+      "bveSoundBaseResource": "station_announcer:m7",
+      "length": 15.0,
+      "bogie1Position": -5.7,
+      "bogie2Position": 5.7
+    },
+    {
+      "id": "r62",
+      "name": "NYCT R62",
+      "color": "A9ADB2",
+      "transportMode": "TRAIN",
+      "width": 2,
+      "couplingPadding1": 0,
+      "couplingPadding2": 0,
+      "wikipediaArticle": "R62_(New_York_City_Subway_car)",
+      "tags": [
+        "family:r62",
+        "iso_3166:US",
+        "doors:6",
+        "type:cab"
+      ],
+      "models": [
+        {
+          "modelResource": "station_announcer:models/vehicle/r62.obj",
+          "textureResource": "station_announcer:textures/vehicle/r62/default.png",
+          "modelPropertiesResource": "station_announcer:properties/vehicle/r62_common.json",
+          "positionDefinitionsResource": "station_announcer:properties/definition/r62.json"
+        },
+        {
+          "modelResource": "station_announcer:models/vehicle/r62.obj",
+          "textureResource": "station_announcer:textures/vehicle/r62/default.png",
+          "modelPropertiesResource": "station_announcer:properties/vehicle/r62_cab_1.json",
+          "positionDefinitionsResource": "station_announcer:properties/definition/r62.json"
+        },
+        {
+          "modelResource": "station_announcer:models/vehicle/r62.obj",
+          "textureResource": "station_announcer:textures/vehicle/r62/default.png",
+          "modelPropertiesResource": "station_announcer:properties/vehicle/r62_cab_2.json",
+          "positionDefinitionsResource": "station_announcer:properties/definition/r62.json"
+        },
+        {
+          "modelResource": "station_announcer:models/vehicle/r62_doors.bbmodel",
+          "textureResource": "station_announcer:textures/vehicle/r62/doors_box.png",
+          "modelPropertiesResource": "station_announcer:properties/vehicle/r62_doors.json",
+          "positionDefinitionsResource": "station_announcer:properties/definition/r62.json"
+        },
+        {
+          "modelResource": "station_announcer:models/vehicle/r62_doors.bbmodel",
+          "textureResource": "station_announcer:textures/vehicle/r62/doors_box.png",
+          "modelPropertiesResource": "station_announcer:properties/vehicle/r62_display_1.json",
+          "positionDefinitionsResource": "station_announcer:properties/definition/r62.json"
+        },
+        {
+          "modelResource": "station_announcer:models/vehicle/r62_doors.bbmodel",
+          "textureResource": "station_announcer:textures/vehicle/r62/doors_box.png",
+          "modelPropertiesResource": "station_announcer:properties/vehicle/r62_display_2.json",
+          "positionDefinitionsResource": "station_announcer:properties/definition/r62.json"
+        },
+        {
+          "modelResource": "station_announcer:models/vehicle/r62_interior.obj",
+          "textureResource": "station_announcer:textures/vehicle/r62/interior/int_atlas.png",
+          "modelPropertiesResource": "station_announcer:properties/vehicle/r62_interior_common.json",
+          "positionDefinitionsResource": "station_announcer:properties/definition/r62.json"
+        },
+        {
+          "modelResource": "station_announcer:models/vehicle/r62_interior.obj",
+          "textureResource": "station_announcer:textures/vehicle/r62/interior/int_atlas.png",
+          "modelPropertiesResource": "station_announcer:properties/vehicle/r62_interior_cab_1.json",
+          "positionDefinitionsResource": "station_announcer:properties/definition/r62.json"
+        },
+        {
+          "modelResource": "station_announcer:models/vehicle/r62_interior.obj",
+          "textureResource": "station_announcer:textures/vehicle/r62/interior/int_atlas.png",
+          "modelPropertiesResource": "station_announcer:properties/vehicle/r62_interior_cab_2.json",
+          "positionDefinitionsResource": "station_announcer:properties/definition/r62.json"
+        }
+      ],
+      "bogie1Models": [
+        {
+          "modelResource": "mtr:models/vehicle/bogie_1.bbmodel",
+          "textureResource": "mtr:textures/vehicle/bogie_1.png",
+          "modelPropertiesResource": "mtr:properties/vehicle/bogie_1.json",
+          "positionDefinitionsResource": "mtr:properties/definition/origin.json"
+        }
+      ],
+      "bogie2Models": [
+        {
+          "modelResource": "mtr:models/vehicle/bogie_1.bbmodel",
+          "textureResource": "mtr:textures/vehicle/bogie_1.png",
+          "modelPropertiesResource": "mtr:properties/vehicle/bogie_1.json",
+          "positionDefinitionsResource": "mtr:properties/definition/origin.json"
+        }
+      ],
+      "hasGangway1": false,
+      "hasGangway2": false,
+      "hasBarrier1": true,
+      "hasBarrier2": true,
+      "legacySpeedSoundBaseResource": "r179",
+      "legacySpeedSoundCount": 66,
+      "legacyDoorSoundBaseResource": "r179",
+      "legacyDoorCloseSoundTime": 1,
+      "length": 16.0,
+      "bogie1Position": -5.632,
+      "bogie2Position": 5.632
+    },
+    {
+      "id": "r62_middle",
+      "name": "NYCT R62 (Blind End)",
+      "color": "A9ADB2",
+      "transportMode": "TRAIN",
+      "width": 2,
+      "couplingPadding1": 0,
+      "couplingPadding2": 0,
+      "wikipediaArticle": "R62_(New_York_City_Subway_car)",
+      "tags": [
+        "family:r62",
+        "iso_3166:US",
+        "doors:6",
+        "type:trailer"
+      ],
+      "models": [
+        {
+          "modelResource": "station_announcer:models/vehicle/r62.obj",
+          "textureResource": "station_announcer:textures/vehicle/r62/default.png",
+          "modelPropertiesResource": "station_announcer:properties/vehicle/r62_common.json",
+          "positionDefinitionsResource": "station_announcer:properties/definition/r62.json"
+        },
+        {
+          "modelResource": "station_announcer:models/vehicle/r62.obj",
+          "textureResource": "station_announcer:textures/vehicle/r62/default.png",
+          "modelPropertiesResource": "station_announcer:properties/vehicle/r62_blind_1.json",
+          "positionDefinitionsResource": "station_announcer:properties/definition/r62.json"
+        },
+        {
+          "modelResource": "station_announcer:models/vehicle/r62.obj",
+          "textureResource": "station_announcer:textures/vehicle/r62/default.png",
+          "modelPropertiesResource": "station_announcer:properties/vehicle/r62_blind_2.json",
+          "positionDefinitionsResource": "station_announcer:properties/definition/r62.json"
+        },
+        {
+          "modelResource": "station_announcer:models/vehicle/r62_doors.bbmodel",
+          "textureResource": "station_announcer:textures/vehicle/r62/doors_box.png",
+          "modelPropertiesResource": "station_announcer:properties/vehicle/r62_doors.json",
+          "positionDefinitionsResource": "station_announcer:properties/definition/r62.json"
+        },
+        {
+          "modelResource": "station_announcer:models/vehicle/r62_interior.obj",
+          "textureResource": "station_announcer:textures/vehicle/r62/interior/int_atlas.png",
+          "modelPropertiesResource": "station_announcer:properties/vehicle/r62_interior_common.json",
+          "positionDefinitionsResource": "station_announcer:properties/definition/r62.json"
+        },
+        {
+          "modelResource": "station_announcer:models/vehicle/r62_interior.obj",
+          "textureResource": "station_announcer:textures/vehicle/r62/interior/int_atlas.png",
+          "modelPropertiesResource": "station_announcer:properties/vehicle/r62_interior_blind_1.json",
+          "positionDefinitionsResource": "station_announcer:properties/definition/r62.json"
+        },
+        {
+          "modelResource": "station_announcer:models/vehicle/r62_interior.obj",
+          "textureResource": "station_announcer:textures/vehicle/r62/interior/int_atlas.png",
+          "modelPropertiesResource": "station_announcer:properties/vehicle/r62_interior_blind_2.json",
+          "positionDefinitionsResource": "station_announcer:properties/definition/r62.json"
+        }
+      ],
+      "bogie1Models": [
+        {
+          "modelResource": "mtr:models/vehicle/bogie_1.bbmodel",
+          "textureResource": "mtr:textures/vehicle/bogie_1.png",
+          "modelPropertiesResource": "mtr:properties/vehicle/bogie_1.json",
+          "positionDefinitionsResource": "mtr:properties/definition/origin.json"
+        }
+      ],
+      "bogie2Models": [
+        {
+          "modelResource": "mtr:models/vehicle/bogie_1.bbmodel",
+          "textureResource": "mtr:textures/vehicle/bogie_1.png",
+          "modelPropertiesResource": "mtr:properties/vehicle/bogie_1.json",
+          "positionDefinitionsResource": "mtr:properties/definition/origin.json"
+        }
+      ],
+      "hasGangway1": false,
+      "hasGangway2": false,
+      "hasBarrier1": true,
+      "hasBarrier2": true,
+      "legacySpeedSoundBaseResource": "r179",
+      "legacySpeedSoundCount": 66,
+      "legacyDoorSoundBaseResource": "r179",
+      "legacyDoorCloseSoundTime": 1,
+      "length": 16.0,
+      "bogie1Position": -5.632,
+      "bogie2Position": 5.632
+    }
+  ],
+  "signs": [],
+  "rails": [],
+  "objects": [],
+  "lifts": []
+}

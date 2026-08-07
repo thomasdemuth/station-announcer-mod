@@ -1,0 +1,51 @@
+{
+  "modelYOffset": 1,
+  "parts": [
+    {
+      "names": [
+        "int_window"
+      ],
+      "positionDefinitions": [
+        "intWindow"
+      ],
+      "renderStage": "INTERIOR"
+    },
+    {
+      "names": [
+        "int_door"
+      ],
+      "positionDefinitions": [
+        "intDoor"
+      ],
+      "renderStage": "INTERIOR"
+    },
+    {
+      "names": [
+        "int_seat_fwd"
+      ],
+      "positionDefinitions": [
+        "intSeatFwd"
+      ],
+      "renderStage": "INTERIOR"
+    },
+    {
+      "names": [
+        "int_seat_rev"
+      ],
+      "positionDefinitions": [
+        "intSeatRev"
+      ],
+      "renderStage": "INTERIOR"
+    },
+    {
+      "names": [
+        "int_seat_zone"
+      ],
+      "positionDefinitions": [
+        "intSeatFwd",
+        "intSeatRev"
+      ],
+      "type": "SEAT"
+    }
+  ]
+}

@@ -1,0 +1,117 @@
+{
+  "multipart": [
+    {
+      "when": {
+        "facing": "north"
+      },
+      "apply": {
+        "model": "station_announcer:block/column_shaft_tinted"
+      }
+    },
+    {
+      "when": {
+        "facing": "east"
+      },
+      "apply": {
+        "model": "station_announcer:block/column_shaft_tinted",
+        "y": 90
+      }
+    },
+    {
+      "when": {
+        "facing": "south"
+      },
+      "apply": {
+        "model": "station_announcer:block/column_shaft_tinted",
+        "y": 180
+      }
+    },
+    {
+      "when": {
+        "facing": "west"
+      },
+      "apply": {
+        "model": "station_announcer:block/column_shaft_tinted",
+        "y": 270
+      }
+    },
+    {
+      "when": {
+        "facing": "north",
+        "down": "false"
+      },
+      "apply": {
+        "model": "station_announcer:block/column_foot_tinted"
+      }
+    },
+    {
+      "when": {
+        "facing": "east",
+        "down": "false"
+      },
+      "apply": {
+        "model": "station_announcer:block/column_foot_tinted",
+        "y": 90
+      }
+    },
+    {
+      "when": {
+        "facing": "south",
+        "down": "false"
+      },
+      "apply": {
+        "model": "station_announcer:block/column_foot_tinted",
+        "y": 180
+      }
+    },
+    {
+      "when": {
+        "facing": "west",
+        "down": "false"
+      },
+      "apply": {
+        "model": "station_announcer:block/column_foot_tinted",
+        "y": 270
+      }
+    },
+    {
+      "when": {
+        "facing": "north",
+        "up": "false"
+      },
+      "apply": {
+        "model": "station_announcer:block/column_cap_tinted"
+      }
+    },
+    {
+      "when": {
+        "facing": "east",
+        "up": "false"
+      },
+      "apply": {
+        "model": "station_announcer:block/column_cap_tinted",
+        "y": 90
+      }
+    },
+    {
+      "when": {
+        "facing": "south",
+        "up": "false"
+      },
+      "apply": {
+        "model": "station_announcer:block/column_cap_tinted",
+        "y": 180
+      }
+    },
+    {
+      "when": {
+        "facing": "west",
+        "up": "false"
+      },
+      "apply": {
+        "model": "station_announcer:block/column_cap_tinted",
+        "y": 270
+      }
+    }
+  ]
+}

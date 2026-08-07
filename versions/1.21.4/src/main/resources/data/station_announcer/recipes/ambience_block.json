@@ -1,0 +1,24 @@
+{
+  "type": "minecraft:crafting_shaped",
+  "category": "building",
+  "key": {
+    "I": {
+      "item": "minecraft:iron_ingot"
+    },
+    "B": {
+      "item": "minecraft:iron_bars"
+    },
+    "N": {
+      "item": "minecraft:note_block"
+    }
+  },
+  "pattern": [
+    "IBI",
+    "BNB",
+    "IBI"
+  ],
+  "result": {
+    "item": "station_announcer:ambience_block",
+    "count": 1
+  }
+}

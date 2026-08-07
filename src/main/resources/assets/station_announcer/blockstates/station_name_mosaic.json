@@ -1,0 +1,19 @@
+{
+  "variants": {
+    "facing=north": {
+      "model": "station_announcer:block/station_name_mosaic"
+    },
+    "facing=east": {
+      "model": "station_announcer:block/station_name_mosaic",
+      "y": 90
+    },
+    "facing=south": {
+      "model": "station_announcer:block/station_name_mosaic",
+      "y": 180
+    },
+    "facing=west": {
+      "model": "station_announcer:block/station_name_mosaic",
+      "y": 270
+    }
+  }
+}

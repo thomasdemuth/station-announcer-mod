@@ -1,0 +1,123 @@
+{
+  "parent": "minecraft:block/block",
+  "textures": {
+    "t": "station_announcer:block/column_iron_tint",
+    "particle": "station_announcer:block/column_iron_tint"
+  },
+  "elements": [
+    {
+      "from": [
+        3,
+        0,
+        4
+      ],
+      "to": [
+        13,
+        16,
+        6
+      ],
+      "faces": {
+        "north": {
+          "texture": "#t",
+          "tintindex": 0
+        },
+        "south": {
+          "texture": "#t",
+          "tintindex": 0
+        },
+        "east": {
+          "texture": "#t",
+          "tintindex": 0
+        },
+        "west": {
+          "texture": "#t",
+          "tintindex": 0
+        },
+        "up": {
+          "texture": "#t",
+          "tintindex": 0
+        },
+        "down": {
+          "texture": "#t",
+          "tintindex": 0
+        }
+      }
+    },
+    {
+      "from": [
+        3,
+        0,
+        10
+      ],
+      "to": [
+        13,
+        16,
+        12
+      ],
+      "faces": {
+        "north": {
+          "texture": "#t",
+          "tintindex": 0
+        },
+        "south": {
+          "texture": "#t",
+          "tintindex": 0
+        },
+        "east": {
+          "texture": "#t",
+          "tintindex": 0
+        },
+        "west": {
+          "texture": "#t",
+          "tintindex": 0
+        },
+        "up": {
+          "texture": "#t",
+          "tintindex": 0
+        },
+        "down": {
+          "texture": "#t",
+          "tintindex": 0
+        }
+      }
+    },
+    {
+      "from": [
+        6.5,
+        0,
+        6
+      ],
+      "to": [
+        9.5,
+        16,
+        10
+      ],
+      "faces": {
+        "north": {
+          "texture": "#t",
+          "tintindex": 0
+        },
+        "south": {
+          "texture": "#t",
+          "tintindex": 0
+        },
+        "east": {
+          "texture": "#t",
+          "tintindex": 0
+        },
+        "west": {
+          "texture": "#t",
+          "tintindex": 0
+        },
+        "up": {
+          "texture": "#t",
+          "tintindex": 0
+        },
+        "down": {
+          "texture": "#t",
+          "tintindex": 0
+        }
+      }
+    }
+  ]
+}

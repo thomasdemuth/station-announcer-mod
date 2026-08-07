@@ -1,0 +1,7 @@
+{
+  "variants": {
+    "": {
+      "model": "station_announcer:block/holding_light_pole"
+    }
+  }
+}

@@ -1,0 +1,92 @@
+{
+  "chime": {
+    "subtitle": "subtitles.station_announcer.chime",
+    "sounds": [
+      "station_announcer:chime"
+    ]
+  },
+  "chime_marimba1": {
+    "subtitle": "subtitles.station_announcer.chime",
+    "sounds": [
+      "station_announcer:chime_marimba1"
+    ]
+  },
+  "chime_marimba2": {
+    "subtitle": "subtitles.station_announcer.chime",
+    "sounds": [
+      "station_announcer:chime_marimba2"
+    ]
+  },
+  "chime_marimba3": {
+    "subtitle": "subtitles.station_announcer.chime",
+    "sounds": [
+      "station_announcer:chime_marimba3"
+    ]
+  },
+  "chime_marimba4": {
+    "subtitle": "subtitles.station_announcer.chime",
+    "sounds": [
+      "station_announcer:chime_marimba4"
+    ]
+  },
+  "chime_marimba5": {
+    "subtitle": "subtitles.station_announcer.chime",
+    "sounds": [
+      "station_announcer:chime_marimba5"
+    ]
+  },
+  "chime_marimba6": {
+    "subtitle": "subtitles.station_announcer.chime",
+    "sounds": [
+      "station_announcer:chime_marimba6"
+    ]
+  },
+  "chime_synth1": {
+    "subtitle": "subtitles.station_announcer.chime",
+    "sounds": [
+      "station_announcer:chime_synth1"
+    ]
+  },
+  "chime_synth2": {
+    "subtitle": "subtitles.station_announcer.chime",
+    "sounds": [
+      "station_announcer:chime_synth2"
+    ]
+  },
+  "chime_synth3": {
+    "subtitle": "subtitles.station_announcer.chime",
+    "sounds": [
+      "station_announcer:chime_synth3"
+    ]
+  },
+  "chime_synth4": {
+    "subtitle": "subtitles.station_announcer.chime",
+    "sounds": [
+      "station_announcer:chime_synth4"
+    ]
+  },
+  "chime_synth5": {
+    "subtitle": "subtitles.station_announcer.chime",
+    "sounds": [
+      "station_announcer:chime_synth5"
+    ]
+  },
+  "ambience_hum": {
+    "subtitle": "subtitles.station_announcer.ambience",
+    "sounds": [
+      {
+        "name": "station_announcer:ambience_hum",
+        "stream": true
+      }
+    ]
+  },
+  "ambience_vent": {
+    "subtitle": "subtitles.station_announcer.ambience",
+    "sounds": [
+      {
+        "name": "station_announcer:ambience_vent",
+        "stream": true
+      }
+    ]
+  }
+}

@@ -1,0 +1,252 @@
+{
+  "modelYOffset": 1,
+  "parts": [
+    {
+      "names": [
+        "door_narrow"
+      ],
+      "positionDefinitions": [
+        "bbDoor"
+      ],
+      "renderStage": "INTERIOR",
+      "doorZMultiplier": 10.5,
+      "doorAnimationType": "R179"
+    },
+    {
+      "names": [
+        "door_narrow_exterior"
+      ],
+      "positionDefinitions": [
+        "bbDoor"
+      ],
+      "renderStage": "EXTERIOR",
+      "doorZMultiplier": 10.5,
+      "doorAnimationType": "R179"
+    },
+    {
+      "names": [
+        "door_wide"
+      ],
+      "positionDefinitions": [
+        "bbDoor"
+      ],
+      "renderStage": "INTERIOR",
+      "doorZMultiplier": -11.5,
+      "doorAnimationType": "R179"
+    },
+    {
+      "names": [
+        "door_wide_exterior"
+      ],
+      "positionDefinitions": [
+        "bbDoor"
+      ],
+      "renderStage": "EXTERIOR",
+      "doorZMultiplier": -11.5,
+      "doorAnimationType": "R179"
+    },
+    {
+      "names": [
+        "doorway_box"
+      ],
+      "positionDefinitions": [
+        "bbDoor"
+      ],
+      "type": "DOORWAY"
+    },
+    {
+      "names": [
+        "floor_panel"
+      ],
+      "positionDefinitions": [
+        "bbFloorPanel"
+      ],
+      "type": "FLOOR"
+    },
+    {
+      "names": [
+        "floor_door"
+      ],
+      "positionDefinitions": [
+        "bbFloorDoor"
+      ],
+      "type": "FLOOR"
+    },
+    {
+      "names": [
+        "floor_end"
+      ],
+      "positionDefinitions": [
+        "bbFloorEnd"
+      ],
+      "type": "FLOOR"
+    },
+    {
+      "names": [
+        "side_bullet_color"
+      ],
+      "positionDefinitions": [
+        "bbPanel"
+      ],
+      "type": "DISPLAY",
+      "displayType": "ROUTE_COLOR_ROUNDED",
+      "displayXPadding": 0.0,
+      "displayYPadding": 0.0
+    },
+    {
+      "names": [
+        "side_bullet_number"
+      ],
+      "positionDefinitions": [
+        "bbPanel"
+      ],
+      "type": "DISPLAY",
+      "displayType": "ROUTE_NUMBER",
+      "displayXPadding": 0.0,
+      "displayYPadding": 0.0,
+      "displayOptions": [
+        "UPPER_CASE"
+      ],
+      "displayColor": "FFFFFF",
+      "displayDefaultText": ""
+    },
+    {
+      "names": [
+        "side_route_number"
+      ],
+      "positionDefinitions": [
+        "bbPanel"
+      ],
+      "type": "DISPLAY",
+      "displayType": "ROUTE_NUMBER",
+      "displayXPadding": 0.25,
+      "displayYPadding": 0.25,
+      "displayOptions": [
+        "UPPER_CASE",
+        "CYCLE_LANGUAGES",
+        "SINGLE_LINE",
+        "SCROLL_NORMAL"
+      ],
+      "displayColor": "FFFFFF",
+      "displayDefaultText": ""
+    },
+    {
+      "names": [
+        "side_destination"
+      ],
+      "positionDefinitions": [
+        "bbPanel"
+      ],
+      "type": "DISPLAY",
+      "displayType": "DESTINATION",
+      "displayXPadding": 0.25,
+      "displayYPadding": 0.25,
+      "displayOptions": [
+        "UPPER_CASE",
+        "CYCLE_LANGUAGES",
+        "SINGLE_LINE",
+        "SCROLL_NORMAL"
+      ],
+      "displayColor": "FFFFFF",
+      "displayDefaultText": "Not In Service"
+    },
+    {
+      "names": [
+        "int_map_bullet_color_a"
+      ],
+      "positionDefinitions": [
+        "bbPanel"
+      ],
+      "type": "DISPLAY",
+      "displayType": "ROUTE_COLOR_ROUNDED",
+      "displayXPadding": 0.0,
+      "displayYPadding": 0.0
+    },
+    {
+      "names": [
+        "int_map_bullet_color_b"
+      ],
+      "positionDefinitions": [
+        "bbPanel"
+      ],
+      "type": "DISPLAY",
+      "displayType": "ROUTE_COLOR_ROUNDED",
+      "displayXPadding": 0.0,
+      "displayYPadding": 0.0
+    },
+    {
+      "names": [
+        "int_map_bullet_number_a"
+      ],
+      "positionDefinitions": [
+        "bbPanel"
+      ],
+      "type": "DISPLAY",
+      "displayType": "ROUTE_NUMBER",
+      "displayXPadding": 0.0,
+      "displayYPadding": 0.0,
+      "displayOptions": [
+        "UPPER_CASE"
+      ],
+      "displayColor": "FFFFFF",
+      "displayDefaultText": ""
+    },
+    {
+      "names": [
+        "int_map_bullet_number_b"
+      ],
+      "positionDefinitions": [
+        "bbPanel"
+      ],
+      "type": "DISPLAY",
+      "displayType": "ROUTE_NUMBER",
+      "displayXPadding": 0.0,
+      "displayYPadding": 0.0,
+      "displayOptions": [
+        "UPPER_CASE"
+      ],
+      "displayColor": "FFFFFF",
+      "displayDefaultText": ""
+    },
+    {
+      "names": [
+        "int_map_next_a"
+      ],
+      "positionDefinitions": [
+        "bbPanel"
+      ],
+      "type": "DISPLAY",
+      "displayType": "NEXT_STATION",
+      "displayXPadding": 0.25,
+      "displayYPadding": 0.25,
+      "displayOptions": [
+        "UPPER_CASE",
+        "CYCLE_LANGUAGES",
+        "SINGLE_LINE",
+        "SCROLL_NORMAL"
+      ],
+      "displayColor": "FFFFFF",
+      "displayDefaultText": ""
+    },
+    {
+      "names": [
+        "int_map_next_b"
+      ],
+      "positionDefinitions": [
+        "bbPanel"
+      ],
+      "type": "DISPLAY",
+      "displayType": "NEXT_STATION",
+      "displayXPadding": 0.25,
+      "displayYPadding": 0.25,
+      "displayOptions": [
+        "UPPER_CASE",
+        "CYCLE_LANGUAGES",
+        "SINGLE_LINE",
+        "SCROLL_NORMAL"
+      ],
+      "displayColor": "FFFFFF",
+      "displayDefaultText": ""
+    }
+  ]
+}

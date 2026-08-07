@@ -1,0 +1,14 @@
+{
+  "modelYOffset": 1,
+  "parts": [
+    {
+      "names": [
+        "int_end_cab"
+      ],
+      "positionDefinitions": [
+        "end1"
+      ],
+      "renderStage": "INTERIOR"
+    }
+  ]
+}

@@ -1,0 +1,254 @@
+{
+  "positionDefinitions": [
+    {
+      "name": "window",
+      "positions": [
+        {
+          "z": 0.0
+        }
+      ],
+      "positionsFlipped": [
+        {
+          "z": 0.0
+        }
+      ]
+    },
+    {
+      "name": "door",
+      "positions": [
+        {
+          "z": -37.0
+        },
+        {
+          "z": 37.0
+        }
+      ],
+      "positionsFlipped": [
+        {
+          "z": -37.0
+        },
+        {
+          "z": 37.0
+        }
+      ]
+    },
+    {
+      "name": "doorFrontA",
+      "positions": [
+        {
+          "z": 37.0
+        }
+      ],
+      "positionsFlipped": []
+    },
+    {
+      "name": "doorFrontB",
+      "positions": [],
+      "positionsFlipped": [
+        {
+          "z": 37.0
+        }
+      ]
+    },
+    {
+      "name": "doorRearA",
+      "positions": [
+        {
+          "z": -37.0
+        }
+      ],
+      "positionsFlipped": []
+    },
+    {
+      "name": "doorRearB",
+      "positions": [],
+      "positionsFlipped": [
+        {
+          "z": -37.0
+        }
+      ]
+    },
+    {
+      "name": "end1",
+      "positions": []
+    },
+    {
+      "name": "end2",
+      "positionsFlipped": []
+    },
+    {
+      "name": "end1Mini",
+      "positions": [
+        {
+          "z": -89.5
+        }
+      ]
+    },
+    {
+      "name": "end2Mini",
+      "positionsFlipped": [
+        {
+          "z": -89.5
+        }
+      ]
+    },
+    {
+      "name": "underframe",
+      "positions": []
+    },
+    {
+      "name": "underframeMini",
+      "positions": [
+        {
+          "z": 0
+        }
+      ]
+    },
+    {
+      "name": "bbWindow",
+      "positions": [
+        {
+          "z": 0.0
+        }
+      ]
+    },
+    {
+      "name": "bbDoor",
+      "positions": [
+        {
+          "z": -37.0
+        },
+        {
+          "z": 37.0
+        }
+      ]
+    },
+    {
+      "name": "bbPartition",
+      "positions": [
+        {
+          "z": -37.0
+        },
+        {
+          "z": 37.0
+        }
+      ],
+      "positionsFlipped": [
+        {
+          "z": -37.0
+        },
+        {
+          "z": 37.0
+        }
+      ]
+    },
+    {
+      "name": "bbSideSign",
+      "positions": [
+        {
+          "z": -37.0
+        },
+        {
+          "z": 37.0
+        }
+      ],
+      "positionsFlipped": [
+        {
+          "z": -37.0
+        },
+        {
+          "z": 37.0
+        }
+      ]
+    },
+    {
+      "name": "bbEnd1",
+      "positions": []
+    },
+    {
+      "name": "bbEnd2",
+      "positionsFlipped": []
+    },
+    {
+      "name": "bbEnd1Mini",
+      "positions": [
+        {
+          "z": -89.5
+        }
+      ]
+    },
+    {
+      "name": "bbEnd2Mini",
+      "positionsFlipped": [
+        {
+          "z": 89.5
+        }
+      ]
+    },
+    {
+      "name": "intWindow",
+      "positions": [
+        {
+          "z": 0.0
+        }
+      ]
+    },
+    {
+      "name": "intDoor",
+      "positions": [
+        {
+          "z": -37.0
+        },
+        {
+          "z": 37.0
+        }
+      ]
+    },
+    {
+      "name": "intSeatFwd",
+      "positions": [
+        {
+          "z": -66.5
+        },
+        {
+          "z": -7.5
+        }
+      ]
+    },
+    {
+      "name": "intSeatRev",
+      "positions": [
+        {
+          "z": 7.5
+        },
+        {
+          "z": 66.5
+        }
+      ]
+    },
+    {
+      "name": "intEnd1",
+      "positions": []
+    },
+    {
+      "name": "intEnd2",
+      "positionsFlipped": []
+    },
+    {
+      "name": "intEnd1Mini",
+      "positions": [
+        {
+          "z": -89.5
+        }
+      ]
+    },
+    {
+      "name": "intEnd2Mini",
+      "positionsFlipped": [
+        {
+          "z": -89.5
+        }
+      ]
+    }
+  ]
+}

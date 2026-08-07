@@ -1,0 +1,139 @@
+{
+  "positionDefinitions": [
+    {
+      "name": "panel",
+      "positions": [
+        {
+          "z": 39.5
+        }
+      ],
+      "positionsFlipped": [
+        {
+          "z": 39.5
+        }
+      ]
+    },
+    {
+      "name": "door",
+      "positions": [
+        {
+          "z": -79.0
+        },
+        {
+          "z": 0.0
+        },
+        {
+          "z": 79.0
+        }
+      ]
+    },
+    {
+      "name": "end1",
+      "positions": [
+        {
+          "z": 108.75
+        }
+      ]
+    },
+    {
+      "name": "end2",
+      "positionsFlipped": [
+        {
+          "z": 108.75
+        }
+      ]
+    },
+    {
+      "name": "bbDoor",
+      "positions": [
+        {
+          "z": -79.0
+        },
+        {
+          "z": 0.0
+        },
+        {
+          "z": 79.0
+        }
+      ],
+      "positionsFlipped": [
+        {
+          "z": -79.0
+        },
+        {
+          "z": 0.0
+        },
+        {
+          "z": 79.0
+        }
+      ]
+    },
+    {
+      "name": "bbPanel",
+      "positions": [
+        {
+          "z": 39.5
+        }
+      ],
+      "positionsFlipped": [
+        {
+          "z": -39.5
+        }
+      ]
+    },
+    {
+      "name": "bbEnd1",
+      "positions": [
+        {
+          "z": 108.75
+        }
+      ]
+    },
+    {
+      "name": "bbEnd2",
+      "positionsFlipped": [
+        {
+          "z": -108.75
+        }
+      ]
+    },
+    {
+      "name": "bbFloorPanel",
+      "positions": [
+        {
+          "z": 39.5
+        },
+        {
+          "z": -39.5
+        }
+      ]
+    },
+    {
+      "name": "bbFloorDoor",
+      "positions": [
+        {
+          "z": -79.0
+        },
+        {
+          "z": 0.0
+        },
+        {
+          "z": 79.0
+        }
+      ]
+    },
+    {
+      "name": "bbFloorEnd",
+      "positions": [
+        {
+          "z": 108.75
+        }
+      ],
+      "positionsFlipped": [
+        {
+          "z": -108.75
+        }
+      ]
+    }
+  ]
+}

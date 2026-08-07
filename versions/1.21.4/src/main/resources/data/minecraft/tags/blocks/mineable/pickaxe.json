@@ -1,0 +1,91 @@
+{
+  "replace": false,
+  "values": [
+    "station_announcer:announcer_block",
+    "station_announcer:pa_control_box",
+    "station_announcer:speaker",
+    "station_announcer:globe_lamp_green",
+    "station_announcer:globe_lamp_red",
+    "station_announcer:globe_lamp_pole",
+    "station_announcer:entrance_railing",
+    "station_announcer:platform_barrier",
+    "station_announcer:fare_machine",
+    "station_announcer:ambience_block",
+    {
+      "id": "station_announcer:pids_nyc_wall_1",
+      "required": false
+    },
+    {
+      "id": "station_announcer:pids_nyc_wall_2",
+      "required": false
+    },
+    {
+      "id": "station_announcer:pids_nyc_standing_1",
+      "required": false
+    },
+    {
+      "id": "station_announcer:pids_nyc_standing_2",
+      "required": false
+    },
+    {
+      "id": "station_announcer:pids_nyc_hanging",
+      "required": false
+    },
+    {
+      "id": "station_announcer:pids_nyc_hanging_mini",
+      "required": false
+    },
+    {
+      "id": "station_announcer:station_name_mosaic",
+      "required": false
+    },
+    {
+      "id": "station_announcer:column_iron",
+      "required": false
+    },
+    {
+      "id": "station_announcer:column_iron_station",
+      "required": false
+    },
+    {
+      "id": "station_announcer:column_iron_named",
+      "required": false
+    },
+    {
+      "id": "station_announcer:column_iron_named_station",
+      "required": false
+    },
+    {
+      "id": "station_announcer:entrance_railing_sign",
+      "required": false
+    },
+    {
+      "id": "station_announcer:turnstile",
+      "required": false
+    },
+    {
+      "id": "station_announcer:turnstile_cap",
+      "required": false
+    },
+    {
+      "id": "station_announcer:pipe",
+      "required": false
+    },
+    {
+      "id": "station_announcer:holding_light_yellow",
+      "required": false
+    },
+    {
+      "id": "station_announcer:holding_light_green",
+      "required": false
+    },
+    {
+      "id": "station_announcer:holding_light_pole",
+      "required": false
+    },
+    {
+      "id": "station_announcer:pids_pole",
+      "required": false
+    }
+  ]
+}

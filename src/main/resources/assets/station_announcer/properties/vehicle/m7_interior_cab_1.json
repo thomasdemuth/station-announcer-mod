@@ -1,0 +1,41 @@
+{
+  "modelYOffset": 1,
+  "parts": [
+    {
+      "names": [
+        "int_end_cab"
+      ],
+      "positionDefinitions": [
+        "intEnd1"
+      ],
+      "renderStage": "INTERIOR"
+    },
+    {
+      "names": [
+        "int_end_cab_mini"
+      ],
+      "positionDefinitions": [
+        "intEnd1Mini"
+      ],
+      "renderStage": "INTERIOR"
+    },
+    {
+      "names": [
+        "int_cab"
+      ],
+      "positionDefinitions": [
+        "intEnd1"
+      ],
+      "renderStage": "INTERIOR"
+    },
+    {
+      "names": [
+        "int_cab_mini"
+      ],
+      "positionDefinitions": [
+        "intEnd1Mini"
+      ],
+      "renderStage": "INTERIOR"
+    }
+  ]
+}

@@ -1,0 +1,24 @@
+{
+  "type": "minecraft:crafting_shaped",
+  "category": "building",
+  "key": {
+    "G": {
+      "item": "minecraft:green_stained_glass"
+    },
+    "D": {
+      "item": "minecraft:glowstone_dust"
+    },
+    "I": {
+      "item": "minecraft:iron_ingot"
+    }
+  },
+  "pattern": [
+    "G",
+    "D",
+    "I"
+  ],
+  "result": {
+    "item": "station_announcer:globe_lamp_green",
+    "count": 1
+  }
+}

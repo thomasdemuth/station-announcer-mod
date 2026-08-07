@@ -1,0 +1,14 @@
+{
+  "modelYOffset": 1,
+  "parts": [
+    {
+      "names": [
+        "end_blind_exterior"
+      ],
+      "positionDefinitions": [
+        "end2"
+      ],
+      "renderStage": "EXTERIOR"
+    }
+  ]
+}

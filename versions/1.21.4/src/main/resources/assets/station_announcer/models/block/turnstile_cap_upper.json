@@ -1,0 +1,216 @@
+{
+  "parent": "minecraft:block/block",
+  "textures": {
+    "steel": "station_announcer:block/turnstile_steel",
+    "face": "station_announcer:block/turnstile_face",
+    "tube": "station_announcer:block/turnstile_tube",
+    "arm": "station_announcer:block/turnstile_arm",
+    "particle": "station_announcer:block/turnstile_steel"
+  },
+  "elements": [
+    {
+      "from": [
+        0,
+        0,
+        2
+      ],
+      "to": [
+        8,
+        7,
+        14
+      ],
+      "faces": {
+        "north": {
+          "texture": "#steel",
+          "uv": [
+            0,
+            0,
+            8.0,
+            7.0
+          ]
+        },
+        "south": {
+          "texture": "#steel",
+          "uv": [
+            0,
+            0,
+            8.0,
+            7.0
+          ]
+        },
+        "east": {
+          "texture": "#steel",
+          "uv": [
+            0,
+            0,
+            12.0,
+            7.0
+          ]
+        },
+        "west": {
+          "texture": "#steel",
+          "uv": [
+            0,
+            0,
+            12.0,
+            7.0
+          ]
+        },
+        "up": {
+          "texture": "#steel",
+          "uv": [
+            0,
+            0,
+            8.0,
+            12.0
+          ]
+        },
+        "down": {
+          "texture": "#steel",
+          "uv": [
+            0,
+            0,
+            8.0,
+            12.0
+          ]
+        }
+      }
+    },
+    {
+      "from": [
+        1,
+        7,
+        4
+      ],
+      "to": [
+        7,
+        9,
+        12
+      ],
+      "faces": {
+        "north": {
+          "texture": "#steel",
+          "uv": [
+            0,
+            0,
+            6.0,
+            2.0
+          ]
+        },
+        "south": {
+          "texture": "#steel",
+          "uv": [
+            0,
+            0,
+            6.0,
+            2.0
+          ]
+        },
+        "east": {
+          "texture": "#steel",
+          "uv": [
+            0,
+            0,
+            8.0,
+            2.0
+          ]
+        },
+        "west": {
+          "texture": "#steel",
+          "uv": [
+            0,
+            0,
+            8.0,
+            2.0
+          ]
+        },
+        "up": {
+          "texture": "#steel",
+          "uv": [
+            0,
+            0,
+            6.0,
+            8.0
+          ]
+        },
+        "down": {
+          "texture": "#steel",
+          "uv": [
+            0,
+            0,
+            6.0,
+            8.0
+          ]
+        }
+      }
+    },
+    {
+      "from": [
+        2.75,
+        9,
+        6.75
+      ],
+      "to": [
+        5.25,
+        24,
+        9.25
+      ],
+      "faces": {
+        "north": {
+          "texture": "#tube",
+          "uv": [
+            0,
+            0,
+            2.5,
+            15.0
+          ]
+        },
+        "south": {
+          "texture": "#tube",
+          "uv": [
+            0,
+            0,
+            2.5,
+            15.0
+          ]
+        },
+        "east": {
+          "texture": "#tube",
+          "uv": [
+            0,
+            0,
+            2.5,
+            15.0
+          ]
+        },
+        "west": {
+          "texture": "#tube",
+          "uv": [
+            0,
+            0,
+            2.5,
+            15.0
+          ]
+        },
+        "up": {
+          "texture": "#tube",
+          "uv": [
+            0,
+            0,
+            2.5,
+            2.5
+          ]
+        },
+        "down": {
+          "texture": "#tube",
+          "uv": [
+            0,
+            0,
+            2.5,
+            2.5
+          ]
+        }
+      }
+    }
+  ]
+}

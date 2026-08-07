@@ -1,0 +1,80 @@
+{
+  "parent": "minecraft:block/block",
+  "textures": {
+    "steel": "station_announcer:block/turnstile_steel",
+    "face": "station_announcer:block/turnstile_face",
+    "tube": "station_announcer:block/turnstile_tube",
+    "arm": "station_announcer:block/turnstile_arm",
+    "particle": "station_announcer:block/turnstile_steel"
+  },
+  "elements": [
+    {
+      "from": [
+        2.5,
+        21.5,
+        6.75
+      ],
+      "to": [
+        18,
+        24,
+        9.25
+      ],
+      "faces": {
+        "north": {
+          "texture": "#tube",
+          "uv": [
+            0,
+            0,
+            15.5,
+            2.5
+          ]
+        },
+        "south": {
+          "texture": "#tube",
+          "uv": [
+            0,
+            0,
+            15.5,
+            2.5
+          ]
+        },
+        "east": {
+          "texture": "#tube",
+          "uv": [
+            0,
+            0,
+            2.5,
+            2.5
+          ]
+        },
+        "west": {
+          "texture": "#tube",
+          "uv": [
+            0,
+            0,
+            2.5,
+            2.5
+          ]
+        },
+        "up": {
+          "texture": "#tube",
+          "uv": [
+            0,
+            0,
+            15.5,
+            2.5
+          ]
+        },
+        "down": {
+          "texture": "#tube",
+          "uv": [
+            0,
+            0,
+            15.5,
+            2.5
+          ]
+        }
+      }
+    }
+  ]
+}

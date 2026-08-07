@@ -1,0 +1,13 @@
+{
+  "type": "minecraft:crafting_shapeless",
+  "category": "building",
+  "ingredients": [
+    {
+      "item": "station_announcer:zebra_board_hanging"
+    }
+  ],
+  "result": {
+    "item": "station_announcer:zebra_board_wall",
+    "count": 1
+  }
+}

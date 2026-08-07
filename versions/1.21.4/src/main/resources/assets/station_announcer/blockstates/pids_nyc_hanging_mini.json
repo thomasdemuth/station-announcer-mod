@@ -1,0 +1,64 @@
+{
+  "variants": {
+    "facing=north,side=left": {
+      "model": "station_announcer:block/pids_nyc_hanging"
+    },
+    "facing=north,side=right": {
+      "model": "station_announcer:block/pids_nyc_hanging"
+    },
+    "facing=north,side=middle": {
+      "model": "station_announcer:block/pids_nyc_hanging"
+    },
+    "facing=north,side=single": {
+      "model": "station_announcer:block/pids_nyc_hanging"
+    },
+    "facing=east,side=left": {
+      "model": "station_announcer:block/pids_nyc_hanging",
+      "y": 90
+    },
+    "facing=east,side=right": {
+      "model": "station_announcer:block/pids_nyc_hanging",
+      "y": 90
+    },
+    "facing=east,side=middle": {
+      "model": "station_announcer:block/pids_nyc_hanging",
+      "y": 90
+    },
+    "facing=east,side=single": {
+      "model": "station_announcer:block/pids_nyc_hanging",
+      "y": 90
+    },
+    "facing=south,side=left": {
+      "model": "station_announcer:block/pids_nyc_hanging",
+      "y": 180
+    },
+    "facing=south,side=right": {
+      "model": "station_announcer:block/pids_nyc_hanging",
+      "y": 180
+    },
+    "facing=south,side=middle": {
+      "model": "station_announcer:block/pids_nyc_hanging",
+      "y": 180
+    },
+    "facing=south,side=single": {
+      "model": "station_announcer:block/pids_nyc_hanging",
+      "y": 180
+    },
+    "facing=west,side=left": {
+      "model": "station_announcer:block/pids_nyc_hanging",
+      "y": 270
+    },
+    "facing=west,side=right": {
+      "model": "station_announcer:block/pids_nyc_hanging",
+      "y": 270
+    },
+    "facing=west,side=middle": {
+      "model": "station_announcer:block/pids_nyc_hanging",
+      "y": 270
+    },
+    "facing=west,side=single": {
+      "model": "station_announcer:block/pids_nyc_hanging",
+      "y": 270
+    }
+  }
+}

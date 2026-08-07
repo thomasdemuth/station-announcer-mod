@@ -1,0 +1,168 @@
+{
+  "multipart": [
+    {
+      "when": {
+        "facing": "north",
+        "half": "lower"
+      },
+      "apply": {
+        "model": "station_announcer:block/turnstile_cap_lower"
+      }
+    },
+    {
+      "when": {
+        "facing": "north",
+        "half": "upper"
+      },
+      "apply": {
+        "model": "station_announcer:block/turnstile_cap_upper"
+      }
+    },
+    {
+      "when": {
+        "facing": "north",
+        "half": "upper",
+        "right": "true"
+      },
+      "apply": {
+        "model": "station_announcer:block/turnstile_tube_bridge"
+      }
+    },
+    {
+      "when": {
+        "facing": "north",
+        "half": "upper",
+        "right": "false"
+      },
+      "apply": {
+        "model": "station_announcer:block/turnstile_tube_end"
+      }
+    },
+    {
+      "when": {
+        "facing": "east",
+        "half": "lower"
+      },
+      "apply": {
+        "model": "station_announcer:block/turnstile_cap_lower",
+        "y": 90
+      }
+    },
+    {
+      "when": {
+        "facing": "east",
+        "half": "upper"
+      },
+      "apply": {
+        "model": "station_announcer:block/turnstile_cap_upper",
+        "y": 90
+      }
+    },
+    {
+      "when": {
+        "facing": "east",
+        "half": "upper",
+        "right": "true"
+      },
+      "apply": {
+        "model": "station_announcer:block/turnstile_tube_bridge",
+        "y": 90
+      }
+    },
+    {
+      "when": {
+        "facing": "east",
+        "half": "upper",
+        "right": "false"
+      },
+      "apply": {
+        "model": "station_announcer:block/turnstile_tube_end",
+        "y": 90
+      }
+    },
+    {
+      "when": {
+        "facing": "south",
+        "half": "lower"
+      },
+      "apply": {
+        "model": "station_announcer:block/turnstile_cap_lower",
+        "y": 180
+      }
+    },
+    {
+      "when": {
+        "facing": "south",
+        "half": "upper"
+      },
+      "apply": {
+        "model": "station_announcer:block/turnstile_cap_upper",
+        "y": 180
+      }
+    },
+    {
+      "when": {
+        "facing": "south",
+        "half": "upper",
+        "right": "true"
+      },
+      "apply": {
+        "model": "station_announcer:block/turnstile_tube_bridge",
+        "y": 180
+      }
+    },
+    {
+      "when": {
+        "facing": "south",
+        "half": "upper",
+        "right": "false"
+      },
+      "apply": {
+        "model": "station_announcer:block/turnstile_tube_end",
+        "y": 180
+      }
+    },
+    {
+      "when": {
+        "facing": "west",
+        "half": "lower"
+      },
+      "apply": {
+        "model": "station_announcer:block/turnstile_cap_lower",
+        "y": 270
+      }
+    },
+    {
+      "when": {
+        "facing": "west",
+        "half": "upper"
+      },
+      "apply": {
+        "model": "station_announcer:block/turnstile_cap_upper",
+        "y": 270
+      }
+    },
+    {
+      "when": {
+        "facing": "west",
+        "half": "upper",
+        "right": "true"
+      },
+      "apply": {
+        "model": "station_announcer:block/turnstile_tube_bridge",
+        "y": 270
+      }
+    },
+    {
+      "when": {
+        "facing": "west",
+        "half": "upper",
+        "right": "false"
+      },
+      "apply": {
+        "model": "station_announcer:block/turnstile_tube_end",
+        "y": 270
+      }
+    }
+  ]
+}

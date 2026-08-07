@@ -1,0 +1,80 @@
+{
+  "parent": "minecraft:block/block",
+  "textures": {
+    "stripes": "station_announcer:block/zebra_stripes",
+    "frame": "station_announcer:block/pids_frame",
+    "cap": "station_announcer:block/zebra_cap",
+    "particle": "station_announcer:block/pids_frame"
+  },
+  "elements": [
+    {
+      "from": [
+        15.0,
+        4.0,
+        10.0
+      ],
+      "to": [
+        16.0,
+        14.0,
+        16.0
+      ],
+      "faces": {
+        "east": {
+          "texture": "#cap",
+          "uv": [
+            10,
+            3,
+            16,
+            13
+          ]
+        },
+        "west": {
+          "texture": "#cap",
+          "uv": [
+            0,
+            0,
+            6,
+            10
+          ]
+        },
+        "north": {
+          "texture": "#cap",
+          "uv": [
+            0,
+            0,
+            1,
+            10
+          ]
+        },
+        "south": {
+          "texture": "#cap",
+          "uv": [
+            0,
+            0,
+            1,
+            10
+          ],
+          "cullface": "south"
+        },
+        "up": {
+          "texture": "#cap",
+          "uv": [
+            0,
+            0,
+            1,
+            6
+          ]
+        },
+        "down": {
+          "texture": "#cap",
+          "uv": [
+            0,
+            0,
+            1,
+            6
+          ]
+        }
+      }
+    }
+  ]
+}

@@ -1,0 +1,23 @@
+{
+  "type": "minecraft:crafting_shaped",
+  "category": "building",
+  "key": {
+    "B": {
+      "item": "minecraft:black_dye"
+    },
+    "W": {
+      "item": "minecraft:white_dye"
+    },
+    "I": {
+      "item": "minecraft:iron_ingot"
+    }
+  },
+  "pattern": [
+    "BWB",
+    "III"
+  ],
+  "result": {
+    "item": "station_announcer:zebra_board_wall",
+    "count": 4
+  }
+}
