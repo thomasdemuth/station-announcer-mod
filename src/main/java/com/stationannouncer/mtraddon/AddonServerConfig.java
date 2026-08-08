@@ -45,6 +45,71 @@ public class AddonServerConfig {
     /** Timetable &amp; headway analytics — per-train arrival/departure logging and derived metrics. */
     public Analytics analytics = new Analytics();
 
+    /** Feature 6a — temporary stop changes (skip a stop / add a stop) as a runtime route overlay. */
+    public StopChanges stopChanges = new StopChanges();
+
+    /** Feature 6b — service disruptions with automatic PA and sign broadcasting. */
+    public Disruptions disruptions = new Disruptions();
+
+    public static class StopChanges {
+        /**
+         * Master switch for the temporary stop overlay. When false the two Depot
+         * hooks bail on a single field read, edits are refused and the S2C sync
+         * sends an empty map. Turning it off leaves already-generated paths alone
+         * until the next depot regeneration — the path is baked, the same rule as
+         * dwell overrides and platform groups.
+         */
+        public boolean enabled = true;
+
+        /** Cap on temporary changes (skips + additions together) per route. */
+        public int maxPerRoute = 8;
+
+        /** Longest duration a temporary change may be given, in minutes (0 = "until turned off" is always allowed). */
+        public int maxDurationMinutes = 10_080; // one week
+    }
+
+    public static class Disruptions {
+        /**
+         * Master switch. When false nothing is scanned, announced or pushed: the
+         * once-a-second ticker returns on one field read, disruption edits are
+         * refused and the S2C sync sends an empty list.
+         */
+        public boolean enabled = true;
+
+        /** How often each affected station's PA announces a disruption, in minutes. Clamped 1–120. */
+        public int announceIntervalMinutes = 5;
+
+        /** Maximum number of stored disruptions. Clamped 1–128. */
+        public int maxActive = 16;
+
+        /** Maximum announcement text length. Clamped 16–512 (the PA text cap). */
+        public int maxMessageLength = 240;
+
+        /** Maximum affected lines per disruption. Clamped 1–64. */
+        public int maxRoutesPerDisruption = 16;
+
+        /**
+         * How often the affected-station set is recomputed on the simulator threads
+         * when nothing has been edited (it is also recomputed immediately after any
+         * edit). Clamped 30–3600 seconds.
+         */
+        public int stationRescanSeconds = 300;
+
+        /**
+         * How often linked PIDS displays get the alert re-pushed, in seconds — the
+         * live message is a timed banner on the renderer side, so it needs
+         * refreshing to stay visible. Clamped 5–600.
+         */
+        public int displayRefreshSeconds = 30;
+
+        /**
+         * Also drive standalone PA Station Announcer blocks (not just PA Control
+         * Boxes) that stand inside an affected station. Off by default: control
+         * boxes are the station-wide PA, announcers are usually one-off props.
+         */
+        public boolean includeStandaloneAnnouncers = false;
+    }
+
     public static class HoldRules {
         /** Master switch; when false the startUp mixin no-ops with a single field read. */
         public boolean enabled = true;
@@ -231,6 +296,20 @@ public class AddonServerConfig {
         if (analytics == null) {
             analytics = new Analytics();
         }
+        if (stopChanges == null) {
+            stopChanges = new StopChanges();
+        }
+        if (disruptions == null) {
+            disruptions = new Disruptions();
+        }
+        stopChanges.maxPerRoute = Math.max(1, Math.min(64, stopChanges.maxPerRoute));
+        stopChanges.maxDurationMinutes = Math.max(1, Math.min(525_600, stopChanges.maxDurationMinutes));
+        disruptions.announceIntervalMinutes = Math.max(1, Math.min(120, disruptions.announceIntervalMinutes));
+        disruptions.maxActive = Math.max(1, Math.min(128, disruptions.maxActive));
+        disruptions.maxMessageLength = Math.max(16, Math.min(512, disruptions.maxMessageLength));
+        disruptions.maxRoutesPerDisruption = Math.max(1, Math.min(64, disruptions.maxRoutesPerDisruption));
+        disruptions.stationRescanSeconds = Math.max(30, Math.min(3_600, disruptions.stationRescanSeconds));
+        disruptions.displayRefreshSeconds = Math.max(5, Math.min(600, disruptions.displayRefreshSeconds));
         holdRules.holdArrivalCacheMillis = Math.max(50, Math.min(10_000, holdRules.holdArrivalCacheMillis));
         holdRules.maxHoldSeconds = Math.max(5, Math.min(3_600, holdRules.maxHoldSeconds));
         doorObstruction.chancePercent = Math.max(0, Math.min(100, doorObstruction.chancePercent));

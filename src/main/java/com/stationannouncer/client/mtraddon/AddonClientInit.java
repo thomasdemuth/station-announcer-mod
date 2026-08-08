@@ -3,6 +3,7 @@ package com.stationannouncer.client.mtraddon;
 import com.stationannouncer.StationAnnouncer;
 import com.stationannouncer.mtraddon.AddonNetworking;
 import com.stationannouncer.mtraddon.LiftDoorSides;
+import com.stationannouncer.mtraddon.disruption.DisruptionNetworking;
 import net.fabricmc.api.EnvType;
 import net.fabricmc.api.Environment;
 import net.fabricmc.fabric.api.client.networking.v1.ClientPlayConnectionEvents;
@@ -118,6 +119,8 @@ public final class AddonClientInit {
             ClientLiftDoors.clear();
             ClientPlatformGroups.clear();
             ClientDispatchInfo.clear();
+            ClientDisruptions.clear();
+            ClientStopChanges.clear();
         });
 
         // Server → client dispatch-availability sync (join only; one int).
@@ -134,6 +137,8 @@ public final class AddonClientInit {
         registerPlatformGroupSync();
         registerPlatformGroupButton();
         registerDispatchDashboardButton();
+        registerDisruptionSync();
+        registerDisruptionsDashboardButton();
         DrivingHud.register(); // Feature 4 — driving HUD (registers its own disconnect cleanup)
 
         ScreenEvents.AFTER_INIT.register((client, screen, scaledWidth, scaledHeight) -> {
@@ -194,6 +199,108 @@ public final class AddonClientInit {
                             Text.translatable("gui.station_announcer.dispatch.button"),
                             button -> Util.getOperatingSystem().open(URI.create(ClientDispatchInfo.url())))
                     .dimensions(mapButton.getX() + mapButton.getWidth() + 2, mapButton.getY(), dispatchWidth, mapButton.getHeight())
+                    .build());
+        });
+    }
+
+    // ------------------------- Feature 6: disruptions + temporary stop changes
+
+    /** Server → client sync of the disruption list and the temporary stop changes. */
+    private static void registerDisruptionSync() {
+        ClientPlayNetworking.registerGlobalReceiver(DisruptionNetworking.DISRUPTIONS_S2C,
+                (client, handler, buf, responseSender) -> {
+                    int count = buf.readVarInt();
+                    if (count < 0 || count > DisruptionNetworking.MAX_SYNC_ENTRIES) {
+                        return;
+                    }
+                    List<ClientDisruptions.Entry> entries = new ArrayList<>(count);
+                    for (int i = 0; i < count; i++) {
+                        long id = buf.readLong();
+                        int severity = buf.readVarInt();
+                        boolean active = buf.readBoolean();
+                        long start = buf.readLong();
+                        long end = buf.readLong();
+                        String message = buf.readString(DisruptionNetworking.MAX_MESSAGE_LENGTH);
+                        int routeCount = buf.readVarInt();
+                        if (routeCount < 0 || routeCount > DisruptionNetworking.MAX_ROUTES) {
+                            return;
+                        }
+                        List<Long> routeIds = new ArrayList<>(routeCount);
+                        for (int j = 0; j < routeCount; j++) {
+                            routeIds.add(buf.readLong());
+                        }
+                        entries.add(new ClientDisruptions.Entry(id, severity, active, start, end,
+                                message, List.copyOf(routeIds)));
+                    }
+                    client.execute(() -> ClientDisruptions.replace(entries));
+                });
+
+        ClientPlayNetworking.registerGlobalReceiver(DisruptionNetworking.STOP_CHANGES_S2C,
+                (client, handler, buf, responseSender) -> {
+                    int disabledCount = buf.readVarInt();
+                    if (disabledCount < 0 || disabledCount > DisruptionNetworking.MAX_SYNC_ENTRIES) {
+                        return;
+                    }
+                    Map<String, Long> disabled = new HashMap<>(Math.max(1, disabledCount));
+                    for (int i = 0; i < disabledCount; i++) {
+                        long routeId = buf.readLong();
+                        int stopIndex = buf.readVarInt();
+                        long expiry = buf.readLong();
+                        disabled.put(routeId + ":" + stopIndex, expiry);
+                    }
+                    int addedCount = buf.readVarInt();
+                    if (addedCount < 0 || addedCount > DisruptionNetworking.MAX_SYNC_ENTRIES) {
+                        return;
+                    }
+                    Map<String, long[]> added = new HashMap<>(Math.max(1, addedCount));
+                    for (int i = 0; i < addedCount; i++) {
+                        long routeId = buf.readLong();
+                        int stopIndex = buf.readVarInt();
+                        long platformId = buf.readLong();
+                        long expiry = buf.readLong();
+                        added.put(routeId + ":" + stopIndex, new long[]{platformId, expiry});
+                    }
+                    client.execute(() -> ClientStopChanges.replace(disabled, added));
+                });
+    }
+
+    /**
+     * Adds a "Disruptions" button to MTR's dashboard, one row below the addon's
+     * "Dispatch" button: it splits MTR's "Resource Pack Creator" button the same
+     * way the dispatch button splits the "Transport System Map" button above it,
+     * so the two addon buttons line up on the right of the bottom two rows and
+     * MTR's own layout keeps working. {@code DashboardScreen} itself is never
+     * restructured — this is a plain {@code ScreenEvents.AFTER_INIT} injection.
+     */
+    private static void registerDisruptionsDashboardButton() {
+        ScreenEvents.AFTER_INIT.register((client, screen, scaledWidth, scaledHeight) -> {
+            if (!(screen instanceof DashboardScreen) || !AddonClientConfig.get().showDisruptionsButton) {
+                return;
+            }
+            if (!MinecraftClientData.hasPermission()) {
+                return;
+            }
+            String creatorLabel = Text.translatable("gui.mtr.resource_pack_creator").getString();
+            ClickableWidget hostButton = null;
+            for (ClickableWidget widget : Screens.getButtons(screen)) {
+                if (widget instanceof ButtonWidget && creatorLabel.equals(widget.getMessage().getString())) {
+                    hostButton = widget;
+                    break;
+                }
+            }
+            if (hostButton == null) {
+                return; // MTR layout changed — skip rather than overlap
+            }
+            int buttonWidth = Math.min(80, hostButton.getWidth() / 2);
+            if (buttonWidth < 40) {
+                return; // row too cramped to split
+            }
+            hostButton.setWidth(hostButton.getWidth() - buttonWidth - 2);
+            Screens.getButtons(screen).add(ButtonWidget.builder(
+                            Text.translatable("gui.station_announcer.disruptions.button"),
+                            button -> client.setScreen(new DisruptionsScreen(screen)))
+                    .dimensions(hostButton.getX() + hostButton.getWidth() + 2, hostButton.getY(),
+                            buttonWidth, hostButton.getHeight())
                     .build());
         });
     }

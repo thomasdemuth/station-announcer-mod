@@ -1641,3 +1641,323 @@ existing `startUp` HEAD callback + two new injectors, both fully commented),
 **Unchanged on purpose:** `station_announcer.mixins.json` (no new mixin classes — the two
 injectors live in the already-registered `VehicleMixin`), every other feature's code, and
 the existing dispatch endpoints' behaviour.
+
+---
+
+## Disruptions Agent — Temporary stop changes + service disruptions — 2026-08-08
+
+Two halves, both additive: a runtime **route overlay** that can skip or add a stop
+without ever touching the saved route, and a **disruption** record that drives the
+existing PA/sign system automatically.
+
+### A) Temporary stop changes (6a) — the overlay mechanism
+
+`mtraddon/disruption/StopOverlayEngine.java` + two extra calls inside the existing
+`mixin/DepotMixin.java` handlers.
+
+**How it works (bytecode-verified against MTR FABRIC-4.0.1+1.20.4).** MTR's
+`Depot.writeRouteCache` flattens all the depot's `Route.getRoutePlatforms()` into
+the private `platformsInRoute` list (consecutive duplicate platforms collapsed),
+and `Depot.generateMainRoute` builds the path-finder chain from exactly that list
+(`new SidingPathFinder<>(data, platformsInRoute.get(i).platform,
+platformsInRoute.get(i + 1).platform, i)`), while `Depot.tick`'s completion callback
+(`siding.generateRoute(platformsInRoute.get(0)…, size, …)`) and
+`Depot.getVehiclePlatformRouteInfo(stopIndex)` index the same list. Feature 5
+already swaps the `platform` FIELD of individual entries; this feature changes the
+list's **shape**:
+
+- **Skip a stop** = remove that entry. The path finder then routes straight from
+  the predecessor to the successor, which IS "runs through without stopping" —
+  provided the track allows it (see the failure note below).
+- **Add a stop** = insert a new entry. `Depot$PlatformRouteDetails` is
+  package-private with a *private* `(Platform, Route, int)` constructor (javap:
+  plus the synthetic 4-arg bridge), so neither an import nor a Mixin factory
+  invoker can name it — the entry is built by **reflection** with a cached,
+  `setAccessible(true)` constructor (a couple of calls per depot generation, cold
+  path). `route`/`platformIndex` follow MTR's own convention: they describe the leg
+  LEADING to the stop, so an inserted stop gets the anchor stop's route and index.
+
+**`Route.getRoutePlatforms()` is never modified, and nothing is written to MTR's
+data files.** The overlay is re-applied from our own store every time MTR rebuilds
+the list.
+
+**Composition with Feature 5 (the part that needed care).** `PlatformGroupEngine`
+sanity-checks `walk.size() == platformsInRoute.size()` and disables itself with a
+warning on a mismatch — so an overlay that changes the size must never be visible
+to it. Injector ordering between separate mixins is not contractual, so both
+engines are now called from the *same* `DepotMixin` handlers, in an explicit order
+(two added lines per handler, no behaviour change to Feature 5's own code):
+
+1. `generateMainRoute` HEAD: `StopOverlayEngine.restorePristine` → undo last
+   overlay so the list is exactly as MTR built it; `PlatformGroupEngine
+   .onGenerateMainRoute` → rotate groups (in-place field swaps, size unchanged);
+   `StopOverlayEngine.onGenerateMainRoute` → re-apply the overlay on top.
+2. `writeRouteCache` TAIL: `PlatformGroupEngine.onWriteRouteCache` → re-apply group
+   choices to the freshly rebuilt list; `StopOverlayEngine.onWriteRouteCache` →
+   drop the now-stale undo record and re-apply the overlay, so
+   `getVehiclePlatformRouteInfo` keeps matching the baked path between generations.
+
+`restorePristine` only restores when the live list is still, element for element
+**by identity**, the list we produced; anything else means MTR rebuilt it in
+between and the record is simply dropped. Undo records live in one
+`ConcurrentHashMap<depotId, {pristine[], applied[]}>`, cleared on SERVER_STOPPED
+and on world load.
+
+**Safety rails inside the overlay**
+- After removals/insertions the list is **re-collapsed**: a duplicate adjacent pair
+  would make MTR build a platform→itself path finder. MTR keeps the first of a pair;
+  we do the same, except an ADDED entry always loses (it is the optional one).
+- If the result would have fewer than two stops the overlay is skipped entirely
+  (MTR would report `TWO_PLATFORMS_REQUIRED`), logged once.
+- If our replica of MTR's collapse loop ever stops matching `platformsInRoute`,
+  the overlay disables itself with one logged warning and touches nothing. It
+  recovers automatically at the next `writeRouteCache`.
+
+**Generation failure detection (the honest answer).** We cannot prove in advance
+that a skip leaves a routable path. What we do: the "Stops…" route list shows
+MTR's own `Depot.getLastGeneratedStatus() == PATH_NOT_FOUND` for the depots running
+that line, so a skip whose neighbours cannot be joined by track shows up as a red
+"depot path generation failed" line right where the change was made.
+
+**Added-stop validation** (`StopOverlayEngine.validateAddition`, simulator thread,
+run BEFORE anything is stored): the platform must resolve, share the anchor's
+transport mode, not equal the anchor or the following stop, and **at least one of
+its rails must appear in the depot's currently generated path** (`PathData
+.getOrderedPosition1/2` + `Platform.containsPos`) — i.e. the trains already run
+over it, no rerouting over new track. Deliberately a whole-path check rather than
+a per-leg one, because the baked path's leg indices drift as soon as another
+overlay is active; where exactly the stop is spliced is the user's choice, and an
+impossible splice surfaces as MTR's own `PATH_NOT_FOUND`. Failures come back to
+the player as an action-bar reason (`msg.station_announcer.stop_change.*`).
+
+**Expiry.** Each change carries `expiresAtMillis` (0 = until turned off). Checked on
+the addon's EXISTING `END_SERVER_TICK` handler, once a second, guarded by a volatile
+`AddonStore.nextExpiryMillis` — with nothing time-limited the check is one field
+comparison. On expiry the entry is removed, the snapshot republished and the S2C
+sync rebroadcast; the route reverts cleanly at the next generation.
+
+### B) Disruptions (6b) — data model
+
+`mtraddon/disruption/Disruption.java`:
+`record Disruption(long id, long[] routeIds, String message, Severity severity,
+long startMillis, long endMillis, boolean active)` with
+`Severity = INFO < MINOR < MAJOR < SEVERE` (ordinal order is the sort key).
+`isActiveAt(now)` = toggled on AND inside its window; `startMillis`/`endMillis` are
+absolute epoch millis (0 = "now" / "until turned off"), entered in the GUI as
+offsets ("starts in N min", "ends after N min") so no date picker is needed.
+Ids are creation-time millis, nudged forward on collision.
+
+### C) PA / sign integration — the exact API added
+
+Two new **public final** methods on `block/AbstractPaBlockEntity` (and nothing else
+in the PA code changed — no existing path calls either of them, so every
+pre-existing PA behaviour is bit-for-bit unchanged when they are unused):
+
+- `announceExternal(String message)` — fires ONE announcement with the supplied
+  text. Identical player experience to a normal firing (chime, TTS, chat,
+  per-player loudest-source volume, push to linked displays via the existing
+  `onFired` hook), but the block's stored pool, `MessageIndex`, delay, tag and
+  presentation flags are never read or written, and its own auto-trigger keeps
+  running in between. The broadcast loop is a deliberate copy of `fire()`'s —
+  `fire()` was NOT refactored to delegate, precisely so its bytecode is untouched.
+- `showExternalDisplayMessage(String message)` — pushes to the block's linked
+  displays only (no chime/TTS/chat) through the same `onFired` hook; `""` clears
+  the banner, which is how a display reverts.
+
+Plus one additive method on `AnnouncerRegistry`:
+`forEachLoaded(MinecraftServer, Consumer<AbstractPaBlockEntity>)` — visits the
+loaded PA sources under the registry lock.
+
+**No new NBT format.** Displays are updated exclusively through the existing
+`ControlBoxBlockEntity.onFired` → `PaDisplay.showPaAnnouncement(String)` →
+`live_message`/`live_start` path the NYC PIDS renderers already read.
+
+### D) Broadcasting — `mtraddon/disruption/DisruptionBroadcaster.java`
+
+Event-driven and throttled, per ARCHITECTURE §6:
+
+- **Ticker**: runs on the addon's existing `END_SERVER_TICK` handler, once a second
+  (a new countdown in `AddonInit`, no new loop). Feature off, or zero stored
+  disruptions → returns after one or two field reads.
+- **Affected-station scan**: on the SIMULATOR threads via `simulator.run(...)`,
+  only when the disruption set changed (`AddonStore.disruptionVersion()`) or after
+  `disruptions.stationRescanSeconds`. For each `Station` it checks
+  `station.savedRails` → `Platform.routes` against the affected route ids and emits
+  a plain `StationScope(dimension, stationId, name, minX/maxX/minZ/maxZ, servedRouteIds)`
+  record (no MTR references), handed back with `server.execute`. Station bounds come
+  from `AreaBase.getMinX/getMaxX/getMinZ/getMaxZ`; **Y is deliberately ignored**
+  because MTR station areas are 2-D.
+- **PA sweep**: `AnnouncerRegistry.forEachLoaded` is walked ONLY on ticks where at
+  least one station is due to announce or the display banner needs refreshing.
+  A block is inside a station when its world's MTR dimension id
+  (`Init.getWorldId(new org.mtr.mapping.holder.World(world))`, cached per world
+  instance) and its X/Z fall inside a scope.
+- **Simulator access**: new `mixin/MainSimulatorsMixin` captures
+  `org.mtr.core.Main.simulators` at the constructor's RETURN into
+  `disruption/MtrSimulators`. `DispatchRegistry` was NOT reused: it is only
+  populated from the `Webserver.start()` redirect, which needs MTR's webserver AND
+  `dispatch.enabled` — disruptions must not depend on either. Cleared on
+  SERVER_STOPPING before `Main.stop()`.
+
+**Severity / cycling rules (the documented choices)**
+- **Speech**: one disruption per station per `announceIntervalMinutes` (default 5),
+  cycling through that station's applicable disruptions in **severity order**
+  (SEVERE → INFO, ties by creation id) — three alerts at one station are all spoken
+  over three cadences.
+- **Displays**: always the **highest-severity** applicable disruption, re-pushed
+  every `displayRefreshSeconds` (default 30) because the PIDS live banner is
+  time-limited on the renderer side.
+- Normal PA message pools are never suppressed or edited; they keep running between
+  disruption announcements.
+
+**Revert**: when a disruption expires / is toggled off / is deleted, when the last
+one goes away, or when the feature is disabled, every PA source we pushed to gets
+`showExternalDisplayMessage("")` and the screens fall straight back to their usual
+content. The same happens per block when it stops being inside an affected station.
+
+### E) Storage, snapshot, networking
+
+`AddonStore` gains three JSON sections in the same style as the rest:
+
+```json
+"disabledStops": { "<routeId>:<stopIndex>": { "expiresAtMillis": 0 } },
+"addedStops":    { "<routeId>:<stopIndex>": { "platformId": 42, "expiresAtMillis": 0 } },
+"disruptions":   { "<id>": { "routeIds": [..], "message": "...", "severity": "MAJOR",
+                             "startMillis": 0, "endMillis": 0, "active": true } }
+```
+plus volatile `nextExpiryMillis` / `disruptionCount` / `disruptionVersion` so the
+ticker is O(1) when idle. `AddonSnapshots.stopOverlays()` publishes a volatile
+immutable `Long2ObjectOpenHashMap<RouteStopOverlay>` (route id → parallel
+`int[] disabled`, `int[] addAfter`, `long[] addPlatform` — allocation-free linear
+scans over a handful of entries on the simulator thread).
+
+`mtraddon/disruption/DisruptionNetworking.java` (own class, `AddonNetworking`
+untouched), all validated the same way as the existing channels (op level
+`editPermissionLevel`, hard wire caps, config caps):
+`addon_stop_changes` (S2C), `addon_update_stop_change` (C2S),
+`addon_disruptions` (S2C), `addon_update_disruption` (C2S). Both S2C maps are sent
+EMPTY while their feature flag is off, and both are pushed on join and re-broadcast
+after every edit and every expiry.
+
+### F) Config keys (`config/station-announcer-addon.json`)
+
+```
+stopChanges.enabled            true    master switch for the route overlay
+stopChanges.maxPerRoute        8       skips + additions together, per line
+stopChanges.maxDurationMinutes 10080   longest duration a change may be given
+
+disruptions.enabled                    true  master switch (off = zero work)
+disruptions.announceIntervalMinutes    5     per-station PA cadence (1–120)
+disruptions.maxActive                  16    stored disruptions (1–128)
+disruptions.maxMessageLength           240   announcement text cap (16–512)
+disruptions.maxRoutesPerDisruption     16    affected lines per disruption (1–64)
+disruptions.stationRescanSeconds       300   affected-station rescan (30–3600)
+disruptions.displayRefreshSeconds      30    PIDS banner refresh (5–600)
+disruptions.includeStandaloneAnnouncers false also drive PA Announcer blocks
+```
+Client: `showDisruptionsButton` in `station-announcer-addon-client.json`.
+
+### G) GUI entry points
+
+A **"Disruptions"** button injected on MTR's `DashboardScreen` via
+`ScreenEvents.AFTER_INIT` — it splits MTR's "Resource Pack Creator" button exactly
+the way the addon's existing "Dispatch" button splits the "Transport System Map"
+button on the row above, so the two addon buttons line up on the right of the bottom
+two rows. `DashboardScreen` itself is never restructured.
+
+- `DisruptionsScreen` — the hub: every disruption with severity colour, in-force
+  state and affected lines; New / Edit / Delete; a marker line counting the active
+  temporary stop changes; and the entry to the stop-change screens.
+- `DisruptionEditScreen` — message field (with three one-click templates: delays /
+  suspension / planned work), severity cycle, Active toggle, affected-lines button,
+  "starts in" and "ends after" sliders (`IntSlider` reused).
+- `RoutePickerScreen` — hand-drawn checkbox list of the dashboard's routes in their
+  own colours (the shared `PlatformPicker` is platform-scoped and not reusable here).
+- `StopChangeRoutesScreen` — line list, lines with a change first, marked `*`, with
+  the depots' `PATH_NOT_FOUND` status shown when generation failed.
+- `RouteStopChangesScreen` — one line's stops with Skip/Restore and +Stop/-Stop per
+  stop, a duration slider for new changes, the "Changes apply after the depot
+  regenerates its paths" hint, and a **"Regenerate depots running this line"** button
+  sending MTR's own `PacketDepotGenerate(DepotOperationByIds)` — the same packet
+  Feature 2's dwell screen and MTR's dashboard refresh use.
+- `AddedStopPickerScreen` — picks the platform for an extra stop from every platform
+  the client knows, ordered by distance from the anchor stop and capped at 200 rows
+  (the shared `PlatformPicker` only covers one station / a 16-block radius, which is
+  wrong here by definition).
+
+### H) Thread model
+
+- Both Depot hooks and the added-stop validation run on the per-dimension
+  SIMULATOR thread (or the server thread with `useThreadedSimulation` off); they
+  read the volatile config, the volatile immutable snapshot and the simulator's own
+  data. The only mutable simulator-side state is the undo-record `ConcurrentHashMap`.
+- The station scan body runs on the simulator threads and returns plain records via
+  `server.execute`; everything else in the broadcaster is server-thread only.
+- Store mutations, snapshot publishes and every packet build stay on the server
+  thread; file I/O stays on the existing debounced executor.
+- The reflective `PlatformRouteDetails` constructor is resolved once into a volatile
+  field and only invoked from the simulator thread during path generation.
+
+### I) Known limitations / gaps
+
+- **Everything applies at the next depot generation.** Skips/additions are baked
+  into the path, exactly like dwell overrides and platform groups. Removing a change
+  likewise only heals on the next generation — and between an expiry and that
+  regeneration, `getVehiclePlatformRouteInfo` (in-train "next station" info) is
+  computed from the reverted list while the path is still the old one, so the stop
+  labels can be off by one until the depot regenerates. Same class of caveat
+  Feature 5 already documents.
+- **We cannot prove a skip is routable.** If the skipped stop's neighbours have no
+  direct track, MTR reports `PATH_NOT_FOUND`; we surface that status per line in the
+  GUI rather than pre-validating (a pre-check would mean running a path finder,
+  which §6 forbids on those threads).
+- **A collapsed stop cannot be targeted.** Changes key on `(routeId, indexInRoute)`
+  of the occurrence that ADDS the collapsed stop, so at a route boundary where
+  route B starts at route A's last platform, only `(routeA, lastIndex)` matches —
+  identical semantics to Features 2 and 5, and the same "looks like a dead edit"
+  trap.
+- **One added platform per anchor index** (the key is `<routeId>:<stopIndex>`), and
+  a skip + an addition may share an anchor (they live in separate sections).
+- **A line served by several depots**: the overlay is applied to every depot that
+  runs the line, which is the intent, but each depot regenerates on its own schedule.
+- **Per-route dwell on an added stop**: `DwellOverrideEngine` matches path dwell
+  segments against the route walk, which has no entry for an added stop, so the
+  extra stop always uses the platform's own default dwell. A skipped stop is handled
+  correctly by its existing monotonic matching. Not changed — Feature 2's code is
+  untouched.
+- **Displays**: only the NYC PIDS block entity implements `PaDisplay` today, and only
+  displays LINKED to an in-station PA Control Box are reached (that is the existing
+  link model — there is no registry of loose PIDS). Railroad PIDS do not implement
+  `PaDisplay` and are not driven.
+- **Unloaded PA blocks** cannot be reverted: a control box that unloads while an
+  alert banner is on it keeps that banner in its displays' NBT until it is loaded
+  again and either re-announced or the renderer's banner window lapses.
+- **Station bounds are X/Z only** (MTR station areas are 2-D), so a PA block far
+  above or below a station but inside its footprint counts as inside it.
+- **Announcement text is exactly what is typed** — no severity prefix is added, so
+  the templates carry their own wording.
+- Not compiled or in-game tested by this agent (no-Gradle rule). Compile-risk spots
+  worth a look: the `@Inject` at `<init>` RETURN in `MainSimulatorsMixin` (Mixin only
+  allows RETURN/TAIL in constructors, which is what is used), the unchecked
+  `ObjectArrayList<?>` → `ObjectArrayList<Object>` cast in `StopOverlayEngine`, and
+  the reflective lookup of `Depot$PlatformRouteDetails` (it degrades gracefully:
+  one warning, ADDED stops disabled, skips keep working).
+
+### J) Files
+
+New: `mtraddon/disruption/{StopOverlayEngine,Disruption,DisruptionBroadcaster,DisruptionNetworking,MtrSimulators}.java`,
+`mixin/MainSimulatorsMixin.java`,
+`client/mtraddon/{ClientDisruptions,ClientStopChanges,DisruptionsScreen,DisruptionEditScreen,RoutePickerScreen,StopChangeRoutesScreen,RouteStopChangesScreen,AddedStopPickerScreen}.java`.
+
+Modified: `mtraddon/{AddonServerConfig,AddonStore,AddonSnapshots,AddonInit}.java`,
+`mixin/DepotMixin.java` (two added calls per handler + javadoc on the ordering),
+`block/AbstractPaBlockEntity.java` (+2 additive public methods),
+`AnnouncerRegistry.java` (+1 additive method),
+`client/mtraddon/{AddonClientInit,AddonClientConfig}.java`,
+`resources/station_announcer.mixins.json` (+1 entry),
+`assets/station_announcer/lang/en_us.json` (+70 keys).
+
+**Untouched on purpose:** `AddonNetworking`, `PlatformGroupEngine`,
+`DwellOverrideEngine`, `HoldRuleEngine`, `DoorObstructionEngine`, the dispatch web
+layer, the analytics layer, `ControlBoxBlockEntity`, `PaDisplay`, the PIDS block
+entities and every renderer.

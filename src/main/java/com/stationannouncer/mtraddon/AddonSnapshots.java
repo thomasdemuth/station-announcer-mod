@@ -117,4 +117,86 @@ public final class AddonSnapshots {
         // groups so a removed group stops being re-applied to the route cache.
         PlatformGroupEngine.pruneRuntime(java.util.Set.copyOf(groups.keySet()));
     }
+
+    // ------------------------------------- Feature 6a: temporary stop changes
+
+    /**
+     * One route's temporary stop changes, flattened into parallel arrays so the
+     * simulator-thread lookup is a couple of linear scans over at most a handful
+     * of entries and allocates nothing.
+     *
+     * @param disabled    indices (within {@code Route.getRoutePlatforms()}) of stops trains skip
+     * @param addAfter    indices after which an extra stop is inserted
+     * @param addPlatform the platform id inserted after {@code addAfter[i]}
+     */
+    public record RouteStopOverlay(int[] disabled, int[] addAfter, long[] addPlatform) {
+        public boolean isDisabled(int stopIndex) {
+            for (int index : disabled) {
+                if (index == stopIndex) {
+                    return true;
+                }
+            }
+            return false;
+        }
+
+        /** The platform id to insert after this stop, or {@code 0} for none. */
+        public long addedAfter(int stopIndex) {
+            for (int i = 0; i < addAfter.length; i++) {
+                if (addAfter[i] == stopIndex) {
+                    return addPlatform[i];
+                }
+            }
+            return 0;
+        }
+    }
+
+    private static volatile Long2ObjectOpenHashMap<RouteStopOverlay> stopOverlays = new Long2ObjectOpenHashMap<>();
+
+    /** Current temporary stop changes keyed by route id. Read-only. */
+    public static Long2ObjectOpenHashMap<RouteStopOverlay> stopOverlays() {
+        return stopOverlays;
+    }
+
+    /**
+     * Server thread only: rebuild the published snapshot from the store's two
+     * key→value maps ({@code "<routeId>:<stopIndex>"} keys, as persisted).
+     */
+    static void publishStopOverlays(Map<String, Long> disabledStops, Map<String, long[]> addedStops) {
+        Map<Long, java.util.List<Integer>> disabledByRoute = new java.util.LinkedHashMap<>();
+        Map<Long, java.util.List<long[]>> addedByRoute = new java.util.LinkedHashMap<>();
+        disabledStops.forEach((key, expiry) -> {
+            long[] parsed = com.stationannouncer.mtraddon.disruption.StopOverlayEngine.parseStopKey(key);
+            if (parsed != null) {
+                disabledByRoute.computeIfAbsent(parsed[0], id -> new java.util.ArrayList<>()).add((int) parsed[1]);
+            }
+        });
+        addedStops.forEach((key, value) -> {
+            long[] parsed = com.stationannouncer.mtraddon.disruption.StopOverlayEngine.parseStopKey(key);
+            if (parsed != null && value != null && value.length > 0 && value[0] != 0) {
+                addedByRoute.computeIfAbsent(parsed[0], id -> new java.util.ArrayList<>())
+                        .add(new long[]{parsed[1], value[0]});
+            }
+        });
+
+        Long2ObjectOpenHashMap<RouteStopOverlay> snapshot =
+                new Long2ObjectOpenHashMap<>(Math.max(1, disabledByRoute.size() + addedByRoute.size()));
+        java.util.Set<Long> routeIds = new java.util.LinkedHashSet<>(disabledByRoute.keySet());
+        routeIds.addAll(addedByRoute.keySet());
+        for (long routeId : routeIds) {
+            java.util.List<Integer> disabled = disabledByRoute.getOrDefault(routeId, java.util.List.of());
+            java.util.List<long[]> added = addedByRoute.getOrDefault(routeId, java.util.List.of());
+            int[] disabledArray = new int[disabled.size()];
+            for (int i = 0; i < disabledArray.length; i++) {
+                disabledArray[i] = disabled.get(i);
+            }
+            int[] addAfter = new int[added.size()];
+            long[] addPlatform = new long[added.size()];
+            for (int i = 0; i < addAfter.length; i++) {
+                addAfter[i] = (int) added.get(i)[0];
+                addPlatform[i] = added.get(i)[1];
+            }
+            snapshot.put(routeId, new RouteStopOverlay(disabledArray, addAfter, addPlatform));
+        }
+        stopOverlays = snapshot;
+    }
 }

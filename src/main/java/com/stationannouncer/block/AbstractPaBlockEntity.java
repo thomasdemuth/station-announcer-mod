@@ -209,6 +209,76 @@ public abstract class AbstractPaBlockEntity extends BlockEntity {
         }
     }
 
+    // --------------------------------------------------- external announcements
+
+    /**
+     * Fires ONE announcement with an externally supplied message — used by the
+     * MTR dispatch addon's service-disruption broadcaster. Everything the players
+     * experience is identical to a normal firing (same chime, same TTS, same chat,
+     * same per-player loudest-source volume, same push to linked displays), but
+     * nothing about this block is touched: the stored pool, {@code MessageIndex},
+     * the delay, the tag and the presentation flags all stay exactly as they were,
+     * and the block's own auto-trigger keeps running in between.
+     *
+     * <p>Deliberately a separate method rather than a refactor of {@link #fire()}:
+     * no existing code path calls it, so the behaviour of every pre-existing PA
+     * feature is bit-for-bit unchanged when it is unused. The broadcast loop below
+     * is a copy of {@code fire()}'s for exactly that reason — do not "de-duplicate"
+     * the two by making {@code fire()} delegate here.</p>
+     */
+    public final void announceExternal(String message) {
+        if (!(world instanceof ServerWorld serverWorld) || message == null || message.isBlank()) {
+            return;
+        }
+        String announcement = message.trim();
+        if (announcement.length() > MAX_TEXT_LENGTH) {
+            announcement = announcement.substring(0, MAX_TEXT_LENGTH);
+        }
+        // Displays first, exactly like fire(): screens show what the PA is saying
+        // even when no speaker ends up in range.
+        onFired(serverWorld, announcement);
+        List<SoundSource> sources = collectSources(serverWorld);
+        if (sources.isEmpty()) {
+            return;
+        }
+        for (ServerPlayerEntity player : serverWorld.getPlayers()) {
+            SoundSource best = null;
+            float bestVolume = -1.0f;
+            for (SoundSource source : sources) {
+                BlockPos sourcePos = source.pos();
+                double distSq = player.squaredDistanceTo(
+                        sourcePos.getX() + 0.5, sourcePos.getY() + 0.5, sourcePos.getZ() + 0.5);
+                double radiusSq = (double) source.radius() * source.radius();
+                if (distSq > radiusSq) {
+                    continue;
+                }
+                double dist = Math.sqrt(distSq);
+                float falloff = 1.0f - 0.75f * (float) (dist / source.radius());
+                float volume = MathHelper.clamp(source.volumePercent() / 100.0f * falloff, 0.0f, 1.0f);
+                if (volume > bestVolume) {
+                    bestVolume = volume;
+                    best = source;
+                }
+            }
+            if (best != null) {
+                AnnouncerNetworking.sendAnnouncement(player, announcement, bestVolume, best.pos(),
+                        showChat, playChime, chimeSound);
+            }
+        }
+    }
+
+    /**
+     * Pushes a message to this source's linked displays only — no chime, no TTS,
+     * no chat. Passing {@code ""} clears the banner so the screens fall back to
+     * their normal content, which is how the dispatch addon reverts a display when
+     * a disruption ends. Also additive: no existing path calls it.
+     */
+    public final void showExternalDisplayMessage(String message) {
+        if (world instanceof ServerWorld serverWorld) {
+            onFired(serverWorld, message == null ? "" : message);
+        }
+    }
+
     // ------------------------------------------------------------ accessors
 
     public String getText() {

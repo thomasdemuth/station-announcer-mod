@@ -6,6 +6,7 @@
   "mixins": [
     "DepotMixin",
     "MainMixin",
+    "MainSimulatorsMixin",
     "PathDataSchemaAccessor",
     "PlatformRouteDetailsAccessor",
     "SidingMixin",

@@ -1,6 +1,7 @@
 package com.stationannouncer.mixin;
 
 import com.stationannouncer.mtraddon.PlatformGroupEngine;
+import com.stationannouncer.mtraddon.disruption.StopOverlayEngine;
 import org.mtr.core.data.Data;
 import org.mtr.core.data.Depot;
 import org.mtr.core.data.TransportMode;
@@ -71,13 +72,38 @@ public abstract class DepotMixin extends DepotSchema {
         super(transportMode, data);
     }
 
+    /**
+     * Feature 5 + Feature 6a share this hook, and the ORDER matters, which is why
+     * both engines are called from one handler instead of two injectors (injector
+     * ordering between mixins is not part of the contract):
+     * <ol>
+     *   <li>{@link StopOverlayEngine#restorePristine} undoes the temporary stop
+     *       overlay we applied last time, so the list is exactly as MTR built it
+     *       and {@code PlatformGroupEngine}'s walk-size sanity check still
+     *       matches;</li>
+     *   <li>{@code PlatformGroupEngine} rotates its platform groups (in-place
+     *       field swaps — the list's size never changes);</li>
+     *   <li>{@link StopOverlayEngine#onGenerateMainRoute} re-applies the temporary
+     *       overlay (which DOES change the size) on top of those choices.</li>
+     * </ol>
+     */
     @Inject(method = "generateMainRoute(Lorg/mtr/core/data/Depot$OnGenerationComplete;)V", at = @At("HEAD"))
     private void stationAnnouncer$chooseGroupPlatforms(CallbackInfo ci) {
+        StopOverlayEngine.restorePristine((Depot) (Object) this, data, platformsInRoute);
         PlatformGroupEngine.onGenerateMainRoute((Depot) (Object) this, data, platformsInRoute);
+        StopOverlayEngine.onGenerateMainRoute((Depot) (Object) this, data, platformsInRoute);
     }
 
+    /**
+     * Same ordering rule on the rebuild path: MTR has just refilled
+     * {@code platformsInRoute} from the routes' original platforms, Feature 5
+     * re-applies its group choices, and Feature 6a then re-applies the temporary
+     * stop overlay so {@code getVehiclePlatformRouteInfo} keeps matching the baked
+     * path between generations.
+     */
     @Inject(method = "writeRouteCache(Lorg/mtr/libraries/it/unimi/dsi/fastutil/longs/Long2ObjectOpenHashMap;)V", at = @At("TAIL"))
     private void stationAnnouncer$reapplyGroupPlatforms(CallbackInfo ci) {
         PlatformGroupEngine.onWriteRouteCache((Depot) (Object) this, data, platformsInRoute);
+        StopOverlayEngine.onWriteRouteCache((Depot) (Object) this, data, platformsInRoute);
     }
 }

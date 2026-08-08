@@ -6,6 +6,10 @@ import com.stationannouncer.mtraddon.analytics.AnalyticsRecorder;
 import com.stationannouncer.mtraddon.dispatch.DispatchRegistry;
 import com.stationannouncer.mtraddon.dispatch.DispatchStreamer;
 import com.stationannouncer.mtraddon.dispatch.DispatchWebSetup;
+import com.stationannouncer.mtraddon.disruption.DisruptionBroadcaster;
+import com.stationannouncer.mtraddon.disruption.DisruptionNetworking;
+import com.stationannouncer.mtraddon.disruption.MtrSimulators;
+import com.stationannouncer.mtraddon.disruption.StopOverlayEngine;
 import net.fabricmc.fabric.api.event.lifecycle.v1.ServerLifecycleEvents;
 import net.fabricmc.fabric.api.event.lifecycle.v1.ServerTickEvents;
 import net.fabricmc.fabric.api.networking.v1.ServerPlayConnectionEvents;
@@ -31,8 +35,14 @@ public final class AddonInit {
     private AddonInit() {
     }
 
+    /** Feature 6: the expiry check + disruption broadcast run once a second. */
+    private static final int DISRUPTION_POLL_TICKS = 20;
+
+    private static int disruptionCountdown;
+
     public static void register() {
         AddonNetworking.registerServerReceivers();
+        DisruptionNetworking.registerServerReceivers();
         AnalyticsCommand.register();
 
         ServerLifecycleEvents.SERVER_STARTED.register(server -> {
@@ -57,14 +67,19 @@ public final class AddonInit {
             // connected clients and the streamer thread itself.
             DispatchRegistry.clear();
             DispatchStreamer.shutdown();
+            // Feature 6: drop the captured Simulator references before MTR stops them.
+            MtrSimulators.clear();
         });
         ServerLifecycleEvents.SERVER_STOPPED.register(server -> {
             HoldRuleEngine.clearRuntimeState();
             PlatformGroupEngine.clearRuntimeState();
             DoorObstructionEngine.clearRuntimeState();
+            StopOverlayEngine.clearRuntimeState();
+            DisruptionBroadcaster.clearRuntimeState();
             lastHoldState = Set.of();
             lastDoorObstructions = Set.of();
             holdStateCountdown = 0;
+            disruptionCountdown = 0;
         });
 
         // Which platforms are holding a train right now (yellow holding lights)
@@ -72,6 +87,18 @@ public final class AddonInit {
         // second, and only sent when an answer changes — which, with nothing held
         // or stuck, is never: the whole tick is two isEmpty checks.
         ServerTickEvents.END_SERVER_TICK.register(server -> {
+            // Feature 6 shares this ticker (no new per-tick loop): once a second it
+            // retires whatever has expired and lets the disruption broadcaster do
+            // its (heavily throttled) work. Both calls return after one or two
+            // field reads when nothing is configured.
+            if (--disruptionCountdown <= 0) {
+                disruptionCountdown = DISRUPTION_POLL_TICKS;
+                if (AddonStore.expireDue(System.currentTimeMillis())) {
+                    DisruptionNetworking.broadcastStopChanges(server);
+                    DisruptionNetworking.broadcastDisruptions(server);
+                }
+                DisruptionBroadcaster.tick(server);
+            }
             if (--holdStateCountdown > 0) {
                 return;
             }
@@ -97,6 +124,8 @@ public final class AddonInit {
             AddonNetworking.syncLiftDoorsTo(sender);
             AddonNetworking.syncPlatformGroupsTo(sender);
             AddonNetworking.syncDispatchInfoTo(sender);
+            DisruptionNetworking.syncStopChangesTo(sender);
+            DisruptionNetworking.syncDisruptionsTo(sender);
         });
 
         StationAnnouncer.LOGGER.info("MTR dispatch addon initialized");

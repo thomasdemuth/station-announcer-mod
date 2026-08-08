@@ -57,6 +57,21 @@ public final class AnnouncerRegistry {
         return count;
     }
 
+    /**
+     * Visits every currently loaded, still-valid PA source of this server.
+     * Additive (used by the MTR dispatch addon's disruption broadcaster); no
+     * pre-existing code path calls it. The consumer runs while the registry lock
+     * is held, so it must not add or remove PA blocks — reading their state and
+     * firing announcements (which only touches the block entity itself) is fine.
+     */
+    public static synchronized void forEachLoaded(MinecraftServer server, java.util.function.Consumer<AbstractPaBlockEntity> consumer) {
+        for (AbstractPaBlockEntity be : LOADED) {
+            if (isValid(be, server)) {
+                consumer.accept(be);
+            }
+        }
+    }
+
     private static boolean isValid(AbstractPaBlockEntity be, MinecraftServer server) {
         return be != null
                 && !be.isRemoved()
