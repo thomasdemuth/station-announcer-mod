@@ -113,6 +113,10 @@ public class StationDecorRenderer implements BlockEntityRenderer<StationDecorBlo
         return lastNameUpper;
     }
 
+    /** A dispatcher hold flashes rather than glowing steadily: on/period, in millis. */
+    private static final long HOLD_FLASH_PERIOD_MS = 1000;
+    private static final long HOLD_FLASH_ON_MS = 550;
+
     /**
      * Three round lenses on both faces of the hanging box. Yellow: lit from
      * {@code on} seconds before arrival until {@code off} seconds before
@@ -120,6 +124,10 @@ public class StationDecorRenderer implements BlockEntityRenderer<StationDecorBlo
      * back). Green: solid from {@code on} seconds before departure until
      * {@code off} seconds after the train has gone. Both edges default to the
      * light's own timing and are adjustable per block with the MTR brush.
+     *
+     * <p>A yellow light may additionally follow the addon's platform hold rules
+     * (Feature 1): while a rule is actually holding a train at its platform the
+     * lenses flash, and in {@code ONLY} mode that is all the light ever does.</p>
      */
     private void paintHoldingLight(StationDecorBlockEntity entity, MatrixStack matrices,
                                    VertexConsumerProvider vertexConsumers,
@@ -129,8 +137,10 @@ public class StationDecorRenderer implements BlockEntityRenderer<StationDecorBlo
         long onMillis = 1000L * entity.lightSecondsOr(entity.getLightOnSeconds(), light.defaultOnSeconds());
         long offMillis = 1000L * entity.lightSecondsOr(entity.getLightOffSeconds(), light.defaultOffSeconds());
         long platformId = resolvePlatform(entity);
+        StationDecorBlockEntity.HoldIndicator holdMode =
+                green ? StationDecorBlockEntity.HoldIndicator.OFF : entity.getHoldIndicator();
         boolean active = false;
-        if (platformId != 0) {
+        if (platformId != 0 && holdMode != StationDecorBlockEntity.HoldIndicator.ONLY) {
             long offset = org.mtr.mod.data.ArrivalsCacheClient.INSTANCE.getMillisOffset();
             long now = System.currentTimeMillis();
             Long storedDeparture = LAST_DEPARTURE.get(entity.getPos().asLong());
@@ -154,6 +164,13 @@ public class StationDecorRenderer implements BlockEntityRenderer<StationDecorBlo
                     && now >= storedDeparture - onMillis && now <= storedDeparture + offMillis) {
                 active = true; // solid "time to leave"
             }
+        }
+
+        // A dispatcher hold overrides the timetable: the schedule says go, the
+        // rule says wait, so the lenses flash for as long as the hold lasts.
+        if (holdMode.followsHoldRules() && platformId != 0
+                && com.stationannouncer.client.mtraddon.ClientHoldState.isHeld(platformId)) {
+            active = System.currentTimeMillis() % HOLD_FLASH_PERIOD_MS < HOLD_FLASH_ON_MS;
         }
 
         int lit = green ? 0xFF38E464 : 0xFFFFC03C;

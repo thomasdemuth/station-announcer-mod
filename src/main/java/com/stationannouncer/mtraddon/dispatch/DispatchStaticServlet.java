@@ -53,7 +53,15 @@ public final class DispatchStaticServlet extends HttpServlet {
     @Override
     protected void doGet(HttpServletRequest request, HttpServletResponse response) throws IOException {
         String path = request.getPathInfo();
-        if (path == null || path.isEmpty() || "/".equals(path)) {
+        if (path == null || path.isEmpty()) {
+            // "/dispatch" without the trailing slash: serving index.html here would make the
+            // page's relative style.css/app.js/api URLs resolve against "/" (MTR's system-map
+            // servlet) and the UI loads unstyled and dead. Redirect to the canonical form.
+            response.setStatus(302);
+            response.setHeader("Location", request.getRequestURI() + "/");
+            return;
+        }
+        if ("/".equals(path)) {
             path = "/index.html";
         }
         // Normalize + reject traversal; classpath lookup has no query strings to strip.

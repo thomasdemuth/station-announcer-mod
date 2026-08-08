@@ -22,11 +22,38 @@ public class StationDecorBlockEntity extends BlockEntity {
     public static final int UNSET_SECONDS = -1;
     public static final int MAX_LIGHT_SECONDS = 60;
 
+    /**
+     * Yellow holding lights only: what the light does about the dispatch addon's
+     * platform hold rules (Feature 1). A held train is the one case where the
+     * arrival timetable says "go" and the dispatcher says "wait", so it gets its
+     * own flashing state rather than sharing the steady dwell light.
+     */
+    public enum HoldIndicator {
+        /** Hold rules are ignored; the light follows arrivals only (the old behaviour). */
+        OFF,
+        /** Arrivals as usual, plus flashing for as long as a hold rule holds the train. */
+        FLASH,
+        /** Dark except while a train is being held — a dedicated "HOLD" indicator. */
+        ONLY;
+
+        public boolean followsHoldRules() {
+            return this != OFF;
+        }
+
+        static HoldIndicator byOrdinal(int ordinal) {
+            HoldIndicator[] values = values();
+            return ordinal >= 0 && ordinal < values.length ? values[ordinal] : OFF;
+        }
+    }
+
     private String customName = "";
 
     /** Holding lights only: seconds before the cue to light up / to go dark again. */
     private int lightOnSeconds = UNSET_SECONDS;
     private int lightOffSeconds = UNSET_SECONDS;
+
+    /** Yellow holding lights only: how this light reacts to platform hold rules. */
+    private HoldIndicator holdIndicator = HoldIndicator.OFF;
 
     public StationDecorBlockEntity(BlockPos pos, BlockState state) {
         super(MtrStationDecor.DECOR_BLOCK_ENTITY, pos, state);
@@ -38,6 +65,7 @@ public class StationDecorBlockEntity extends BlockEntity {
         nbt.putString("CustomName", customName);
         nbt.putInt("LightOnSeconds", lightOnSeconds);
         nbt.putInt("LightOffSeconds", lightOffSeconds);
+        nbt.putByte("HoldIndicator", (byte) holdIndicator.ordinal());
     }
 
     @Override
@@ -48,6 +76,8 @@ public class StationDecorBlockEntity extends BlockEntity {
         // whatever their light's built-in default is.
         setLightOnSeconds(nbt.contains("LightOnSeconds") ? nbt.getInt("LightOnSeconds") : UNSET_SECONDS);
         setLightOffSeconds(nbt.contains("LightOffSeconds") ? nbt.getInt("LightOffSeconds") : UNSET_SECONDS);
+        // Absent on blocks placed before hold rules existed: those ignore them.
+        setHoldIndicator(HoldIndicator.byOrdinal(nbt.getByte("HoldIndicator")));
     }
 
     @Nullable
@@ -94,6 +124,15 @@ public class StationDecorBlockEntity extends BlockEntity {
 
     public void setLightOffSeconds(int seconds) {
         this.lightOffSeconds = clampSeconds(seconds);
+    }
+
+    /** How this light reacts to platform hold rules (yellow holding lights only). */
+    public HoldIndicator getHoldIndicator() {
+        return holdIndicator;
+    }
+
+    public void setHoldIndicator(HoldIndicator holdIndicator) {
+        this.holdIndicator = holdIndicator == null ? HoldIndicator.OFF : holdIndicator;
     }
 
     private static int clampSeconds(int seconds) {

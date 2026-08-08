@@ -11,18 +11,24 @@ import net.fabricmc.fabric.api.client.screen.v1.ScreenEvents;
 import net.fabricmc.fabric.api.client.screen.v1.Screens;
 import net.minecraft.client.gui.screen.Screen;
 import net.minecraft.client.gui.widget.ButtonWidget;
+import net.minecraft.client.gui.widget.ClickableWidget;
 import net.minecraft.text.Text;
+import net.minecraft.util.Util;
 import org.mtr.core.data.Lift;
 import org.mtr.core.data.Platform;
 import org.mtr.mod.client.MinecraftClientData;
+import org.mtr.mod.screen.DashboardScreen;
 import org.mtr.mod.screen.LiftCustomizationScreen;
 import org.mtr.mod.screen.PlatformScreen;
 import org.mtr.mod.screen.SavedRailScreenBase;
 import java.lang.reflect.Field;
+import java.net.URI;
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 /**
  * Client hookup for the MTR dispatch addon. Only classloaded when MTR is present
@@ -75,12 +81,35 @@ public final class AddonClientInit {
                     client.execute(() -> ClientHoldRules.replace(rules));
                 });
 
+        // Server → client hold STATE sync (join + whenever the held set changes).
+        ClientPlayNetworking.registerGlobalReceiver(AddonNetworking.HOLD_STATE_S2C,
+                (client, handler, buf, responseSender) -> {
+                    int count = buf.readVarInt();
+                    if (count < 0 || count > 10_000) {
+                        return;
+                    }
+                    Set<Long> held = new HashSet<>(Math.max(1, count));
+                    for (int i = 0; i < count; i++) {
+                        held.add(buf.readLong());
+                    }
+                    client.execute(() -> ClientHoldState.replace(held));
+                });
+
         ClientPlayConnectionEvents.DISCONNECT.register((handler, client) -> {
             ClientHoldRules.clear();
+            ClientHoldState.clear();
             ClientDwellOverrides.clear();
             ClientLiftDoors.clear();
             ClientPlatformGroups.clear();
+            ClientDispatchInfo.clear();
         });
+
+        // Server → client dispatch-availability sync (join only; one int).
+        ClientPlayNetworking.registerGlobalReceiver(AddonNetworking.DISPATCH_INFO_S2C,
+                (client, handler, buf, responseSender) -> {
+                    int port = buf.readInt();
+                    client.execute(() -> ClientDispatchInfo.setPort(port));
+                });
 
         registerDwellOverrideSync();
         registerRouteDwellButton();
@@ -88,6 +117,7 @@ public final class AddonClientInit {
         registerLiftDoorSidesButton();
         registerPlatformGroupSync();
         registerPlatformGroupButton();
+        registerDispatchDashboardButton();
         DrivingHud.register(); // Feature 4 — driving HUD (registers its own disconnect cleanup)
 
         ScreenEvents.AFTER_INIT.register((client, screen, scaledWidth, scaledHeight) -> {
@@ -107,6 +137,47 @@ public final class AddonClientInit {
                             Text.translatable("gui.station_announcer.hold_rules.button"),
                             button -> client.setScreen(new HoldRuleScreen(platform, screen)))
                     .dimensions(screen.width - 104, screen.height - 24, 100, 20)
+                    .build());
+        });
+    }
+
+    // -------------------------------------------- Dispatch web UI: dashboard button
+
+    /**
+     * Adds a "Dispatch" button beside MTR's "Transport System Map" button on every
+     * MTR dashboard (all transport modes share {@code DashboardScreen}). MTR's own
+     * button opens the CLIENT-side proxy webserver in multiplayer, which does not
+     * host the dispatch servlets, so this one targets the game server's synced
+     * port instead ({@link ClientDispatchInfo}). Hidden when the server reports no
+     * dispatch UI (feature off, webserver off, or server without the addon).
+     */
+    private static void registerDispatchDashboardButton() {
+        ScreenEvents.AFTER_INIT.register((client, screen, scaledWidth, scaledHeight) -> {
+            if (!(screen instanceof DashboardScreen) || !ClientDispatchInfo.isAvailable()) {
+                return;
+            }
+            // Find MTR's map button by its localized label, shrink it, and slot ours
+            // into the freed space so the bottom row keeps its layout.
+            String mapLabel = Text.translatable("gui.mtr.transport_system_map").getString();
+            ClickableWidget mapButton = null;
+            for (ClickableWidget widget : Screens.getButtons(screen)) {
+                if (widget instanceof ButtonWidget && mapLabel.equals(widget.getMessage().getString())) {
+                    mapButton = widget;
+                    break;
+                }
+            }
+            if (mapButton == null) {
+                return; // MTR layout changed — skip rather than overlap
+            }
+            int dispatchWidth = Math.min(80, mapButton.getWidth() / 2);
+            if (dispatchWidth < 40) {
+                return; // row too cramped to split
+            }
+            mapButton.setWidth(mapButton.getWidth() - dispatchWidth - 2);
+            Screens.getButtons(screen).add(ButtonWidget.builder(
+                            Text.translatable("gui.station_announcer.dispatch.button"),
+                            button -> Util.getOperatingSystem().open(URI.create(ClientDispatchInfo.url())))
+                    .dimensions(mapButton.getX() + mapButton.getWidth() + 2, mapButton.getY(), dispatchWidth, mapButton.getHeight())
                     .build());
         });
     }

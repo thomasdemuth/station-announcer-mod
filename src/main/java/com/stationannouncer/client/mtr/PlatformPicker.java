@@ -119,6 +119,24 @@ public class PlatformPicker {
         return platforms.isEmpty();
     }
 
+    /** The row label for a platform id, or "" when that platform is not listed. */
+    public String labelFor(long id) {
+        for (Option option : platforms) {
+            if (option.id() == id) {
+                return option.label();
+            }
+        }
+        return "";
+    }
+
+    /** The single ticked platform, or 0 — for the one-of pickers. */
+    public long getSingleSelected() {
+        for (long id : selected) {
+            return id;
+        }
+        return 0;
+    }
+
     // ------------------------------------------------------------ MTR data
 
     private static List<Option> findPlatforms(BlockPos here) {
@@ -227,7 +245,15 @@ public class PlatformPicker {
             return false;
         }
         long id = platforms.get(row).id();
-        if (!selected.remove(id) && selected.size() < maxSelected) {
+        if (selected.remove(id)) {
+            return true; // ticking the chosen row again clears it (back to automatic)
+        }
+        if (maxSelected == 1) {
+            // One-of pickers (the holding lights): picking a row REPLACES the
+            // choice, rather than doing nothing until the old one is unticked.
+            selected.clear();
+            selected.add(id);
+        } else if (selected.size() < maxSelected) {
             selected.add(id);
         }
         return true;

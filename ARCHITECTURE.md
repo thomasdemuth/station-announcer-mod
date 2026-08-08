@@ -249,6 +249,16 @@ assumption). JSON via Gson, human-editable:
   `IntSlider` for N (5–120 s), Clear button. Save via our C2S packet → `AddonStore` →
   snapshot republished.
 - Chat-free, event-driven; zero work when no rules configured.
+- **Hold-state indicator (2026-08-07)**: `HoldRuleEngine` also records
+  `platformId → System.currentTimeMillis()` in `HELD_PLATFORMS` every tick it actually
+  holds a vehicle (and removes the entry when the condition lapses or the deadlock cap
+  gives up). `AddonInit`'s `END_SERVER_TICK` handler samples `heldPlatforms()` every 10
+  ticks — entries stale by >1.5 s are pruned, i.e. the train left — and broadcasts
+  `addon_hold_state` (varint count + longs) ONLY when the set differs from what clients
+  were last told; with nothing held that tick is a single `isEmpty()`. Joining players get
+  the current set. `ClientHoldState` mirrors it; the yellow holding light's renderer reads
+  it per frame (an empty-set `contains`). Wall clock rather than the simulator clock
+  because the writer is a simulator thread and the reader is the server thread.
 
 ### Feature 2 — Per-line dwell at platforms
 - **Hook**: rewrite `PathData.dwellTime` on the depot's freshly generated path *before*

@@ -25,6 +25,10 @@ import java.util.Map;
  *       Requires op level {@code editPermissionLevel} (default 2) — these are
  *       dashboard-style dispatch settings, not block edits, so there is no
  *       block-distance check.</li>
+ *   <li>{@code station_announcer:addon_hold_state} (S2C) — which platforms are
+ *       holding a train right now, so yellow holding lights can show it. Sent on
+ *       join and thereafter only when the set actually CHANGES (usually never:
+ *       holds are rare and short), a handful of longs each time.</li>
  *   <li>{@code station_announcer:addon_dwell_overrides} (S2C) — the full
  *       per-route dwell override map (Feature 2), sent on join and re-broadcast
  *       after every change so the GUI opens with current data.</li>
@@ -58,12 +62,14 @@ import java.util.Map;
  */
 public final class AddonNetworking {
     public static final Identifier HOLD_RULES_S2C = StationAnnouncer.id("addon_hold_rules");
+    public static final Identifier HOLD_STATE_S2C = StationAnnouncer.id("addon_hold_state");
     public static final Identifier UPDATE_HOLD_RULE_C2S = StationAnnouncer.id("addon_update_hold_rule");
     public static final Identifier DWELL_OVERRIDES_S2C = StationAnnouncer.id("addon_dwell_overrides");
     public static final Identifier UPDATE_DWELL_OVERRIDES_C2S = StationAnnouncer.id("addon_update_dwell_overrides");
     public static final Identifier LIFT_DOORS_S2C = StationAnnouncer.id("addon_lift_doors");
     public static final Identifier UPDATE_LIFT_DOORS_C2S = StationAnnouncer.id("addon_update_lift_doors");
     public static final Identifier PLATFORM_GROUPS_S2C = StationAnnouncer.id("addon_platform_groups");
+    public static final Identifier DISPATCH_INFO_S2C = StationAnnouncer.id("addon_dispatch_info");
     public static final Identifier UPDATE_PLATFORM_GROUP_C2S = StationAnnouncer.id("addon_update_platform_group");
 
     /** Cap on watched platforms per rule (also the GUI's picker cap). */
@@ -259,6 +265,47 @@ public final class AddonNetworking {
             }
         });
         return buf;
+    }
+
+    // ------------------------------------------------------------ hold state
+
+    /** On join, through the connection event's sender. */
+    public static void syncHoldStateTo(PacketSender sender, java.util.Set<Long> heldPlatforms) {
+        sender.sendPacket(HOLD_STATE_S2C, buildHoldStateBuf(heldPlatforms));
+    }
+
+    /** On change, to everyone: a handful of longs, and normally an empty list. */
+    public static void broadcastHoldState(MinecraftServer server, java.util.Set<Long> heldPlatforms) {
+        for (ServerPlayerEntity player : server.getPlayerManager().getPlayerList()) {
+            ServerPlayNetworking.send(player, HOLD_STATE_S2C, buildHoldStateBuf(heldPlatforms));
+        }
+    }
+
+    private static PacketByteBuf buildHoldStateBuf(java.util.Set<Long> heldPlatforms) {
+        PacketByteBuf buf = PacketByteBufs.create();
+        buf.writeVarInt(heldPlatforms.size());
+        for (long platformId : heldPlatforms) {
+            buf.writeLong(platformId);
+        }
+        return buf;
+    }
+
+    /**
+     * On join: tell the client where the dispatch web UI lives. One int — the game
+     * server's MTR webserver port, or -1 when dispatch is disabled or the webserver
+     * is off. The client combines it with the address it is already connected to;
+     * MTR's own dashboard map button can't be reused because in multiplayer it
+     * points at the CLIENT-SIDE proxy webserver, which does not carry our servlets.
+     */
+    public static void syncDispatchInfoTo(PacketSender sender) {
+        PacketByteBuf buf = PacketByteBufs.create();
+        int port = -1;
+        if (AddonServerConfig.get().dispatch.enabled) {
+            int serverPort = org.mtr.mod.Init.getServerPort();
+            port = serverPort > 0 ? serverPort : -1;
+        }
+        buf.writeInt(port);
+        sender.sendPacket(DISPATCH_INFO_S2C, buf);
     }
 
     /** On join, through the connection event's sender. */

@@ -1197,3 +1197,40 @@ own `ServletBase.startAsync` proves the path); and whether `getSpeedLimitKilomet
 (false)` truly corresponds to `RailMath.getPosition(d, false)`'s direction — both use
 `false`, but `getSpeedLimitKilometersPerHour` keys off the rail's own `reversePositions`
 flag, so `speedA`/`speedB` may be swapped on some rails. Frontend impact is cosmetic.
+
+## Holding lights ↔ hold rules — 2026-08-07
+
+Reworked both holding-light UIs (they share `HoldingLightScreen`; the block variant
+decides what it offers) and wired the YELLOW light into Feature 1.
+
+**Files**
+- `client/mtr/HoldingLightScreen.java` — rewritten. The platform `CyclingButtonWidget`
+  (radius-16 sweep, one label per press) is gone; it now uses the shared
+  `PlatformPicker` capped at one selection, so a light is configured exactly like the
+  PIDS above it and sees every platform of its station, nearest-first, with the routes
+  that call there. Nothing ticked = the nearest platform (what an unconfigured light
+  already did). Both timing sliders unchanged. Yellow lights gain a **Hold rules**
+  cycling button (Ignored / Flash while held / Only when held, each with a tooltip) and
+  a live hint line underneath: no rule on this platform, the rule's watched count, or
+  "a train is being held here right now".
+- `client/mtr/PlatformPicker.java` — `maxSelected == 1` now REPLACES the selection on
+  click instead of ignoring it (multi-select callers are untouched); added
+  `getSingleSelected()` and `labelFor(id)`.
+- `mtr/StationDecorBlockEntity.java` — new `HoldIndicator` enum (OFF/FLASH/ONLY) +
+  `HoldIndicator` NBT byte, defaulting to OFF so existing lights behave as before.
+  `MtrStationDecor`'s `update_decor` receiver reads one extra byte; `StationSignScreen`
+  echoes it back unchanged, like the timings.
+- `client/mtr/StationDecorRenderer.java` — while a hold is in force at the light's
+  platform the lenses flash (550 ms on / 1000 ms period); in ONLY mode the arrivals
+  branch is skipped entirely, so the light is dark at all other times.
+- Server side: `HoldRuleEngine.HELD_PLATFORMS` + `heldPlatforms()`, the
+  `addon_hold_state` S2C packet, `AddonInit`'s change-only ticker, `ClientHoldState`.
+  See ARCHITECTURE.md § Feature 1.
+
+**Verified**: `./gradlew compileJava` green. **NOT verified**: anything in game — the
+GUI needs a real brush right-click, and the flashing needs a hold actually firing.
+
+**Known gap (deliberate, not a bug)**: GREEN lights still follow MTR's timetable only,
+so a green "time to leave" can light while our hold rule is holding the train (MTR's
+arrival data knows nothing about the cancelled `startUp`). Suppressing green while held
+is a one-line change in `paintHoldingLight` if Thomas wants it.

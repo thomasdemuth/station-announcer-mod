@@ -123,6 +123,8 @@ public final class MtrStationDecor {
             // rather than varints.
             int lightOnSeconds = buf.readInt();
             int lightOffSeconds = buf.readInt();
+            StationDecorBlockEntity.HoldIndicator holdIndicator =
+                    StationDecorBlockEntity.HoldIndicator.byOrdinal(buf.readByte());
             server.execute(() -> {
                 ServerWorld world = player.getServerWorld();
                 if (player.squaredDistanceTo(Vec3d.ofCenter(pos)) <= 64.0 * 64.0
@@ -131,6 +133,7 @@ public final class MtrStationDecor {
                     decor.setCustomName(customName);
                     decor.setLightOnSeconds(lightOnSeconds);
                     decor.setLightOffSeconds(lightOffSeconds);
+                    decor.setHoldIndicator(holdIndicator);
                     decor.sync();
                 }
             });

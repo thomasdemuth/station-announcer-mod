@@ -49,6 +49,22 @@ public final class HoldRuleEngine {
     /** vehicle id → {firstHeldMillis, lastHeldMillis} for the maxHoldSeconds deadlock guard. */
     private static final ConcurrentHashMap<Long, long[]> HOLD_STATE = new ConcurrentHashMap<>();
 
+    /**
+     * Ruled platform id → wall-clock millis of the last tick a vehicle was actually
+     * held there. Purely informational: it drives the "train being held" indicator on
+     * yellow holding lights (broadcast by {@link AddonInit}'s ticker), never the
+     * simulation. Wall clock rather than the simulator clock because the reader is
+     * the server thread, and the two need to compare like for like.
+     */
+    private static final ConcurrentHashMap<Long, Long> HELD_PLATFORMS = new ConcurrentHashMap<>();
+
+    /**
+     * A held vehicle retries {@code startUp} every simulation tick, so an entry that
+     * has not been refreshed within this window belongs to a train that has left (or
+     * to a hold that was released).
+     */
+    private static final long HELD_TTL_MILLIS = 1_500;
+
     private HoldRuleEngine() {
     }
 
@@ -107,6 +123,7 @@ public final class HoldRuleEngine {
         long now = data.getCurrentMillis();
         if (!anyWatchedApproaching(rule, config, data, now)) {
             HOLD_STATE.remove(vehicleId);
+            HELD_PLATFORMS.remove(platformId);
             return false;
         }
 
@@ -124,7 +141,36 @@ public final class HoldRuleEngine {
         } else {
             state[1] = now;
         }
-        return now - state[0] < (config.maxHoldSeconds + rule.transferSeconds()) * 1_000L;
+        boolean hold = now - state[0] < (config.maxHoldSeconds + rule.transferSeconds()) * 1_000L;
+        if (hold) {
+            HELD_PLATFORMS.put(platformId, System.currentTimeMillis());
+        } else {
+            // Gave up on the cap: the train is leaving, so the indicator must not linger.
+            HELD_PLATFORMS.remove(platformId);
+        }
+        return hold;
+    }
+
+    /**
+     * The platforms currently holding a train, for the holding-light indicator.
+     * Called on the server thread a couple of times a second; prunes entries whose
+     * vehicle stopped refreshing them (it departed) as it goes. Empty whenever the
+     * feature is off, because nothing ever writes an entry then.
+     */
+    public static java.util.Set<Long> heldPlatforms() {
+        if (HELD_PLATFORMS.isEmpty()) {
+            return java.util.Set.of();
+        }
+        long now = System.currentTimeMillis();
+        java.util.Set<Long> held = new java.util.HashSet<>();
+        HELD_PLATFORMS.forEach((platformId, lastHeld) -> {
+            if (now - lastHeld <= HELD_TTL_MILLIS) {
+                held.add(platformId);
+            } else {
+                HELD_PLATFORMS.remove(platformId, lastHeld);
+            }
+        });
+        return held;
     }
 
     /**
@@ -194,5 +240,6 @@ public final class HoldRuleEngine {
     public static void clearRuntimeState() {
         ARRIVAL_CACHE.clear();
         HOLD_STATE.clear();
+        HELD_PLATFORMS.clear();
     }
 }

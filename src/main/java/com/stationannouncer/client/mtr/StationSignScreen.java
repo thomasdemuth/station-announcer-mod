@@ -60,9 +60,10 @@ public class StationSignScreen extends Screen {
         PacketByteBuf buf = PacketByteBufs.create();
         buf.writeBlockPos(decor.getPos());
         buf.writeString(customName.trim(), StationDecorBlockEntity.MAX_NAME_LENGTH);
-        // Shared channel: echo the holding-light timing back unchanged.
+        // Shared channel: echo the holding-light settings back unchanged.
         buf.writeInt(decor.getLightOnSeconds());
         buf.writeInt(decor.getLightOffSeconds());
+        buf.writeByte(decor.getHoldIndicator().ordinal());
         ClientPlayNetworking.send(MtrStationDecor.UPDATE_DECOR_C2S, buf);
         close();
     }

@@ -76,6 +76,13 @@ Thomas is play-testing and will report fixes. ARCHITECTURE.md is the authoritati
 internals doc (TSC threading, hook points, per-feature designs); PROGRESS.md has each
 agent's files/limitations.
 
+**Holding lights now use the shared `PlatformPicker`** (one-of mode) instead of a
+platform cycling button, and YELLOW ones have a **Hold rules** button (Ignored / Flash
+while held / Only when held) driven by a new `addon_hold_state` S2C packet —
+`HoldRuleEngine` records which platforms are actively holding a train, `AddonInit`'s
+ticker broadcasts the set only when it changes, `ClientHoldState` mirrors it, and the
+renderer flashes the lenses. Green lights are unchanged (see PROGRESS.md's known gap).
+
 ## Current state: v2.4.0 shipped (station suite, trainless); M7 continues toward 2.5.0
 
 **CONDUIT PIPE REMOVED (2026-07-29, user decision).** The `pipe` block is gone entirely —
