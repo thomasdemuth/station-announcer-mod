@@ -44,6 +44,27 @@ rig's Gradle wrappers (and sometimes the JVMs) get SIGKILLed — forbid agents f
 entirely and check rig health after each one finishes; an orphaned JVM keeps serving but
 loses the console fifo.
 
+## MTR DISPATCH ADDON (2026-08-07) — read ARCHITECTURE.md + PROGRESS.md first
+
+Five dispatch/lift/driving features built INSIDE this mod (additive, user decision),
+targeting **MTR 4.0.1** (gradle.properties downgraded from 4.0.5 to match the Baker City
+play profile; existing code compiles unchanged against it). The repo is now a **git repo**
+(baseline commit = pre-addon v2.4.0 state; one commit per feature). The mod now **has
+mixins** (`station_announcer.mixins.json`, package `com.stationannouncer.mixin`) — the
+old "no mixins" rule is relaxed for the addon only. New packages:
+`com.stationannouncer.mtraddon` (config/store/snapshots/networking/engines) and
+`client.mtraddon` (GUI injection via Fabric ScreenEvents into MTR screens, HUD, client
+mirrors). MTR reference sources cloned at `mtr-src/` (gitignored; TSC is master and has
+DRIFTED from 4.0.1 — always javap the 4.0.1 jar in loom-cache before touching MTR members).
+Features: 1 platform hold rules (Vehicle.startUp HEAD-cancel), 2 per-route dwell overrides
+(PathData dwell rewrite at generation), 3 multi-sided lift doors (client render takeover +
+AddonModelLift), 4 driving HUD (client-only, H key settings), 5 platform groups
+(generation-time rotation via DepotMixin; runtime switching deliberately not implemented —
+see PROGRESS.md). All compile-verified + full build green; NOT in-game tested yet —
+Thomas is play-testing and will report fixes. ARCHITECTURE.md is the authoritative
+internals doc (TSC threading, hook points, per-feature designs); PROGRESS.md has each
+agent's files/limitations.
+
 ## Current state: v2.4.0 shipped (station suite, trainless); M7 continues toward 2.5.0
 
 **CONDUIT PIPE REMOVED (2026-07-29, user decision).** The `pipe` block is gone entirely —
