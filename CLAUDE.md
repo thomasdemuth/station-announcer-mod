@@ -44,6 +44,17 @@ rig's Gradle wrappers (and sometimes the JVMs) get SIGKILLed — forbid agents f
 entirely and check rig health after each one finishes; an orphaned JVM keeps serving but
 loses the console fifo.
 
+### v2.4.1 — addon release (2026-08-07)
+
+**SHIPPED to `releases/station-announcer-2.4.1+1.20.4.jar`**: the five dispatch/lift/
+driving features (incl. the hold-rule transfer window + doors-open fix) AND the Dispatch
+web UI (backend on MTR's Jetty + /dispatch/ frontend; schema in PROGRESS.md). Release
+copy stripped of the in-flux M7/R62 train content per the 2.4.0 procedure (now also
+r62_* sound keys and properties/vehicle+definition dirs; 14 chime keys kept; the six
+remaining "vehicle"-named entries are addon mixin/dispatch classes — they stay). Source
+tree untouched; 2.5.0 ships the trains by not stripping. Addon compile-verified + full
+build green; frontend browser-verified in ?demo=1 mode; NOT in-game tested.
+
 ## MTR DISPATCH ADDON (2026-08-07) — read ARCHITECTURE.md + PROGRESS.md first
 
 Five dispatch/lift/driving features built INSIDE this mod (additive, user decision),
