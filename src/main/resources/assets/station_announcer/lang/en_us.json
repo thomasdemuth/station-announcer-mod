@@ -239,5 +239,7 @@
   "gui.station_announcer.platform_groups.clear": "Clear group",
   "gui.station_announcer.platform_groups.hint_queue": "Trains pick a group platform when the depot regenerates its paths",
   "gui.station_announcer.platform_groups.hint_queue2": "Occupied platforms already queue via MTR's signal blocks",
-  "gui.station_announcer.platform_groups.hint_include": "Tick this platform itself to keep it in the rotation"
+  "gui.station_announcer.platform_groups.hint_include": "Tick this platform itself to keep it in the rotation",
+  "gui.station_announcer.hold_rules.transfer_seconds": "Keep holding after arrival: %ss",
+  "gui.station_announcer.hold_rules.transfer_seconds.off": "Keep holding after arrival: Off"
 }

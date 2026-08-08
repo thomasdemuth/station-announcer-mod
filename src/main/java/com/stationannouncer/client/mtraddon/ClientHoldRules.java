@@ -12,7 +12,7 @@ import java.util.Map;
  */
 @Environment(EnvType.CLIENT)
 public final class ClientHoldRules {
-    public record Rule(List<Long> watched, int seconds) {
+    public record Rule(List<Long> watched, int seconds, int transferSeconds) {
     }
 
     private static Map<Long, Rule> rules = Map.of();

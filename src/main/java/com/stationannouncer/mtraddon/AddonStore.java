@@ -131,9 +131,9 @@ public final class AddonStore {
     }
 
     /** Server thread: create or replace the rule for a platform, then republish + save. */
-    public static void setHoldRule(long platformId, long[] watched, int seconds) {
+    public static void setHoldRule(long platformId, long[] watched, int seconds, int transferSeconds) {
         synchronized (LOCK) {
-            holdRules.put(platformId, new AddonSnapshots.HoldRule(watched, seconds));
+            holdRules.put(platformId, new AddonSnapshots.HoldRule(watched, seconds, transferSeconds));
         }
         publish();
         markDirty();
@@ -319,8 +319,12 @@ public final class AddonStore {
                     watched[i] = watchedJson.get(i).getAsLong();
                 }
                 int seconds = rule.get("seconds").getAsInt();
+                // Pre-transfer-window saves have no transferSeconds field: default 0 = old behavior.
+                int transferSeconds = rule.has("transferSeconds")
+                        ? Math.max(0, rule.get("transferSeconds").getAsInt())
+                        : 0;
                 if (watched.length > 0 && seconds > 0) {
-                    holdRules.put(platformId, new AddonSnapshots.HoldRule(watched, seconds));
+                    holdRules.put(platformId, new AddonSnapshots.HoldRule(watched, seconds, transferSeconds));
                 }
             } catch (Exception e) {
                 StationAnnouncer.LOGGER.warn("Skipping malformed hold rule '{}'", entry.getKey(), e);
@@ -449,6 +453,7 @@ public final class AddonStore {
                 }
                 ruleJson.add("watched", watchedJson);
                 ruleJson.addProperty("seconds", rule.seconds());
+                ruleJson.addProperty("transferSeconds", rule.transferSeconds());
                 rulesJson.add(Long.toString(platformId), ruleJson);
             });
             root.add("holdRules", rulesJson);

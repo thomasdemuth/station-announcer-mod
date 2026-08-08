@@ -61,6 +61,7 @@ public final class AddonClientInit {
                     for (int i = 0; i < ruleCount; i++) {
                         long platformId = buf.readLong();
                         int seconds = buf.readVarInt();
+                        int transferSeconds = buf.readVarInt();
                         int watchedCount = buf.readVarInt();
                         if (watchedCount < 0 || watchedCount > AddonNetworking.MAX_WATCHED) {
                             return;
@@ -69,7 +70,7 @@ public final class AddonClientInit {
                         for (int j = 0; j < watchedCount; j++) {
                             watched.add(buf.readLong());
                         }
-                        rules.put(platformId, new ClientHoldRules.Rule(watched, seconds));
+                        rules.put(platformId, new ClientHoldRules.Rule(watched, seconds, transferSeconds));
                     }
                     client.execute(() -> ClientHoldRules.replace(rules));
                 });

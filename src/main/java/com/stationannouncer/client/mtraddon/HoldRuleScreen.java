@@ -44,6 +44,7 @@ public class HoldRuleScreen extends Screen {
     private final PlatformPicker picker;
     private final boolean hadRule;
     private int seconds;
+    private int transferSeconds;
 
     private int listLeft;
     private int titleY;
@@ -58,6 +59,7 @@ public class HoldRuleScreen extends Screen {
         ClientHoldRules.Rule rule = ClientHoldRules.get(platform.getId());
         this.hadRule = rule != null;
         this.seconds = rule == null ? 30 : rule.seconds();
+        this.transferSeconds = rule == null ? AddonNetworking.DEFAULT_TRANSFER_SECONDS : rule.transferSeconds();
         List<Long> preselected = rule == null ? new ArrayList<>() : rule.watched();
 
         Position mid = platform.getMidPosition();
@@ -70,7 +72,7 @@ public class HoldRuleScreen extends Screen {
         int left = (width - PANEL_WIDTH) / 2;
         int half = (PANEL_WIDTH - GAP) / 2;
 
-        int fixed = 14 + 14 + (WIDGET_HEIGHT + GAP) + 8 + 2 * WIDGET_HEIGHT + GAP;
+        int fixed = 14 + 14 + 2 * (WIDGET_HEIGHT + GAP) + 8 + 2 * WIDGET_HEIGHT + GAP;
         picker.fitTo(height - fixed - 44);
         int content = fixed + picker.getHeight();
         int y = Math.max(28, (height - content) / 2);
@@ -88,6 +90,16 @@ public class HoldRuleScreen extends Screen {
                 AddonNetworking.MIN_HOLD_WINDOW_SECONDS, AddonNetworking.MAX_HOLD_WINDOW_SECONDS, seconds,
                 value -> Text.translatable("gui.station_announcer.hold_rules.seconds", value),
                 value -> seconds = value));
+        y += WIDGET_HEIGHT + GAP;
+
+        // Transfer time: once a watched train lands, both trains sit with doors
+        // open for this long so passengers can actually make the connection.
+        addDrawableChild(new IntSlider(left, y, PANEL_WIDTH, WIDGET_HEIGHT,
+                0, AddonNetworking.MAX_TRANSFER_SECONDS, transferSeconds,
+                value -> value == 0
+                        ? Text.translatable("gui.station_announcer.hold_rules.transfer_seconds.off")
+                        : Text.translatable("gui.station_announcer.hold_rules.transfer_seconds", value),
+                value -> transferSeconds = value));
         y += WIDGET_HEIGHT + GAP + 8;
 
         addDrawableChild(ButtonWidget.builder(ScreenTexts.DONE, button -> saveAndClose())
@@ -137,6 +149,7 @@ public class HoldRuleScreen extends Screen {
         PacketByteBuf buf = PacketByteBufs.create();
         buf.writeLong(platform.getId());
         buf.writeVarInt(sendSeconds);
+        buf.writeVarInt(transferSeconds);
         buf.writeVarInt(watched.size());
         for (long id : watched) {
             buf.writeLong(id);

@@ -70,6 +70,10 @@ public final class AddonNetworking {
     public static final int MAX_WATCHED = 16;
     public static final int MIN_HOLD_WINDOW_SECONDS = 5;
     public static final int MAX_HOLD_WINDOW_SECONDS = 120;
+    /** How long the held train keeps waiting after a watched train lands (0 = release on arrival). */
+    public static final int MAX_TRANSFER_SECONDS = 120;
+    /** Suggested transfer time preselected for brand-new rules in the GUI. */
+    public static final int DEFAULT_TRANSFER_SECONDS = 20;
 
     /** Cap on overridden routes per platform in one save packet. */
     public static final int MAX_ROUTE_OVERRIDES = 32;
@@ -93,6 +97,7 @@ public final class AddonNetworking {
         ServerPlayNetworking.registerGlobalReceiver(UPDATE_HOLD_RULE_C2S, (server, player, handler, buf, responseSender) -> {
             long platformId = buf.readLong();
             int seconds = buf.readVarInt();
+            int transferSeconds = buf.readVarInt();
             int count = buf.readVarInt();
             if (count < 0 || count > MAX_WATCHED) {
                 return; // malformed — drop without touching anything
@@ -110,7 +115,8 @@ public final class AddonNetworking {
                     AddonStore.clearHoldRule(platformId);
                 } else {
                     int clamped = Math.max(MIN_HOLD_WINDOW_SECONDS, Math.min(MAX_HOLD_WINDOW_SECONDS, seconds));
-                    AddonStore.setHoldRule(platformId, dedupe(watched, platformId), clamped);
+                    int clampedTransfer = Math.max(0, Math.min(MAX_TRANSFER_SECONDS, transferSeconds));
+                    AddonStore.setHoldRule(platformId, dedupe(watched, platformId), clamped, clampedTransfer);
                 }
                 broadcastHoldRules(server);
             });
@@ -246,6 +252,7 @@ public final class AddonNetworking {
         rules.forEach((platformId, rule) -> {
             buf.writeLong(platformId);
             buf.writeVarInt(rule.seconds());
+            buf.writeVarInt(rule.transferSeconds());
             buf.writeVarInt(rule.watched().length);
             for (long watched : rule.watched()) {
                 buf.writeLong(watched);

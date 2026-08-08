@@ -43,7 +43,7 @@ public final class HoldRuleEngine {
      */
     private static final long NEW_STOP_GAP_MILLIS = 5_000;
 
-    /** watched platform id → {computedAtMillis, soonestUpcomingArrivalMillis (0 = none)}. */
+    /** watched platform id → {computedAtMillis, soonestUpcomingArrivalMillis, latestPastArrivalMillis} (0 = none). */
     private static final ConcurrentHashMap<Long, long[]> ARRIVAL_CACHE = new ConcurrentHashMap<>();
 
     /** vehicle id → {firstHeldMillis, lastHeldMillis} for the maxHoldSeconds deadlock guard. */
@@ -110,10 +110,13 @@ public final class HoldRuleEngine {
             return false;
         }
 
-        // 7. Deadlock guard: never hold one stop longer than maxHoldSeconds. The
-        // state entry survives the give-up so retries (e.g. while the track ahead
-        // is briefly blocked) cannot restart the timer; it only resets once the
-        // vehicle has actually been gone for a while (NEW_STOP_GAP_MILLIS).
+        // 7. Deadlock guard: never hold one stop longer than the cap. Rules with a
+        // transfer window may legitimately run ~seconds + transferSeconds, so the
+        // effective cap is maxHoldSeconds + transferSeconds — maxHoldSeconds keeps
+        // its meaning ("longest wait FOR a train") regardless of the transfer
+        // setting. The state entry survives the give-up so retries (e.g. while the
+        // track ahead is briefly blocked) cannot restart the timer; it only resets
+        // once the vehicle has actually been gone for a while (NEW_STOP_GAP_MILLIS).
         long[] state = HOLD_STATE.get(vehicleId);
         if (state == null || now - state[1] > NEW_STOP_GAP_MILLIS) {
             state = new long[]{now, now};
@@ -121,15 +124,30 @@ public final class HoldRuleEngine {
         } else {
             state[1] = now;
         }
-        return now - state[0] < config.maxHoldSeconds * 1_000L;
+        return now - state[0] < (config.maxHoldSeconds + rule.transferSeconds()) * 1_000L;
     }
 
-    /** Any watched platform with an arrival in {@code (now, now + seconds]}? */
+    /**
+     * Any watched platform with an arrival in
+     * {@code (now - transferSeconds*1000, now + seconds*1000]}? The past side of
+     * the window is the transfer time: a watched train that has just landed keeps
+     * the hold alive for transferSeconds so passengers can walk across, doors open
+     * on both trains. Past arrivals only exist while the arrived train is still
+     * dwelling (its entry then rolls over to the next run), so if it leaves early
+     * the hold releases early — and self-arrivals cannot occur because the ruled
+     * platform is filtered out of every watched set on save.
+     */
     private static boolean anyWatchedApproaching(AddonSnapshots.HoldRule rule, AddonServerConfig.HoldRules config,
                                                  Data data, long now) {
         for (long watchedId : rule.watched()) {
-            long soonest = soonestUpcomingArrival(watchedId, data, now, config.holdArrivalCacheMillis);
-            if (soonest > now && soonest - now <= rule.seconds() * 1_000L) {
+            long[] times = arrivalTimes(watchedId, data, now, config.holdArrivalCacheMillis);
+            long soonestUpcoming = times[1];
+            long latestPast = times[2];
+            if (soonestUpcoming > now && soonestUpcoming - now <= rule.seconds() * 1_000L) {
+                return true;
+            }
+            if (rule.transferSeconds() > 0 && latestPast > 0
+                    && now - latestPast < rule.transferSeconds() * 1_000L) {
                 return true;
             }
         }
@@ -137,16 +155,19 @@ public final class HoldRuleEngine {
     }
 
     /**
-     * The soonest strictly-future arrival at a platform, cached for
-     * {@code cacheMillis}. 0 = no upcoming arrival (or unknown platform — a rule
-     * referencing another dimension's platform simply never fires).
+     * A platform's arrival times as {@code {computedAt, soonestUpcoming, latestPast}}
+     * (0 = none), cached for {@code cacheMillis}. latestPast is the most recent
+     * arrival at or before now — a train currently (or very recently) at the
+     * watched platform. An unknown platform (e.g. a rule referencing another
+     * dimension) yields no arrivals and simply never fires.
      */
-    private static long soonestUpcomingArrival(long watchedId, Data data, long now, long cacheMillis) {
+    private static long[] arrivalTimes(long watchedId, Data data, long now, long cacheMillis) {
         long[] cached = ARRIVAL_CACHE.get(watchedId);
         if (cached != null && now - cached[0] < cacheMillis) {
-            return cached[1];
+            return cached;
         }
-        long soonest = 0;
+        long soonestUpcoming = 0;
+        long latestPast = 0;
         Platform platform = data.platformIdMap.get(watchedId);
         if (platform != null) {
             ObjectArrayList<ArrivalResponse> arrivals = new ObjectArrayList<>();
@@ -155,13 +176,18 @@ public final class HoldRuleEngine {
             }
             for (ArrivalResponse arrival : arrivals) {
                 long time = arrival.getArrival();
-                if (time > now && (soonest == 0 || time < soonest)) {
-                    soonest = time;
+                if (time > now) {
+                    if (soonestUpcoming == 0 || time < soonestUpcoming) {
+                        soonestUpcoming = time;
+                    }
+                } else if (time > latestPast) {
+                    latestPast = time;
                 }
             }
         }
-        ARRIVAL_CACHE.put(watchedId, new long[]{now, soonest});
-        return soonest;
+        long[] computed = new long[]{now, soonestUpcoming, latestPast};
+        ARRIVAL_CACHE.put(watchedId, computed);
+        return computed;
     }
 
     /** Server thread: called when the rule snapshot is republished and on SERVER_STOPPED. */

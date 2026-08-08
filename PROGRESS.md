@@ -769,3 +769,31 @@ Modified (extending the shared skeleton as intended):
 `client/mtraddon/{AddonClientInit,AddonClientConfig}.java`,
 `resources/station_announcer.mixins.json` (+2 entries),
 `assets/station_announcer/lang/en_us.json` (+14 keys).
+
+### Feature Agent 1 — Update: transfer windows on hold rules (2026-08-07)
+
+Per Thomas's play-review: a hold used to release the instant the watched train
+arrived, giving passengers zero time to walk across. Hold rules now carry a
+per-rule `transferSeconds` (GUI slider 0–120, "Keep holding after arrival",
+default 20 for NEW rules, 0 = old release-on-arrival behavior).
+
+- **Engine**: the arrival window widened from `(now, now + N*1000]` to
+  `(now - transferSeconds*1000, now + N*1000]` — the shared per-platform arrival
+  cache now stores `{computedAt, soonestUpcoming, latestPast}`. A recent past
+  arrival only exists while the arrived train is still dwelling (its
+  ArrivalResponse then rolls to the next run), so the hold also releases early if
+  the watched train leaves early. Self-arrivals remain impossible (ruled platform
+  filtered from watched sets on save).
+- **Deadlock cap interplay (decision)**: the engine's effective cap is
+  `maxHoldSeconds + rule.transferSeconds()` so `maxHoldSeconds` keeps meaning
+  "longest wait FOR a train" independent of the transfer setting; commented at
+  the cap site in HoldRuleEngine.
+- **Threaded through**: `AddonSnapshots.HoldRule` (new record component),
+  `AddonStore` (JSON `transferSeconds` per rule; missing field → 0, so existing
+  saves load unchanged), `AddonNetworking` (C2S reads + clamps 0–120, S2C syncs;
+  new `MAX_TRANSFER_SECONDS` / `DEFAULT_TRANSFER_SECONDS` constants),
+  `ClientHoldRules.Rule`, `AddonClientInit` (receiver), `HoldRuleScreen` (second
+  IntSlider with an explicit "Off" caption at 0), lang keys
+  `gui.station_announcer.hold_rules.transfer_seconds(.off)`.
+- Wire format changed (varint inserted in both channels) — fine, both sides ship
+  together and the channels are this addon's own.

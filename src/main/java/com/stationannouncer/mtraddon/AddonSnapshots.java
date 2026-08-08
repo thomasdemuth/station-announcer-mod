@@ -16,8 +16,13 @@ import java.util.Map;
  * threads without locks and safe only because nobody writes them after publish.</p>
  */
 public final class AddonSnapshots {
-    /** One hold rule: hold the ruled platform's trains while any {@code watched} platform has an arrival within {@code seconds}. */
-    public record HoldRule(long[] watched, int seconds) {
+    /**
+     * One hold rule: hold the ruled platform's trains while any {@code watched}
+     * platform has an arrival within {@code seconds} — and, once a watched train
+     * has landed, for a further {@code transferSeconds} so passengers can actually
+     * walk across ({@code 0} = release the moment the watched train arrives).
+     */
+    public record HoldRule(long[] watched, int seconds, int transferSeconds) {
     }
 
     private static volatile Long2ObjectOpenHashMap<HoldRule> holdRules = new Long2ObjectOpenHashMap<>();
