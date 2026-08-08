@@ -68,7 +68,12 @@ public class StationDecorRenderer implements BlockEntityRenderer<StationDecorBlo
         matrices.translate(0.5, 0.0, 0.5);
         matrices.multiply(RotationAxis.POSITIVE_Y.rotationDegrees(180.0f - facing.asRotation()));
         if (block instanceof StationDecorBlock) {
-            paintMosaic(matrices, vertexConsumers, name, color);
+            // Adjacent mosaics merge into one band (see mosaicPanel): a lone
+            // block centres on itself, two side by side centre on their seam.
+            MosaicPanel mosaic = mosaicPanel(entity, facing, name);
+            if (mosaic.run() > 0) {
+                paintMosaic(matrices, vertexConsumers, mosaic.text(), color, mosaic.run());
+            }
         } else if (block instanceof com.stationannouncer.mtr.StationColumnBlock) {
             paintColumnBoard(matrices, vertexConsumers, name);
         } else if (block instanceof com.stationannouncer.mtr.RailingSignBlock) {
@@ -340,17 +345,93 @@ public class StationDecorRenderer implements BlockEntityRenderer<StationDecorBlo
 
     // ------------------------------------------------------------- mosaic
 
+    /** Longest run of adjacent mosaic blocks merged into one band. */
+    private static final int MAX_MOSAIC_RUN = 8;
+
+    /** A merged mosaic band: how many blocks it spans (0 = this block draws nothing) and its text. */
+    private record MosaicPanel(int run, String text) {
+    }
+
+    /** Same cheap TTL cache as the railing sign — the answer only changes when somebody builds or renames. */
+    private static final java.util.Map<Long, MosaicPanel> MOSAIC_PANELS = new java.util.HashMap<>();
+    private static long mosaicPanelExpiry;
+
+    /**
+     * Resolves the merged band this mosaic belongs to. Neighbours count only
+     * when they are mosaics facing the same way, so two back-to-back signs on
+     * opposite walls never merge into one another.
+     *
+     * <p>The band is drawn by the block at the run's start, centred on the
+     * run — which is what lets an even-length run centre on a seam (two
+     * blocks centre across 4 blocks' worth of wall) instead of always being
+     * symmetric about one block's middle.</p>
+     */
+    private static MosaicPanel mosaicPanel(StationDecorBlockEntity entity, Direction facing, String autoName) {
+        net.minecraft.client.world.ClientWorld world = net.minecraft.client.MinecraftClient.getInstance().world;
+        if (world == null) {
+            return new MosaicPanel(1, autoName);
+        }
+        net.minecraft.util.math.BlockPos pos = entity.getPos();
+        long now = System.currentTimeMillis();
+        if (now >= mosaicPanelExpiry) {
+            MOSAIC_PANELS.clear();
+            mosaicPanelExpiry = now + SIGN_PANEL_TTL_MS;
+        }
+        MosaicPanel cached = MOSAIC_PANELS.get(pos.asLong());
+        if (cached != null) {
+            return cached;
+        }
+
+        // The band runs along the wall, i.e. perpendicular to the facing:
+        // local +X in the rotated render frame is facing.rotateYClockwise().
+        Direction posDir = facing.rotateYClockwise();
+        Direction negDir = facing.rotateYCounterclockwise();
+
+        MosaicPanel panel;
+        if (isMosaicFacing(world, pos.offset(negDir), facing)) {
+            panel = new MosaicPanel(0, ""); // a block further back draws the whole band
+        } else {
+            int run = 1;
+            while (run < MAX_MOSAIC_RUN && isMosaicFacing(world, pos.offset(posDir, run), facing)) {
+                run++;
+            }
+            // A custom name typed on ANY block of the run wins over the auto name.
+            String custom = entity.getCustomName();
+            for (int i = 1; i < run && custom.isEmpty(); i++) {
+                if (world.getBlockEntity(pos.offset(posDir, i)) instanceof StationDecorBlockEntity other) {
+                    custom = other.getCustomName();
+                }
+            }
+            panel = new MosaicPanel(run, !custom.isEmpty() ? custom : autoName);
+        }
+        MOSAIC_PANELS.put(pos.asLong(), panel);
+        return panel;
+    }
+
+    /** True when the block at {@code pos} is a mosaic mounted the same way as its neighbour. */
+    private static boolean isMosaicFacing(net.minecraft.client.world.ClientWorld world,
+                                          net.minecraft.util.math.BlockPos pos, Direction facing) {
+        net.minecraft.block.BlockState state = world.getBlockState(pos);
+        return state.getBlock() instanceof StationDecorBlock
+                && state.contains(StationDecorBlock.FACING)
+                && state.get(StationDecorBlock.FACING) == facing;
+    }
+
     /**
      * The classic mosaic frieze: cream tile field, station-color border tile
-     * rows, dark lettering. The band auto-sizes to the name and extends past
-     * the block edges, centered on the block.
+     * rows, dark lettering. The band auto-sizes to the name (never narrower
+     * than the run it spans) and is centred on the run, so it extends evenly
+     * past both ends however many blocks were placed.
      */
-    private void paintMosaic(MatrixStack matrices, VertexConsumerProvider vertexConsumers, String name, int color) {
+    private void paintMosaic(MatrixStack matrices, VertexConsumerProvider vertexConsumers,
+                             String name, int color, int run) {
         String text = upperCase(name.isEmpty() ? "BAKER CITY" : name);
         // The band paints directly onto the wall behind the block: 0.01 in
-        // front of the wall face (local +0.5) so nothing z-fights.
+        // front of the wall face (local +0.5) so nothing z-fights. The X shift
+        // moves the origin to the RUN's centre — half a block per extra block,
+        // which is exactly the seam for an even-length run.
         matrices.push();
-        matrices.translate(0.0, 1.0, 0.5 - 0.01);
+        matrices.translate((run - 1) / 2.0, 1.0, 0.5 - 0.01);
         matrices.scale(-UNIT, -UNIT, UNIT);
         CanvasPainter painter = new CanvasPainter(matrices, vertexConsumers);
 
@@ -358,7 +439,7 @@ public class StationDecorRenderer implements BlockEntityRenderer<StationDecorBlo
         float textWidth = painter.width(text, textSize);
         // Snap the band to whole 8-unit tiles so the border pattern always
         // fits exactly (no partial tiles, nothing hanging past the edges).
-        float bandWidth = (float) (Math.ceil(Math.max(64, textWidth + 40) / 8.0) * 8.0);
+        float bandWidth = (float) (Math.ceil(Math.max(64.0 * run, textWidth + 40) / 8.0) * 8.0);
         float left = -bandWidth / 2.0f;
         float right = bandWidth / 2.0f;
 
