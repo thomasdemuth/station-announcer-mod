@@ -1,0 +1,69 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Dispatch — Station Announcer</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div id="banner" class="hidden"></div>
+
+<header id="topbar">
+	<div class="brand">DISPATCH</div>
+	<select id="dimSelect" title="Dimension"></select>
+	<div id="connStatus" class="status connecting">CONNECTING</div>
+	<div class="spacer"></div>
+	<div class="toggles">
+		<label><input type="checkbox" id="lySpeed" checked> Speed limits</label>
+		<label><input type="checkbox" id="lySignals" checked> Signals</label>
+		<label><input type="checkbox" id="lyStations" checked> Station labels</label>
+		<label><input type="checkbox" id="lyTrainLabels" checked> Train labels</label>
+	</div>
+	<button id="boardBtn" class="btn" title="Toggle the dispatch board">Board</button>
+	<button id="fitBtn" class="btn" title="Fit network in view">Fit</button>
+</header>
+
+<main id="stage">
+	<canvas id="map"></canvas>
+
+	<div id="legend">
+		<div class="legend-title">SPEED LIMIT (km/h)</div>
+		<div id="legendRows"></div>
+		<div class="legend-title" style="margin-top:6px">SIGNALS</div>
+		<div class="legend-row"><span class="sig-dot" style="background:#e5484d"></span>occupied</div>
+		<div class="legend-row"><span class="sig-dot" style="background:#f5b942"></span>reserved</div>
+		<div class="legend-row"><span class="sig-dot" style="background:#46c46e"></span>clear</div>
+	</div>
+
+	<aside id="detail" class="hidden">
+		<div id="detailHeader">
+			<span id="detailChip" class="chip"></span>
+			<span id="detailTitle"></span>
+			<span class="spacer"></span>
+			<button id="followBtn" class="btn small">Follow</button>
+			<button id="closeDetail" class="btn small">&times;</button>
+		</div>
+		<div id="detailBody"></div>
+	</aside>
+
+	<section id="board" class="hidden">
+		<table id="boardTable">
+			<thead><tr>
+				<th data-k="route">Route</th>
+				<th data-k="dest">Destination</th>
+				<th data-k="next">Next station</th>
+				<th data-k="kmh" class="num">km/h</th>
+				<th data-k="dev" class="num">Dev</th>
+				<th data-k="doors">Doors</th>
+				<th data-k="dwell" class="num">Dwell</th>
+				<th data-k="mode">Mode</th>
+			</tr></thead>
+			<tbody id="boardBody"></tbody>
+		</table>
+	</section>
+</main>
+
+<script src="app.js"></script>
+</body>
+</html>
