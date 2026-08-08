@@ -797,3 +797,33 @@ default 20 for NEW rules, 0 = old release-on-arrival behavior).
   `gui.station_announcer.hold_rules.transfer_seconds(.off)`.
 - Wire format changed (varint inserted in both channels) — fine, both sides ship
   together and the channels are this addon's own.
+
+### Feature Agent 1 — Update: held trains now actively hold their doors open (2026-08-07)
+
+In-game bug (Thomas): a train held ~10 s sat with doors SHUT. The original
+"cancelling startUp before closeDoors() keeps doors open" claim was only true
+when the hold condition was already true at the FIRST startUp attempt — stock
+MTR closes doors on that first call (at doorCloseTime, ~4 s before departure)
+and then retries startUp each tick until the door cooldown expires. A hold
+engaging in that gap cancelled the retries but nothing reopened the doors.
+
+Fix: every genuine platform-hold cancel in `VehicleMixin` now also calls
+`VehicleExtraData.openDoors()` on the held vehicle. That method is protected in
+4.0.1 (javap-verified), so a new `@Invoker` accessor mixin
+`mixin/VehicleExtraDataAccessor.java` exposes it (registered in
+`station_announcer.mixins.json`). Safe: it runs on the simulator thread inside
+the vehicle's own simulate call — the same context from which stock
+`simulateStopped` mutates its own `VehicleExtraData` — and is idempotent
+(`doorTarget = true`) so per-tick re-assertion costs nothing. Client sync
+verified read-only in TSC source: the doorTarget flip flows through the existing
+`writeVehiclePositions` → `checkForUpdate()` (`doorTarget != oldDoorTarget` →
+needsUpdate) → `client.update(...)` path — no new packets. Bonus: reopening
+resets the door cooldown, so on release startUp closes the doors and waits the
+full door animation before moving (no teleport-departure).
+
+Supersedes the earlier limitation note: held trains now keep (or regain) open
+doors regardless of when the hold engages, which is also the realistic
+connection-hold behavior.
+
+Files: `mixin/VehicleExtraDataAccessor.java` (new), `mixin/VehicleMixin.java`
+(openDoors call + corrected javadoc), `station_announcer.mixins.json` (+1 entry).

@@ -22,10 +22,13 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
  *
  * <p><b>Why a mixin:</b> TSC has no departure event or hold API; {@code startUp}
  * is called from deep inside {@code simulateStopped} with no extension point.
- * Cancelling at HEAD (before {@code closeDoors()}) keeps the train dwelling with
- * its doors open — an accepted, even desirable, side effect for a held train.
- * The vehicle re-tries {@code startUp} every simulation tick, so releasing the
- * hold simply means letting the next attempt through.</p>
+ * Every hold-cancel also re-asserts {@code openDoors()} (via
+ * {@link VehicleExtraDataAccessor}) — cancelling before {@code closeDoors()} is
+ * not sufficient on its own, because the doors already closed on the first
+ * un-held startUp attempt if the hold engaged mid-close. The vehicle re-tries
+ * {@code startUp} every simulation tick, so releasing the hold simply means
+ * letting the next attempt through, which closes the doors and waits out the
+ * door animation before moving.</p>
  *
  * <p><b>Thread:</b> the SIMULATOR thread for the vehicle's dimension (or the
  * server thread when {@code useThreadedSimulation} is off). The engine therefore
@@ -56,6 +59,18 @@ public abstract class VehicleMixin extends VehicleSchema {
     @Inject(method = "startUp(JJ)V", at = @At("HEAD"), cancellable = true)
     private void stationAnnouncer$holdAtPlatform(long newDepartureIndex, long newSidingDepartureTime, CallbackInfo ci) {
         if (HoldRuleEngine.shouldHold(getId(), vehicleExtraData, railProgress, data)) {
+            // Actively re-assert open doors for the held train. Cancelling alone is
+            // not enough: stock flow already ran closeDoors() on the FIRST startUp
+            // attempt (at doorCloseTime, ~4 s before real departure), so a hold that
+            // engages after that point would otherwise sit with doors shut. This is
+            // exactly what simulateStopped does during dwell — same thread, the
+            // vehicle mutating its own VehicleExtraData — and it only happens on a
+            // genuine platform-hold cancel (shouldHold's stopped-at-platform guard).
+            // Bonus: reopening resets the door cooldown, so on release startUp
+            // closes doors and waits the full door animation before moving. The
+            // doorTarget flip reaches clients through the existing update flow
+            // (writeVehiclePositions -> checkForUpdate -> client.update).
+            ((VehicleExtraDataAccessor) (Object) vehicleExtraData).stationAnnouncer$openDoors();
             ci.cancel();
         }
     }

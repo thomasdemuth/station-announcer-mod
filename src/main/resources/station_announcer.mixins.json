@@ -8,6 +8,7 @@
     "PathDataSchemaAccessor",
     "PlatformRouteDetailsAccessor",
     "SidingMixin",
+    "VehicleExtraDataAccessor",
     "VehicleMixin"
   ],
   "client": [
