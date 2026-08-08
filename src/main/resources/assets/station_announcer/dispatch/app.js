@@ -24,8 +24,13 @@ const state = {
 	stations: [],
 	platforms: new Map(),
 	routes: new Map(),
-	vehicles: new Map(),     // id -> {data, samples:[{t,x,z,railT,rail}], route, consist}
+	vehicles: new Map(),     // id -> {data, samples:[{t,x,z,railT,rail}], route, consist, disp}
 	signals: new Map(),      // railId -> {occupied:[], reserved:[]}
+	signalGroups: [],        // contiguous same-color signal blocks -> one dot each
+	modes: new Set(),        // enabled transport modes (empty until network load)
+	emaInterval: 0,          // measured ms between stream frames
+	lastServerTime: 0,
+	lastFrameAt: 0,
 	selected: null,
 	follow: false,
 	es: null,
@@ -103,6 +108,8 @@ async function loadDimension(n) {
 	state.dim = n;
 	state.vehicles.clear();
 	state.signals.clear();
+	state.emaInterval = 0;
+	state.lastServerTime = 0;
 	state.selected = null;
 	updateDetail();
 	if (state.es) { state.es.close(); state.es = null; }
@@ -144,7 +151,86 @@ function applyNetwork(net) {
 		});
 	});
 	state.networkBox = maxX < minX ? null : { minX, minZ, maxX, maxZ };
+	buildSignalGroups();
+	buildModeToggles();
 	invalidateStatic();
+}
+
+/**
+ * Merge contiguous rails carrying the SAME signal color set into one "block"
+ * so a signal block renders as a single dot instead of a dot per rail.
+ */
+function buildSignalGroups() {
+	const parent = new Map();
+	const find = (a) => { while (parent.get(a) !== a) { parent.set(a, parent.get(parent.get(a))); a = parent.get(a); } return a; };
+	const union = (a, b) => parent.set(find(a), find(b));
+	const sigRails = [];
+	for (const r of state.rails.values()) {
+		if (r.signalColors && r.signalColors.length) { sigRails.push(r); parent.set(r.id, r.id); }
+	}
+	const byEndpoint = new Map(); // "colors|x,z" -> first rail seen there
+	for (const r of sigRails) {
+		const ck = r.signalColors.slice().sort((a, b) => a - b).join(",");
+		for (const p of [r.points[0], r.points[r.points.length - 1]]) {
+			const key = ck + "|" + Math.round(p[0]) + "," + Math.round(p[2]);
+			if (byEndpoint.has(key)) union(r.id, byEndpoint.get(key));
+			else byEndpoint.set(key, r.id);
+		}
+	}
+	const grouped = new Map();
+	for (const r of sigRails) {
+		const root = find(r.id);
+		if (!grouped.has(root)) grouped.set(root, []);
+		grouped.get(root).push(r);
+	}
+	state.signalGroups = [];
+	for (const members of grouped.values()) {
+		let sx = 0, sz = 0;
+		for (const r of members) {
+			const m = railPoint(r.id, 0.5) || [r.points[0][0], r.points[0][2]];
+			sx += m[0]; sz += m[1];
+		}
+		state.signalGroups.push({
+			x: sx / members.length, z: sz / members.length,
+			memberIds: members.map((r) => r.id), mode: members[0].mode,
+		});
+	}
+}
+
+/** Transit-mode filter checkboxes; hidden when the network has a single mode. */
+function buildModeToggles() {
+	const modes = [...new Set([...state.rails.values()].map((r) => r.mode))].sort();
+	if (state.modes.size === 0 || [...state.modes].some((m) => !modes.includes(m))) {
+		state.modes = new Set(modes);
+	}
+	const el = $("modeToggles");
+	el.innerHTML = "";
+	el.style.display = modes.length > 1 ? "" : "none";
+	const labels = { train: "Trains", boat: "Boats", cable_car: "Cable cars", airplane: "Planes" };
+	for (const m of modes) {
+		const label = document.createElement("label");
+		const cb = document.createElement("input");
+		cb.type = "checkbox";
+		cb.checked = state.modes.has(m);
+		cb.onchange = () => {
+			if (cb.checked) state.modes.add(m); else state.modes.delete(m);
+			invalidateStatic();
+			renderBoard();
+		};
+		label.appendChild(cb);
+		label.appendChild(document.createTextNode(" " + (labels[m] || m)));
+		el.appendChild(label);
+	}
+}
+
+function modeEnabled(mode) {
+	return !mode || state.modes.size === 0 || state.modes.has(mode);
+}
+
+/** A vehicle's transport mode, derived from the rail it is currently on. */
+function vehicleMode(rec) {
+	const rail = rec.data.rail ? state.rails.get(rec.data.rail) : null;
+	return rail ? rail.mode : null;
 }
 
 /* ---------- SSE ---------- */
@@ -167,6 +253,15 @@ function handleFrame(f, isFull) {
 	if (f.dimension !== state.dim) return;   // stale stream after a dim switch
 	state.lastEventAt = now();
 	setStatus("live");
+
+	// Measure the stream's real cadence so interpolation delay matches reality.
+	if (state.lastServerTime) {
+		const d = f.serverTime - state.lastServerTime;
+		if (d > 0 && d < 10000) {
+			state.emaInterval = state.emaInterval ? state.emaInterval * 0.8 + d * 0.2 : d;
+		}
+	}
+	state.lastServerTime = f.serverTime;
 
 	if (isFull) {
 		for (const id of [...state.vehicles.keys()])
@@ -211,6 +306,18 @@ function vehiclePos(rec, renderTime) {
 	const s = rec.samples;
 	if (s.length === 0) return null;
 	if (s.length === 1) return { x: s[0].x, z: s[0].z };
+	// Past the newest sample (stream hiccup): extrapolate briefly along the last
+	// heading instead of freezing, capped so a stall can't run a train away.
+	const last = s[s.length - 1], prev = s[s.length - 2];
+	if (renderTime > last.t) {
+		const dt = Math.min(renderTime - last.t, 1000);
+		const span = last.t - prev.t || 1;
+		return {
+			x: last.x + (last.x - prev.x) / span * dt,
+			z: last.z + (last.z - prev.z) / span * dt,
+			hx: last.x - prev.x, hz: last.z - prev.z,
+		};
+	}
 	let a = s[0], b = s[s.length - 1];
 	for (let i = 1; i < s.length; i++) {
 		if (s[i].t >= renderTime) { a = s[i - 1]; b = s[i]; break; }
@@ -282,6 +389,7 @@ function drawStatic(dpr) {
 
 	// rails
 	for (const r of state.rails.values()) {
+		if (!modeEnabled(r.mode)) continue;
 		const kmh = Math.max(r.speedA, r.speedB);
 		g.strokeStyle = r.platform ? "#8fa3c4" : r.siding ? "#3a4358" : state.layers.speed ? speedColor(kmh) : "#5b6981";
 		g.lineWidth = r.platform ? 4 : 2;
@@ -331,36 +439,60 @@ function frame() {
 	ctx.drawImage(staticCanvas, 0, 0);
 	ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
 
-	const renderTime = now() - state.updateMillis * 1.5;
+	// interpolation delay from the measured stream cadence (fallback: configured rate)
+	const delay = state.emaInterval
+		? Math.max(250, Math.min(2000, state.emaInterval * 1.25 + 120))
+		: state.updateMillis * 1.5;
+	const renderTime = now() - delay;
+	const frameNow = now();
+	const dtSec = state.lastFrameAt ? Math.min(0.1, (frameNow - state.lastFrameAt) / 1000) : 0.016;
+	state.lastFrameAt = frameNow;
 
-	// signals
+	// signals — one dot per contiguous same-color block, worst aspect wins
 	if (state.layers.signals) {
-		for (const r of state.rails.values()) {
-			if (!r.signalColors || r.signalColors.length === 0) continue;
-			const live = state.signals.get(r.id);
-			const aspect = live && live.occupied && live.occupied.length ? "#e5484d"
-				: live && live.reserved && live.reserved.length ? "#f5b942" : "#46c46e";
-			const mid = railPoint(r.id, 0.5);
-			if (!mid) continue;
-			const [sx, sy] = worldToScreen(mid[0], mid[1]);
-			ctx.beginPath(); ctx.arc(sx, sy, 3.5, 0, Math.PI * 2);
+		for (const group of state.signalGroups) {
+			if (!modeEnabled(group.mode)) continue;
+			let aspect = "#46c46e";
+			for (const railId of group.memberIds) {
+				const live = state.signals.get(railId);
+				if (live && live.occupied && live.occupied.length) { aspect = "#e5484d"; break; }
+				if (live && live.reserved && live.reserved.length) aspect = "#f5b942";
+			}
+			const [sx, sy] = worldToScreen(group.x, group.z);
+			ctx.beginPath(); ctx.arc(sx, sy, 4, 0, Math.PI * 2);
 			ctx.fillStyle = aspect; ctx.fill();
 			ctx.strokeStyle = "#0b0e14"; ctx.lineWidth = 1; ctx.stroke();
 		}
 	}
 
 	// vehicles
+	const smoothing = 1 - Math.exp(-dtSec / 0.12); // critically-damped ease toward target
 	for (const [id, rec] of state.vehicles) {
+		if (!modeEnabled(vehicleMode(rec))) { rec.screen = null; continue; }
 		const p = vehiclePos(rec, renderTime);
-		if (!p) continue;
-		rec.screen = worldToScreen(p.x, p.z);
+		if (!p) { rec.screen = null; continue; }
+		const targetAngle = Math.atan2(p.hz || 0, p.hx || 1);
+		if (!rec.disp || Math.hypot(p.x - rec.disp.x, p.z - rec.disp.z) > 64) {
+			rec.disp = { x: p.x, z: p.z, angle: targetAngle }; // teleport-scale jump: snap
+		} else {
+			rec.disp.x += (p.x - rec.disp.x) * smoothing;
+			rec.disp.z += (p.z - rec.disp.z) * smoothing;
+			// only steer when actually moving — heading is noise when stopped
+			if ((p.hx || 0) * (p.hx || 0) + (p.hz || 0) * (p.hz || 0) > 0.01) {
+				let da = targetAngle - rec.disp.angle;
+				while (da > Math.PI) da -= 2 * Math.PI;
+				while (da < -Math.PI) da += 2 * Math.PI;
+				rec.disp.angle += da * smoothing;
+			}
+		}
+		rec.screen = worldToScreen(rec.disp.x, rec.disp.z);
 		const [sx, sy] = rec.screen;
-		const angle = Math.atan2(p.hz || 0, p.hx || 1);
+		const angle = rec.disp.angle;
 		const color = rec.route ? colorHex(rec.route.color) : "#9aa7bf";
 		const selected = id === state.selected;
 		const len = Math.max(10, Math.min(22, 6 * state.view.scale));
 
-		if (state.follow && selected) { state.view.x = p.x; state.view.z = p.z; invalidateStatic(); }
+		if (state.follow && selected) { state.view.x = rec.disp.x; state.view.z = rec.disp.z; invalidateStatic(); }
 
 		ctx.save();
 		ctx.translate(sx, sy);
@@ -541,7 +673,9 @@ function boardRow(id, rec) {
 
 function renderBoard() {
 	if ($("board").classList.contains("hidden")) return;
-	const rows = [...state.vehicles.entries()].map(([id, rec]) => boardRow(id, rec));
+	const rows = [...state.vehicles.entries()]
+		.filter(([, rec]) => modeEnabled(vehicleMode(rec)))
+		.map(([id, rec]) => boardRow(id, rec));
 	const { k, asc } = state.sort;
 	rows.sort((a, b) => {
 		const va = a[k], vb = b[k];
@@ -593,8 +727,9 @@ function bootDemo() {
 		canTurnBack: false, signalColors: opts.sig ? [16711680] : [], points: pts,
 	});
 	// a loop with two stations, curves, a siding stub
+	// r1+r2 share a signal color AND touch at (120,0) → must consolidate to ONE dot
 	line("r1", [P(0, 0), P(120, 0)], 80, { sig: true });
-	line("r2", [P(120, 0), P(160, 10), P(180, 40)], 60);
+	line("r2", [P(120, 0), P(160, 10), P(180, 40)], 60, { sig: true });
 	line("r3", [P(180, 40), P(180, 120)], 120, { sig: true });
 	line("r4", [P(180, 120), P(160, 150), P(120, 160)], 60);
 	line("r5", [P(120, 160), P(0, 160)], 80, { sig: true });
@@ -604,6 +739,9 @@ function bootDemo() {
 	line("p1", [P(30, 0), P(90, 0)], 80, { platform: true });
 	line("p2", [P(30, 160), P(90, 160)], 80, { platform: true });
 	line("s1", [P(-60, 80), P(-100, 80)], 30, { siding: true });
+	// a boat line so the mode toggles appear in demo
+	rails.push({ id: "b1", mode: "boat", length: 260, speedA: 30, speedB: 30, platform: false, siding: false, canAccelerate: true, canTurnBack: false, signalColors: [], points: [P(-40, 220), P(60, 240), P(160, 220)] });
+	rails.push({ id: "b2", mode: "boat", length: 260, speedA: 30, speedB: 30, platform: false, siding: false, canAccelerate: true, canTurnBack: false, signalColors: [], points: [P(160, 220), P(60, 260), P(-40, 220)] });
 	applyNetwork({
 		schemaVersion: 1, dimension: "demo:overworld", dimensionIndex: 0, dimensions: state.dims,
 		rails,
@@ -626,8 +764,20 @@ function bootDemo() {
 		{ id: "v1", li: 0, t: 0.2, kmh: 64, devMs: 12000 },
 		{ id: "v2", li: 4, t: 0.6, kmh: 48, devMs: -22000 },
 	];
+	const boatLoop = ["b1", "b2"];
+	const boat = { id: "v3", li: 0, t: 0.3, kmh: 22, devMs: 0 };
 	setInterval(() => {
 		const st = now();
+		boat.t += 0.02;
+		if (boat.t >= 1) { boat.t -= 1; boat.li = (boat.li + 1) % boatLoop.length; }
+		const bp = railPoint(boatLoop[boat.li], boat.t) || [0, 0];
+		const boatVehicle = {
+			id: boat.id, x: bp[0], y: 62, z: bp[1], kmh: boat.kmh, rev: false,
+			rail: boatLoop[boat.li], railT: boat.t, doors: false, dwellMs: 0,
+			devMs: 0, manual: false, stop: 0,
+			route: { id: "rt2", name: "Harbor Ferry", number: "F", color: 0x3fc1c9, dest: "Harbor North", nextStation: "Harbor North" },
+			consist: { sidingId: "sd2", siding: "Dock", depot: "Ferry Dock", cars: ["boat_1"] },
+		};
 		const vehicles = trains.map((tr) => {
 			tr.t += 0.04 * (tr.kmh / 60);
 			if (tr.t >= 1) { tr.t -= 1; tr.li = (tr.li + 1) % loop.length; }
@@ -641,6 +791,7 @@ function bootDemo() {
 				consist: { sidingId: "sd1", siding: "S1", depot: "Demo Depot", cars: ["m7_a", "m7_b", "m7_b", "m7_a"] },
 			};
 		});
+		vehicles.push(boatVehicle);
 		handleFrame({ schemaVersion: 1, serverTime: st, dimension: 0, vehicles, signals: [
 			{ rail: "r1", occupied: [16711680], reserved: [] },
 			{ rail: "r3", occupied: [], reserved: [16711680] },
