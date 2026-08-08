@@ -1961,3 +1961,303 @@ Modified: `mtraddon/{AddonServerConfig,AddonStore,AddonSnapshots,AddonInit}.java
 `DwellOverrideEngine`, `HoldRuleEngine`, `DoorObstructionEngine`, the dispatch web
 layer, the analytics layer, `ControlBoxBlockEntity`, `PaDisplay`, the PIDS block
 entities and every renderer.
+
+---
+
+## Depot Rotation Agent — Duplicate line, per-depot rotation, depot groups — 2026-08-08
+
+Thomas's ask: "trains should alternate across a platform group", plus "we need to be
+able to group depots together so that they don't dispatch together". True per-train
+platform choice stays infeasible (a depot bakes ONE shared main path — Feature 5's
+documented gap), so this is the three feasible pieces: a **Duplicate line** tool, a
+**per-depot** twist on Feature 5's rotation, and **depot groups** that phase-offset
+their members' departures. Additive throughout; the only shared files touched are
+`AddonServerConfig`/`AddonStore`/`AddonSnapshots`/`AddonInit` (new sections in the
+existing style), `PlatformGroupEngine` (the selection line + a second runtime map),
+`DepotMixin` (two new injectors, existing handlers untouched), `AnalyticsRecorder`
+(one new public method, nothing existing changed) and the two client-init files.
+
+### A) Duplicate line — how the copy reaches MTR's data
+
+`client/mtraddon/DuplicateLineScreen.java`. **No addon packet and no addon storage**:
+the clone goes through MTR's own pipeline, the same one `DashboardScreen` uses.
+
+1. `new Route(source.getTransportMode(), MinecraftClientData.getDashboardInstance())`
+   — `NameColorDataBaseSchema`'s `(TransportMode, Data)` constructor assigns
+   `id = new Random().nextLong()` (javap -c verified), so the copy is a genuinely new
+   route, not a second reference to the old one.
+2. Metadata through the public setters: `setName`, `setColor`, `setRouteNumber`,
+   `setRouteType`, `setHidden`, `setCircularState` — i.e. everything `RouteSchema`
+   carries besides the stops.
+3. Stops: one `new RoutePlatformData(platform.getId())` per source stop with
+   `setCustomDestination(...)` copied, appended to `copy.getRoutePlatforms()`, then
+   `writePlatformCache(copy, dashboard.platformIdMap)` — exactly
+   `DashboardScreen.onClickAddPlatformToRoute`'s sequence. `RoutePlatformDataSchema`
+   holds only `platformId` + `customDestination`, so there are no other per-stop flags
+   to carry.
+4. `InitClient.REGISTRY_CLIENT.sendPacketToServer(new PacketUpdateData(new
+   UpdateDataRequest(dashboardInstance).addRoute(copy)))` — byte-for-byte the packet
+   `onDoneEditingRoute` sends. `UpdateDataRequest.addRoute(Route)` is public in 4.0.1
+   (javap-verified), so no server-side C2S packet was needed.
+
+The name gets the copy suffix appended **per language** ("A|B" → "A (copy)|B (copy)")
+so it reads right on signs in either language. A stop whose `platform` reference does
+not resolve on this client is **skipped and counted** in the result line — `platformId`
+is a protected schema field with no getter, so an unresolved stop cannot be copied at
+all (and would be a broken stop anyway).
+
+**The copy is deliberately not assigned to any depot**; the screen says so
+(`hint_depot`, `hint_edit`). Which depot runs a line, and in what order, is a routing
+decision — and assigning it automatically would silently change a depot's timetable.
+
+### B) Per-depot rotation
+
+`PlatformGroupEngine.applyGroups` picked `validMembers[counter % n]` from a counter
+keyed by group (`"<routeId>:<stopIndex>"`), so two depots serving one route followed
+the SAME counter and picked the SAME platform. The pick is now
+`validMembers[(counter + depotOffset) % n]`, where:
+
+- **`depotOffset` = this depot's stable index among the depots serving that route** —
+  computed as "how many OTHER depots that serve this route have a smaller
+  `getId()`" (`depotOffsetForRoute`). **Stability guarantee:** MTR depot ids are random
+  longs assigned once at creation and persisted, so the ordering is identical across
+  restarts, across generation order and on every dimension. It is deliberately NOT the
+  iteration order of `simulator.depots` — that is an `ObjectArraySet`, i.e.
+  insertion-ordered and therefore load-order dependent.
+- Memoized per route per generation in a small local map (a depot has a handful of
+  routes; the scan is over `simulator.depots`, also a handful).
+- **Single-depot behaviour is bit-for-bit unchanged**: with no other depot on the route
+  the offset is 0. Gated by the existing `dynamicPlatforms.enabled`, as asked.
+- Result: two depots + a group of ≥2 members always land on different platforms; more
+  depots than members wrap, which is simply "the group is not big enough".
+
+**One correctness fix this forced.** `APPLIED_CHOICE` (the platform each group last
+resolved to, re-applied at `writeRouteCache` so `getVehiclePlatformRouteInfo` matches
+the baked path) was keyed per GROUP, i.e. "last depot to generate wins". With the two
+depots now deliberately differing, that would systematically mis-label one of them, so
+a second map `APPLIED_CHOICE_BY_DEPOT` keyed `"<depotId>|<routeId>:<stopIndex>"` was
+added; the re-apply reads it first and falls back to the shared entry (which is what
+data files written before today contain). Persisted as a new
+`platformGroupRuntime.choiceByDepot` object; pruned by suffix in `pruneRuntime`. The
+shared map is kept because `effectiveStopPlatformId` — Feature 2's dwell attribution —
+walks routes, not depots, and has no depot to key on (documented in its javadoc, and
+under Limitations below).
+
+`StopOverlayEngine`'s shared-`DepotMixin` ordering and the walk-size self-disable
+contract are untouched: the change is inside `applyGroups`' member pick, the list's
+size and the call order in both handlers are exactly as the Disruptions agent left
+them.
+
+### C) Depot groups — staggering departures
+
+**The hook** (`mixin/DepotMixin.java`, two new injectors,
+`mtraddon/DepotGroupEngine.java`). `javap -c` on 4.0.1's
+`Depot.generatePlatformDirectionsAndWriteDeparturesToSidings()V` shows the departure
+list is a **method-local `LongArrayList`** and that `Siding.addDeparture(J)Z` is invoked
+at exactly **one** call site in the entire class (offset 571; `grep` over the full
+disassembly confirms a single occurrence), so:
+
+- `@Inject` at **HEAD** resolves the depot's phase offset once into a `@Unique long`
+  field — a depot belongs to one simulator and departures are only ever written from
+  that simulator's thread inside this method, so no synchronization is needed;
+- `@Redirect` on that unique `Siding.addDeparture(J)Z` call adds the offset and passes
+  the return value straight through (MTR uses it to advance to the next siding; the
+  decision is unaffected because every departure of the pass shifts by the same
+  constant, and siding acceptance only ever compares departures of the same pass
+  against each other via `tempReturnTimes`).
+
+**The offset**: member `i` of a group of `N` gets `round(i / N × interval)`, where
+`interval` is that depot's own mean scheduled departure interval. Member 0 is the
+reference and never moves.
+
+**The interval reuses the analytics derivation** rather than re-deriving it: a new
+public `AnalyticsRecorder.depotDepartureIntervalMillis(Simulator, Depot)` sits beside
+the existing `scheduledHeadwayMillis` and uses its `FREQUENCY_BASE_MILLIS` /
+`MILLIS_PER_NOMINAL_DAY` constants (the brief's "reuse, don't duplicate the constant").
+The difference: `scheduledHeadwayMillis` pools every depot serving a ROUTE, this one
+answers for a single DEPOT. Derivation:
+`departuresPerNominalDay = Σ_hour freq(hour) × 3 600 000 / FREQUENCY_BASE_MILLIS`
+(the hour index mirrors MTR's own `isTimeMoving() ? i : getHour()` selection), and the
+real interval is `getGameMillisPerDay() / departuresPerNominalDay`. For a depot with a
+flat frequency this reduces exactly to analytics' single-hour formula. It returns
+**0 = "do not stagger"** for real-time-timetable depots, continuous-movement modes
+(cable cars use `CONTINUOUS_MOVEMENT_FREQUENCY`, not frequencies) and depots with no
+frequency at all — those two branches of MTR's method are therefore never touched.
+
+**THE WRAP RULE: there is none, deliberately, and that is the point.** The offset is
+added to *every* departure the depot writes in one pass, so every gap between its own
+departures is unchanged, and the repeat cycle length — `getRepeatInterval(0)` =
+`gameMillisPerDay × repeatDepartures`, computed by MTR from journey time and the day
+length, never from the departure values — is unchanged too. `Siding.matchDeparture`
+anchors the cycle on `departures.getLong(0)`, which slides with the rest, so nothing
+needs taking modulo anything and no departure can fall off either end of the day; the
+timetable simply slides in phase. The offset is clamped to `[0, interval)`: never
+negative (a departure could otherwise be pushed before `getMillisOfGameMidnight()`),
+and never a whole headway (which would renumber the runs and change nothing).
+
+**Guards, in O(1) order:** `depotGroups.enabled` → snapshot `isEmpty` →
+`data instanceof Simulator` → one `get(depotId)` on the membership map → slot > 0 and
+group size ≥ 2. Any failure returns 0 and the redirect hands MTR's own value on
+untouched. The per-departure cost when staggering is one field read plus an add.
+
+**Taking effect.** Departures are rewritten when a depot regenerates, when all its
+sidings finish path generation, and on `Simulator.setGameTime` (any `/time set`) — so
+normally an offset change lands at the next generation, which the GUI says. Two places
+force it sooner, both via `DepotGroupEngine.refreshOffsets(server, true)`, which hops
+onto each simulator thread and calls
+`depot.generatePlatformDirectionsAndWriteDeparturesToSidings()` for the affected depots
+only (grouped now, or staggered before and just removed — so a removed depot goes back
+to MTR's own times):
+
+1. **SERVER_STARTED**, right after the store loads. This one is necessary, not a
+   nicety: MTR is our dependency, so its own SERVER_STARTED handler — which constructs
+   the simulators and runs `Depot.init()` — has already written the day's departures
+   before our store exists, and without the rewrite the stagger would not appear until
+   something else regenerated the depot.
+2. **After a group edit**, so Thomas hears the change immediately.
+
+That call is a supported runtime operation: MTR itself makes it from `setGameTime` at
+arbitrary moments, and it begins by clearing each siding's departure list
+(`Siding.startGeneratingDepartures`), so it is idempotent by construction. It is
+wrapped in try/catch — a failure leaves MTR's own timetable in place.
+
+### D) GUI
+
+One new dashboard button, **"Tools…"**, injected with `ScreenEvents.AFTER_INIT`: it
+splits MTR's own Options button exactly the way the addon's "Dispatch" and
+"Disruptions" buttons split the two map rows beside it, so `DashboardScreen` is never
+restructured and MTR's layout keeps working. One button rather than two because those
+rows are the only splittable space left. Permission-gated on
+`MinecraftClientData.hasPermission()`, client toggle `showToolsButton`.
+
+- `DispatchToolsScreen` — the hub: "Duplicate line…" and "Depot groups…", plus a
+  configured-group count.
+- `DuplicateLineScreen` — every route in its own colour with its stop count and a
+  Duplicate button; a result line reporting the new name, the stops copied and any
+  skipped; the two hint lines about depot assignment.
+- `DepotGroupsScreen` — every group with its members and each member's computed shift
+  ("Main Depot +0s, North Yard +2m 30s"), New / Edit / Delete.
+- `DepotGroupEditScreen` — name field plus a hand-drawn checkbox list of the
+  dashboard's depots (the shared `PlatformPicker` is platform-scoped and unusable
+  here), members floated to the top in their offset order. **Tick order is offset
+  order**, so each ticked row shows "slot 2 of 3" and, once the server has measured
+  that depot's headway, the absolute "+2m 30s" beside it; untick and re-tick to move a
+  depot to the end. A depot already in another group is drawn red and cannot be ticked
+  (the server refuses it too).
+
+### E) Storage, snapshot, networking
+
+`AddonStore` gains one JSON section in the same style as the rest:
+
+```json
+"depotGroups": { "<id>": { "name": "Uptown pair", "depots": [111, 222] } }
+```
+
+plus the `platformGroupRuntime.choiceByDepot` object described in B. Ids are
+creation-time millis nudged forward on collision (the `Disruption` scheme).
+`AddonSnapshots.depotGroups()` publishes a volatile immutable
+`Long2ObjectOpenHashMap<int[]>` — depot id → `{offsetSlot, groupSize}` — so the
+simulator-thread lookup is one allocation-free `get(long)`; a depot listed twice by a
+hand-edited file keeps its first membership.
+
+`mtraddon/DepotGroupNetworking.java` (own class; `AddonNetworking` untouched),
+validated like every other channel — op level `editPermissionLevel`, feature flag,
+hard wire caps (`MAX_GROUPS` 64, `MAX_DEPOTS` 32, `MAX_NAME_LENGTH` 64) then the config
+caps, dedupe, zero ids dropped, one-group-per-depot refused with an action-bar reason:
+
+- `addon_depot_groups` (S2C) — the full list plus each member's last computed offset
+  (`-1` = "not computed yet"; the client cannot derive it because `gameMillisPerDay`
+  lives on the simulator). Sent on join, after every edit and again once the simulators
+  answer the offset refresh. Sent EMPTY while the feature is off.
+- `addon_update_depot_group` (C2S) — create / rename / re-member / delete. An emptied
+  member list deletes the group. Depot ids are resolved against the railway only at USE
+  time on the simulator thread, like platform-group members.
+
+### F) Config keys (`config/station-announcer-addon.json`, new `depotGroups` section)
+
+```
+depotGroups.enabled            true   master switch (off = zero work; one field read in the hook)
+depotGroups.maxGroups          16     stored groups (1–64)
+depotGroups.maxDepotsPerGroup  8      member depots per group (2–32)
+depotGroups.maxNameLength      48     group name cap (1–64)
+```
+
+Per-depot platform rotation has **no new key** — it is gated by the existing
+`dynamicPlatforms.enabled`, as specified. Client: `showToolsButton` in
+`station-announcer-addon-client.json`.
+
+### G) Thread model
+
+| Thread | What it does |
+|---|---|
+| **Simulator** (per dimension) | Both new `Depot` injectors, and the bodies of `refreshOffsets`. They read the volatile config, the volatile immutable membership snapshot and that simulator's own data. The only mutable state is `DepotGroupEngine.LAST_OFFSET` (a `ConcurrentHashMap`, one writer per depot) which exists purely so the GUI can show a number — the simulation never reads it back. |
+| **Server** | Store mutations, snapshot publishes, packet building, the SERVER_STARTED / SERVER_STOPPED lifecycle, and the fan-out/fan-in around `simulator.run`. |
+| **Client** | The four screens and `ClientDepotGroups`, replaced wholesale by the sync and cleared on disconnect. Route duplication happens entirely on the client thread and leaves as one MTR packet. |
+| **Store executor** | Unchanged: the new JSON sections are written by the existing debounced writer. |
+
+### H) Known limitations / gaps
+
+- **Not compiled or in-game tested** (no-Gradle rule). Every MTR member used was
+  javap-verified against `FABRIC-4.0.1+1.20.4`. Compile-risk spots worth a look: the
+  `@Redirect` handler signature `(Siding, long) -> boolean` on a target owned by
+  `Depot`, the `@Unique` instance field on a mixin that also `extends DepotSchema`, and
+  `for (long id : Long2ObjectOpenHashMap.keySet())` in `refreshOffsets`.
+- **The stagger is per depot, not per siding.** All of a depot's sidings share the shift,
+  which is exactly "this depot dispatches later than that one". Two trains of the SAME
+  depot still leave on MTR's own interval — that is what the interval means.
+- **Depots whose interval is not derivable are not staggered**: real-time-timetable
+  depots, continuous-movement modes and depots with no frequency set. They are shown in
+  the GUI with "shift at next generation" and never get a number, which is honest but
+  indistinguishable from "not generated yet". A dedicated "not derivable" state would
+  need another wire field.
+- **A frequency change does not re-stagger by itself** — the offset is recomputed from
+  the new frequency the next time departures are written, which is what MTR does with
+  the departures anyway.
+- **Feature 2 on a multi-depot grouped stop.** `effectiveStopPlatformId` still reads the
+  shared per-group choice (Feature 2's stop walk has no depot to key on), so with two
+  depots picking different members, the second depot's dwell segments fall through the
+  monotonic matcher and keep the platform's own default dwell. Pre-existing shape,
+  newly systematic; fixing it means threading the depot through `DwellOverrideEngine`,
+  which is another feature's code.
+- **Duplicate line does not copy depot assignment, and cannot** — a depot's route list
+  lives on the depot; assigning the copy would change that depot's timetable behind
+  Thomas's back. The screen says so.
+- **Duplicating relies on the dashboard's client data**, so a stop whose platform is not
+  in `platformIdMap` is skipped (reported in the result line), and a client that has
+  never opened the dashboard sees an empty list.
+- **No confirmation dialog on Duplicate** — pressing it twice makes two copies. They are
+  deletable from MTR's own Routes tab.
+- **The "Tools…" button is client-toggled only**: it appears even when
+  `depotGroups.enabled` is false on the server, in which case the group list syncs empty
+  and edits are refused (same shape as the other addon buttons).
+- A depot may be in **one group only**; the C2S handler refuses the second and the edit
+  screen greys the row. Overlapping groups would fight over one depot's offset.
+- **A group of one staggers nothing** (offset 0) — kept storable so a group can be built
+  up over two edits.
+
+### I) Files
+
+**New:** `mtraddon/{DepotGroup,DepotGroupEngine,DepotGroupNetworking}.java`,
+`client/mtraddon/{ClientDepotGroups,DepotGroupsScreen,DepotGroupEditScreen,
+DuplicateLineScreen,DispatchToolsScreen}.java`.
+
+**Modified (additive only):**
+`mtraddon/AddonServerConfig.java` (new `depotGroups` section + clamps),
+`mtraddon/AddonStore.java` (the `depotGroups` section, `platformGroupRuntime
+.choiceByDepot`, load/save/view/put/remove),
+`mtraddon/AddonSnapshots.java` (`depotGroups()` + `publishDepotGroups`),
+`mtraddon/AddonInit.java` (receiver registration, join sync, startup offset apply,
+SERVER_STOPPED clear),
+`mtraddon/PlatformGroupEngine.java` (per-depot offset in the pick, the per-depot
+applied-choice map and its key helpers, three-arg `seedRuntime`),
+`mtraddon/analytics/AnalyticsRecorder.java` (one new public method + two constants;
+nothing existing changed),
+`mixin/DepotMixin.java` (a `@Unique` field, a HEAD `@Inject` and a `@Redirect`; the two
+existing handlers and their documented ordering are untouched),
+`client/mtraddon/{AddonClientInit,AddonClientConfig}.java`,
+`assets/station_announcer/lang/en_us.json` (+33 keys).
+
+**Unchanged on purpose:** `station_announcer.mixins.json` (no new mixin classes — both
+injectors live in the already-registered `DepotMixin`), `AddonNetworking`,
+`DwellOverrideEngine`, `StopOverlayEngine`, `DisruptionNetworking`, the dispatch web
+layer, the analytics event pipeline and every renderer.

@@ -73,6 +73,10 @@ public final class AnalyticsRecorder {
     private static final long FREQUENCY_BASE_MILLIS = 14_400_000L;
     /** A nominal MTR day, before {@code getGameMillisPerDay()} scaling. */
     private static final long MILLIS_PER_NOMINAL_DAY = 86_400_000L;
+    /** One nominal hour — the slot {@code generatePlatformDirectionsAndWriteDeparturesToSidings} fills per frequency. */
+    private static final long MILLIS_PER_NOMINAL_HOUR = 3_600_000L;
+    /** MTR builds departures for 24 nominal hours per day. */
+    private static final int HOURS_PER_DAY = 24;
     /** How long a route's derived scheduled headway is reused before recomputing. */
     private static final long HEADWAY_CACHE_MILLIS = 60_000;
     /** Departure attempts arrive every tick; a bigger gap means the vehicle left and came back. */
@@ -433,6 +437,67 @@ public final class AnalyticsRecorder {
         long headway = departuresPerMillis > 0 ? Math.round(1 / departuresPerMillis) : 0;
         HEADWAY_CACHE.put(routeId, new long[]{now, headway});
         return headway;
+    }
+
+    /**
+     * <b>Shared frequency math (added for the depot-group departure stagger).</b> One
+     * depot's mean scheduled departure interval, in real simulation milliseconds — i.e.
+     * "how often this depot dispatches a train".
+     *
+     * <p>It lives here rather than in a second copy because it is the SAME reversal of
+     * {@code Depot.generatePlatformDirectionsAndWriteDeparturesToSidings} that
+     * {@link #scheduledHeadwayMillis} already performs, and the two constants it needs
+     * ({@link #FREQUENCY_BASE_MILLIS}, {@link #MILLIS_PER_NOMINAL_DAY}) must not be
+     * duplicated. The difference: that method pools every depot serving a ROUTE, this one
+     * answers for a single DEPOT.</p>
+     *
+     * <p>Derivation, straight off the 4.0.1 bytecode: for each of the 24 nominal hours the
+     * depot emits departures every {@code FREQUENCY_BASE_MILLIS / getFrequency(hour)}
+     * nominal millis (the hour index is the real hour when the daylight cycle runs, and the
+     * current hour otherwise — mirrored here), so
+     * {@code departuresPerNominalDay = Σ freq(hour) × MILLIS_PER_NOMINAL_HOUR /
+     * FREQUENCY_BASE_MILLIS}. Departure values are then mapped onto real time by
+     * {@code × getGameMillisPerDay() / MILLIS_PER_NOMINAL_DAY}, so the mean REAL interval
+     * is simply {@code getGameMillisPerDay() / departuresPerNominalDay}. For a depot whose
+     * frequency is the same all day this is exactly the single-hour formula above.</p>
+     *
+     * <p>Returns {@code 0} — "not derivable" — for real-time-timetable depots, for
+     * continuous-movement transport modes (cable cars depart every
+     * {@code CONTINUOUS_MOVEMENT_FREQUENCY} ms per siding, not by frequency) and when no
+     * frequency is set at all. Callers must treat 0 as "do not stagger".</p>
+     *
+     * <p><b>Thread:</b> the SIMULATOR thread that owns {@code simulator} — it reads that
+     * simulator's own data only. Allocation-free; 24 {@code getFrequency} reads.</p>
+     */
+    public static long depotDepartureIntervalMillis(Simulator simulator, Depot depot) {
+        if (simulator == null || depot == null || depot.getUseRealTime()
+                || depot.getTransportMode().continuousMovement) {
+            return 0;
+        }
+        long gameMillisPerDay = simulator.getGameMillisPerDay();
+        if (gameMillisPerDay <= 0) {
+            return 0;
+        }
+        // Mirrors MTR's own hour selection inside the departure loop.
+        boolean timeMoving = simulator.isTimeMoving();
+        int currentHour = simulator.getHour();
+        long frequencySum = 0;
+        for (int i = 0; i < HOURS_PER_DAY; i++) {
+            long frequency = depot.getFrequency(timeMoving ? i : currentHour);
+            if (frequency > 0) {
+                frequencySum += frequency;
+            }
+        }
+        if (frequencySum <= 0) {
+            return 0;
+        }
+        double departuresPerNominalDay =
+                (double) frequencySum * MILLIS_PER_NOMINAL_HOUR / FREQUENCY_BASE_MILLIS;
+        if (departuresPerNominalDay <= 0) {
+            return 0;
+        }
+        long interval = Math.round(gameMillisPerDay / departuresPerNominalDay);
+        return interval > 0 ? interval : 0;
     }
 
     // ------------------------------------------------------------- writer thread ----

@@ -2,6 +2,7 @@ package com.stationannouncer.client.mtraddon;
 
 import com.stationannouncer.StationAnnouncer;
 import com.stationannouncer.mtraddon.AddonNetworking;
+import com.stationannouncer.mtraddon.DepotGroupNetworking;
 import com.stationannouncer.mtraddon.LiftDoorSides;
 import com.stationannouncer.mtraddon.disruption.DisruptionNetworking;
 import net.fabricmc.api.EnvType;
@@ -121,6 +122,7 @@ public final class AddonClientInit {
             ClientDispatchInfo.clear();
             ClientDisruptions.clear();
             ClientStopChanges.clear();
+            ClientDepotGroups.clear();
         });
 
         // Server → client dispatch-availability sync (join only; one int).
@@ -139,6 +141,8 @@ public final class AddonClientInit {
         registerDispatchDashboardButton();
         registerDisruptionSync();
         registerDisruptionsDashboardButton();
+        registerDepotGroupSync();
+        registerToolsDashboardButton();
         DrivingHud.register(); // Feature 4 — driving HUD (registers its own disconnect cleanup)
 
         ScreenEvents.AFTER_INIT.register((client, screen, scaledWidth, scaledHeight) -> {
@@ -299,6 +303,77 @@ public final class AddonClientInit {
             Screens.getButtons(screen).add(ButtonWidget.builder(
                             Text.translatable("gui.station_announcer.disruptions.button"),
                             button -> client.setScreen(new DisruptionsScreen(screen)))
+                    .dimensions(hostButton.getX() + hostButton.getWidth() + 2, hostButton.getY(),
+                            buttonWidth, hostButton.getHeight())
+                    .build());
+        });
+    }
+
+    // ------------------------------- Depot groups + line tools (dashboard button)
+
+    /** Server → client depot-group sync (join + after every edit and offset refresh). */
+    private static void registerDepotGroupSync() {
+        ClientPlayNetworking.registerGlobalReceiver(DepotGroupNetworking.DEPOT_GROUPS_S2C,
+                (client, handler, buf, responseSender) -> {
+                    int groupCount = buf.readVarInt();
+                    if (groupCount < 0 || groupCount > DepotGroupNetworking.MAX_GROUPS) {
+                        return;
+                    }
+                    List<ClientDepotGroups.Group> groups = new ArrayList<>(groupCount);
+                    for (int i = 0; i < groupCount; i++) {
+                        long id = buf.readLong();
+                        String name = buf.readString(DepotGroupNetworking.MAX_NAME_LENGTH);
+                        int memberCount = buf.readVarInt();
+                        if (memberCount < 0 || memberCount > DepotGroupNetworking.MAX_DEPOTS) {
+                            return;
+                        }
+                        List<ClientDepotGroups.Member> members = new ArrayList<>(memberCount);
+                        for (int j = 0; j < memberCount; j++) {
+                            long depotId = buf.readLong();
+                            int offsetMillis = buf.readVarInt(); // -1 = not computed yet
+                            members.add(new ClientDepotGroups.Member(depotId, offsetMillis));
+                        }
+                        groups.add(new ClientDepotGroups.Group(id, name, List.copyOf(members)));
+                    }
+                    client.execute(() -> ClientDepotGroups.replace(groups));
+                });
+    }
+
+    /**
+     * Adds a "Tools…" button to MTR's dashboard for the addon's line/depot tools
+     * (duplicate a line, depot groups). It splits MTR's own Options button the same way
+     * the addon's "Dispatch" and "Disruptions" buttons split the two map rows beside it,
+     * so MTR's layout keeps working and {@code DashboardScreen} is never restructured.
+     * One button, not two, because those two rows are the only splittable space left.
+     */
+    private static void registerToolsDashboardButton() {
+        ScreenEvents.AFTER_INIT.register((client, screen, scaledWidth, scaledHeight) -> {
+            if (!(screen instanceof DashboardScreen) || !AddonClientConfig.get().showToolsButton) {
+                return;
+            }
+            if (!MinecraftClientData.hasPermission()) {
+                return;
+            }
+            // "Options..." is a vanilla key, so the label is always resolvable.
+            String optionsLabel = Text.translatable("menu.options").getString();
+            ClickableWidget hostButton = null;
+            for (ClickableWidget widget : Screens.getButtons(screen)) {
+                if (widget instanceof ButtonWidget && optionsLabel.equals(widget.getMessage().getString())) {
+                    hostButton = widget;
+                    break;
+                }
+            }
+            if (hostButton == null) {
+                return; // MTR layout changed — skip rather than overlap
+            }
+            int buttonWidth = Math.min(52, hostButton.getWidth() / 2);
+            if (buttonWidth < 34) {
+                return; // row too cramped to split
+            }
+            hostButton.setWidth(hostButton.getWidth() - buttonWidth - 2);
+            Screens.getButtons(screen).add(ButtonWidget.builder(
+                            Text.translatable("gui.station_announcer.tools.button"),
+                            button -> client.setScreen(new DispatchToolsScreen(screen)))
                     .dimensions(hostButton.getX() + hostButton.getWidth() + 2, hostButton.getY(),
                             buttonWidth, hostButton.getHeight())
                     .build());

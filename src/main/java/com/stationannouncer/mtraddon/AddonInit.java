@@ -43,6 +43,7 @@ public final class AddonInit {
     public static void register() {
         AddonNetworking.registerServerReceivers();
         DisruptionNetworking.registerServerReceivers();
+        DepotGroupNetworking.registerServerReceivers();
         AnalyticsCommand.register();
 
         ServerLifecycleEvents.SERVER_STARTED.register(server -> {
@@ -56,6 +57,12 @@ public final class AddonInit {
             // MTR (our dependency, so it initialized and registered first) has already
             // constructed Main by now; explain in the log when the dispatch UI is absent.
             DispatchWebSetup.logAvailability();
+            // …which also means MTR's depots already wrote today's departures BEFORE the
+            // store above was read, so the depot-group stagger would be missing until
+            // something regenerated them. Re-write the grouped depots' timetables once,
+            // on their own simulator threads. No-op when the feature is off or nothing is
+            // grouped.
+            DepotGroupEngine.refreshOffsets(server, true);
         });
         ServerLifecycleEvents.SERVER_STOPPING.register(server -> {
             AddonStore.flush();
@@ -76,6 +83,7 @@ public final class AddonInit {
             DoorObstructionEngine.clearRuntimeState();
             StopOverlayEngine.clearRuntimeState();
             DisruptionBroadcaster.clearRuntimeState();
+            DepotGroupEngine.clearRuntimeState();
             lastHoldState = Set.of();
             lastDoorObstructions = Set.of();
             holdStateCountdown = 0;
@@ -126,6 +134,7 @@ public final class AddonInit {
             AddonNetworking.syncDispatchInfoTo(sender);
             DisruptionNetworking.syncStopChangesTo(sender);
             DisruptionNetworking.syncDisruptionsTo(sender);
+            DepotGroupNetworking.syncDepotGroupsTo(sender);
         });
 
         StationAnnouncer.LOGGER.info("MTR dispatch addon initialized");

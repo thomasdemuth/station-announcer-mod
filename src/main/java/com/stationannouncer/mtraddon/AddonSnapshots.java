@@ -118,6 +118,40 @@ public final class AddonSnapshots {
         PlatformGroupEngine.pruneRuntime(java.util.Set.copyOf(groups.keySet()));
     }
 
+    // ------------------------------------------------------- depot groups
+
+    /**
+     * Depot-group membership flattened for the simulator threads: depot id →
+     * {@code {offsetSlot, groupSize}}. A depot that is in no group is simply absent, so
+     * the departure hook's whole cost for an ungrouped depot is one {@code get(long)}
+     * that returns null. The array is never mutated after publish.
+     */
+    private static volatile Long2ObjectOpenHashMap<int[]> depotGroups = new Long2ObjectOpenHashMap<>();
+
+    /** Current depot-group membership keyed by depot id. Read-only. */
+    public static Long2ObjectOpenHashMap<int[]> depotGroups() {
+        return depotGroups;
+    }
+
+    /**
+     * Server thread only: rebuild the published membership map from the store's groups.
+     * A depot listed in two groups keeps its FIRST membership (iteration order of the
+     * store's LinkedHashMap, i.e. creation order) — the C2S handler already refuses to
+     * create the second one, so this is only a defensive rule for hand-edited files.
+     */
+    static void publishDepotGroups(Map<Long, DepotGroup> groups) {
+        Long2ObjectOpenHashMap<int[]> snapshot = new Long2ObjectOpenHashMap<>(Math.max(1, groups.size() * 2));
+        groups.forEach((id, group) -> {
+            long[] members = group.depotIds();
+            for (int i = 0; i < members.length; i++) {
+                if (members[i] != 0 && !snapshot.containsKey(members[i])) {
+                    snapshot.put(members[i], new int[]{i, members.length});
+                }
+            }
+        });
+        depotGroups = snapshot;
+    }
+
     // ------------------------------------- Feature 6a: temporary stop changes
 
     /**

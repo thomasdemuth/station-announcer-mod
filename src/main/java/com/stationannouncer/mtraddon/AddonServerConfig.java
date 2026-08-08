@@ -51,6 +51,30 @@ public class AddonServerConfig {
     /** Feature 6b — service disruptions with automatic PA and sign broadcasting. */
     public Disruptions disruptions = new Disruptions();
 
+    /** Depot groups — grouped depots stagger their departures instead of dispatching together. */
+    public DepotGroups depotGroups = new DepotGroups();
+
+    public static class DepotGroups {
+        /**
+         * Master switch. When false the departure-stagger hook returns 0 on a single
+         * field read (MTR's timetable is written untouched), group edits are refused
+         * and the S2C sync sends an empty list. Turning it off leaves the offsets
+         * already written into the sidings' departure lists in place until the next
+         * depot regeneration — the timetable is baked, the same rule as dwell
+         * overrides and platform groups.
+         */
+        public boolean enabled = true;
+
+        /** Maximum number of stored depot groups. Clamped 1–64. */
+        public int maxGroups = 16;
+
+        /** Maximum member depots per group. Clamped 2–32. */
+        public int maxDepotsPerGroup = 8;
+
+        /** Maximum group name length. Clamped 1–64. */
+        public int maxNameLength = 48;
+    }
+
     public static class StopChanges {
         /**
          * Master switch for the temporary stop overlay. When false the two Depot
@@ -302,6 +326,12 @@ public class AddonServerConfig {
         if (disruptions == null) {
             disruptions = new Disruptions();
         }
+        if (depotGroups == null) {
+            depotGroups = new DepotGroups();
+        }
+        depotGroups.maxGroups = Math.max(1, Math.min(64, depotGroups.maxGroups));
+        depotGroups.maxDepotsPerGroup = Math.max(2, Math.min(32, depotGroups.maxDepotsPerGroup));
+        depotGroups.maxNameLength = Math.max(1, Math.min(64, depotGroups.maxNameLength));
         stopChanges.maxPerRoute = Math.max(1, Math.min(64, stopChanges.maxPerRoute));
         stopChanges.maxDurationMinutes = Math.max(1, Math.min(525_600, stopChanges.maxDurationMinutes));
         disruptions.announceIntervalMinutes = Math.max(1, Math.min(120, disruptions.announceIntervalMinutes));

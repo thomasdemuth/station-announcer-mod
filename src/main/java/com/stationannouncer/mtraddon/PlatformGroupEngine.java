@@ -76,8 +76,22 @@ public final class PlatformGroupEngine {
      * actually targets). Re-applied by the writeRouteCache hook; also what
      * Feature 2 uses to attribute dwell segments. Persisted so a restarted
      * server keeps {@code platformsInRoute} consistent with the saved path.
+     *
+     * <p>With several depots on one route this is the LAST generated depot's
+     * choice, which is why {@link #APPLIED_CHOICE_BY_DEPOT} exists alongside it.
+     * It is kept because {@link #effectiveStopPlatformId} (Feature 2's dwell
+     * attribution) has no depot in hand — see that method's note.</p>
      */
     private static final ConcurrentHashMap<String, Long> APPLIED_CHOICE = new ConcurrentHashMap<>();
+
+    /**
+     * Per-depot applied choices, keyed {@code "<depotId>|<routeId>:<stopIndex>"}.
+     * Added with per-depot rotation (2026-08-08): two depots on one route now
+     * deliberately pick DIFFERENT members, so the {@code writeRouteCache} re-apply
+     * must use the choice of the depot whose cache is being rebuilt, not whichever
+     * depot generated last. Persisted next to the shared map.
+     */
+    private static final ConcurrentHashMap<String, Long> APPLIED_CHOICE_BY_DEPOT = new ConcurrentHashMap<>();
 
     private static volatile boolean warnedWalkMismatch;
 
@@ -99,6 +113,29 @@ public final class PlatformGroupEngine {
 
     public static String groupKey(long routeId, int stopIndex) {
         return routeId + ":" + stopIndex;
+    }
+
+    /** {@code "<depotId>|<routeId>:<stopIndex>"} — the per-depot applied-choice key. */
+    public static String depotChoiceKey(long depotId, String groupKey) {
+        return depotId + "|" + groupKey;
+    }
+
+    /** The group key inside a per-depot choice key, or null when malformed. */
+    public static String parseDepotChoiceKey(String key) {
+        if (key == null) {
+            return null;
+        }
+        int split = key.indexOf('|');
+        if (split <= 0 || split == key.length() - 1) {
+            return null;
+        }
+        try {
+            Long.parseLong(key.substring(0, split));
+        } catch (NumberFormatException e) {
+            return null;
+        }
+        String groupKey = key.substring(split + 1);
+        return parseGroupKey(groupKey) == null ? null : groupKey;
     }
 
     /** Parses {@code "<routeId>:<stopIndex>"}; null when malformed or out of range. */
@@ -180,6 +217,15 @@ public final class PlatformGroupEngine {
      * the generated path — the applied group choice when one exists, else the
      * original. {@link DwellOverrideEngine} matches path dwell segments (whose
      * {@code savedRailBaseId} is the swapped platform) through this.
+     *
+     * <p><b>Multi-depot caveat (pre-existing, now more visible):</b> this reads the
+     * SHARED per-group entry, i.e. the last generated depot's choice — the caller
+     * ({@code DwellOverrideEngine.buildCollapsedStops}) walks routes, not depots, so
+     * there is no depot to key on. With per-depot rotation two depots on one route
+     * deliberately pick different members, so the OTHER depot's dwell segments fall
+     * through Feature 2's monotonic matcher and keep the platform's own default
+     * dwell. Documented rather than fixed: fixing it means threading the depot
+     * through Feature 2's stop walk, which is another feature's code.</p>
      */
     public static long effectiveStopPlatformId(long routeId, int indexInRoute, long originalPlatformId) {
         if (!AddonServerConfig.get().dynamicPlatforms.enabled || APPLIED_CHOICE.isEmpty()) {
@@ -192,11 +238,14 @@ public final class PlatformGroupEngine {
     // ------------------------------------------------------------ runtime state
 
     /** Server thread (SERVER_STARTED): seed the persisted counters/choices from the store. */
-    public static void seedRuntime(Map<String, Integer> rotation, Map<String, Long> appliedChoice) {
+    public static void seedRuntime(Map<String, Integer> rotation, Map<String, Long> appliedChoice,
+                                   Map<String, Long> appliedChoiceByDepot) {
         ROTATION.clear();
         ROTATION.putAll(rotation);
         APPLIED_CHOICE.clear();
         APPLIED_CHOICE.putAll(appliedChoice);
+        APPLIED_CHOICE_BY_DEPOT.clear();
+        APPLIED_CHOICE_BY_DEPOT.putAll(appliedChoiceByDepot);
     }
 
     /** Store save executor: copies safe to serialize (weakly consistent is fine). */
@@ -208,16 +257,26 @@ public final class PlatformGroupEngine {
         return new HashMap<>(APPLIED_CHOICE);
     }
 
+    public static Map<String, Long> appliedChoiceByDepotSnapshot() {
+        return new HashMap<>(APPLIED_CHOICE_BY_DEPOT);
+    }
+
     /** Server thread (snapshot republish): drop runtime entries for deleted groups. */
     public static void pruneRuntime(Set<String> validKeys) {
         ROTATION.keySet().retainAll(validKeys);
         APPLIED_CHOICE.keySet().retainAll(validKeys);
+        // The per-depot map is keyed "<depotId>|<groupKey>", so prune by the suffix.
+        APPLIED_CHOICE_BY_DEPOT.keySet().removeIf(key -> {
+            String groupKey = parseDepotChoiceKey(key);
+            return groupKey == null || !validKeys.contains(groupKey);
+        });
     }
 
     /** SERVER_STOPPED. */
     public static void clearRuntimeState() {
         ROTATION.clear();
         APPLIED_CHOICE.clear();
+        APPLIED_CHOICE_BY_DEPOT.clear();
         warnedWalkMismatch = false;
     }
 
@@ -274,6 +333,15 @@ public final class PlatformGroupEngine {
      * is skipped when it would make two consecutive collapsed stops the same
      * platform (a platform→itself path finder). Invalid or colliding groups
      * fall back to the original platform.</p>
+     *
+     * <p><b>Per-depot rotation (2026-08-08).</b> The pick is
+     * {@code (counter + depotOffset) % n} rather than {@code counter % n}, where
+     * {@code depotOffset} is this depot's stable index among the depots serving
+     * that route (see {@link #depotOffsetForRoute}). Two depots on one route then
+     * always land on different members whenever the group has at least as many
+     * members as there are depots, instead of both following the same shared
+     * counter. A route served by a single depot gets offset 0, so its behaviour is
+     * bit-for-bit what it was before.</p>
      */
     private static void applyGroups(Depot depot, Data data, ObjectArrayList<?> platformsInRoute,
                                     Long2ObjectOpenHashMap<long[][]> groups, boolean advanceRotation) {
@@ -291,6 +359,9 @@ public final class PlatformGroupEngine {
 
         boolean runtimeChanged = false;
         long previousEffectiveId = 0;
+        // route id → this depot's offset among the depots serving it; computed at most
+        // once per route per generation (a depot has a handful of routes).
+        Map<Long, Integer> depotOffsets = new HashMap<>();
         for (int k = 0; k < walk.size(); k++) {
             StopRef stop = walk.get(k);
             PlatformRouteDetailsAccessor entry = (PlatformRouteDetailsAccessor) platformsInRoute.get(k);
@@ -315,25 +386,37 @@ public final class PlatformGroupEngine {
             long[] members = membersFor(groups, stop);
             if (members != null) {
                 String key = groupKey(stop.routeId, stop.indexInRoute);
+                String depotKey = depotChoiceKey(depot.getId(), key);
                 ObjectArrayList<Platform> valid = validMembers(data, stop.original, members);
                 if (advanceRotation) {
                     if (valid.isEmpty()) {
                         // Group configured but nothing usable: fall back + forget any stale choice.
                         runtimeChanged |= APPLIED_CHOICE.remove(key) != null;
+                        runtimeChanged |= APPLIED_CHOICE_BY_DEPOT.remove(depotKey) != null;
                     } else {
                         int counter = ROTATION.merge(key, 1, Integer::sum);
-                        Platform chosen = pickNonColliding(valid, counter - 1, previousEffectiveId, nextOriginalId);
+                        int depotOffset = depotOffsets.computeIfAbsent(stop.routeId,
+                                routeId -> depotOffsetForRoute(data, depot, routeId));
+                        Platform chosen = pickNonColliding(valid, counter - 1 + depotOffset,
+                                previousEffectiveId, nextOriginalId);
                         if (chosen != null) {
                             target = chosen;
                             Long previous = APPLIED_CHOICE.put(key, chosen.getId());
+                            APPLIED_CHOICE_BY_DEPOT.put(depotKey, chosen.getId());
                             runtimeChanged |= previous == null || previous != chosen.getId();
                         } else {
                             runtimeChanged |= APPLIED_CHOICE.remove(key) != null;
+                            runtimeChanged |= APPLIED_CHOICE_BY_DEPOT.remove(depotKey) != null;
                         }
                         runtimeChanged = true; // the counter advanced either way
                     }
                 } else {
-                    Long chosenId = APPLIED_CHOICE.get(key);
+                    // Re-apply THIS depot's own choice; the shared entry is only the
+                    // fallback for data files written before per-depot rotation.
+                    Long chosenId = APPLIED_CHOICE_BY_DEPOT.get(depotKey);
+                    if (chosenId == null) {
+                        chosenId = APPLIED_CHOICE.get(key);
+                    }
                     if (chosenId != null) {
                         for (int v = 0; v < valid.size(); v++) {
                             Platform candidate = valid.get(v);
@@ -358,6 +441,43 @@ public final class PlatformGroupEngine {
             // Thread-safe debounced persistence (AtomicBoolean + executor); never file I/O here.
             AddonStore.requestSaveFromEngine();
         }
+    }
+
+    /**
+     * This depot's stable index among the depots that serve {@code routeId}: the number
+     * of OTHER serving depots whose id sorts before ours. Sorting by MTR's own persisted
+     * depot ids (random longs, assigned once at creation) makes the index deterministic
+     * and stable across restarts and across generation order — deliberately NOT the
+     * iteration order of {@code simulator.depots}, which is an {@code ObjectArraySet} and
+     * therefore insertion-ordered, i.e. load-order dependent.
+     *
+     * <p>Result: with two depots on a route and a group of two, one depot takes member A
+     * and the other member B, every generation. With more depots than members they wrap,
+     * which is the best that can be done — the group simply is not big enough.</p>
+     *
+     * <p>Cost: one pass over {@code simulator.depots} (a handful of entries) per route per
+     * generation, memoized by the caller. Runs on the simulator thread, reading that
+     * simulator's own data.</p>
+     */
+    private static int depotOffsetForRoute(Data data, Depot depot, long routeId) {
+        if (!(data instanceof Simulator simulator)) {
+            return 0;
+        }
+        long thisId = depot.getId();
+        int offset = 0;
+        for (Depot other : simulator.depots) {
+            if (other == null || other.getId() >= thisId) {
+                continue;
+            }
+            for (int i = 0; i < other.routes.size(); i++) {
+                Route route = other.routes.get(i);
+                if (route != null && route.getId() == routeId) {
+                    offset++;
+                    break;
+                }
+            }
+        }
+        return offset;
     }
 
     private static long[] membersFor(Long2ObjectOpenHashMap<long[][]> groups, StopRef stop) {

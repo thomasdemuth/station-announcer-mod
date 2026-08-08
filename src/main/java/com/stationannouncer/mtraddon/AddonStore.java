@@ -73,6 +73,8 @@ public final class AddonStore {
     private static final Map<String, long[]> addedStops = new LinkedHashMap<>();
     /** Feature 6b: disruption id → record. */
     private static final Map<Long, Disruption> disruptions = new LinkedHashMap<>();
+    /** Depot groups: group id → the group (name + member depot ids in offset order). */
+    private static final Map<Long, DepotGroup> depotGroups = new LinkedHashMap<>();
 
     /**
      * Lock-free "is there anything to do" state for the once-a-second server
@@ -103,6 +105,8 @@ public final class AddonStore {
             disabledStops.clear();
             addedStops.clear();
             disruptions.clear();
+            depotGroups.clear();
+            DepotGroupEngine.clearRuntimeState();
             // A world without a data file must not inherit a previous world's
             // rotation/choice state (SERVER_STOPPED normally clears it, but not
             // after a crash).
@@ -121,6 +125,7 @@ public final class AddonStore {
                     readDisabledStops(root.getAsJsonObject("disabledStops"));
                     readAddedStops(root.getAsJsonObject("addedStops"));
                     readDisruptions(root.getAsJsonObject("disruptions"));
+                    readDepotGroups(root.getAsJsonObject("depotGroups"));
                 }
             } catch (Exception e) {
                 StationAnnouncer.LOGGER.warn("Could not read {}, starting with empty addon data", path, e);
@@ -130,9 +135,10 @@ public final class AddonStore {
         publishDwell();
         publishGroups();
         publishStopChanges();
-        StationAnnouncer.LOGGER.info("Addon store loaded ({} hold rules, {} platforms with dwell overrides, {} lift door configs, {} platform groups, {} temporary stop changes, {} disruptions)",
+        publishDepotGroups();
+        StationAnnouncer.LOGGER.info("Addon store loaded ({} hold rules, {} platforms with dwell overrides, {} lift door configs, {} platform groups, {} temporary stop changes, {} disruptions, {} depot groups)",
                 holdRuleCount(), dwellOverridePlatformCount(), liftDoorCount(), platformGroupCount(),
-                stopChangeCount(), disruptionCount);
+                stopChangeCount(), disruptionCount, depotGroupCount());
     }
 
     /** SERVER_STOPPING: write the current state right now, on the calling thread. */
@@ -293,6 +299,67 @@ public final class AddonStore {
      * {@link #saveNow()}.
      */
     public static void requestSaveFromEngine() {
+        markDirty();
+    }
+
+    // ------------------------------------------------------- depot groups
+
+    public static int depotGroupCount() {
+        synchronized (LOCK) {
+            return depotGroups.size();
+        }
+    }
+
+    /** Server thread: a deep copy safe to iterate while building sync packets. */
+    public static Map<Long, DepotGroup> depotGroupsView() {
+        synchronized (LOCK) {
+            Map<Long, DepotGroup> copy = new LinkedHashMap<>(depotGroups.size());
+            depotGroups.forEach((id, group) ->
+                    copy.put(id, new DepotGroup(group.id(), group.name(), group.depotIds().clone())));
+            return copy;
+        }
+    }
+
+    /**
+     * Server thread: create or replace one depot group, then republish + save. A zero id
+     * means "new" and gets the current time (nudged forward on collision so ids stay
+     * unique), mirroring {@link #putDisruption}. Returns the stored record, or null when
+     * the cap was hit.
+     *
+     * <p>Member ids are stored in the order given — that order IS the offset order, so the
+     * GUI must send the list exactly as it displays it.</p>
+     */
+    public static DepotGroup putDepotGroup(DepotGroup group, int maxGroups) {
+        DepotGroup stored;
+        synchronized (LOCK) {
+            long id = group.id();
+            if (id == 0) {
+                if (depotGroups.size() >= maxGroups) {
+                    return null;
+                }
+                id = System.currentTimeMillis();
+                while (depotGroups.containsKey(id)) {
+                    id++;
+                }
+            } else if (!depotGroups.containsKey(id) && depotGroups.size() >= maxGroups) {
+                return null;
+            }
+            stored = new DepotGroup(id, group.name(), group.depotIds().clone());
+            depotGroups.put(id, stored);
+        }
+        publishDepotGroups();
+        markDirty();
+        return stored;
+    }
+
+    /** Server thread: delete a depot group. */
+    public static void removeDepotGroup(long id) {
+        synchronized (LOCK) {
+            if (depotGroups.remove(id) == null) {
+                return;
+            }
+        }
+        publishDepotGroups();
         markDirty();
     }
 
@@ -546,6 +613,37 @@ public final class AddonStore {
         AddonSnapshots.publishPlatformGroups(platformGroupsView());
     }
 
+    private static void publishDepotGroups() {
+        AddonSnapshots.publishDepotGroups(depotGroupsView());
+    }
+
+    private static void readDepotGroups(JsonObject json) {
+        if (json == null) {
+            return;
+        }
+        for (Map.Entry<String, JsonElement> entry : json.entrySet()) {
+            try {
+                long id = Long.parseLong(entry.getKey());
+                JsonObject value = entry.getValue().getAsJsonObject();
+                String name = value.has("name") ? value.get("name").getAsString() : "";
+                JsonArray membersJson = value.getAsJsonArray("depots");
+                long[] members = new long[membersJson == null ? 0 : membersJson.size()];
+                int size = 0;
+                for (int i = 0; i < members.length; i++) {
+                    long depotId = membersJson.get(i).getAsLong();
+                    if (depotId != 0 && !contains(members, size, depotId)) {
+                        members[size++] = depotId;
+                    }
+                }
+                if (size > 0) {
+                    depotGroups.put(id, new DepotGroup(id, name, java.util.Arrays.copyOf(members, size)));
+                }
+            } catch (Exception e) {
+                StationAnnouncer.LOGGER.warn("Skipping malformed depot group '{}'", entry.getKey(), e);
+            }
+        }
+    }
+
     private static void readDwellOverrides(JsonObject overridesJson) {
         if (overridesJson == null) {
             return;
@@ -650,6 +748,7 @@ public final class AddonStore {
     private static void readPlatformGroupRuntime(JsonObject runtimeJson) {
         Map<String, Integer> rotation = new LinkedHashMap<>();
         Map<String, Long> choice = new LinkedHashMap<>();
+        Map<String, Long> choiceByDepot = new LinkedHashMap<>();
         if (runtimeJson != null) {
             try {
                 JsonObject rotationJson = runtimeJson.getAsJsonObject("rotation");
@@ -668,11 +767,22 @@ public final class AddonStore {
                         }
                     }
                 }
+                // "<depotId>|<routeId>:<stopIndex>" → chosen platform id. Absent in files
+                // written before per-depot rotation; the engine then falls back to the
+                // shared "choice" entry, which is exactly the old behaviour.
+                JsonObject byDepotJson = runtimeJson.getAsJsonObject("choiceByDepot");
+                if (byDepotJson != null) {
+                    for (Map.Entry<String, JsonElement> entry : byDepotJson.entrySet()) {
+                        if (PlatformGroupEngine.parseDepotChoiceKey(entry.getKey()) != null) {
+                            choiceByDepot.put(entry.getKey(), entry.getValue().getAsLong());
+                        }
+                    }
+                }
             } catch (Exception e) {
                 StationAnnouncer.LOGGER.warn("Skipping malformed platform group runtime state", e);
             }
         }
-        PlatformGroupEngine.seedRuntime(rotation, choice);
+        PlatformGroupEngine.seedRuntime(rotation, choice, choiceByDepot);
     }
 
     private static void readDisabledStops(JsonObject json) {
@@ -827,6 +937,13 @@ public final class AddonStore {
             JsonObject choiceJson = new JsonObject();
             PlatformGroupEngine.appliedChoiceSnapshot().forEach(choiceJson::addProperty);
             runtimeJson.add("choice", choiceJson);
+            // Per-DEPOT applied choices (added with per-depot rotation, 2026-08-08):
+            // keys are "<depotId>|<routeId>:<stopIndex>". Without these, two depots
+            // sharing a route — which now deliberately pick DIFFERENT members — would
+            // re-apply each other's choice to their route cache after a data sync.
+            JsonObject choiceByDepotJson = new JsonObject();
+            PlatformGroupEngine.appliedChoiceByDepotSnapshot().forEach(choiceByDepotJson::addProperty);
+            runtimeJson.add("choiceByDepot", choiceByDepotJson);
             root.add("platformGroupRuntime", runtimeJson);
             // Feature 6a — temporary stop changes (runtime overlay; the saved
             // routes themselves are never modified).
@@ -862,6 +979,19 @@ public final class AddonStore {
                 disruptionsJson.add(Long.toString(id), entry);
             });
             root.add("disruptions", disruptionsJson);
+            // Depot groups — the "these depots must not dispatch together" sets.
+            JsonObject depotGroupsJson = new JsonObject();
+            depotGroups.forEach((id, group) -> {
+                JsonObject entry = new JsonObject();
+                entry.addProperty("name", group.name());
+                JsonArray membersJson = new JsonArray(group.depotIds().length);
+                for (long depotId : group.depotIds()) {
+                    membersJson.add(depotId);
+                }
+                entry.add("depots", membersJson);
+                depotGroupsJson.add(Long.toString(id), entry);
+            });
+            root.add("depotGroups", depotGroupsJson);
             json = GSON.toJson(root);
         }
         try {

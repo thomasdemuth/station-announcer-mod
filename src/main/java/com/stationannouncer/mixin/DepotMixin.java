@@ -1,17 +1,21 @@
 package com.stationannouncer.mixin;
 
+import com.stationannouncer.mtraddon.DepotGroupEngine;
 import com.stationannouncer.mtraddon.PlatformGroupEngine;
 import com.stationannouncer.mtraddon.disruption.StopOverlayEngine;
 import org.mtr.core.data.Data;
 import org.mtr.core.data.Depot;
+import org.mtr.core.data.Siding;
 import org.mtr.core.data.TransportMode;
 import org.mtr.core.generated.data.DepotSchema;
 import org.mtr.libraries.it.unimi.dsi.fastutil.objects.ObjectArrayList;
 import org.spongepowered.asm.mixin.Final;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Shadow;
+import org.spongepowered.asm.mixin.Unique;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
+import org.spongepowered.asm.mixin.injection.Redirect;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
 /**
@@ -38,6 +42,12 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
  *       Runs on client Data too — the engine bails unless
  *       {@code data instanceof Simulator}.</li>
  * </ul>
+ *
+ * <p>Plus, since 2026-08-08, two hooks into
+ * {@code generatePlatformDirectionsAndWriteDeparturesToSidings()V} (public,
+ * bytecode-verified) that phase-shift a grouped depot's whole departure timetable
+ * so depots in one <em>depot group</em> never dispatch together — see
+ * {@link DepotGroupEngine} for the offset derivation and the wrap rule.</p>
  *
  * <p><b>Why a mixin:</b> both members are private/have no events, and the swap
  * must land between the route-cache build and the finder-chain build — there is
@@ -105,5 +115,60 @@ public abstract class DepotMixin extends DepotSchema {
     private void stationAnnouncer$reapplyGroupPlatforms(CallbackInfo ci) {
         PlatformGroupEngine.onWriteRouteCache((Depot) (Object) this, data, platformsInRoute);
         StopOverlayEngine.onWriteRouteCache((Depot) (Object) this, data, platformsInRoute);
+    }
+
+    // ------------------------------------------------ depot groups: stagger departures
+
+    /**
+     * The phase offset (millis) added to every departure of the generation pass currently
+     * running, resolved once at HEAD so the redirect below is a field read plus an add
+     * rather than a config + snapshot lookup per departure (a busy depot writes hundreds).
+     * {@code @Unique} instance state on {@code Depot}: a depot belongs to exactly one
+     * simulator, and departures are only ever written from that simulator's thread inside
+     * this one method, so no synchronization is needed.
+     */
+    @Unique
+    private long stationAnnouncer$departureOffsetMillis;
+
+    /**
+     * <b>What:</b> resolve this depot's departure phase offset before MTR builds its
+     * departure list. <b>Why here:</b> the offset depends on the depot's frequencies and
+     * the simulator's game-day length, both of which are only safely readable on this
+     * thread, and computing it once per generation keeps the per-departure redirect O(1).
+     * <b>Thread:</b> simulator (or the server thread with {@code useThreadedSimulation}
+     * off) — this method runs from {@code Depot.init}, {@code Depot.finishGeneratingPath}
+     * and {@code Simulator.setGameTime}, never per tick. <b>Toggle:</b>
+     * {@code depotGroups.enabled}; off, ungrouped, or a group of one → 0.
+     */
+    @Inject(method = "generatePlatformDirectionsAndWriteDeparturesToSidings()V", at = @At("HEAD"))
+    private void stationAnnouncer$computeDepartureOffset(CallbackInfo ci) {
+        stationAnnouncer$departureOffsetMillis = DepotGroupEngine.departureOffsetMillis((Depot) (Object) this, data);
+    }
+
+    /**
+     * <b>What:</b> the single {@code Siding.addDeparture(J)Z} call site inside
+     * {@code generatePlatformDirectionsAndWriteDeparturesToSidings} (bytecode-verified:
+     * exactly one occurrence in the whole 4.0.1 {@code Depot} class, at offset 571), with
+     * the depot's phase offset added to the departure time.
+     *
+     * <p><b>Why a redirect:</b> the departure list is a local {@code LongArrayList} built
+     * inside the method and never exposed, so the only place to shift it is where each
+     * value crosses into a siding. The return value is passed straight through — MTR uses
+     * it to decide whether to advance to the next siding, and that decision is unaffected
+     * because every departure of this depot shifts by the SAME constant (siding
+     * acceptance compares departures against {@code tempReturnTimes}, i.e. other
+     * departures of the same pass).</p>
+     *
+     * <p><b>Thread:</b> as above. <b>Toggle:</b> {@code depotGroups.enabled} — when off,
+     * or for any depot that is not staggered, the offset is 0 and the original value is
+     * handed on untouched.</p>
+     */
+    @Redirect(
+            method = "generatePlatformDirectionsAndWriteDeparturesToSidings()V",
+            at = @At(value = "INVOKE", target = "Lorg/mtr/core/data/Siding;addDeparture(J)Z")
+    )
+    private boolean stationAnnouncer$staggerDeparture(Siding siding, long departureMillis) {
+        long offset = stationAnnouncer$departureOffsetMillis;
+        return siding.addDeparture(offset == 0 ? departureMillis : departureMillis + offset);
     }
 }

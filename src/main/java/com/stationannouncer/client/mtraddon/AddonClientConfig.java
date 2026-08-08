@@ -35,6 +35,9 @@ public class AddonClientConfig {
     /** Show the "Disruptions" button on MTR's dashboard (same permission gating). */
     public boolean showDisruptionsButton = true;
 
+    /** Show the "Tools…" button on MTR's dashboard — duplicate a line, depot groups (same permission gating). */
+    public boolean showToolsButton = true;
+
     // ---- Feature 4: advanced manual driving HUD (all read on the client thread) ----
 
     /** Master toggle for the driving HUD overlay. */
