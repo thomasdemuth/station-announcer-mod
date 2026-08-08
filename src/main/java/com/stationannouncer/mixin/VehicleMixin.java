@@ -2,12 +2,16 @@ package com.stationannouncer.mixin;
 
 import com.stationannouncer.mtraddon.DoorObstructionEngine;
 import com.stationannouncer.mtraddon.HoldRuleEngine;
+import com.stationannouncer.mtraddon.analytics.AnalyticsRecorder;
 import org.mtr.core.data.Data;
+import org.mtr.core.data.Position;
 import org.mtr.core.data.TransportMode;
 import org.mtr.core.data.Vehicle;
 import org.mtr.core.data.VehicleExtraData;
+import org.mtr.core.data.VehiclePosition;
 import org.mtr.core.data.VehicleRidingEntity;
 import org.mtr.core.generated.data.VehicleSchema;
+import org.mtr.libraries.it.unimi.dsi.fastutil.objects.Object2ObjectAVLTreeMap;
 import org.mtr.libraries.it.unimi.dsi.fastutil.objects.ObjectArrayList;
 import org.spongepowered.asm.mixin.Final;
 import org.spongepowered.asm.mixin.Mixin;
@@ -45,6 +49,14 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
  * {@code config/station-announcer-addon.json}; when off (or when no rules exist)
  * the injected code bails out in O(1) with zero allocation.</p>
  *
+ * <p><b>Also hosts the timetable-analytics event sources</b> (toggle:
+ * {@code analytics.enabled}): the platform is captured at the HEAD of {@code startUp},
+ * the DEPARTURE event is emitted at its TAIL (only reached when the call was not
+ * cancelled and only counted when it actually committed), and the ARRIVAL event is
+ * emitted from the single "vehicle came to rest" branch inside {@code simulateMoving}.
+ * See {@link com.stationannouncer.mtraddon.analytics.AnalyticsRecorder} — every one of
+ * those paths bails out on one volatile read when analytics is disabled.</p>
+ *
  * <p>Target verified with javap against MTR FABRIC-4.0.1+1.20.4:
  * {@code public void startUp(long, long)}; {@code vehicleExtraData} is a public
  * final field on {@code Vehicle}; {@code railProgress} and {@code data} are
@@ -64,6 +76,13 @@ public abstract class VehicleMixin extends VehicleSchema {
 
     @Inject(method = "startUp(JJ)V", at = @At("HEAD"), cancellable = true)
     private void stationAnnouncer$holdAtPlatform(long newDepartureIndex, long newSidingDepartureTime, CallbackInfo ci) {
+        // Analytics (toggle: analytics.enabled) — remember WHICH platform this attempt is
+        // leaving before startUp nudges railProgress past the boundary on commit. Done
+        // inside this existing callback rather than as a second HEAD @Inject because the
+        // order of two HEAD callbacks is undefined and a cancel from the other one would
+        // then non-deterministically skip this. O(1) bail-out when analytics is off.
+        AnalyticsRecorder.beforeStartUp(getId(), vehicleExtraData, railProgress, elapsedDwellTime, data);
+
         if (HoldRuleEngine.shouldHold(getId(), vehicleExtraData, railProgress, data)) {
             // Actively re-assert open doors for the held train. Cancelling alone is
             // not enough: stock flow already ran closeDoors() on the FIRST startUp
@@ -87,6 +106,53 @@ public abstract class VehicleMixin extends VehicleSchema {
         if (DoorObstructionEngine.shouldObstructDeparture(getId(), vehicleExtraData, railProgress, data)) {
             ci.cancel();
         }
+    }
+
+    /**
+     * <b>Analytics — DEPARTURE event.</b> The TAIL of {@code startUp} is only reached
+     * when nothing cancelled the call (a hold-rule or door-obstruction cancel returns
+     * from the HEAD callback), and {@code startUp} leaves {@code speed} at zero on the
+     * attempts where the doors are still closing — so "reached here with speed != 0"
+     * is exactly "this train really pulled out of the platform". Verified against the
+     * 4.0.1 bytecode: {@code startUp(JJ)V} has a single RETURN, so TAIL is unambiguous
+     * and {@code defaultRequire: 1} is satisfiable.
+     *
+     * <p><b>Thread:</b> the vehicle's SIMULATOR thread. <b>Toggle:</b>
+     * {@code analytics.enabled} — the recorder returns on one volatile read when off.</p>
+     */
+    @Inject(method = "startUp(JJ)V", at = @At("TAIL"))
+    private void stationAnnouncer$recordDeparture(long newDepartureIndex, long newSidingDepartureTime,
+                                                  CallbackInfo ci) {
+        AnalyticsRecorder.afterStartUp(getId(), speed, data,
+                ((VehicleDeviationAccessor) (Object) this).stationAnnouncer$getDeviation());
+    }
+
+    /**
+     * <b>Analytics — ARRIVAL event.</b> Injected at the one place inside
+     * {@code simulateMoving} where a vehicle comes to rest: MTR clamps
+     * {@code railProgress} to the stopping point, zeroes {@code speed} and calls the
+     * private {@code updateDeviation()} (javap -c: exactly ONE such invoke inside
+     * {@code simulateMoving}, at offset 726, so the injection point is unique). Landing
+     * AFTER that call means the deviation we log is the freshly recomputed one.
+     *
+     * <p><b>Why here:</b> this branch runs only on the tick a train actually stops, so
+     * unlike a TAIL/HEAD hook on the per-tick methods it costs nothing while trains are
+     * moving. The recorder then filters out mid-route signal stops and the run back into
+     * the siding with the shared stopped-at-a-platform test.</p>
+     *
+     * <p><b>Thread:</b> the vehicle's SIMULATOR thread (the same call also runs for
+     * client-side vehicles; the recorder rejects those with its {@code Simulator} check).
+     * <b>Toggle:</b> {@code analytics.enabled}.</p>
+     */
+    @Inject(method = "simulateMoving(JLorg/mtr/libraries/it/unimi/dsi/fastutil/objects/ObjectArrayList;I)V",
+            at = @At(value = "INVOKE", target = "Lorg/mtr/core/data/Vehicle;updateDeviation()V",
+                    shift = At.Shift.AFTER))
+    private void stationAnnouncer$recordArrival(
+            long millisElapsed,
+            ObjectArrayList<Object2ObjectAVLTreeMap<Position, Object2ObjectAVLTreeMap<Position, VehiclePosition>>> vehiclePositions,
+            int currentIndex, CallbackInfo ci) {
+        AnalyticsRecorder.onVehicleStopped(getId(), vehicleExtraData, railProgress, data,
+                ((VehicleDeviationAccessor) (Object) this).stationAnnouncer$getDeviation());
     }
 
     /**

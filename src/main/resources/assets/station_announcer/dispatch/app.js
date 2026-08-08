@@ -13,6 +13,11 @@ const SCHEMA_VERSION = 1;
 const API = "api";
 const DEMO = new URLSearchParams(location.search).get("demo") === "1";
 
+/* How often the analytics aggregate is polled, and ONLY while the Analytics view or the
+ * station heat mode is actually visible. The server recomputes it at most every
+ * analytics.aggregateSeconds (default 30 s), so polling faster buys nothing. */
+const ANALYTICS_POLL_MS = 15000;
+
 /* ---------- state ---------- */
 
 const state = {
@@ -39,6 +44,14 @@ const state = {
 	layers: { speed: true, signals: true, stations: true, trainLabels: true },
 	sort: { k: "route", asc: true },
 	networkBox: null,
+	analytics: {
+		data: null,          // last /api/analytics payload (envelope unwrapped)
+		view: false,         // Analytics overlay visible
+		heat: "off",         // off | dwell | headway — station heat on the track map
+		timer: null,         // poll interval id; null whenever nothing needs the data
+		fetching: false,
+		stationById: new Map(),
+	},
 };
 
 /* ---------- speed colour ramp ---------- */
@@ -108,6 +121,8 @@ async function loadDimension(n) {
 	state.dim = n;
 	state.vehicles.clear();
 	state.signals.clear();
+	setAnalyticsData(null);
+	if (state.analytics.timer) fetchAnalytics();   // different dimension → refetch now
 	state.emaInterval = 0;
 	state.lastServerTime = 0;
 	state.selected = null;
@@ -377,13 +392,21 @@ function drawStatic(dpr) {
 	const v = state.view;
 	const zoomedIn = v.scale > 1.2;
 
-	// station areas
+	// station areas — tinted by the station's own colour, or by the selected heat metric
+	const heat = state.analytics.heat;
 	for (const st of state.stations) {
 		const [x1, y1] = worldToScreen(st.bounds[0], st.bounds[2]);
 		const [x2, y2] = worldToScreen(st.bounds[3] + 1, st.bounds[5] + 1);
-		g.fillStyle = colorHex(st.color) + "1f";
-		g.strokeStyle = colorHex(st.color) + "66";
-		g.lineWidth = 1;
+		const hot = heat !== "off" ? heatColor(heat, state.analytics.stationById.get(st.id)) : null;
+		if (heat !== "off" && !hot) {
+			// heat mode on but this station has no samples in the window: neutral grey
+			g.fillStyle = "#5b698126";
+			g.strokeStyle = "#5b698155";
+		} else {
+			g.fillStyle = (hot || colorHex(st.color)) + (hot ? "4d" : "1f");
+			g.strokeStyle = (hot || colorHex(st.color)) + (hot ? "cc" : "66");
+		}
+		g.lineWidth = hot ? 2 : 1;
 		g.beginPath(); g.roundRect(x1, y1, x2 - x1, y2 - y1, 4); g.fill(); g.stroke();
 	}
 
@@ -432,6 +455,8 @@ function drawStatic(dpr) {
 }
 
 function frame() {
+	// The analytics overlay covers the whole stage — don't burn frames drawing under it.
+	if (state.analytics.view) { requestAnimationFrame(frame); return; }
 	const dpr = resize();
 	if (staticDirty) { drawStatic(dpr); staticDirty = false; }
 	ctx.setTransform(1, 0, 0, 1, 0, 0);
@@ -548,6 +573,10 @@ function initUi() {
 
 	$("fitBtn").onclick = fitView;
 	$("boardBtn").onclick = () => { $("board").classList.toggle("hidden"); $("boardBtn").classList.toggle("active"); };
+	$("analyticsBtn").onclick = () => setAnalyticsView(!state.analytics.view);
+	$("analyticsClose").onclick = () => setAnalyticsView(false);
+	$("heatSelect").onchange = (e) => setHeatMode(e.target.value);
+	renderHeatLegend();
 	$("closeDetail").onclick = () => { state.selected = null; state.follow = false; updateDetail(); };
 	$("followBtn").onclick = () => { state.follow = !state.follow; $("followBtn").classList.toggle("active", state.follow); };
 
@@ -703,6 +732,306 @@ function renderBoard() {
 	}
 }
 
+/* ---------- analytics ---------- */
+
+/**
+ * Polling is strictly demand-driven: the timer exists only while the Analytics view is
+ * open or the station heat mode is on, and it is torn down the moment neither is true.
+ * With the map alone on screen this file makes ZERO analytics requests.
+ */
+function ensureAnalyticsPolling() {
+	const wanted = state.analytics.view || state.analytics.heat !== "off";
+	if (wanted && !state.analytics.timer) {
+		fetchAnalytics();
+		state.analytics.timer = setInterval(fetchAnalytics, ANALYTICS_POLL_MS);
+	} else if (!wanted && state.analytics.timer) {
+		clearInterval(state.analytics.timer);
+		state.analytics.timer = null;
+	}
+}
+
+async function fetchAnalytics() {
+	if (DEMO) { setAnalyticsData(demoAnalytics()); return; }
+	if (state.analytics.fetching || document.hidden) return;
+	state.analytics.fetching = true;
+	try {
+		const body = await (await fetch(`${API}/analytics?dimension=${state.dim}`)).json();
+		setAnalyticsData(body.data || body);
+	} catch (e) {
+		/* transient — the connection status pill already reflects backend health */
+	} finally {
+		state.analytics.fetching = false;
+	}
+}
+
+function setAnalyticsData(data) {
+	state.analytics.data = data;
+	state.analytics.stationById = new Map();
+	if (data && data.stations) for (const s of data.stations) state.analytics.stationById.set(s.id, s);
+	if (state.analytics.heat !== "off") invalidateStatic();
+	if (state.analytics.view) renderAnalytics();
+}
+
+function setAnalyticsView(on) {
+	state.analytics.view = on;
+	$("analytics").classList.toggle("hidden", !on);
+	$("analyticsBtn").classList.toggle("active", on);
+	ensureAnalyticsPolling();
+	if (on) renderAnalytics();
+}
+
+function setHeatMode(mode) {
+	state.analytics.heat = mode;
+	renderHeatLegend();
+	ensureAnalyticsPolling();
+	invalidateStatic();
+}
+
+/* ---------- heat scale ---------- */
+
+/* Buckets are [upper bound, colour, label]; the last one is the catch-all. Dwell overrun
+ * is in seconds, headway irregularity is a coefficient of variation (stddev / mean). */
+const HEAT_SCALES = {
+	dwell: {
+		title: "DWELL OVERRUN (s)",
+		value: (st) => st.avgDwellOverrunMs / 1000,
+		buckets: [[0, "#46c46e", "on time"], [5, "#b7cf4f", "0–5"], [15, "#f5b942", "5–15"],
+			[30, "#f07b3f", "15–30"], [Infinity, "#e5484d", ">30"]],
+	},
+	headway: {
+		title: "HEADWAY IRREGULARITY",
+		value: (st) => st.headwayIrregularity,
+		buckets: [[0.15, "#46c46e", "<0.15"], [0.3, "#b7cf4f", "0.15–0.3"], [0.5, "#f5b942", "0.3–0.5"],
+			[0.8, "#f07b3f", "0.5–0.8"], [Infinity, "#e5484d", ">0.8"]],
+	},
+};
+
+function heatColor(mode, station) {
+	const scale = HEAT_SCALES[mode];
+	if (!scale || !station) return null;
+	const v = scale.value(station);
+	if (v === undefined || v === null || Number.isNaN(v)) return null;
+	for (const [max, color] of scale.buckets) if (v <= max) return color;
+	return scale.buckets[scale.buckets.length - 1][1];
+}
+
+function renderHeatLegend() {
+	const wrap = $("heatLegend");
+	const scale = HEAT_SCALES[state.analytics.heat];
+	wrap.classList.toggle("hidden", !scale);
+	if (!scale) return;
+	$("heatLegendTitle").textContent = scale.title;
+	const rows = $("heatLegendRows");
+	rows.innerHTML = "";
+	for (const [, color, label] of scale.buckets) {
+		const row = document.createElement("div");
+		row.className = "legend-row";
+		row.innerHTML = `<span class="legend-swatch" style="background:${color}"></span>${label}`;
+		rows.appendChild(row);
+	}
+}
+
+/* ---------- analytics view rendering ---------- */
+
+function fmtDur(ms) {
+	if (ms === undefined || ms === null || ms < 0) return "—";
+	const s = Math.round(ms / 1000);
+	if (s < 60) return s + "s";
+	const m = Math.floor(s / 60);
+	return m + "m" + String(s % 60).padStart(2, "0");
+}
+
+function fmtSigned(ms) {
+	if (ms === undefined || ms === null) return "—";
+	const s = Math.round(ms / 1000);
+	return (s > 0 ? "+" : "") + s + "s";
+}
+
+function onTimeClass(pct) { return pct >= 90 ? "ok" : pct >= 75 ? "warn" : "bad"; }
+
+function renderAnalytics() {
+	const data = state.analytics.data;
+	const meta = $("analyticsMeta");
+	const empty = $("analyticsEmpty");
+	const cards = $("lineCards");
+	const stationWrap = $("stationTableWrap");
+
+	if (!data) { meta.textContent = "loading…"; return; }
+	if (data.enabled === false) {
+		meta.textContent = "";
+		empty.textContent = "Timetable analytics is disabled on the server (analytics.enabled = false).";
+		empty.classList.remove("hidden");
+		cards.innerHTML = "";
+		stationWrap.classList.add("hidden");
+		return;
+	}
+
+	const age = Math.max(0, Math.round((Date.now() - data.computedAt) / 1000));
+	meta.textContent = `${data.departures} departures over the last ${data.windowMinutes} min · `
+		+ `on time = |dev| ≤ ${data.onTimeToleranceSeconds}s · bunching < `
+		+ `${Math.round(data.bunchingFraction * 100)}% of headway · recomputed ${age}s ago`
+		+ (data.dropped ? ` · ${data.dropped} events dropped` : "");
+
+	const lines = data.lines || [];
+	empty.classList.toggle("hidden", lines.length > 0);
+	if (!lines.length) empty.textContent = "Waiting for the first departures…";
+
+	cards.innerHTML = "";
+	for (const line of lines) cards.appendChild(lineCard(line));
+
+	const stations = data.stations || [];
+	stationWrap.classList.toggle("hidden", stations.length === 0);
+	const body = $("stationBody");
+	body.innerHTML = "";
+	for (const st of stations) {
+		const tr = document.createElement("tr");
+		const dwellColor = heatColor("dwell", st) || "#5b6981";
+		const hwColor = heatColor("headway", st) || "#5b6981";
+		tr.innerHTML =
+			`<td>${escapeHtml(firstLang(st.name)) || "—"}</td>` +
+			`<td class="num">${st.departures}</td>` +
+			`<td class="num ${onTimeClass(st.onTimePct)}">${st.onTimePct}%</td>` +
+			`<td class="num"><span class="heat-cell" style="background:${dwellColor}"></span>${fmtSigned(st.avgDwellOverrunMs)}</td>` +
+			`<td class="num">${fmtSigned(st.maxDwellOverrunMs)}</td>` +
+			`<td class="num"><span class="heat-cell" style="background:${hwColor}"></span>` +
+			`${st.headwaySamples >= 2 ? st.headwayIrregularity.toFixed(2) : "—"}</td>`;
+		body.appendChild(tr);
+	}
+}
+
+function lineCard(line) {
+	const card = document.createElement("div");
+	card.className = "line-card";
+	const color = colorHex(line.color);
+	const head = document.createElement("div");
+	head.className = "line-card-head";
+	head.innerHTML =
+		`<span class="chip" style="background:${color}">${escapeHtml(line.number || "•")}</span>` +
+		`<span class="name">${escapeHtml(firstLang(line.name)) || "Unnamed line"}</span>` +
+		`<span class="spacer"></span><span class="count">${line.departures} dep</span>`;
+	card.appendChild(head);
+
+	const stats = document.createElement("div");
+	stats.className = "line-stats";
+	stats.innerHTML =
+		stat("On time", `<span class="${onTimeClass(line.onTimePct)}">${line.onTimePct}%</span>`,
+			`${line.onTime}/${line.departures} · avg ${fmtSigned(line.avgDeviationMs)}`) +
+		stat("Headway", fmtDur(line.avgHeadwayMs),
+			`vs ${fmtDur(line.refHeadwayMs)} ${line.headwaySource}`) +
+		stat("Dwell overrun", fmtSigned(line.avgDwellOverrunMs),
+			`max ${fmtSigned(line.maxDwellOverrunMs)}`);
+	card.appendChild(stats);
+
+	const canvas = document.createElement("canvas");
+	canvas.className = "line-chart";
+	card.appendChild(canvas);
+
+	const alerts = document.createElement("div");
+	if (line.bunching && line.bunching.length) {
+		alerts.className = "line-alerts";
+		alerts.innerHTML = line.bunching.slice(0, 6).map((b) =>
+			`▲ ${fmtDur(b.gapMs)} gap — ${escapeHtml(firstLang(b.station)) || "?"} plat ${escapeHtml(firstLang(b.platform)) || "?"}`
+		).join("<br>");
+	} else {
+		alerts.className = "line-alerts none";
+		alerts.textContent = "no bunching alerts";
+	}
+	card.appendChild(alerts);
+
+	// The canvas has no layout size until it is in the document, so size + draw next frame.
+	requestAnimationFrame(() => drawHeadwayChart(canvas, line));
+	return card;
+}
+
+function stat(k, v, sub) {
+	return `<div class="line-stat"><div class="k">${k}</div><div class="v">${v}</div>` +
+		`<div class="sub">${sub}</div></div>`;
+}
+
+/**
+ * Headway strip chart: time on x, the gap to the previous train on y, with the reference
+ * headway as a dashed line and the bunching threshold shaded. Points under the threshold
+ * are drawn red.
+ */
+function drawHeadwayChart(canvas, line) {
+	const dpr = window.devicePixelRatio || 1;
+	const w = canvas.clientWidth || 340, h = canvas.clientHeight || 110;
+	canvas.width = w * dpr;
+	canvas.height = h * dpr;
+	const g = canvas.getContext("2d");
+	g.setTransform(dpr, 0, 0, dpr, 0, 0);
+	g.clearRect(0, 0, w, h);
+
+	const css = getComputedStyle(document.body);
+	const dim = css.getPropertyValue("--dim").trim() || "#7d8aa5";
+	const border = css.getPropertyValue("--border").trim() || "#232c3f";
+	const series = line.series || [];
+	const pad = { l: 40, r: 8, t: 10, b: 16 };
+	const plotW = Math.max(1, w - pad.l - pad.r);
+	const plotH = Math.max(1, h - pad.t - pad.b);
+
+	if (series.length < 2) {
+		g.fillStyle = dim;
+		g.font = "11px " + css.getPropertyValue("--mono");
+		g.textAlign = "center";
+		g.fillText(series.length ? "1 headway sample so far" : "no headway samples yet", w / 2, h / 2);
+		return;
+	}
+
+	const ref = line.refHeadwayMs > 0 ? line.refHeadwayMs : 0;
+	const t0 = series[0][0], t1 = series[series.length - 1][0];
+	const span = Math.max(1, t1 - t0);
+	let maxGap = 0;
+	for (const [, gap] of series) maxGap = Math.max(maxGap, gap);
+	const yMax = Math.max(maxGap, ref) * 1.15 || 1;
+	const X = (t) => pad.l + ((t - t0) / span) * plotW;
+	const Y = (v) => pad.t + plotH - (v / yMax) * plotH;
+
+	// axes
+	g.strokeStyle = border;
+	g.lineWidth = 1;
+	g.beginPath();
+	g.moveTo(pad.l, pad.t); g.lineTo(pad.l, pad.t + plotH); g.lineTo(pad.l + plotW, pad.t + plotH);
+	g.stroke();
+	g.fillStyle = dim;
+	g.font = "10px " + css.getPropertyValue("--mono");
+	g.textAlign = "right";
+	g.fillText(fmtDur(yMax), pad.l - 4, pad.t + 8);
+	g.fillText("0", pad.l - 4, pad.t + plotH);
+
+	if (ref > 0) {
+		const threshold = ref * (state.analytics.data ? state.analytics.data.bunchingFraction : 0.5);
+		g.fillStyle = "rgba(229,72,77,.10)";
+		g.fillRect(pad.l, Y(threshold), plotW, pad.t + plotH - Y(threshold));
+		g.strokeStyle = "#8fa3c4";
+		g.setLineDash([4, 4]);
+		g.beginPath(); g.moveTo(pad.l, Y(ref)); g.lineTo(pad.l + plotW, Y(ref)); g.stroke();
+		g.setLineDash([]);
+		g.textAlign = "left";
+		g.fillStyle = "#8fa3c4";
+		g.fillText("sched " + fmtDur(ref), pad.l + 3, Math.max(pad.t + 9, Y(ref) - 3));
+	}
+
+	g.strokeStyle = colorHex(line.color);
+	g.lineWidth = 1.5;
+	g.beginPath();
+	series.forEach(([t, gap], i) => (i ? g.lineTo(X(t), Y(gap)) : g.moveTo(X(t), Y(gap))));
+	g.stroke();
+
+	const threshold = ref > 0 ? ref * (state.analytics.data ? state.analytics.data.bunchingFraction : 0.5) : -1;
+	for (const [t, gap] of series) {
+		g.beginPath();
+		g.arc(X(t), Y(gap), 2.5, 0, Math.PI * 2);
+		g.fillStyle = threshold > 0 && gap < threshold ? "#e5484d" : colorHex(line.color);
+		g.fill();
+	}
+}
+
+function escapeHtml(s) {
+	return String(s === undefined || s === null ? "" : s)
+		.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+}
+
 /* ---------- status ui ---------- */
 
 function setStatus(s) {
@@ -714,6 +1043,47 @@ function showBanner(msg) { const b = $("banner"); b.textContent = msg; b.classLi
 function hideBanner() { $("banner").classList.add("hidden"); }
 
 /* ---------- demo mode (UI testing without a server) ---------- */
+
+/** Synthetic analytics payload so the Analytics view and heat mode work with ?demo=1. */
+function demoAnalytics() {
+	const t = now();
+	const series = (base, jitter, n) => {
+		const out = [];
+		for (let i = n; i > 0; i--) out.push([t - i * base, Math.max(20000, base + (Math.random() - 0.5) * jitter)]);
+		return out;
+	};
+	const s1 = series(300000, 260000, 18);
+	const s2 = series(600000, 200000, 6);
+	return {
+		schemaVersion: 1, enabled: true, dimension: "demo:overworld", computedAt: t - 4000,
+		windowMinutes: 60, aggregateSeconds: 30, onTimeToleranceSeconds: 60, bunchingFraction: 0.5,
+		departures: 24, recorded: 51, dropped: 0,
+		lines: [
+			{
+				id: "rt1", name: "Demo Express|演示", number: "4", color: 0x00933c,
+				departures: 18, onTime: 15, onTimePct: 83.3, avgDeviationMs: 21000,
+				worstLateMs: 96000, worstEarlyMs: -4000, avgDwellMs: 13400,
+				avgDwellOverrunMs: 3400, maxDwellOverrunMs: 21000, headwaySamples: s1.length,
+				avgHeadwayMs: 305000, medianHeadwayMs: 300000, minHeadwayMs: 92000, maxHeadwayMs: 640000,
+				refHeadwayMs: 300000, headwaySource: "scheduled",
+				bunching: [{ atMs: t - 400000, platformId: "pl1", platform: "1", stationId: "st1", station: "Baker City Central|贝克城", gapMs: 92000 }],
+				series: s1,
+			},
+			{
+				id: "rt2", name: "Harbor Ferry", number: "F", color: 0x3fc1c9,
+				departures: 6, onTime: 6, onTimePct: 100, avgDeviationMs: -2000,
+				worstLateMs: 8000, worstEarlyMs: -19000, avgDwellMs: 9800,
+				avgDwellOverrunMs: -200, maxDwellOverrunMs: 1500, headwaySamples: s2.length,
+				avgHeadwayMs: 600000, medianHeadwayMs: 600000, minHeadwayMs: 520000, maxHeadwayMs: 690000,
+				refHeadwayMs: 600000, headwaySource: "observed", bunching: [], series: s2,
+			},
+		],
+		stations: [
+			{ id: "st1", name: "Baker City Central|贝克城", departures: 14, onTimePct: 78.6, avgDwellOverrunMs: 18000, maxDwellOverrunMs: 41000, headwaySamples: 12, headwayIrregularity: 0.62 },
+			{ id: "st2", name: "Harbor North", departures: 10, onTimePct: 100, avgDwellOverrunMs: 1200, maxDwellOverrunMs: 4000, headwaySamples: 8, headwayIrregularity: 0.11 },
+		],
+	};
+}
 
 function bootDemo() {
 	state.dims = ["demo:overworld"];

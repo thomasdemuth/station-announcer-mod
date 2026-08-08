@@ -1347,3 +1347,297 @@ Files: `mtraddon/DoorObstructionEngine.java` (new),
 `mtraddon/AddonNetworking.java` (DOOR_OBSTRUCTIONS_S2C + sync/broadcast),
 `mtraddon/AddonInit.java` (ticker diff + join sync + clear),
 `client/mtraddon/AddonClientInit.java` (receiver + disconnect clear).
+
+---
+
+## Analytics Agent — Timetable & headway analytics — 2026-08-08
+
+Per-train arrival/departure logging on the simulator threads, an append-only JSONL log,
+derived on-time/headway/dwell/bunching metrics computed entirely off-thread, a new
+`/dispatch/api/analytics` endpoint, an **Analytics** view + **station heat mode** in the
+dispatch board, and a `/dispatch stats [line]` chat scorecard. Additive throughout: the
+only shared files touched are `AddonServerConfig` (new section), `AddonInit` (two lifecycle
+calls + the command registration), `VehicleMixin` (one line in an existing callback + two
+new injectors) and `DispatchApiServlet` (one new endpoint). No existing behaviour changed.
+
+### A) Event sources — where the data comes from
+
+Both sources are **edges of calls MTR already makes**; neither adds a scan or a tick loop.
+
+| Event | Hook | Why it is exact |
+|---|---|---|
+| **DEPARTURE** | `Vehicle.startUp(JJ)V` — capture at HEAD (inside the existing hold/obstruction callback), emit at **TAIL** | `javap -c` on 4.0.1: `startUp` has a **single RETURN** (offset 252), so `@At("TAIL")` is unambiguous. A hold-rule or door-obstruction cancel returns from the HEAD callback and never reaches TAIL, so held/bounced attempts log nothing. A non-committing attempt (doors still closing, `doorCooldown > 0`) leaves `speed == 0`; the committing one sets `speed = 4.0E-6`, so `speed != 0` at TAIL is exactly "this train really pulled out". The platform is captured at HEAD because a committing `startUp` adds `ACCELERATION_DEFAULT` to `railProgress` and the boundary test would then fail. |
+| **ARRIVAL** | `Vehicle.simulateMoving(JL…ObjectArrayList;I)V` at `INVOKE` → `Vehicle.updateDeviation()`, `shift = AFTER` | `javap -c`: `updateDeviation()` is invoked **exactly twice in the whole class** — once in `startUp` (offset 89) and once in `simulateMoving` (offset 726) — so the injection point inside `simulateMoving` is unique and `defaultRequire: 1` is satisfiable. That call site is the `railProgress >= stoppingPoint` branch, i.e. MTR clamps `railProgress`, sets `speed = 0` and refreshes the deviation. Because the branch is only taken on the tick a vehicle comes to rest, **the hook costs nothing on every other moving tick** — there is no per-tick analytics work anywhere. Landing AFTER the call means the logged deviation is the freshly recomputed one. |
+
+Both are filtered by the **same stopped-at-a-platform test** the rest of the addon uses
+(`HoldRuleEngine` / `DoorObstructionEngine` / `DispatchSampler`): `railProgress` must sit
+exactly on the next path segment's `startDistance`, and the previous segment must carry a
+`savedRailBaseId` with `dwellTime > 0`. Mid-route signal stops, terminus reversals and the
+run back into the siding therefore never produce events.
+
+**Dwell is measured, not read off MTR.** `elapsedDwellTime` saturates at the scheduled
+dwell, so a train held by Feature 1 or by a door obstruction would look punctual. Dwell is
+`departure timestamp − arrival timestamp` from the in-memory open-arrival map;
+`elapsedDwellTime` is only the fallback when no arrival was seen (server restarted
+mid-dwell, or the feature was enabled while the train was already standing), and the event
+then carries `dwellSrc: "elapsed"` so it is distinguishable after the fact.
+
+**Documented gap:** a route's FINAL approach (end of a non-repeating journey, where the
+stopping point is `totalDistance − …` rather than a segment boundary) is not a platform
+arrival by the test above, so it produces no arrival event; if the train nonetheless
+departs from a platform there, that departure falls back to `elapsedDwellTime`. Manual
+(driver-controlled) trains ARE included — `startUp` is their departure choke point too —
+but their deviation is whatever MTR last computed, which for a manual siding can be stale.
+
+### B) Storage — append-only JSONL, and why not SQLite
+
+`<save>/station-announcer-addon/analytics/YYYY-MM-DD.jsonl`, one JSON object per line,
+rotated by local calendar day, pruned to `analytics.retentionDays` (default 7) **on server
+start and on each rotation**.
+
+Justification (the decision the brief asked for):
+
+1. **No new dependency.** SQLite needs a JDBC driver shaded into the jar; this mod ships
+   with zero third-party dependencies today and MTR already shades a small universe of its
+   own. Adding one for a workload that is 99 % sequential appends is a bad trade.
+2. **The workload is append-only.** The log is never queried at runtime — every metric is
+   served from an in-memory window. The only read is one bounded tail-replay at startup.
+3. **Retention is a file delete**, not `DELETE … ; VACUUM`.
+4. **Crash safety.** A process killed mid-write truncates at most the last line, which the
+   parser skips. A half-written SQLite page inside the world save is a worse failure mode.
+5. **Thomas can use it directly** — `grep`, `jq`, or a spreadsheet import, no tooling.
+
+Writes are **queued and flushed on a background daemon thread**
+(`station-announcer-analytics`), never on a simulator or server tick. The hand-off is a
+bounded `ArrayBlockingQueue` (`analytics.queueCapacity`, default 8192): when it is full
+events are **dropped and counted**, and a warning is logged at most once a minute — a
+simulator tick is never blocked on I/O. The drop counter is surfaced in the payload
+(`dropped`) and in the Analytics header so a saturating server is visible, not silent.
+
+One JSONL line (~230 bytes) looks like:
+
+```json
+{"t":1786500000000,"ev":"dep","dim":"minecraft/overworld","veh":"8123456789",
+ "plat":"987654321","platName":"1","sta":"123456789","staName":"City Hall|市政廳",
+ "rt":"555555","rtName":"Lexington Av Express|…","rtNum":"4","rtColor":1092784,
+ "sid":"777","depot":"Main Depot","stop":3,"dev":1500,
+ "dwell":12500,"schedDwell":10000,"dwellSrc":"measured","schedHw":300000}
+```
+
+`ev` is `arr` or `dep`; arrival lines omit the last four keys. All MTR ids are **decimal
+strings** (they exceed 2^53). Names are MTR-raw `"English|Other"`. Arrival logging can be
+turned off (`analytics.logArrivals = false`) to roughly halve the log — every metric is
+computed from departures, so nothing is lost but the raw arrival record.
+
+### C) Derived metrics
+
+Computed on the writer thread, at most every `analytics.aggregateSeconds` (30), over the
+last `analytics.windowMinutes` (60) of **departure** events, and published as a volatile
+immutable snapshot with its JSON payload pre-rendered.
+
+- **On time** — `|deviation| <= analytics.onTimeToleranceSeconds` (60). MTR only refreshes
+  a vehicle's deviation when it stops, so a departure's value is precisely "how late this
+  train was at this stop" — the one moment the number is meaningful.
+- **Dwell overrun** — `measured dwell − the dwell baked into the path`. The baked value is
+  `PathData.getDwellTime()`, which **already carries Feature 2's per-route override**, so
+  an express with a 10 s override is not scored against the platform's 25 s default.
+  Reported signed (avg + max) — a negative average means trains are leaving early.
+- **Headway** — the gap between consecutive departures of the **same line at the same
+  platform**. Pooling platforms would mix directions and terminus loops, so gaps are always
+  computed per `(route, platform)` and only then pooled for the line. Gaps above 6 h are
+  service breaks and are excluded.
+- **Scheduled headway** — derived at record time from MTR's depot frequencies, exactly
+  reversing `Depot.generatePlatformDirectionsAndWriteDeparturesToSidings` (javap -c on
+  4.0.1): the departure interval is `14 400 000 / getFrequency(hour)` nominal-day millis,
+  mapped onto real simulation time by `× getGameMillisPerDay() / 86 400 000`. Where several
+  depots run one route their rates add (`headway = 1 / Σ rate`). Cached per route for 60 s
+  on the simulator thread. It returns **0 — "not derivable"** for real-time-timetable depots
+  (`getUseRealTime()`), continuous-movement modes (cable cars, which depart every
+  `CONTINUOUS_MOVEMENT_FREQUENCY = 8000` ms per siding rather than by frequency) and routes
+  with no frequency set for the current hour. In that case the aggregator substitutes the
+  **median observed gap** and the payload says `headwaySource: "observed"` (or `"none"`
+  when there is not even one gap yet) — the reference is never silently mislabelled.
+- **Bunching** — a gap shorter than `analytics.bunchingFraction` (0.5) of the reference
+  headway. Up to 20 most recent alerts per line, each with platform, station, gap and time.
+- **Per station** (the map heat view): average and max dwell overrun, on-time percentage,
+  and **headway irregularity** = the coefficient of variation (stddev ÷ mean) of every gap
+  observed at that station's platforms. 0 = metronomic, ≥1 = wildly uneven.
+
+### D) `GET /dispatch/api/analytics?dimension=N`
+
+Wrapped in **MTR's standard `ServletBase` envelope** — built with MTR's own
+`org.mtr.core.integration.Response`, so it is shaped identically to `/dispatch/api/network`:
+
+```json
+{ "code": 200, "currentTime": 1786500000000, "text": "Success", "version": 1,
+  "data": { …payload below… } }
+```
+
+It is answered **synchronously on the Jetty worker, before ServletBase's
+`simulator.run(...)` hop** (intercepted in `doGet`/`doPost`), because the aggregate is a
+volatile snapshot computed off-thread — polling it costs the simulation literally nothing.
+`400 {"error":"invalid dimension"}` for a bad index, plain `503` while the registry is
+empty (server stopping / dispatch disabled). `data`:
+
+```json
+{
+  "schemaVersion": 1,
+  "enabled": true,                    // false = analytics.enabled is off; all lists empty
+  "dimension": "minecraft/overworld", // MTR's dimension string for the requested index
+  "computedAt": 1786499990000,        // when this aggregate was built (compare with envelope currentTime for age)
+  "windowMinutes": 60,
+  "aggregateSeconds": 30,
+  "onTimeToleranceSeconds": 60,
+  "bunchingFraction": 0.5,
+  "departures": 124,                  // departures in the window for THIS dimension
+  "recorded": 271,                    // events accepted since server start (all dimensions)
+  "dropped": 0,                       // events lost to a full queue since server start
+
+  "lines": [
+    {
+      "id": "555555",                 // route id, decimal string
+      "name": "Lexington Av Express|…",// MTR-raw, split on "|"
+      "number": "4",
+      "color": 1092784,               // 24-bit 0xRRGGBB
+      "departures": 42,
+      "onTime": 37,
+      "onTimePct": 88.1,
+      "avgDeviationMs": 4200,         // + late, − early
+      "worstLateMs": 61000,
+      "worstEarlyMs": -8000,
+      "avgDwellMs": 12500,
+      "avgDwellOverrunMs": 2500,      // signed: measured dwell − baked dwell
+      "maxDwellOverrunMs": 9000,
+      "headwaySamples": 37,
+      "avgHeadwayMs": 305000,         // −1 = no samples yet (same for the next three)
+      "medianHeadwayMs": 300000,
+      "minHeadwayMs": 90000,
+      "maxHeadwayMs": 620000,
+      "refHeadwayMs": 300000,         // the reference the UI draws + bunching is measured against
+      "headwaySource": "scheduled",   // "scheduled" | "observed" | "none"
+      "bunching": [
+        { "atMs": 1786499000000, "platformId": "987", "platform": "1",
+          "stationId": "123", "station": "City Hall|…", "gapMs": 90000 }
+      ],
+      "series": [ [1786490000000, 300000], … ]   // [atMillis, gapMillis], oldest first, ≤240
+    }
+  ],
+
+  "stations": [
+    { "id": "123456789", "name": "City Hall|…", "departures": 30,
+      "onTimePct": 90.0, "avgDwellOverrunMs": 2000, "maxDwellOverrunMs": 9000,
+      "headwaySamples": 25, "headwayIrregularity": 0.34 }
+  ]
+}
+```
+
+### Frontend (dispatch board, unchanged endpoints)
+
+- **Analytics view** — a top-bar toggle opening a full-stage overlay: per-line cards
+  (on-time %, headway vs reference, dwell overrun, bunching list) each with a **canvas
+  headway strip chart** (time on x, gap on y, dashed reference headway, shaded bunching
+  band, sub-threshold points in red), plus a station table with heat swatches.
+- **Station heat mode** — a `Heat:` selector (off / dwell overrun / headway irregularity)
+  recolours the station rectangles on the existing track map, with its own legend under the
+  speed/signal legend. Stations with no samples in the window stay neutral grey.
+- **Polling is strictly demand-driven**: the interval (`ANALYTICS_POLL_MS = 15000`, a
+  constant at the top of `app.js`) is created only while the Analytics view is open **or**
+  heat mode is on, and torn down as soon as neither is true. It also skips while the tab is
+  hidden. With just the map on screen the page makes **zero** analytics requests. While the
+  Analytics overlay is up the map's rAF loop early-returns instead of drawing under it.
+- `?demo=1` now also synthesises an analytics payload, so the whole view (and the heat map)
+  can be exercised with no server. **Verified that way in a browser**: both views render,
+  charts draw, heat recolours the two demo stations, zero console errors.
+
+### E) `/dispatch stats [line]`
+
+Permission `editPermissionLevel` (default 2 — the same gate the addon's other admin
+surfaces use, matching `AnnounceCommand`'s `ServerConfig` pattern). Registered from
+`AddonInit.register()`. No new item, no GUI.
+
+```
+/dispatch stats              → every line in the caller's dimension
+/dispatch stats <line>       → one line, matched on route number (exact) or name (substring);
+                               tab-completes from the live aggregate
+```
+
+Prints a header (window, departure count, aggregate age) and per line: on-time % coloured
+green/yellow/red with the average and worst deviation; average / worst / tightest headway
+against the reference and its source; average dwell and overrun; then either "no bunching"
+or the alert count with the three most recent gaps (duration, station, platform). The
+dimension is resolved as `"<namespace>/<path>"` from the caller's world — the exact form
+MTR's `Init.getWorldId` uses to key its simulators, so it matches the recorded events.
+Reads only the published snapshot: no simulator hop, no file access, no recomputation.
+
+### F) Config keys (`config/station-announcer-addon.json`, new `analytics` section)
+
+| Key | Default | Meaning |
+|---|---|---|
+| `analytics.enabled` | `true` | Master switch. **Off = zero work anywhere**: both `Vehicle` hooks return on one volatile read, no queue/thread/file is created, and the endpoint answers `enabled:false` with empty lists. |
+| `analytics.retentionDays` | `7` (1–365) | Day files kept; pruned on start and on rotation. |
+| `analytics.aggregateSeconds` | `30` (5–600) | Longest interval between metric recomputations. |
+| `analytics.onTimeToleranceSeconds` | `60` (1–3600) | On-time threshold on `|deviation|`. |
+| `analytics.bunchingFraction` | `0.5` (0.05–1.0) | Gap fraction below which a bunching alert fires. |
+| `analytics.windowMinutes` | `60` (5–1440) | How much history the metrics cover. |
+| `analytics.flushSeconds` | `5` (1–60) | Queue-drain / disk-append cadence. |
+| `analytics.queueCapacity` | `8192` (256–262144) | Bounded hand-off queue; overflow drops + counts. |
+| `analytics.maxWindowEvents` | `20000` (1000–500000) | Hard per-dimension memory cap on the window. |
+| `analytics.logArrivals` | `true` | Write arrival lines too (metrics never need them). |
+
+### Thread model
+
+| Thread | What it does |
+|---|---|
+| **Simulator** (per dimension) | The two `Vehicle` hooks. Reads the volatile config, that simulator's own data, and `ConcurrentHashMap`s whose individual keys have exactly one writer; `offer`s to the bounded queue. Never touches the Minecraft world, files, or the aggregate. |
+| **`station-announcer-analytics`** (daemon) | Drains the queue every `flushSeconds`, appends JSONL, folds departures into the window, recomputes + publishes the aggregate (throttled), prunes abandoned open arrivals. All file I/O and all JSON building live here. |
+| **Server** | `SERVER_STARTED` opens the log dir, prunes, replays the recent tail into the window and starts the writer; `SERVER_STOPPING` shuts the writer down (with a 2 s `awaitTermination` so there is never a second writer on the file), flushes the queue tail synchronously and closes. The command reads the published snapshot. |
+| **Jetty worker** | Reads the published snapshot and writes the envelope. No simulator hop. |
+
+### Known limitations / risks
+
+- **Not compiled or in-game tested** (no-Gradle rule). Every MTR member used was
+  javap-verified against `FABRIC-4.0.1+1.20.4`; the frontend was exercised in a real
+  browser via `?demo=1`.
+- The `simulateMoving` injector is the one genuinely new mixin shape here. It relies on
+  `updateDeviation()` being invoked exactly once inside that method (bytecode-confirmed at
+  offset 726). Should MTR ever inline or duplicate that call, the injector fails loudly at
+  apply time rather than misbehaving.
+- **"Line" = MTR's `vehicleExtraData.getThisRouteId()`** for the vehicle at that stop — the
+  same field the dispatch stream calls `route`. For a depot chaining several routes that is
+  the leg the train is about to run, which is the right attribution for "a departure on
+  line X", but it means the last stop of route A is attributed to route B.
+- Scheduled headway is per **route across depots**, not per platform or direction. A route
+  whose depots use real-time timetables or continuous movement always falls back to the
+  observed median (labelled as such).
+- Deviation is MTR's, so it inherits MTR's semantics: refreshed only at stops, and
+  meaningless for manual sidings with `departureIndex == -1`.
+- The metric window is memory-only. A restart replays at most today's + yesterday's log
+  (bounded to 200 000 lines per file) and only events inside the window; history older than
+  that lives in the JSONL files but is not re-aggregated. There is deliberately no
+  historical query API — the log is for offline analysis.
+- Day-file rotation uses the **server's local time zone**, and retention counts calendar
+  days, not 24 h periods.
+- Events are logged per dimension but the `recorded`/`dropped` counters are global
+  (one queue serves every simulator).
+- No lang keys were added — the command's output is plain literal English, like the rest of
+  the dispatch tooling.
+
+### Files
+
+**New:** `src/main/java/com/stationannouncer/mtraddon/analytics/{AnalyticsEvent,
+AnalyticsRecorder,AnalyticsStore,AnalyticsAggregator,AnalyticsCommand}.java`.
+
+**Modified (additive only):**
+`src/main/java/com/stationannouncer/mtraddon/AddonServerConfig.java` (new `Analytics`
+section + clamps), `src/main/java/com/stationannouncer/mtraddon/AddonInit.java`
+(command registration, `AnalyticsRecorder.start/stop` on the existing lifecycle hooks),
+`src/main/java/com/stationannouncer/mixin/VehicleMixin.java` (one capture call inside the
+existing `startUp` HEAD callback + two new injectors, both fully commented),
+`src/main/java/com/stationannouncer/mtraddon/dispatch/DispatchApiServlet.java`
+(`analytics` endpoint),
+`src/main/resources/assets/station_announcer/dispatch/{index.html,style.css,app.js}`
+(Analytics view, heat mode, demand-driven polling, demo payload).
+
+**Unchanged on purpose:** `station_announcer.mixins.json` (no new mixin classes — the two
+injectors live in the already-registered `VehicleMixin`), every other feature's code, and
+the existing dispatch endpoints' behaviour.

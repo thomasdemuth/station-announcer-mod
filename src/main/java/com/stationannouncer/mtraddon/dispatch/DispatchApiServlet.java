@@ -1,5 +1,8 @@
 package com.stationannouncer.mtraddon.dispatch;
 
+import com.stationannouncer.mtraddon.AddonServerConfig;
+import com.stationannouncer.mtraddon.analytics.AnalyticsAggregator;
+import org.mtr.core.integration.Response;
 import org.mtr.core.serializer.JsonReader;
 import org.mtr.core.servlet.CachedResponse;
 import org.mtr.core.servlet.ServletBase;
@@ -28,6 +31,10 @@ import java.util.function.Consumer;
  *   <li>{@code network} — the static network payload ({@link DispatchNetwork}), served
  *       behind a per-dimension 30 s {@link CachedResponse}, the same throttle
  *       SystemMapServlet uses so busy servers never rebuild per request.</li>
+ *   <li>{@code analytics} — the timetable/headway aggregate
+ *       ({@link AnalyticsAggregator}). Handled before ServletBase's simulator hop and
+ *       answered straight from the off-thread cache, so polling it costs the simulation
+ *       nothing at all.</li>
  * </ul>
  *
  * <p>{@code /dispatch/api/ping} and {@code /dispatch/api/stream} are separate exact-path
@@ -50,7 +57,7 @@ public final class DispatchApiServlet extends ServletBase {
 
     @Override
     protected void doGet(HttpServletRequest request, HttpServletResponse response) {
-        if (unavailable(response)) {
+        if (unavailable(response) || handleAnalytics(request, response)) {
             return;
         }
         super.doGet(request, response);
@@ -62,10 +69,74 @@ public final class DispatchApiServlet extends ServletBase {
      */
     @Override
     protected void doPost(HttpServletRequest request, HttpServletResponse response) {
-        if (unavailable(response)) {
+        if (unavailable(response) || handleAnalytics(request, response)) {
             return;
         }
         super.doPost(request, response);
+    }
+
+    /**
+     * {@code analytics} is answered SYNCHRONOUSLY on the Jetty worker, before
+     * ServletBase's {@code simulator.run(...)} hop, because the aggregate is computed
+     * entirely on the analytics writer thread and published as a volatile immutable
+     * snapshot — the request has no reason to queue work onto a simulator. The reply
+     * still uses MTR's own {@link Response} envelope, so it is byte-shaped exactly like
+     * the {@code network} endpoint's.
+     *
+     * @return true when the request was handled here
+     */
+    private static boolean handleAnalytics(HttpServletRequest request, HttpServletResponse response) {
+        if (!"analytics".equals(firstSegment(request))) {
+            return false;
+        }
+        int dimensionIndex = 0;
+        try {
+            String parameter = request.getParameter("dimension");
+            if (parameter != null && !parameter.isEmpty()) {
+                dimensionIndex = Integer.parseInt(parameter);
+            }
+        } catch (NumberFormatException ignored) {
+            // Fall through with dimension 0, matching ServletBase's tolerant default.
+        }
+        Simulator simulator = DispatchRegistry.simulator(dimensionIndex);
+        if (simulator == null) {
+            DispatchStaticServlet.sendText(response, 400, "application/json;charset=utf-8",
+                    "{\"error\":\"invalid dimension\"}");
+            return true;
+        }
+        boolean enabled = AddonServerConfig.get().analytics.enabled;
+        AnalyticsAggregator.Aggregate aggregate = enabled ? AnalyticsAggregator.get(simulator.dimension) : null;
+        JsonObject data = aggregate == null
+                ? AnalyticsAggregator.emptyJson(simulator.dimension, enabled)
+                : aggregate.json;
+        DispatchStaticServlet.sendText(response, 200, "application/json;charset=utf-8",
+                new Response(200, "Success", data).getJson().toString());
+        return true;
+    }
+
+    /** First path segment after the servlet mapping, e.g. {@code /analytics} → {@code analytics}. */
+    private static String firstSegment(HttpServletRequest request) {
+        String path = request.getPathInfo();
+        if (path == null) {
+            path = request.getRequestURI();
+        }
+        if (path == null) {
+            return "";
+        }
+        int start = 0;
+        while (start < path.length() && path.charAt(start) == '/') {
+            start++;
+        }
+        int slash = path.indexOf('/', start);
+        int end = slash < 0 ? path.length() : slash;
+        // getRequestURI() fallback keeps the whole "/dispatch/api/analytics" path, so take
+        // the LAST segment there; getPathInfo() (the normal case) yields the first.
+        String segment = path.substring(start, end);
+        if ("dispatch".equals(segment)) {
+            int lastSlash = path.lastIndexOf('/');
+            segment = lastSlash < 0 ? segment : path.substring(lastSlash + 1);
+        }
+        return segment;
     }
 
     /** Plain 503 (no MTR envelope) while no webserver session is registered. */

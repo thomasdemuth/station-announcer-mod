@@ -1,12 +1,15 @@
 package com.stationannouncer.mtraddon;
 
 import com.stationannouncer.StationAnnouncer;
+import com.stationannouncer.mtraddon.analytics.AnalyticsCommand;
+import com.stationannouncer.mtraddon.analytics.AnalyticsRecorder;
 import com.stationannouncer.mtraddon.dispatch.DispatchRegistry;
 import com.stationannouncer.mtraddon.dispatch.DispatchStreamer;
 import com.stationannouncer.mtraddon.dispatch.DispatchWebSetup;
 import net.fabricmc.fabric.api.event.lifecycle.v1.ServerLifecycleEvents;
 import net.fabricmc.fabric.api.event.lifecycle.v1.ServerTickEvents;
 import net.fabricmc.fabric.api.networking.v1.ServerPlayConnectionEvents;
+import net.minecraft.util.WorldSavePath;
 import java.util.Set;
 
 /**
@@ -30,16 +33,24 @@ public final class AddonInit {
 
     public static void register() {
         AddonNetworking.registerServerReceivers();
+        AnalyticsCommand.register();
 
         ServerLifecycleEvents.SERVER_STARTED.register(server -> {
             AddonServerConfig.get(); // load (and cache) the config before any simulator asks for it
             AddonStore.load(server);
+            // Timetable analytics: opens <save>/station-announcer-addon/analytics/, prunes
+            // expired day files, replays the recent tail into the metric window and starts
+            // the writer thread. A no-op when analytics.enabled is false.
+            AnalyticsRecorder.start(server.getSavePath(WorldSavePath.ROOT)
+                    .resolve("station-announcer-addon").resolve("analytics").normalize());
             // MTR (our dependency, so it initialized and registered first) has already
             // constructed Main by now; explain in the log when the dispatch UI is absent.
             DispatchWebSetup.logAvailability();
         });
         ServerLifecycleEvents.SERVER_STOPPING.register(server -> {
             AddonStore.flush();
+            // Flush the queued analytics events and stop the writer before the simulators go.
+            AnalyticsRecorder.stop();
             // Dispatch teardown before MTR's Main.stop(). Clear the registry FIRST so
             // late servlet requests answer 503 and no new SSE client can register (which
             // would restart the streamer thread we are about to stop), then drop the

@@ -21,6 +21,12 @@
 		<label><input type="checkbox" id="lyTrainLabels" checked> Train labels</label>
 	</div>
 	<div class="toggles" id="modeToggles"></div>
+	<select id="heatSelect" title="Colour station areas by a performance metric">
+		<option value="off">Heat: off</option>
+		<option value="dwell">Heat: dwell overrun</option>
+		<option value="headway">Heat: headway irregularity</option>
+	</select>
+	<button id="analyticsBtn" class="btn" title="Timetable &amp; headway analytics">Analytics</button>
 	<button id="boardBtn" class="btn" title="Toggle the dispatch board">Board</button>
 	<button id="fitBtn" class="btn" title="Fit network in view">Fit</button>
 </header>
@@ -35,6 +41,10 @@
 		<div class="legend-row"><span class="sig-dot" style="background:#e5484d"></span>occupied</div>
 		<div class="legend-row"><span class="sig-dot" style="background:#f5b942"></span>reserved</div>
 		<div class="legend-row"><span class="sig-dot" style="background:#46c46e"></span>clear</div>
+		<div id="heatLegend" class="hidden">
+			<div class="legend-title" style="margin-top:6px" id="heatLegendTitle">STATION HEAT</div>
+			<div id="heatLegendRows"></div>
+		</div>
 	</div>
 
 	<aside id="detail" class="hidden">
@@ -62,6 +72,33 @@
 			</tr></thead>
 			<tbody id="boardBody"></tbody>
 		</table>
+	</section>
+
+	<section id="analytics" class="hidden">
+		<div id="analyticsHead">
+			<span class="an-title">TIMETABLE &amp; HEADWAY ANALYTICS</span>
+			<span id="analyticsMeta" class="an-meta"></span>
+			<span class="spacer"></span>
+			<button id="analyticsClose" class="btn small">&times;</button>
+		</div>
+		<div id="analyticsBody">
+			<div id="analyticsEmpty" class="an-empty">Waiting for the first departures…</div>
+			<div id="lineCards"></div>
+			<div id="stationTableWrap" class="hidden">
+				<div class="an-section">STATIONS</div>
+				<table id="stationTable">
+					<thead><tr>
+						<th>Station</th>
+						<th class="num">Departures</th>
+						<th class="num">On time</th>
+						<th class="num">Avg dwell overrun</th>
+						<th class="num">Max overrun</th>
+						<th class="num">Headway irregularity</th>
+					</tr></thead>
+					<tbody id="stationBody"></tbody>
+				</table>
+			</div>
+		</div>
 	</section>
 </main>
 

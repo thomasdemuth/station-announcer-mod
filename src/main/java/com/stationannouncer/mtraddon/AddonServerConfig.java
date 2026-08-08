@@ -42,6 +42,9 @@ public class AddonServerConfig {
     /** Dispatch web UI — real-time network/train map served from MTR's own webserver. */
     public Dispatch dispatch = new Dispatch();
 
+    /** Timetable &amp; headway analytics — per-train arrival/departure logging and derived metrics. */
+    public Analytics analytics = new Analytics();
+
     public static class HoldRules {
         /** Master switch; when false the startUp mixin no-ops with a single field read. */
         public boolean enabled = true;
@@ -123,6 +126,54 @@ public class AddonServerConfig {
         public int maxClients = 8;
     }
 
+    public static class Analytics {
+        /**
+         * Master switch. When false NOTHING runs: the two {@code Vehicle} hooks bail on a
+         * single field read, the writer thread is never started, no files are opened or
+         * pruned, and {@code /dispatch/api/analytics} answers an empty (disabled) payload.
+         * Read on every recorded event, so it takes effect on the next config reload.
+         */
+        public boolean enabled = true;
+
+        /** Days of {@code analytics/YYYY-MM-DD.jsonl} kept; older files are deleted on start and on rotation. */
+        public int retentionDays = 7;
+
+        /** Longest interval between recomputations of the cached aggregate. Clamped 5–600. */
+        public int aggregateSeconds = 30;
+
+        /** A departure counts as on time when {@code |deviation| <=} this. Clamped 1–3600. */
+        public int onTimeToleranceSeconds = 60;
+
+        /**
+         * A gap between consecutive trains shorter than this fraction of the reference
+         * headway raises a bunching alert. Clamped 0.05–1.0.
+         */
+        public double bunchingFraction = 0.5;
+
+        /** How much history the derived metrics cover, in minutes. Clamped 5–1440. */
+        public int windowMinutes = 60;
+
+        /** How often the writer thread drains the event queue to disk. Clamped 1–60. */
+        public int flushSeconds = 5;
+
+        /**
+         * Bounded hand-off queue between the simulator threads and the writer thread.
+         * When it is full events are DROPPED (counted, warned about at most once a
+         * minute) rather than blocking a simulator tick. Clamped 256–262144.
+         */
+        public int queueCapacity = 8192;
+
+        /** Hard cap on in-memory departures per dimension, so the window cannot grow without bound. Clamped 1000–500000. */
+        public int maxWindowEvents = 20_000;
+
+        /**
+         * Write arrival events to the log as well as departures. Departures alone carry
+         * every metric (dwell is measured from the matching arrival in memory), so
+         * turning this off roughly halves the log size at no cost to the analytics.
+         */
+        public boolean logArrivals = true;
+    }
+
     public static AddonServerConfig get() {
         AddonServerConfig config = instance;
         if (config == null) {
@@ -177,6 +228,9 @@ public class AddonServerConfig {
         if (dispatch == null) {
             dispatch = new Dispatch();
         }
+        if (analytics == null) {
+            analytics = new Analytics();
+        }
         holdRules.holdArrivalCacheMillis = Math.max(50, Math.min(10_000, holdRules.holdArrivalCacheMillis));
         holdRules.maxHoldSeconds = Math.max(5, Math.min(3_600, holdRules.maxHoldSeconds));
         doorObstruction.chancePercent = Math.max(0, Math.min(100, doorObstruction.chancePercent));
@@ -184,6 +238,14 @@ public class AddonServerConfig {
         doorObstruction.maxSeconds = Math.max(doorObstruction.minSeconds, Math.min(120, doorObstruction.maxSeconds));
         dispatch.updateMillis = Math.max(100, Math.min(5_000, dispatch.updateMillis));
         dispatch.maxClients = Math.max(1, Math.min(64, dispatch.maxClients));
+        analytics.retentionDays = Math.max(1, Math.min(365, analytics.retentionDays));
+        analytics.aggregateSeconds = Math.max(5, Math.min(600, analytics.aggregateSeconds));
+        analytics.onTimeToleranceSeconds = Math.max(1, Math.min(3_600, analytics.onTimeToleranceSeconds));
+        analytics.bunchingFraction = Math.max(0.05, Math.min(1.0, analytics.bunchingFraction));
+        analytics.windowMinutes = Math.max(5, Math.min(1_440, analytics.windowMinutes));
+        analytics.flushSeconds = Math.max(1, Math.min(60, analytics.flushSeconds));
+        analytics.queueCapacity = Math.max(256, Math.min(262_144, analytics.queueCapacity));
+        analytics.maxWindowEvents = Math.max(1_000, Math.min(500_000, analytics.maxWindowEvents));
     }
 
     private void save(Path path) {
