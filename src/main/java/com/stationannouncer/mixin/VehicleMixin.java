@@ -1,14 +1,18 @@
 package com.stationannouncer.mixin;
 
+import com.stationannouncer.mtraddon.DoorObstructionEngine;
 import com.stationannouncer.mtraddon.HoldRuleEngine;
 import org.mtr.core.data.Data;
 import org.mtr.core.data.TransportMode;
 import org.mtr.core.data.Vehicle;
 import org.mtr.core.data.VehicleExtraData;
+import org.mtr.core.data.VehicleRidingEntity;
 import org.mtr.core.generated.data.VehicleSchema;
+import org.mtr.libraries.it.unimi.dsi.fastutil.objects.ObjectArrayList;
 import org.spongepowered.asm.mixin.Final;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Shadow;
+import org.spongepowered.asm.mixin.Unique;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
@@ -18,7 +22,9 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
  * point through which every automatic (and manual) train begins moving — when
  * {@link HoldRuleEngine} says the vehicle must be held at its platform because a
  * connecting train is approaching a watched platform (Feature 1, platform hold
- * rules).
+ * rules) — or when {@link DoorObstructionEngine} rolled that something got stuck
+ * in the doors (random door obstructions; the same engine is also bracketed
+ * around {@code updateRidingEntities} for manual driving, see below).
  *
  * <p><b>Why a mixin:</b> TSC has no departure event or hold API; {@code startUp}
  * is called from deep inside {@code simulateStopped} with no extension point.
@@ -72,6 +78,48 @@ public abstract class VehicleMixin extends VehicleSchema {
             // (writeVehiclePositions -> checkForUpdate -> client.update).
             ((VehicleExtraDataAccessor) (Object) vehicleExtraData).stationAnnouncer$openDoors();
             ci.cancel();
+            return;
         }
+        // Random door obstructions (toggle: doorObstruction.enabled). Checked only
+        // when no hold is active, so the once-per-stop roll lands on the first
+        // attempt that would genuinely have departed; the engine cancels + reopens
+        // exactly like a mini-hold. Same thread and safety story as above.
+        if (DoorObstructionEngine.shouldObstructDeparture(getId(), vehicleExtraData, railProgress, data)) {
+            ci.cancel();
+        }
+    }
+
+    /**
+     * Door multiplier observed at the HEAD of {@code updateRidingEntities}, so the
+     * TAIL can tell whether THIS call closed the doors (the driver's manual
+     * door-close lands inside that method). Instance state is safe: each vehicle
+     * is simulated by exactly one simulator thread.
+     */
+    @Unique
+    private int stationAnnouncer$doorMultiplierBefore;
+
+    /**
+     * Manual-driving door obstructions (toggle: doorObstruction.enabled). The
+     * driver's {@code manualToggleDoors} close is applied inside package-private
+     * {@code updateRidingEntities(ObjectArrayList)V} (javap-verified against
+     * 4.0.1) with no extension point, so we bracket it: HEAD records the door
+     * state, TAIL hands the before/after pair to the engine, which — when a roll
+     * says something got stuck — bounces the doors straight back open. Runs on
+     * the SIMULATOR thread inside the vehicle's own simulate call; O(1) bail-out
+     * in the engine when the feature is off.
+     */
+    @Inject(method = "updateRidingEntities(Lorg/mtr/libraries/it/unimi/dsi/fastutil/objects/ObjectArrayList;)V",
+            at = @At("HEAD"))
+    private void stationAnnouncer$captureDoorState(ObjectArrayList<VehicleRidingEntity> vehicleRidingEntities,
+                                                   CallbackInfo ci) {
+        stationAnnouncer$doorMultiplierBefore = vehicleExtraData.getDoorMultiplier();
+    }
+
+    @Inject(method = "updateRidingEntities(Lorg/mtr/libraries/it/unimi/dsi/fastutil/objects/ObjectArrayList;)V",
+            at = @At("TAIL"))
+    private void stationAnnouncer$bounceObstructedDoors(ObjectArrayList<VehicleRidingEntity> vehicleRidingEntities,
+                                                        CallbackInfo ci) {
+        DoorObstructionEngine.afterRidingUpdate(getId(), vehicleExtraData, railProgress, speed, data,
+                stationAnnouncer$doorMultiplierBefore);
     }
 }

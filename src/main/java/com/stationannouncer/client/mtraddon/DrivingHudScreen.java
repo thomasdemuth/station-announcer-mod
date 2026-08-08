@@ -40,6 +40,7 @@ public class DrivingHudScreen extends Screen {
     private final boolean oldShowSignals;
     private final boolean oldShowNextStop;
     private final boolean oldShowOnTime;
+    private final boolean oldShowDoors;
     private final int oldUpdateHz;
     private final int oldLookaheadMeters;
     private final int oldOnTimeThresholdSeconds;
@@ -57,6 +58,7 @@ public class DrivingHudScreen extends Screen {
         oldShowSignals = config.hudShowSignals;
         oldShowNextStop = config.hudShowNextStop;
         oldShowOnTime = config.hudShowOnTime;
+        oldShowDoors = config.hudShowDoors;
         oldUpdateHz = config.hudUpdateHz;
         oldLookaheadMeters = config.hudLookaheadMeters;
         oldOnTimeThresholdSeconds = config.hudOnTimeThresholdSeconds;
@@ -69,7 +71,7 @@ public class DrivingHudScreen extends Screen {
         int panelWidth = 2 * COLUMN_WIDTH + GAP;
         int leftX = (width - panelWidth) / 2;
         int rightX = leftX + COLUMN_WIDTH + GAP;
-        int contentHeight = 5 * ROW + 8 + 14 + ROW;
+        int contentHeight = 6 * ROW + 8 + 14 + ROW;
         int top = Math.max(28, (height - contentHeight) / 2);
         titleY = top - 16;
 
@@ -99,6 +101,11 @@ public class DrivingHudScreen extends Screen {
                 .build(leftX, y, COLUMN_WIDTH, WIDGET_HEIGHT,
                         Text.translatable("gui.station_announcer.driving_hud.show_signals"),
                         (button, value) -> config.hudShowSignals = value));
+        y += ROW;
+        addDrawableChild(CyclingButtonWidget.onOffBuilder(config.hudShowDoors)
+                .build(leftX, y, COLUMN_WIDTH, WIDGET_HEIGHT,
+                        Text.translatable("gui.station_announcer.driving_hud.show_doors"),
+                        (button, value) -> config.hudShowDoors = value));
 
         // Right column: tunables.
         y = top;
@@ -124,8 +131,8 @@ public class DrivingHudScreen extends Screen {
                         (button, value) -> config.hudCorner = value));
 
         // Bottom row: Done / Cancel, spanning both columns.
-        int bottomY = top + 5 * ROW + 8 + 14;
-        hintY = top + 5 * ROW + 4;
+        int bottomY = top + 6 * ROW + 8 + 14;
+        hintY = top + 6 * ROW + 4;
         int half = (panelWidth - GAP) / 2;
         addDrawableChild(ButtonWidget.builder(ScreenTexts.DONE, button -> saveAndClose())
                 .dimensions(leftX, bottomY, half, WIDGET_HEIGHT).build());
@@ -145,6 +152,7 @@ public class DrivingHudScreen extends Screen {
         config.hudShowSignals = oldShowSignals;
         config.hudShowNextStop = oldShowNextStop;
         config.hudShowOnTime = oldShowOnTime;
+        config.hudShowDoors = oldShowDoors;
         config.hudUpdateHz = oldUpdateHz;
         config.hudLookaheadMeters = oldLookaheadMeters;
         config.hudOnTimeThresholdSeconds = oldOnTimeThresholdSeconds;

@@ -550,6 +550,69 @@ Modified (extending the shared skeleton as intended):
 `client/mtraddon/AddonClientInit.java` (+1 line: `DrivingHud.register()`),
 `assets/station_announcer/lang/en_us.json` (+31 keys).
 
+### Update: in-game feedback fixes + door rows — 2026-08-08
+
+**BUG "schedule not working"** — the arrivals data path was re-verified end to
+end against the 4.0.1 jar + TSC sources: `departureIndex` IS synced to clients
+(it is in the serialized `vehicle.json` schema), `ArrivalResponse.
+getDepartureIndex()` carries the SAME per-siding departures index the vehicle
+holds (`Siding.iterateArrivals` passes `getIsManual() ? -1 : departureIndex`),
+both sides are `long`, and `ArrivalsCache.requestArrivals`+`tick()` fetch
+standalone. Root cause of Thomas's report: driving a MANUAL-siding train —
+every vehicle AND every arrival there carries `departureIndex == -1`, so the
+indicator can never resolve BY DESIGN and showed a bare "Schedule: --" that
+read as broken. Now `departureIndex < 0` shows "Manual - no schedule"
+(new lang key `sched_manual`); "Schedule: --" remains only for
+fetch-pending/no-match. Scheduled matching also hardened: the route key now
+accepts `getNextRouteId()` besides `getThisRouteId()` (route-handover stop
+within one depot block), preferring the thisRouteId hit.
+
+**BUG "next stop randomly turns on/off"** — two causes fixed:
+1. The walk now WRAPS repeat-infinitely routes instead of stopping at path
+   end: on reaching `repeatIndex2` it continues at `repeatIndex1` with the
+   distance rebased by `path[repeatIndex2].getStartDistance()` (or the last
+   segment's end when `repeatIndex2 == path.size()`) — the exact
+   `Vehicle.simulate` wrap math (Vehicle.java:496 + the totalDistance
+   derivation). `repeatIndex1/2` are protected final schema fields with only
+   protected getters in 4.0.1, read via the same cached-reflection helper as
+   `railProgress` (no new mixin); on lookup failure the walk degrades to the
+   old stop-at-end behavior. All three scans (next stop, limits, signals) now
+   consume one shared wrapped walk with head-relative distances; the walk runs
+   to the lookahead AND until one platform stop has been seen (capped at one
+   full extra loop / 4096 segments / 100 km).
+2. Sticky section: when a refresh finds no stop for ANY reason, the last known
+   next-stop rows keep showing for a 3 s grace period before the section
+   hides. Also fixed in passing: the scan previously started at headIndex+1
+   and skipped the platform segment the head was already ON while pulling in
+   (briefly naming the stop after next); the head segment is now checked
+   first. The obstruction cue is skipped when the next stop lies past a wrap
+   (`getStoppingPoint()` is a plain rail-progress value, not comparable across
+   the wrap).
+
+**ADDITION: doors row** (`hudShowDoors`, default true, settings toggle + lang
+keys): OPEN (green) / OPENING n% / CLOSING n% (amber, percent = door position,
+100 = fully open) / CLOSED (white), from the same two values MTR's driving GUI
+reads — `persistentVehicleData.getDoorValue()` (0..1) and
+`persistentVehicleData.getAdjustedDoorMultiplier(vehicleExtraData)` (both
+public, javap-verified; the adjusted multiplier is what MTR's own door tick
+integrates).
+
+**ADDITION: door obstruction alert** — when
+`ClientDoorObstructions.isObstructed(vehicleId)` (Feature 5-era server
+feature's client mirror; read-only here) reports the driven vehicle, a
+"DOORS OBSTRUCTED" row tops the panel flashing at 2 Hz (250 ms on/off; the
+blink phase is a per-frame color choice over the cached snapshot flag — the
+row keeps its height while dark so the panel never jumps) and the doors row
+reads OBSTRUCTED (red). The alert row bypasses `hudShowDoors` (master toggle
+still applies).
+
+Cache discipline unchanged: everything above is computed in the 4 Hz snapshot;
+no new per-frame work beyond the blink phase check. New/changed files this
+update: `client/mtraddon/DrivingHud.java` (rewritten walk + fixes),
+`client/mtraddon/DrivingHudScreen.java` (+doors toggle, 6-row column),
+`client/mtraddon/AddonClientConfig.java` (+`hudShowDoors`),
+`assets/station_announcer/lang/en_us.json` (+9 keys).
+
 ---
 
 ## Feature Agent 5 — Dynamic platform selection (platform groups) — 2026-08-07
@@ -1234,3 +1297,53 @@ GUI needs a real brush right-click, and the flashing needs a hold actually firin
 so a green "time to leave" can light while our hold rule is holding the train (MTR's
 arrival data knows nothing about the cancelled `startUp`). Suppressing green while held
 is a one-line change in `paintHoldingLight` if Thomas wants it.
+
+### Feature Agent 1 — Update: random door obstructions (2026-08-08)
+
+New Thomas request: a low chance that "something gets stuck in the doors" when a
+train tries to depart, bouncing them back open for a few seconds.
+
+- **Config** (`doorObstruction` in `config/station-announcer-addon.json`):
+  `enabled` (true), `chancePercent` (3, clamped 0–100), `minSeconds` (2),
+  `maxSeconds` (6, clamped ≥ min, both ≤ 120). Volatile config reads; zero work
+  when disabled.
+- **`mtraddon/DoorObstructionEngine.java`** (new), simulator-thread safe with the
+  same discipline as HoldRuleEngine (ConcurrentHashMaps, per-key single-writer,
+  ThreadLocalRandom per simulator thread, shared stopped-at-platform test).
+- **ATO path**: `VehicleMixin`'s existing `startUp` injection now consults the
+  engine AFTER the hold check declines — so the once-per-stop roll lands on the
+  first attempt that would genuinely have departed (including the release moment
+  of a Feature-1 hold), and held ticks never roll. Stuck = cancel + re-assert
+  `openDoors()` (existing `VehicleExtraDataAccessor`) for a uniform-random
+  [min,max]-second window; per-vehicle `{lastAttempt, stuckUntil}` state with the
+  hold engine's 5 s new-stop gap prevents re-rolls within a stop.
+- **Manual path**: new HEAD/TAIL bracket around package-private
+  `Vehicle.updateRidingEntities(Lorg/mtr/libraries/it/unimi/dsi/fastutil/objects/ObjectArrayList;)V`
+  (javap-verified; the driver's `manualToggleDoors` close at `speed == 0` is a
+  `toggleDoors()` inside it — the `speed > 0` force-close branch is left alone).
+  HEAD records `getDoorMultiplier()`, TAIL hands before/after to the engine: an
+  open→closed flip while stationary at a platform rolls once per platform visit
+  (per-vehicle `{platformId, stuckUntil}`, reset when the vehicle moves); while
+  stuck, every close attempt bounces straight back open AND `startUp` is refused
+  (manual stuck window checked in `shouldObstructDeparture`), so the driver
+  cannot power away through an obstruction. Manual vehicles are excluded from
+  the ATO roll so no departure is ever rolled by both paths.
+- **Exposure**: `DoorObstructionEngine.obstructedVehicleIds()` (wall-clock-
+  deadline map, pruned on read, server thread). `AddonInit`'s existing 10-tick
+  hold-state ticker now also diffs this set and broadcasts new S2C
+  `addon_door_obstructions` (varint count + vehicle-id longs) on change; join
+  sync included. Client: minimal `ClientDoorObstructions` static set +
+  receiver in `AddonClientInit`, cleared on disconnect — the HUD agent renders it.
+- Per-event logging at debug only.
+- **ATO vs manual in one line**: ATO rolls when the simulation tries to depart
+  (startUp), manual rolls when the driver's door-close lands
+  (updateRidingEntities); both share the config, the reopen mechanism, the
+  broadcast set, and the "only at platforms" guard.
+
+Files: `mtraddon/DoorObstructionEngine.java` (new),
+`client/mtraddon/ClientDoorObstructions.java` (new),
+`mixin/VehicleMixin.java` (obstruction check + updateRidingEntities bracket),
+`mtraddon/AddonServerConfig.java` (doorObstruction section),
+`mtraddon/AddonNetworking.java` (DOOR_OBSTRUCTIONS_S2C + sync/broadcast),
+`mtraddon/AddonInit.java` (ticker diff + join sync + clear),
+`client/mtraddon/AddonClientInit.java` (receiver + disconnect clear).

@@ -49,6 +49,9 @@ public class AddonClientConfig {
     /** Show the EARLY / ON TIME / LATE schedule indicator on the HUD. */
     public boolean hudShowOnTime = true;
 
+    /** Show the door state row (OPEN / OPENING / CLOSING / CLOSED / OBSTRUCTED) on the HUD. */
+    public boolean hudShowDoors = true;
+
     /** Lookahead recomputes per second (clamped 1–20; rendering itself only draws the cache). */
     public int hudUpdateHz = 4;
 

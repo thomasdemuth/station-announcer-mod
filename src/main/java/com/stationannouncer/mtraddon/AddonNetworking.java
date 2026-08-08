@@ -63,6 +63,7 @@ import java.util.Map;
 public final class AddonNetworking {
     public static final Identifier HOLD_RULES_S2C = StationAnnouncer.id("addon_hold_rules");
     public static final Identifier HOLD_STATE_S2C = StationAnnouncer.id("addon_hold_state");
+    public static final Identifier DOOR_OBSTRUCTIONS_S2C = StationAnnouncer.id("addon_door_obstructions");
     public static final Identifier UPDATE_HOLD_RULE_C2S = StationAnnouncer.id("addon_update_hold_rule");
     public static final Identifier DWELL_OVERRIDES_S2C = StationAnnouncer.id("addon_dwell_overrides");
     public static final Identifier UPDATE_DWELL_OVERRIDES_C2S = StationAnnouncer.id("addon_update_dwell_overrides");
@@ -286,6 +287,29 @@ public final class AddonNetworking {
         buf.writeVarInt(heldPlatforms.size());
         for (long platformId : heldPlatforms) {
             buf.writeLong(platformId);
+        }
+        return buf;
+    }
+
+    // ---------------------------------------------------- door obstructions
+
+    /** On join, so a late joiner sees an obstruction already in progress. */
+    public static void syncDoorObstructionsTo(PacketSender sender, java.util.Set<Long> obstructedVehicleIds) {
+        sender.sendPacket(DOOR_OBSTRUCTIONS_S2C, buildDoorObstructionsBuf(obstructedVehicleIds));
+    }
+
+    /** Whenever the ticker sees the obstructed-vehicle set change. */
+    public static void broadcastDoorObstructions(MinecraftServer server, java.util.Set<Long> obstructedVehicleIds) {
+        for (ServerPlayerEntity player : server.getPlayerManager().getPlayerList()) {
+            ServerPlayNetworking.send(player, DOOR_OBSTRUCTIONS_S2C, buildDoorObstructionsBuf(obstructedVehicleIds));
+        }
+    }
+
+    private static PacketByteBuf buildDoorObstructionsBuf(java.util.Set<Long> obstructedVehicleIds) {
+        PacketByteBuf buf = PacketByteBufs.create();
+        buf.writeVarInt(obstructedVehicleIds.size());
+        for (long vehicleId : obstructedVehicleIds) {
+            buf.writeLong(vehicleId);
         }
         return buf;
     }

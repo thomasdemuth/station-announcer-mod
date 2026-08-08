@@ -22,6 +22,7 @@ public final class AddonInit {
 
     /** What the clients currently believe; the ticker only sends when this changes. */
     private static Set<Long> lastHoldState = Set.of();
+    private static Set<Long> lastDoorObstructions = Set.of();
     private static int holdStateCountdown;
 
     private AddonInit() {
@@ -49,30 +50,38 @@ public final class AddonInit {
         ServerLifecycleEvents.SERVER_STOPPED.register(server -> {
             HoldRuleEngine.clearRuntimeState();
             PlatformGroupEngine.clearRuntimeState();
+            DoorObstructionEngine.clearRuntimeState();
             lastHoldState = Set.of();
+            lastDoorObstructions = Set.of();
             holdStateCountdown = 0;
         });
 
-        // Which platforms are holding a train right now, for the yellow holding
-        // lights. Twice a second, and only sent when the answer changes — which,
-        // with no train being held, is never: the whole tick is one isEmpty check.
+        // Which platforms are holding a train right now (yellow holding lights)
+        // and which vehicles have something stuck in their doors (HUD). Twice a
+        // second, and only sent when an answer changes — which, with nothing held
+        // or stuck, is never: the whole tick is two isEmpty checks.
         ServerTickEvents.END_SERVER_TICK.register(server -> {
             if (--holdStateCountdown > 0) {
                 return;
             }
             holdStateCountdown = HOLD_STATE_POLL_TICKS;
             Set<Long> held = HoldRuleEngine.heldPlatforms();
-            if (held.equals(lastHoldState)) {
-                return;
+            if (!held.equals(lastHoldState)) {
+                lastHoldState = held;
+                AddonNetworking.broadcastHoldState(server, held);
             }
-            lastHoldState = held;
-            AddonNetworking.broadcastHoldState(server, held);
+            Set<Long> obstructed = DoorObstructionEngine.obstructedVehicleIds();
+            if (!obstructed.equals(lastDoorObstructions)) {
+                lastDoorObstructions = obstructed;
+                AddonNetworking.broadcastDoorObstructions(server, obstructed);
+            }
         });
 
         // Late joiners need the current rule/override maps for the GUIs (and future HUDs).
         ServerPlayConnectionEvents.JOIN.register((handler, sender, server) -> {
             AddonNetworking.syncHoldRulesTo(sender);
             AddonNetworking.syncHoldStateTo(sender, lastHoldState);
+            AddonNetworking.syncDoorObstructionsTo(sender, lastDoorObstructions);
             AddonNetworking.syncDwellOverridesTo(sender);
             AddonNetworking.syncLiftDoorsTo(sender);
             AddonNetworking.syncPlatformGroupsTo(sender);

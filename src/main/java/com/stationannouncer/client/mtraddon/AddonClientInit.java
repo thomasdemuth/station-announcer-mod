@@ -95,9 +95,25 @@ public final class AddonClientInit {
                     client.execute(() -> ClientHoldState.replace(held));
                 });
 
+        // Server → client door-obstruction sync (join + whenever the stuck set
+        // changes). Data only — the driving HUD renders it.
+        ClientPlayNetworking.registerGlobalReceiver(AddonNetworking.DOOR_OBSTRUCTIONS_S2C,
+                (client, handler, buf, responseSender) -> {
+                    int count = buf.readVarInt();
+                    if (count < 0 || count > 10_000) {
+                        return;
+                    }
+                    Set<Long> obstructed = new HashSet<>(Math.max(1, count));
+                    for (int i = 0; i < count; i++) {
+                        obstructed.add(buf.readLong());
+                    }
+                    client.execute(() -> ClientDoorObstructions.replace(obstructed));
+                });
+
         ClientPlayConnectionEvents.DISCONNECT.register((handler, client) -> {
             ClientHoldRules.clear();
             ClientHoldState.clear();
+            ClientDoorObstructions.clear();
             ClientDwellOverrides.clear();
             ClientLiftDoors.clear();
             ClientPlatformGroups.clear();

@@ -41,20 +41,33 @@ import java.util.List;
  * <p>Shows, while the player is DRIVING a vehicle (riding it AND holding a
  * valid driver key for its depot — the exact visibility condition of MTR's own
  * {@code DrivingGuiRenderer}): upcoming speed-limit changes, upcoming signal
- * blocks with an aspect estimate, the next stop (name / distance / ETA), and
- * an EARLY / ON TIME / LATE schedule indicator.</p>
+ * blocks with an aspect estimate, the next stop (name / distance / ETA), a
+ * door state row (with the door-obstruction alert from the addon's server
+ * feature), and an EARLY / ON TIME / LATE schedule indicator.</p>
  *
  * <p><b>Performance contract</b> (ARCHITECTURE §6): the lookahead is computed
  * in a {@link ClientTickEvents} handler throttled to {@code hudUpdateHz}
  * (default 4 Hz) — never per frame. The {@link HudRenderCallback} only draws
  * the cached {@link Snapshot} (pre-built text rows; the only per-frame work is
- * a handful of {@code TextRenderer.getWidth} calls and fills). The schedule
- * check reuses the arrivals trick proven by {@code RailroadRouteData}: a
- * cached {@code ArrivalsCacheClient.requestArrivals} fetch (≥{@code
+ * a handful of {@code TextRenderer.getWidth} calls, fills, and the blink phase
+ * of the obstruction alert — a color choice, not a recomputation). The
+ * schedule check reuses the arrivals trick proven by {@code RailroadRouteData}:
+ * a cached {@code ArrivalsCacheClient.requestArrivals} fetch (≥{@code
  * hudArrivalsCacheMillis}, default 1000 ms) for the next platform id, matching
  * our own run by {@code routeId + departureIndex}. When nobody is driving, the
  * per-update work is one small vehicle-set scan and nothing is rendered; with
  * {@code hudEnabled} off, not even that.</p>
+ *
+ * <p><b>Repeat-infinitely routes</b>: the path walk wraps exactly like
+ * {@code Vehicle.simulate} does (on reaching {@code repeatIndex2}, continue at
+ * {@code repeatIndex1}; the wrap base is {@code path[repeatIndex2].
+ * getStartDistance()} — or the last segment's end when {@code repeatIndex2 ==
+ * path.size()} — mirroring how TSC derives {@code totalDistance}). The repeat
+ * indices are protected schema fields with no public getter in 4.0.1, read via
+ * cached reflection like {@code railProgress}. As a belt-and-braces measure
+ * the next-stop section is also sticky: when a refresh finds no stop for any
+ * reason, the last known one keeps showing for {@link #NEXT_STOP_GRACE_MILLIS}
+ * before the section hides.</p>
  *
  * <p>All state is static, touched only on the client thread, and cleared on
  * disconnect.</p>
@@ -80,6 +93,16 @@ public final class DrivingHud {
     private static final int MAX_SPEED_LIMIT_ENTRIES = 3;
     private static final int MAX_SIGNAL_ENTRIES = 3;
 
+    /** How long the last known next stop keeps showing when a refresh finds none. */
+    private static final long NEXT_STOP_GRACE_MILLIS = 3000;
+
+    /** Hard caps on the path walk, whatever the config says. */
+    private static final int MAX_WALK_SEGMENTS = 4096;
+    private static final double MAX_WALK_DISTANCE = 100_000;
+
+    /** Obstruction alert blink: 250 ms on, 250 ms off (2 Hz). */
+    private static final long BLINK_PERIOD_MILLIS = 250;
+
     // ------------------------------------------------------------- lifecycle
     private static KeyBinding settingsKey;
 
@@ -94,10 +117,22 @@ public final class DrivingHud {
     private static ObjectArrayList<ArrivalResponse> arrivals = new ObjectArrayList<>();
     private static final LongArrayList ARRIVALS_REQUEST_IDS = new LongArrayList();
 
+    // Sticky next-stop section (see class javadoc).
+    @Nullable
+    private static List<Row> lastNextStopRows;
+    private static long lastNextStopAt;
+
     /** Cached accessor for {@code VehicleSchema.railProgress} (protected, no getter in 4.0.1). */
     @Nullable
     private static Field railProgressField;
     private static boolean railProgressLookupFailed;
+
+    /** Cached accessors for {@code VehicleExtraDataSchema.repeatIndex1/2} (protected fields; getters are protected too). */
+    @Nullable
+    private static Field repeatIndex1Field;
+    @Nullable
+    private static Field repeatIndex2Field;
+    private static boolean repeatIndexLookupFailed;
 
     private DrivingHud() {
     }
@@ -119,6 +154,8 @@ public final class DrivingHud {
         arrivalsPlatformId = 0;
         arrivals = new ObjectArrayList<>();
         ARRIVALS_REQUEST_IDS.clear();
+        lastNextStopRows = null;
+        lastNextStopAt = 0;
     }
 
     // ------------------------------------------------------------- tick side
@@ -180,13 +217,10 @@ public final class DrivingHud {
         }
         // Last index whose startDistance <= railProgress; -1 before the path
         // starts. When stopped exactly at a platform boundary this is already
-        // the segment AFTER the platform, so every scan below naturally looks
-        // at what comes next. Repeat-infinitely routes: we simply stop the walk
-        // at path end rather than wrapping to getRepeatIndex1() (protected in
-        // 4.0.1) — after the final stop of a looping route the lists go quiet
-        // until MTR advances the path. Documented limitation.
+        // the segment AFTER the platform, so the scans naturally look at what
+        // comes next; while still rolling INTO a platform the head segment IS
+        // the platform segment, which findNextStop checks separately.
         int headIndex = Utilities.getIndexFromConditionalList(path, railProgress);
-        int scanStart = Math.max(0, headIndex + 1);
 
         double speed = vehicle.getSpeed(); // meters per millisecond
         double speedKph = speed * 3600;
@@ -194,27 +228,39 @@ public final class DrivingHud {
         int lookahead = MathHelper.clamp(config.hudLookaheadMeters, 100, 20_000);
         // Our own vehicle marks blockedRailIds up to its braking padding ahead
         // (VehicleExtension "Write signals"); occupancy hits inside that zone
-        // would be self-detections and are ignored.
-        double selfPaddingEnd = railProgress + 0.5 * speed * speed / deceleration
+        // would be self-detections and are ignored. Distance is relative to
+        // the head, so it works for wrapped segments too.
+        double selfPaddingLength = 0.5 * speed * speed / deceleration
                 + vehicle.getTransportMode().stoppingSpace;
+
+        List<WalkEntry> walk = buildWalk(extra, path, headIndex, railProgress, lookahead);
 
         List<Row> rows = new ArrayList<>();
 
-        NextStop nextStop = config.hudShowNextStop || config.hudShowOnTime || config.hudShowSignals
-                ? findNextStop(extra, path, scanStart, railProgress)
-                : null;
+        boolean obstructed = ClientDoorObstructions.isObstructed(vehicle.getId());
+        if (obstructed) {
+            // The alert outranks every toggle except the master one.
+            rows.add(new Row(Text.translatable("gui.station_announcer.driving_hud.doors_obstructed_alert")
+                    .getString(), COLOR_RED, COLOR_RED, true));
+            rows.add(Row.GAP);
+        }
+
+        NextStop nextStop = findNextStop(extra, path, headIndex, railProgress, walk);
 
         if (config.hudShowNextStop) {
-            buildNextStopRows(rows, extra, nextStop, speed, deceleration);
+            buildNextStopRows(rows, extra, nextStop, speed, deceleration, now);
         }
         if (config.hudShowOnTime) {
             buildOnTimeRow(rows, config, vehicle, extra, nextStop, now);
         }
+        if (config.hudShowDoors) {
+            buildDoorsRow(rows, vehicle, extra, obstructed);
+        }
         if (config.hudShowSpeedLimits) {
-            buildSpeedLimitRows(rows, path, headIndex, scanStart, railProgress, lookahead, speedKph);
+            buildSpeedLimitRows(rows, path, headIndex, walk, lookahead, speedKph);
         }
         if (config.hudShowSignals) {
-            buildSignalRows(rows, path, scanStart, railProgress, lookahead, selfPaddingEnd, extra, nextStop);
+            buildSignalRows(rows, walk, lookahead, selfPaddingLength, extra, nextStop);
         }
 
         // Trim a trailing section gap.
@@ -224,48 +270,141 @@ public final class DrivingHud {
         return rows.isEmpty() ? null : new Snapshot(rows);
     }
 
+    // ------------------------------------------------------------- path walk
+
+    /**
+     * The segments ahead of the head, each with its distance from the head,
+     * wrapping through the repeat indices exactly like {@code Vehicle.simulate}
+     * (see class javadoc). The walk covers at least the lookahead and keeps
+     * going until it has also seen one platform stop (so the next stop is
+     * found regardless of the configured lookahead), bounded by one full extra
+     * loop / {@link #MAX_WALK_SEGMENTS} / {@link #MAX_WALK_DISTANCE}.
+     */
+    private static List<WalkEntry> buildWalk(VehicleExtraData extra, ObjectImmutableList<PathData> path,
+                                             int headIndex, double railProgress, int lookahead) {
+        int repeatIndex1 = 0;
+        int repeatIndex2 = 0;
+        long[] repeatIndices = readRepeatIndices(extra);
+        if (repeatIndices != null) {
+            repeatIndex1 = (int) repeatIndices[0];
+            repeatIndex2 = (int) repeatIndices[1];
+        }
+        // The wrap base mirrors how TSC derives totalDistance for repeating
+        // routes: path[repeatIndex2].getStartDistance(), or the very end of
+        // the path when repeatIndex2 lands one past it.
+        boolean repeats = repeatIndex2 > 0 && repeatIndex1 >= 0
+                && repeatIndex1 < repeatIndex2 && repeatIndex1 < path.size() && repeatIndex2 <= path.size();
+        double wrapBase = 0;
+        double loopStart = 0;
+        if (repeats) {
+            wrapBase = repeatIndex2 < path.size()
+                    ? path.get(repeatIndex2).getStartDistance()
+                    : path.get(path.size() - 1).getEndDistance();
+            loopStart = path.get(repeatIndex1).getStartDistance();
+            if (wrapBase - loopStart <= 0) {
+                repeats = false; // degenerate loop — never wrap
+            }
+        }
+
+        List<WalkEntry> walk = new ArrayList<>();
+        long sidingId = extra.getSidingId();
+        boolean dwellSeen = false;
+        int i = Math.max(0, headIndex + 1);
+        double offset = -railProgress; // entry distance = startDistance + offset
+        int wraps = 0;
+        while (walk.size() < MAX_WALK_SEGMENTS) {
+            if (i >= path.size() || (repeats && i >= repeatIndex2)) {
+                if (!repeats || wraps >= 1) {
+                    break; // path end, or one full extra loop already walked
+                }
+                offset += wrapBase - loopStart;
+                i = repeatIndex1;
+                wraps++;
+                continue;
+            }
+            PathData pathData = path.get(i);
+            double distance = pathData.getStartDistance() + offset;
+            if (distance > MAX_WALK_DISTANCE || (distance > lookahead && dwellSeen)) {
+                break;
+            }
+            walk.add(new WalkEntry(pathData, distance, wraps > 0));
+            if (isPlatformDwell(pathData, sidingId)) {
+                dwellSeen = true;
+            }
+            i++;
+        }
+        return walk;
+    }
+
+    private static boolean isPlatformDwell(PathData pathData, long sidingId) {
+        return pathData.getDwellTime() > 0 && pathData.getSavedRailBaseId() != 0
+                && pathData.getSavedRailBaseId() != sidingId;
+    }
+
     // ------------------------------------------------------------- next stop
 
-    /** The next platform the vehicle will stop at, or null (path end / siding). */
+    /**
+     * The next platform the vehicle will stop at, or null. The head segment
+     * itself is checked first: while rolling into a platform the head is
+     * already ON the platform segment, and that platform — not the one after —
+     * is still the next stop until the head passes its end.
+     */
     @Nullable
     private static NextStop findNextStop(VehicleExtraData extra, ObjectImmutableList<PathData> path,
-                                         int scanStart, double railProgress) {
+                                         int headIndex, double railProgress, List<WalkEntry> walk) {
         long sidingId = extra.getSidingId();
-        for (int i = scanStart; i < path.size(); i++) {
-            PathData pathData = path.get(i);
-            if (pathData.getDwellTime() > 0 && pathData.getSavedRailBaseId() != 0
-                    && pathData.getSavedRailBaseId() != sidingId
-                    && pathData.getEndDistance() > railProgress + 0.5) {
+        if (headIndex >= 0 && headIndex < path.size()) {
+            PathData head = path.get(headIndex);
+            if (isPlatformDwell(head, sidingId) && head.getEndDistance() > railProgress + 0.5) {
+                return new NextStop(head.getSavedRailBaseId(),
+                        head.getEndDistance() - railProgress, head.getEndDistance(), false);
+            }
+        }
+        for (WalkEntry entry : walk) {
+            PathData pathData = entry.pathData();
+            if (isPlatformDwell(pathData, sidingId)) {
+                double length = pathData.getEndDistance() - pathData.getStartDistance();
                 return new NextStop(pathData.getSavedRailBaseId(),
-                        pathData.getEndDistance() - railProgress, pathData.getEndDistance());
+                        entry.distance() + length, pathData.getEndDistance(), entry.wrapped());
             }
         }
         return null;
     }
 
     private static void buildNextStopRows(List<Row> rows, VehicleExtraData extra, @Nullable NextStop nextStop,
-                                          double speed, double deceleration) {
+                                          double speed, double deceleration, long now) {
         if (nextStop == null) {
+            // Sticky grace: a refresh that finds no stop (repeat-wrap edges,
+            // data mid-sync, …) keeps the last known section briefly instead
+            // of blinking the panel section in and out.
+            if (lastNextStopRows != null && now - lastNextStopAt < NEXT_STOP_GRACE_MILLIS) {
+                rows.addAll(lastNextStopRows);
+            } else {
+                lastNextStopRows = null;
+            }
             return;
         }
-        rows.add(new Row(Text.translatable("gui.station_announcer.driving_hud.next",
+        List<Row> section = new ArrayList<>(3);
+        section.add(new Row(Text.translatable("gui.station_announcer.driving_hud.next",
                 stopName(extra, nextStop.platformId())).getString(), COLOR_TEXT, 0));
         long etaSeconds = etaSeconds(nextStop.distance(), speed, deceleration);
         String distance = formatDistance(nextStop.distance());
         String detail = etaSeconds >= 0
                 ? Text.translatable("gui.station_announcer.driving_hud.eta", distance, formatSeconds(etaSeconds)).getString()
                 : distance;
-        rows.add(new Row(detail, COLOR_FAINT, 0));
-        rows.add(Row.GAP);
+        section.add(new Row(detail, COLOR_FAINT, 0));
+        section.add(Row.GAP);
+        rows.addAll(section);
+        lastNextStopRows = List.copyOf(section);
+        lastNextStopAt = now;
     }
 
     /**
-     * Name of the platform's station (falling back to
-     * {@code getNextStationName()} would be MTR's own label, but around the
-     * moment the head enters the platform segment MTR already points it one
-     * station further — the platform-map lookup always matches the platform
-     * whose distance we display, so it is preferred, with MTR's label and the
-     * bare platform name as fallbacks).
+     * Name of the platform's station. The platform-map lookup comes first
+     * because it always matches the platform whose distance we display; MTR's
+     * own {@code getNextStationName()} label points one station further for
+     * the stretch where the head is already on the platform segment. Falls
+     * back to MTR's label, then the bare platform name.
      */
     private static String stopName(VehicleExtraData extra, long platformId) {
         Platform platform = MinecraftClientData.getInstance().platformIdMap.get(platformId);
@@ -302,9 +441,16 @@ public final class DrivingHud {
     private static void buildOnTimeRow(List<Row> rows, AddonClientConfig config, VehicleExtension vehicle,
                                        VehicleExtraData extra, @Nullable NextStop nextStop, long now) {
         long departureIndex = vehicle.getDepartureIndex();
-        if (nextStop == null || departureIndex < 0) {
-            // Manual sidings run with departureIndex == -1: MTR publishes no
-            // schedule for them, so there is nothing to deviate from.
+        if (departureIndex < 0) {
+            // Manual sidings run every vehicle with departureIndex == -1 and
+            // publish their arrivals the same way — there is no schedule to
+            // deviate from. Say so instead of a bare dash.
+            rows.add(new Row(Text.translatable("gui.station_announcer.driving_hud.sched_manual").getString(),
+                    COLOR_FAINT, 0));
+            rows.add(Row.GAP);
+            return;
+        }
+        if (nextStop == null) {
             rows.add(new Row(Text.translatable("gui.station_announcer.driving_hud.sched_unknown").getString(),
                     COLOR_FAINT, 0));
             rows.add(Row.GAP);
@@ -320,12 +466,20 @@ public final class DrivingHud {
             arrivals = ArrivalsCacheClient.INSTANCE.requestArrivals(ARRIVALS_REQUEST_IDS);
         }
 
-        long routeId = extra.getThisRouteId();
+        // One specific run is identified by routeId + departureIndex — the
+        // same pair RailroadRouteData matches on. thisRouteId is the primary
+        // key; nextRouteId covers the stop where one route hands over to the
+        // next within the same depot block.
+        long thisRouteId = extra.getThisRouteId();
+        long nextRouteId = extra.getNextRouteId();
         ArrivalResponse match = null;
         for (ArrivalResponse arrival : arrivals) {
-            if (arrival.getRouteId() == routeId && arrival.getDepartureIndex() == departureIndex) {
+            if (arrival.getDepartureIndex() == departureIndex
+                    && (arrival.getRouteId() == thisRouteId || arrival.getRouteId() == nextRouteId)) {
                 match = arrival;
-                break;
+                if (arrival.getRouteId() == thisRouteId) {
+                    break;
+                }
             }
         }
         if (match == null) {
@@ -354,29 +508,68 @@ public final class DrivingHud {
         rows.add(Row.GAP);
     }
 
+    // -------------------------------------------------------------- doors row
+
+    /**
+     * Door state from the same two values MTR's own driving GUI reads: the
+     * adjusted door multiplier (target/direction) and the persistent 0..1
+     * animation value. The percent shown while moving is the door position
+     * (100 = fully open).
+     */
+    private static void buildDoorsRow(List<Row> rows, VehicleExtension vehicle, VehicleExtraData extra,
+                                      boolean obstructed) {
+        double doorValue = vehicle.persistentVehicleData.getDoorValue();
+        int doorMultiplier = vehicle.persistentVehicleData.getAdjustedDoorMultiplier(extra);
+        String key;
+        int color;
+        boolean showPercent = false;
+        if (obstructed) {
+            key = "gui.station_announcer.driving_hud.doors_obstructed";
+            color = COLOR_RED;
+        } else if (doorMultiplier > 0) {
+            if (doorValue >= 1) {
+                key = "gui.station_announcer.driving_hud.doors_open";
+                color = COLOR_GREEN;
+            } else {
+                key = "gui.station_announcer.driving_hud.doors_opening";
+                color = COLOR_AMBER;
+                showPercent = true;
+            }
+        } else if (doorValue <= 0) {
+            key = "gui.station_announcer.driving_hud.doors_closed";
+            color = COLOR_TEXT;
+        } else {
+            key = "gui.station_announcer.driving_hud.doors_closing";
+            color = COLOR_AMBER;
+            showPercent = true;
+        }
+        String text = showPercent
+                ? Text.translatable(key, Math.round(doorValue * 100)).getString()
+                : Text.translatable(key).getString();
+        rows.add(new Row(text, color, 0));
+        rows.add(Row.GAP);
+    }
+
     // ---------------------------------------------------------- speed limits
 
     private static void buildSpeedLimitRows(List<Row> rows, ObjectImmutableList<PathData> path,
-                                            int headIndex, int scanStart, double railProgress,
+                                            int headIndex, List<WalkEntry> walk,
                                             int lookahead, double speedKph) {
-        long currentLimit = headIndex >= 0 && headIndex < path.size()
+        long previousLimit = headIndex >= 0 && headIndex < path.size()
                 ? path.get(headIndex).getSpeedLimitKilometersPerHour()
                 : 0;
-        long previousLimit = currentLimit;
         int added = 0;
-        for (int i = scanStart; i < path.size() && added < MAX_SPEED_LIMIT_ENTRIES; i++) {
-            PathData pathData = path.get(i);
-            double distance = pathData.getStartDistance() - railProgress;
-            if (distance > lookahead) {
+        for (WalkEntry entry : walk) {
+            if (added >= MAX_SPEED_LIMIT_ENTRIES || entry.distance() > lookahead) {
                 break;
             }
-            long limit = pathData.getSpeedLimitKilometersPerHour();
+            long limit = entry.pathData().getSpeedLimitKilometersPerHour();
             if (limit > 0 && limit != previousLimit) {
                 // Amber when the limit ahead is below the current speed — the
                 // driver has braking to do.
                 int color = limit < speedKph ? COLOR_AMBER : COLOR_TEXT;
                 rows.add(new Row(Text.translatable("gui.station_announcer.driving_hud.limit",
-                        formatDistance(Math.max(0, distance)), limit).getString(), color, 0));
+                        formatDistance(Math.max(0, entry.distance())), limit).getString(), color, 0));
                 added++;
             }
             if (limit > 0) {
@@ -390,33 +583,30 @@ public final class DrivingHud {
 
     // -------------------------------------------------------------- signals
 
-    private static void buildSignalRows(List<Row> rows, ObjectImmutableList<PathData> path,
-                                        int scanStart, double railProgress, int lookahead,
-                                        double selfPaddingEnd, VehicleExtraData extra,
+    private static void buildSignalRows(List<Row> rows, List<WalkEntry> walk, int lookahead,
+                                        double selfPaddingLength, VehicleExtraData extra,
                                         @Nullable NextStop nextStop) {
         MinecraftClientData data = MinecraftClientData.getInstance();
         int added = 0;
-        int lastSignalIndex = Integer.MIN_VALUE;
+        boolean previousWasSignal = false;
         int lastAspect = -1;
-        for (int i = scanStart; i < path.size() && added < MAX_SIGNAL_ENTRIES; i++) {
-            PathData pathData = path.get(i);
-            double distance = pathData.getStartDistance() - railProgress;
-            if (distance > lookahead) {
+        for (WalkEntry entry : walk) {
+            if (added >= MAX_SIGNAL_ENTRIES || entry.distance() > lookahead) {
                 break;
             }
+            PathData pathData = entry.pathData();
             IntAVLTreeSet signalColors = pathData.getSignalColors();
             if (signalColors.isEmpty()) {
+                previousWasSignal = false;
                 continue;
             }
-            int aspect = aspectOf(data, pathData, signalColors,
-                    pathData.getStartDistance() > selfPaddingEnd);
+            int aspect = aspectOf(data, pathData, signalColors, entry.distance() > selfPaddingLength);
             // Consecutive signalled segments with the same aspect are one
             // block; a gap or an aspect change starts a new entry.
-            if (i == lastSignalIndex + 1 && aspect == lastAspect) {
-                lastSignalIndex = i;
+            if (previousWasSignal && aspect == lastAspect) {
                 continue;
             }
-            lastSignalIndex = i;
+            previousWasSignal = true;
             lastAspect = aspect;
             String aspectText = Text.translatable(switch (aspect) {
                 case ASPECT_OCCUPIED -> "gui.station_announcer.driving_hud.aspect_occupied";
@@ -429,14 +619,17 @@ public final class DrivingHud {
                 default -> COLOR_GREEN;
             };
             rows.add(new Row(Text.translatable("gui.station_announcer.driving_hud.signal",
-                    formatDistance(Math.max(0, distance)), aspectText).getString(), color, color));
+                    formatDistance(Math.max(0, entry.distance())), aspectText).getString(), color, color));
             added++;
         }
 
         // Obstruction cue: MTR plans stops via the stopping point; when it
         // lands short of the next platform's end, something (a signal held
-        // against us or a vehicle ahead) is in the way.
-        if (nextStop != null && extra.getStoppingPoint() < nextStop.endDistance() - 0.5) {
+        // against us or a vehicle ahead) is in the way. The stopping point is
+        // a plain rail-progress value, so it is only comparable to a next stop
+        // on THIS side of a repeat wrap.
+        if (nextStop != null && !nextStop.wrapped()
+                && extra.getStoppingPoint() < nextStop.endDistance() - 0.5) {
             rows.add(new Row(Text.translatable("gui.station_announcer.driving_hud.obstruction").getString(),
                     COLOR_RED, COLOR_RED));
             added++;
@@ -525,10 +718,19 @@ public final class DrivingHud {
 
         context.fill(x, y, x + panelWidth, y + panelHeight, COLOR_BACKGROUND);
 
+        // 2 Hz blink phase for alert rows — a per-frame color choice off the
+        // cached snapshot, not a recomputation. The row keeps its height while
+        // dark so the panel never jumps.
+        boolean blinkOn = (System.currentTimeMillis() / BLINK_PERIOD_MILLIS) % 2 == 0;
+
         int textY = y + PANEL_PADDING;
         for (Row row : rows) {
             if (row == Row.GAP) {
                 textY += GAP_HEIGHT;
+                continue;
+            }
+            if (row.blink() && !blinkOn) {
+                textY += LINE_HEIGHT;
                 continue;
             }
             int textX = x + PANEL_PADDING;
@@ -561,6 +763,8 @@ public final class DrivingHud {
         return (split >= 0 ? raw.substring(0, split) : raw).trim();
     }
 
+    // ------------------------------------------------------------ reflection
+
     private static double readRailProgress(VehicleExtension vehicle) {
         try {
             if (railProgressField == null) {
@@ -578,10 +782,39 @@ public final class DrivingHud {
         }
     }
 
+    /** {@code [repeatIndex1, repeatIndex2]}, or null when unreadable (walk then simply stops at path end). */
+    @Nullable
+    private static long[] readRepeatIndices(VehicleExtraData extra) {
+        try {
+            if (repeatIndex1Field == null || repeatIndex2Field == null) {
+                if (repeatIndexLookupFailed) {
+                    return null;
+                }
+                Class<?> schema = org.mtr.core.generated.data.VehicleExtraDataSchema.class;
+                repeatIndex1Field = schema.getDeclaredField("repeatIndex1");
+                repeatIndex1Field.setAccessible(true);
+                repeatIndex2Field = schema.getDeclaredField("repeatIndex2");
+                repeatIndex2Field.setAccessible(true);
+            }
+            return new long[]{repeatIndex1Field.getLong(extra), repeatIndex2Field.getLong(extra)};
+        } catch (Exception e) {
+            repeatIndexLookupFailed = true;
+            StationAnnouncer.LOGGER.warn("Could not read repeat indices; driving HUD will not wrap looping routes", e);
+            return null;
+        }
+    }
+
     // ----------------------------------------------------------------- types
 
-    /** One text line of the panel; {@code bulletColor} != 0 draws a small square before the text. */
-    private record Row(String text, int color, int bulletColor) {
+    /**
+     * One text line of the panel; {@code bulletColor} != 0 draws a small
+     * square before the text; {@code blink} rows flash at 2 Hz.
+     */
+    private record Row(String text, int color, int bulletColor, boolean blink) {
+        Row(String text, int color, int bulletColor) {
+            this(text, color, bulletColor, false);
+        }
+
         /** Sentinel: a short vertical gap between sections. */
         static final Row GAP = new Row("", 0, 0);
     }
@@ -589,7 +822,15 @@ public final class DrivingHud {
     private record Snapshot(List<Row> rows) {
     }
 
-    /** The upcoming platform stop: id, distance from the head, absolute end distance on the path. */
-    private record NextStop(long platformId, double distance, double endDistance) {
+    /** One path segment ahead of the head: {@code distance} is from the head to its start. */
+    private record WalkEntry(PathData pathData, double distance, boolean wrapped) {
+    }
+
+    /**
+     * The upcoming platform stop: id, distance from the head to the stopping
+     * point, absolute end distance on the path (only meaningful when not
+     * {@code wrapped}), and whether it lies past a repeat wrap.
+     */
+    private record NextStop(long platformId, double distance, double endDistance, boolean wrapped) {
     }
 }

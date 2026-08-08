@@ -27,6 +27,9 @@ public class AddonServerConfig {
     /** Feature 1 — hold trains at a platform while a connecting train is approaching a watched platform. */
     public HoldRules holdRules = new HoldRules();
 
+    /** Random door obstructions — a low chance that something gets stuck in the doors on departure. */
+    public DoorObstruction doorObstruction = new DoorObstruction();
+
     /** Feature 2 — per-route dwell time overrides at platforms. */
     public DwellOverrides dwellOverrides = new DwellOverrides();
 
@@ -48,6 +51,20 @@ public class AddonServerConfig {
 
         /** Deadlock guard: a train is never held longer than this per stop, rule or not. */
         public int maxHoldSeconds = 120;
+    }
+
+    public static class DoorObstruction {
+        /** Master switch; when false the startUp/riding mixin paths no-op with a single field read. */
+        public boolean enabled = true;
+
+        /** Chance (percent, 0–100) that a departure's door close gets something stuck in it. */
+        public int chancePercent = 3;
+
+        /** Shortest stuck time in seconds (the actual duration is uniform in [min, max]). */
+        public int minSeconds = 2;
+
+        /** Longest stuck time in seconds. */
+        public int maxSeconds = 6;
     }
 
     public static class DwellOverrides {
@@ -145,6 +162,9 @@ public class AddonServerConfig {
         if (holdRules == null) {
             holdRules = new HoldRules();
         }
+        if (doorObstruction == null) {
+            doorObstruction = new DoorObstruction();
+        }
         if (dwellOverrides == null) {
             dwellOverrides = new DwellOverrides();
         }
@@ -159,6 +179,9 @@ public class AddonServerConfig {
         }
         holdRules.holdArrivalCacheMillis = Math.max(50, Math.min(10_000, holdRules.holdArrivalCacheMillis));
         holdRules.maxHoldSeconds = Math.max(5, Math.min(3_600, holdRules.maxHoldSeconds));
+        doorObstruction.chancePercent = Math.max(0, Math.min(100, doorObstruction.chancePercent));
+        doorObstruction.minSeconds = Math.max(1, Math.min(120, doorObstruction.minSeconds));
+        doorObstruction.maxSeconds = Math.max(doorObstruction.minSeconds, Math.min(120, doorObstruction.maxSeconds));
         dispatch.updateMillis = Math.max(100, Math.min(5_000, dispatch.updateMillis));
         dispatch.maxClients = Math.max(1, Math.min(64, dispatch.maxClients));
     }
