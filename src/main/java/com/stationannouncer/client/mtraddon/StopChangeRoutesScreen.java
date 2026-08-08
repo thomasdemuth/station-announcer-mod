@@ -51,7 +51,12 @@ public class StopChangeRoutesScreen extends Screen {
             if (rows.size() >= MAX_ROWS_TOTAL) {
                 break;
             }
-            rows.add(new Row(route, PlatformGroupScreen.firstLang(route.getName()), route.getRoutePlatforms().size()));
+            // MTR packs the direction into the name after a DOUBLE pipe
+            // ("Line 1||Northbound"); show both parts so sub-routes are tellable apart.
+            String[] split = AddonUi.splitLineAndDirection(route.getName());
+            String label = split[1].isEmpty() ? split[0] : split[0] + " - " + split[1];
+            rows.add(new Row(route, label.isEmpty() ? "#" + route.getId() : label,
+                    route.getRoutePlatforms().size()));
         }
         // Lines that already carry a change float to the top, then alphabetical.
         rows.sort((a, b) -> {
@@ -136,6 +141,18 @@ public class StopChangeRoutesScreen extends Screen {
     @Override
     public void render(DrawContext context, int mouseX, int mouseY, float delta) {
         renderBackground(context, mouseX, mouseY, delta);
+        // The board goes down BEFORE the widgets, so the per-row buttons stay on top.
+        AddonUi.panel(context, listLeft, listTop, listLeft + PANEL_WIDTH,
+                listTop + visibleRows * ROW_HEIGHT);
+        for (int i = scrollOffset; i < scrollOffset + visibleRows && i < rows.size(); i++) {
+            int rowY = listTop + (i - scrollOffset) * ROW_HEIGHT;
+            if (mouseX >= listLeft && mouseX < listLeft + PANEL_WIDTH
+                    && mouseY >= rowY && mouseY < rowY + ROW_HEIGHT) {
+                context.fill(listLeft + 1, rowY, listLeft + PANEL_WIDTH - 1, rowY + ROW_HEIGHT, AddonUi.ROW_HOVER);
+            }
+            context.fill(listLeft + 1, rowY + ROW_HEIGHT - 1, listLeft + PANEL_WIDTH - 1,
+                    rowY + ROW_HEIGHT, AddonUi.ROW_DIVIDER);
+        }
         super.render(context, mouseX, mouseY, delta);
         context.drawCenteredTextWithShadow(textRenderer, title, width / 2, titleY, 0xFFFFFF);
 

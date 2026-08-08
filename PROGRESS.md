@@ -2261,3 +2261,99 @@ existing handlers and their documented ordering are untouched),
 injectors live in the already-registered `DepotMixin`), `AddonNetworking`,
 `DwellOverrideEngine`, `StopOverlayEngine`, `DisruptionNetworking`, the dispatch web
 layer, the analytics event pipeline and every renderer.
+
+### Disruptions Agent — Update: hand-drawn disruption board + collapsible line picker (2026-08-08)
+
+In-game feedback from Thomas: *"the service disruptions screen doesn't have to be
+minecrafty — right now it's making it hard to manage"*, and the line picker listed
+every route flat with no way to see or choose the sub-type. Both are **presentation
+only** — the data model, the packets, their field order and every server behaviour
+are untouched.
+
+**New `client/mtraddon/AddonUi.java`** — the shared look, lifted from this project's
+own custom screens (`PlatformPicker`, the PIDS settings screens): `panel()`,
+`caption()`, tri-state `checkbox()`, coloured `chip()` with `readableOn()` text,
+`inlineButton()`, `scrollIndicator()`, plus the palette constants. Also home to
+`firstLang()` and `splitLineAndDirection()`.
+
+**THE NAMING FACT (verified, do not re-derive):** MTR separates a route's **LINE**
+from its **DIRECTION** with a **DOUBLE pipe** — `"Line 1||Northbound"`. A SINGLE
+pipe is the language separator. Confirmed by disassembling
+`org.mtr.mod.data.VehicleExtension.formatRouteName` in the 4.0.1 jar, whose entire
+body is `ldc "\\|\\|"; String.split; iconst_0; aaload; areturn` — i.e.
+`routeName.split("\\|\\|")[0]`. So the line name is `split("\\|\\|")[0]` and the
+direction is `[1]`, each then reduced to its first language segment. Note the trap:
+the pre-existing `firstLang` helpers split on the FIRST `'|'`, which happens to
+yield the right line name for `"Line 1||Northbound"` but silently discards the
+direction — that is why the old flat picker showed "Line 1" four times.
+
+**New `client/mtraddon/LinePicker.java`** — a collapsible picker component in
+`PlatformPicker`'s mould (dark panel, hover/selection washes, scissor-clipped
+scrolling, thin scroll indicator, `fitTo()` shrink), mutating the caller's selection
+set in place.
+- **Grouping rule:** routes are one line when they share **both** their colour
+  **and** their line name. Two different lines that share a colour do not merge;
+  two same-named routes in different colours do not merge.
+- **Collapsed by default**: one row per line = tri-state tick box (none / some /
+  all), a `>` / `v` affordance, the colour chip carrying the line name, and a
+  "n directions" count.
+- **The tick box selects/clears the WHOLE line; clicking anywhere else on the
+  header expands it.** Expanded rows are indented sub-rows labelled by direction,
+  each independently selectable, with a colour spine tying them to their line.
+- A line with a single route has no expander (its direction, if any, is shown
+  inline on the row) and the whole row toggles it.
+- Opens pre-expanded for any line that is only PARTIALLY selected, so an existing
+  disruption shows what it actually covers.
+- An "Expand / Collapse" control above the list drives `setAllExpanded`.
+
+**`DisruptionsScreen` rewritten** into a hand-drawn board: one 30 px row per
+disruption with a severity spine down its left edge, a severity badge, the message
+(ellipsised), the affected lines as colour chips **collapsed to one chip per LINE**
+(same grouping rule), the time window ("starts in 12 min" / "ends in 45 min"), and
+**three inline actions on the row** — an ON/OFF toggle, Edit and a delete `x` —
+instead of select-then-act. Clicking a row's body opens it. The toggle sends the
+same upsert packet the editor sends with only `active` flipped. Scrolls with the
+scissor + indicator pattern; the footer (New disruption / Temporary stop changes /
+Done) stays outside the board so it can never be pushed off screen. The list is
+re-read from `ClientDisruptions` each frame, so a delete or toggle disappears as
+soon as the sync lands.
+
+**`DisruptionEditScreen` rewritten** into labelled sections: **Affected lines** (the
+`LinePicker` inline, with the expand/collapse control on the caption row and a live
+"n route(s) on m line(s)" hint), **Announcement text** (full-width field with the
+three templates as obvious buttons directly under it), **Severity** (four clickable
+badges in their real board colours with the chosen one underlined — the cycling
+button is gone) beside the Active toggle, and **Schedule** (the two sliders side by
+side). Only the picker is flexible, so `fitTo(height - fixed - 44)` absorbs a short
+window rather than pushing Done/Cancel off the bottom.
+
+**`RoutePickerScreen` deleted** — the separate flat route screen it replaced no
+longer exists; line selection happens inline in the editor.
+
+**`StopChangeRoutesScreen` / `RouteStopChangesScreen`** got the same board
+background (panel + hover + row dividers drawn BEFORE `super.render` so their
+per-row vanilla buttons stay on top), and the route list now labels rows
+"Line 1 - Northbound" using the double-pipe split instead of hiding the direction.
+
+**Compromises / notes**
+- Row-level actions and the severity badges are hand-drawn hit boxes, not vanilla
+  widgets, so they are not keyboard-navigable or narrated. The footer, the message
+  field, the templates, the Active toggle and the sliders stay vanilla widgets and
+  keep full accessibility.
+- `AddedStopPickerScreen` was left alone (it already drew its own panel), as was
+  everything outside this feature — including the concurrently-added
+  `DepotGroupsScreen` / `DuplicateLineScreen`, which keep their own layout.
+- The dashboard button placement is unchanged and still does not clash: Dispatch
+  splits MTR's "Transport System Map", Disruptions splits "Resource Pack Creator",
+  and the other agent's "Tools…" splits "Options".
+- Unused lang keys from the old layout (`disruptions.lines`, `line_stops`,
+  `severity_label`, `state_active/inactive`, `hint`, `lines_title`) were left in
+  `en_us.json` rather than removed, to avoid touching lines another agent may be
+  editing.
+- Not compiled or in-game tested (no-Gradle rule).
+
+**Files** — new: `client/mtraddon/{AddonUi,LinePicker}.java`; rewritten:
+`client/mtraddon/{DisruptionsScreen,DisruptionEditScreen}.java`; deleted:
+`client/mtraddon/RoutePickerScreen.java`; lightly restyled:
+`client/mtraddon/{StopChangeRoutesScreen,RouteStopChangesScreen}.java`;
+`assets/station_announcer/lang/en_us.json` (+14 keys).
