@@ -372,6 +372,105 @@ runtime re-pathing is out of reach for this pass. Build the feasible core:
 - Every feature has an `enabled` flag in `station-announcer-addon.json` (+ client toggles in
   the client config). Defaults: features 1–4 enabled, feature 5 runtime-switch disabled.
 
+## 7½. Dispatch web UI — MTR 4's webserver + map internals (researched 2026-08-08)
+
+All verified against the 4.0.1 jar; note the drift warnings — TSC master's servlet layer moved
+to `jakarta.servlet` and renamed classes, but **4.0.1 ships `org.mtr.libraries.javax.servlet.*`**.
+
+### How MTR 4 serves the online system map
+- The webserver is **embedded Jetty, shaded + relocated** (`org.mtr.libraries.org.eclipse.jetty.*`).
+  `org.mtr.core.servlet.Webserver` wraps it: `addServlet(org.mtr.libraries.org.eclipse.jetty.servlet.ServletHolder, String path)`
+  (must be called before `start()`), `start()`, `stop()`.
+- `org.mtr.core.Main`'s constructor (4.0.1: `Main(Path, int port, boolean, boolean,
+  Consumer<Webserver> additionalWebserverSetup, String... dimensions)`) creates one `Simulator`
+  per dimension, then — when `port > 0` — creates the `Webserver`, registers MTR's servlets
+  (static site + `SystemMapServlet` at `/mtr/api/map/*` + `OBAServlet` at `/oba/api/where/*`),
+  invokes `additionalWebserverSetup` (the **sanctioned embedder hook** for extra servlets),
+  and calls `webserver.start()` — all inside the constructor.
+- On a **dedicated server** the mod passes `Init.webserverSetup` which is **null** (only
+  `InitClient` ever sets it, via `Init.createWebserverSetup`, for the resource-pack-creator +
+  client servlets). The port comes from MTR's `Config.getServer().getWebserverPort()` →
+  `Init.findFreePort` → `Init.getServerPort()` (public; `-1` = disabled, `0` = not running).
+  The system map is at `http://<server>:<port>/`.
+- Threading: `ServletBase` (extends relocated `HttpServlet`) parses the request on a Jetty
+  worker, resolves the target `Simulator` from the `dimension` int query param (index into the
+  simulators list; `dimensions=all` fans out), then calls **`simulator.run(Runnable)`** —
+  public, enqueues onto the simulator's own thread — and the subclass's `getContent(...)`
+  executes THERE, replying through an async `Consumer<JsonObject>` (relocated gson!) callback.
+  This is the sanctioned single-threaded-state pattern; `SystemMapServlet` layers
+  `CachedResponse` (30 s static / 3 s live) on top so busy servers don't recompute per request.
+- Map payload classes live in `org.mtr.core.map.*` (`StationAndRoutes`, `Departures`,
+  `Client(s)`…). They serve the schematic route map — **no rail geometry, no signals, no train
+  positions** are exposed today. `Siding.getDeparturesForMap` exists for deviation data.
+- Static site: `org.mtr.core.servlet.WebServlet(Function<String, String> resourceProvider,
+  String basePath)` (4.0.1 name; master renamed it) — MTR feeds it generated
+  `WebserverResources::get`. We can instantiate it with our own classpath-reading function, or
+  write a trivial static servlet; either is fine.
+- **No jetty-websocket modules in the shaded jar** (only http/io/security/server/servlet/util).
+  → WebSocket is off the table. Use **SSE (Server-Sent Events)** over the relocated async
+  servlet API (`startAsync`, timeout 0, periodic writes + flush) — `ServletBase.sendResponse`
+  demonstrates the async write pattern. SSE reconnects natively (`EventSource`) and needs zero
+  frontend libraries. Document this as the WebSocket substitute.
+
+### Decision: extend MTR's webserver (not a second server)
+Register our servlets on MTR's own Jetty instance. Rationale: same port/origin as the system
+map (no CORS, no extra firewall hole), Jetty's thread pool + lifecycle are already managed,
+and `additionalWebserverSetup` proves embedder servlets are a supported concept. Because the
+mod passes null for that hook on dedicated servers (and `InitClient` owns it on clients — we
+must NOT clobber `Init.createWebserverSetup`), the injection point is a **mixin on
+`org.mtr.core.Main`'s constructor at `@At(value = "INVOKE",
+target = "Lorg/mtr/core/servlet/Webserver;start()V")`** — right after MTR's servlets and any
+`additionalWebserverSetup`, right before Jetty starts, with `this` (Main) in hand. Capture the
+`Webserver` + private `simulators` list via accessor mixins into a volatile static registry;
+clear it when the addon's SERVER_STOPPING hook runs (`Main.stop()` follows). javap -c the
+4.0.1 `Main.<init>` to confirm the INVOKE target before writing the mixin. This also cleanly
+ignores `InitClient`'s separate client-side webserver (which has no simulators — dispatch is a
+server/integrated-host feature; a pure client connecting to a remote server opens the SERVER's
+dispatch URL).
+
+### Data access for dispatch payloads (all on the simulator thread via `simulator.run`)
+- **Rails**: `Simulator extends Data` → public `positionsToRail`
+  (`Object2ObjectOpenHashMap<Position, Object2ObjectOpenHashMap<Position, Rail>>`; each rail
+  appears twice — dedupe by ordered position pair / `getHexId`). `Rail`: public `railMath`
+  (`RailMath.getLength()`, `getPosition(distance, reversed)` → `Vector` world coords — sample
+  a polyline every few meters for curve geometry), `getSpeedLimitKilometersPerHour(boolean)`
+  (per direction), `isPlatform()`, `isSiding()`, `canAccelerate()`, `canTurnBack()`,
+  `getSignalColors()` (IntAVLTreeSet of signal block colors on that rail), and blocked-state
+  queries (`isBlocked(vehicleId, Rail.BlockReservation.DO_NOT_RESERVE)`-style — javap the
+  exact 4.0.1 member; if current aspect isn't cleanly readable without reserving, ship colors
+  + occupancy-from-vehicle-positions and document the gap).
+- **Stations/platforms**: `simulator.stations` / `simulator.platforms` (+ `platformIdMap`);
+  `Platform.routes` + `routeColors` give "which lines serve it"; positions via
+  `SavedRailBase` position pair / `getMidPosition()`.
+- **Vehicles**: `simulator.sidings` → per siding the private `ObjectArraySet<Vehicle> vehicles`
+  (4.0.1) → needs an `@Accessor` on `Siding`. Per `Vehicle` (schema fields protected — the
+  existing Feature 1 mixin pattern / accessors apply): `railProgress`, `speed`, `reversed`,
+  `getIsOnRoute()`, `getHeadPosition()` (world `Vector`), `elapsedDwellTime`, private
+  `deviation` (accessor), and the public `vehicleExtraData` with route/station names + ids,
+  `immutableVehicleCars` (consist), `getDoorMultiplier()`/door target, `getStoppingPoint()`.
+- **Dimensions**: `simulators` are index-aligned with MTR's own `dimension` query-param
+  convention — reuse the same integer indexing; expose the dimension id strings
+  (`simulator.dimension`) in the static payload for the frontend's selector.
+
+### Dispatch performance contract (per §6, made concrete)
+- SSE clients register with a `DispatchStreamer`. **Zero connected clients → zero work**: no
+  scheduler ticks, no `simulator.run` enqueues, nothing sampled or serialized. First client
+  starts a single daemon scheduler; last disconnect stops it.
+- Each streamer tick (config `dispatch.updateMillis`, default 333 ms ≈ 3 Hz, clamp 100–5000)
+  enqueues one cheap sampling Runnable per *subscribed* dimension via `simulator.run`; the
+  Runnable snapshots vehicles into plain POJOs (no MTR refs) and hands off. JSON
+  serialization + delta computation + socket writes happen on the streamer thread, never on
+  simulator or server threads.
+- Static network payload (rails polylines, stations, platforms, signals) is built on the
+  simulator thread behind a `CachedResponse`-style cache (30 s) — same trick as
+  `SystemMapServlet`. Fetched once by the frontend per dimension.
+- Deltas: every SSE event carries `schemaVersion` + a `full` or `delta` flag; a full vehicle
+  snapshot every ~10th tick or on subscribe, deltas otherwise (omit unchanged vehicles,
+  static consist/route fields only on change). Cap connected clients
+  (`dispatch.maxClients`, default 8; excess get 503).
+- Master toggle `dispatch.enabled` (default true) — when false the servlets are never
+  registered (the Main mixin bails O(1)).
+
 ## 7. Workflow for every agent
 
 1. Read this file + PROGRESS.md. Read the relevant sources under `mtr-src/` (they are
