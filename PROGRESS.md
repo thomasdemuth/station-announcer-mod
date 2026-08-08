@@ -827,3 +827,373 @@ connection-hold behavior.
 
 Files: `mixin/VehicleExtraDataAccessor.java` (new), `mixin/VehicleMixin.java`
 (openDoors call + corrected javadoc), `station_announcer.mixins.json` (+1 entry).
+
+---
+
+## Dispatch Agent 1 — Server-side dispatch web layer (webserver hook, network API, SSE stream) — 2026-08-07
+
+### What was built
+
+The server side of the real-time dispatch web UI, riding on **MTR's own embedded
+Jetty webserver** (same port/origin as the Transport System Map — no CORS, no
+second server). Everything lives in the new package
+`com.stationannouncer.mtraddon.dispatch` plus four mixins. All servlet / jetty /
+gson / fastutil imports are the RELOCATED `org.mtr.libraries.*` ones; every MTR
+member touched was javap-verified against the 4.0.1 jar (the TSC master source
+has drifted badly in this layer — 4.0.1 ships `org.mtr.libraries.javax.servlet.*`
+and `WebServlet`, not jakarta/renamed classes).
+
+**Webserver hook** — `mixin/MainMixin.java` injects into `org.mtr.core.Main`'s
+constructor at `@At(value="INVOKE", target="Lorg/mtr/core/servlet/Webserver;start()V")`
+(bytecode-verified: `putfield simulators` @85 and `putfield webserver` @101 both
+precede the `start()` invoke @208, and the invoke sits on the `port > 0` branch —
+so with the webserver disabled the hook code simply never runs). At that instant
+MTR's servlets and any `additionalWebserverSetup` are registered and Jetty has
+not started; the mixin shadows the private `webserver` + `simulators` fields and
+calls `DispatchWebSetup.install(...)`, which registers our four servlets and
+publishes the simulators list + port into `DispatchRegistry` (a single volatile
+reference to an immutable record). `Init.createWebserverSetup` is untouched;
+InitClient's client-side resource-pack webserver never constructs a `Main`, so it
+is cleanly ignored. The registry is cleared (and the SSE streamer shut down) in
+AddonInit's SERVER_STOPPING hook; servlets answer **503** whenever the registry
+is empty. The dispatch URL is logged once at install
+(`Dispatch web UI available at http://localhost:{port}/dispatch/`, port from
+`Init.getServerPort()`), and AddonInit's SERVER_STARTED hook logs why the UI is
+unavailable when it is (webserver disabled: port -1/0, or feature off).
+
+**Servlet paths** (Jetty exact-beats-prefix, longest-prefix-wins matching):
+
+| Path | Class | Behavior |
+|---|---|---|
+| `/dispatch/*` | `DispatchStaticServlet` | static frontend from classpath `assets/station_announcer/dispatch/` (placeholder `index.html` committed — **Agent 2 replaces that directory's contents**); byte-accurate IO, MIME map for html/js/css/svg/png/ico/woff2/json/etc, `..`-traversal rejected, extensionless paths fall back to index.html (SPA-friendly). MTR's `WebServlet` was rejected after javap: its provider is `Function<String,String>` — text-only, corrupts binaries. |
+| `/dispatch/api/*` | `DispatchApiServlet` (extends MTR's `ServletBase`) | JSON data endpoints; inherits dimension routing + the `simulator.run` thread hop + MTR's response envelope |
+| `/dispatch/api/ping` | `DispatchPingServlet` | synchronous bootstrap JSON (no simulator hop, no envelope) |
+| `/dispatch/api/stream` | `DispatchStreamServlet` | the SSE live stream (extends relocated `HttpServlet` directly) |
+
+### THE ENDPOINT + SSE SCHEMA (build the frontend from this)
+
+`schemaVersion` is **1** everywhere. All MTR entity ids (station/platform/route/
+vehicle/siding — random longs that can exceed 2^53) are **decimal strings**; rail
+ids are MTR's canonical position-sorted hex ids (string, format
+`x1-y1-z1-x2-y2-z2` in padded hex), identical between the network payload and the
+stream. Coordinates are world coordinates (doubles rounded to 2 decimals; block
+positions as integers). Names are MTR-raw (`"English|中文"` — split on `|`
+client-side). Colors are 24-bit `0xRRGGBB` ints.
+
+**GET `/dispatch/api/ping`** → `200 application/json` (plain, no envelope), or
+`503 {"error":"dispatch not available"}`:
+
+```json
+{
+  "schemaVersion": 1,
+  "serverTime": 1786500000000,
+  "updateMillis": 333,            // the stream cadence actually in effect (clamped)
+  "maxClients": 8,
+  "dimensions": ["minecraft:overworld", "minecraft:the_nether"]
+  // index into this array == the `dimension` query param for the other endpoints
+}
+```
+
+**GET `/dispatch/api/network?dimension=N`** (N defaults to 0; `dimensions=all`
+fans out like MTR's own servlets but is not intended for the frontend). Response
+is wrapped in **MTR's standard ServletBase envelope**:
+
+```json
+{ "code": 200, "currentTime": 1786500000000, "text": "Success", "version": 1,
+  "data": { ...payload below... } }
+```
+
+Plain `503` (no envelope) while the server is stopping. The payload is built on
+the simulator thread behind a per-dimension **30 s CachedResponse** (same
+throttle as SystemMapServlet), so it is at most 30 s stale — refetch when MTR's
+network is edited, or just poll it slowly. Payload (`data`):
+
+```json
+{
+  "schemaVersion": 1,
+  "serverTime": 1786500000000,
+  "dimension": "minecraft:overworld",   // this simulator's dimension string
+  "dimensionIndex": 0,                  // its index (== the query param you sent)
+  "dimensions": ["minecraft:overworld", "..."],
+
+  "rails": [
+    {
+      "id": "3f-40-2a-41-40-9c",        // canonical hex id — the stream's key
+      "mode": "train",                  // train | boat | cable_car | airplane
+      "length": 152.34,                 // meters
+      "speedA": 80,                     // km/h along the polyline direction (points[0] → last)
+      "speedB": 0,                      // km/h opposite direction; 0 = one-way / not traversable
+      "platform": false, "siding": false,
+      "canAccelerate": true, "canTurnBack": false,
+      "signalColors": [16711680],      // signal block colors placed on this rail ([] = none)
+      "points": [[x,y,z], ...]         // polyline, 2-dec doubles; sampled every ~4 m
+                                        // (≤96 samples/rail), collinear points pruned —
+                                        // a straight rail is exactly 2 points
+    }
+  ],
+
+  "stations": [
+    { "id": "123456789", "name": "City Hall|市政厅", "color": 4474111,
+      "bounds": [minX, minY, minZ, maxX, maxY, maxZ],   // AreaBase corners, ints
+      "platformIds": ["987...", "..."] }
+  ],
+
+  "platforms": [
+    { "id": "987654321", "name": "1", "dwellMs": 10000,
+      "stationId": "123456789",        // null when the platform is outside any station
+      "p1": [x,y,z], "p2": [x,y,z],    // block-position pair (ints)
+      "mid": [x,y,z],                  // midpoint (ints)
+      "routeIds": ["555...", "..."] }  // routes calling here (resolve in "routes")
+  ],
+
+  "routes": [
+    { "id": "555555", "name": "Lexington Av Express|...", "number": "4",
+      "color": 1092784, "hidden": false }
+  ]
+}
+```
+
+(Route objects carry exactly: `id`, `name`, `number`, `color`, `hidden`.)
+
+**GET `/dispatch/api/stream?dimension=N`** → `text/event-stream`. Errors before
+the stream opens: `400` invalid dimension, `503` registry empty or
+`dispatch.maxClients` reached (a cap race after headers are committed instead
+sends an in-band `event: error` with `data: {"error":"too many dispatch clients"}`
+and closes). On open the server sends `: connected` + `retry: 3000`, then on the
+next streamer tick a `full` event, then `delta`s. A **`full` also goes to every
+client every 10th tick**; deltas are emitted even when empty (≈3 Hz keep-alive).
+Native `EventSource` reconnection works; after reconnect you get a fresh `full`.
+
+Event `full` — complete state of the dimension:
+
+```json
+{
+  "schemaVersion": 1,
+  "serverTime": 1786500000000,      // sample instant, server epoch ms
+  "dimension": 0,                   // dimension INDEX
+  "vehicles": [ VEHICLE... ],       // every on-route vehicle, each WITH route+consist
+  "signals":  [ SIGNAL... ]         // every rail with a non-empty live signal state
+}
+```
+
+Event `delta`:
+
+```json
+{
+  "schemaVersion": 1, "serverTime": ..., "dimension": 0,
+  "vehicles": [ VEHICLE... ],       // new vehicles and changed vehicles only.
+                                    // route+consist blocks present ONLY on new vehicles
+                                    // (or when route/consist actually changed);
+                                    // otherwise dynamic fields only — keep your cache.
+  "removed": ["8123..."],           // vehicle ids no longer on route
+  "signals": [ SIGNAL... ],         // rails whose live signal state changed
+  "signalsCleared": ["hexId", ...]  // rails whose live signal state became empty
+}
+```
+
+VEHICLE object:
+
+```json
+{
+  "id": "8123456789",
+  "x": 1023.5, "y": 64.0, "z": -211.25,  // head position, world coords
+  "kmh": 57.6,                      // speed (converted from MTR's m/ms)
+  "rev": false,                     // reversed
+  "rail": "3f-40-...",              // canonical hex id of the current rail (absent if unknown)
+  "railT": 0.42,                    // progress fraction 0..1 along that rail (absent with "rail")
+  "doors": true,                    // door TARGET open (MTR doorMultiplier > 0)
+  "dwellMs": 8100,                  // dwell REMAINING at the current platform stop; 0 when moving
+  "devMs": 1500,                    // schedule deviation, +late/−early. NOTE: MTR updates this
+                                    // only when the vehicle stops — treat as "as of last stop"
+  "manual": false,                  // driver-controlled right now
+  "stop": 3,                        // MTR stopIndex (increments along the route)
+  "route": {                        // ← full events, new vehicles, and static-change deltas only
+    "id": "555555", "name": "...", "number": "4", "color": 1234567,
+    "dest": "Crown Heights|...",    // this route's destination string
+    "nextStation": "Wall St|..."    // next station name
+  },
+  "consist": {                      // ← same presence rule as "route"
+    "sidingId": "777...", "siding": "Siding 1|...", "depot": "Main Depot|...",
+    "cars": ["m7_a", "m7_b", "m7_b", "m7_a"]   // vehicle-car ids, head first
+  }
+}
+```
+
+SIGNAL object (live aspect — read directly from the rails' reservation maps via
+the public `iterateCurrentlyBlockedSignalColors` / `iteratePreBlockedSignalColors`,
+NO reservation is taken by sampling; this is exact, not approximated):
+
+```json
+{ "rail": "3f-40-...",
+  "occupied": [16711680],   // signal colors currently blocked (a train holds the block)
+  "reserved": [255] }       // colors pre-reserved (a train has claimed the block ahead)
+```
+
+A rail with signal colors (see the network payload's `signalColors`) that appears
+in neither `signals` nor previous state is CLEAR. Render: occupied=red,
+reserved=yellow, else green, per color group.
+
+### Config keys (`config/station-announcer-addon.json`)
+
+- `dispatch.enabled` (default **true**) — master switch; when false the Main
+  mixin bails on one volatile-cached field read and no servlet is ever
+  registered. Needs a server restart to change (the webserver only exists
+  between server start/stop).
+- `dispatch.updateMillis` (default **333**, clamped 100–5000) — SSE sampling
+  cadence. Read every tick, so edits apply on next config reload/restart
+  (config object is cached for the session).
+- `dispatch.maxClients` (default **8**, clamped 1–64) — SSE connection cap,
+  excess gets 503.
+
+### Thread model (performance contract honored)
+
+- **Zero clients = zero work.** `DispatchStreamer`'s single daemon thread
+  (`station-announcer-dispatch-streamer`) starts on the first SSE register and
+  stops on the last unregister/shutdown; while idle there are no timer ticks and
+  no `simulator.run` enqueues. Static-payload requests cost one simulator-thread
+  hop per 30 s per dimension (CachedResponse).
+- Each streamer tick enqueues ONE `DispatchSampler.sample` Runnable per
+  subscribed dimension via `simulator.run(...)`; it runs on that dimension's
+  SIMULATOR thread, reads only the simulator's own data + accessor mixins, and
+  returns plain POJOs (no live MTR refs cross the boundary). A bounded
+  `CountDownLatch.await` means a stalled simulator costs one tick, never a hang.
+- JSON serialization, delta computation and all socket writes happen on the
+  streamer thread; frames are serialized once per tick per dimension and reused
+  across clients. Dead connections are pruned on write failure.
+- The sampler's only cache is the signalled-rail list per dimension (10 s
+  rebuild; one pass over `railIdMap`), touched only on that simulator's thread,
+  cleared when the streamer stops.
+- Jetty worker threads only ever touch the volatile `DispatchRegistry`, the
+  static-file classpath and (for SSE) the initial handshake bytes; the response
+  stream stays in blocking mode (no WriteListener), which is what makes
+  streamer-thread writes legal.
+
+### Files
+
+New: `src/main/java/com/stationannouncer/mtraddon/dispatch/{DispatchRegistry,
+DispatchWebSetup,DispatchStaticServlet,DispatchPingServlet,DispatchApiServlet,
+DispatchNetwork,DispatchSampler,DispatchStreamer,DispatchStreamServlet}.java`,
+`src/main/java/com/stationannouncer/mixin/{MainMixin,SidingVehiclesAccessor,
+VehicleSchemaAccessor,VehicleDeviationAccessor}.java`,
+`src/main/resources/assets/station_announcer/dispatch/index.html` (placeholder —
+Agent 2 owns this directory).
+Modified (extending the shared skeleton as intended):
+`mtraddon/AddonServerConfig.java` (Dispatch section + sanitize),
+`mtraddon/AddonInit.java` (SERVER_STARTED availability log; SERVER_STOPPING
+streamer shutdown + registry clear), `station_announcer.mixins.json` (+4 entries).
+
+### Known limitations / risks
+
+- **Mixin-into-constructor at INVOKE**: upstream SpongePowered Mixin historically
+  restricts `@Inject` in `<init>` to RETURN/TAIL; Fabric's fork (shipped with
+  Loader 0.19.3) supports arbitrary post-super injection points, which this
+  relies on (per the ARCHITECTURE §7½ decision). If the runtime ever rejects it,
+  the fallback is TAIL + reflective servlet registration BEFORE `start()` won't
+  work — flag to the orchestrator immediately if apply fails.
+- `devMs` only updates when a vehicle stops (MTR's `updateDeviation()` call
+  site); between stops it is stale by design. Manual sidings report whatever MTR
+  last computed.
+- `dwellMs` is derived from the stopped-at-platform boundary condition (same
+  logic as HoldRuleEngine); a vehicle held by Feature 1 or by a signal past its
+  dwell shows `dwellMs` 0 while still stationary.
+- The 30 s network cache means edits to rails/stations/routes can take up to
+  30 s to appear; live data is unaffected.
+- `vehicles` includes only `getIsOnRoute()` vehicles — trains parked in their
+  siding are invisible until they depart (deliberate, per spec).
+- Signal state is per-rail; the frontend must group rails by shared
+  `signalColors` if it wants block-level rendering.
+- A route's `speedA`/`speedB` direction convention is tied to the polyline
+  sampling direction (`getPosition(d, false)`), not to compass or route
+  direction.
+- Not compiled or runtime-tested by this agent (no-Gradle rule); the orchestrator
+  compiles. Runtime-only risks: the constructor injection point (above), Jetty's
+  default `asyncSupported` on ServletHolder (relied upon — MTR's own ServletBase
+  does the same `startAsync` through the same registration path), and SSE
+  behavior behind reverse proxies (X-Accel-Buffering: no is set, but a buffering
+  proxy will still break streaming).
+
+### Dispatch backend review (Opus) — 2026-08-07
+
+Adversarial javap-verified pass over the whole server-side dispatch layer before its
+first compile. **The endpoint + SSE schema above is unchanged — every field name, type,
+unit and presence rule was checked against the emitting code and matches.** Fixes:
+
+1. **`mixin/MainMixin.java` — `@Inject` into `<init>` replaced with `@Redirect`.**
+   The original relied on Fabric Mixin permitting arbitrary `@Inject` injection points
+   inside a constructor, which upstream restricts. The redirect rewrites the existing
+   `Webserver.start()` call site instead (fully supported after the super-constructor
+   call) and performs the original call itself, so MTR's behaviour is unchanged.
+   `javap -c` re-confirms `Main.<init>(Path,I,Z,Z,Consumer,String[])` contains **exactly
+   one** `invokevirtual Webserver.start()V` (offset 208) — so `defaultRequire: 1` is
+   satisfiable and unambiguous — with `putfield simulators` at 85 ahead of it. The
+   `@Shadow @Final Webserver webserver` field is gone: the redirect hands us the
+   instance directly.
+2. **`dispatch/DispatchStreamer.java` — duplicate-streamer-thread race.** When the last
+   client left, `stopThreadLocked()` set `running = false` and nulled `schedulerThread`
+   while the old thread was still inside a tick; a reconnect in that window started a
+   SECOND thread which the old loop then joined (`running` was true again), doubling
+   every frame to every client. Added a `generation` counter captured by each loop;
+   a superseded loop exits at its next check. Also: `stopThreadLocked()` no longer
+   interrupts the streamer thread when *it* is the caller (the last client is detected
+   during a tick), which previously left a bogus interrupt flag set mid-tick.
+3. **`DispatchStreamer.register` + `mtraddon/AddonInit.java` — post-shutdown restart.**
+   `register()` now refuses when `DispatchRegistry` is inactive, and SERVER_STOPPING
+   clears the registry **before** `DispatchStreamer.shutdown()` (was the other way
+   round), so a connection arriving during teardown cannot restart the thread that is
+   being stopped. `shutdown()` was already idempotent and still is.
+4. **`dispatch/DispatchApiServlet.java` — POST bypassed the 503 guard.** `ServletBase`
+   routes GET through `doPost`, so only overriding `doGet` left a direct POST going
+   straight to the simulator hop after the session was cleared. Both entry points now
+   share one `unavailable(response)` check. `getContent` narrowed back to `protected`
+   to match `ServletBase`'s declaration (the `public` widening was legal but gratuitous).
+5. **`dispatch/DispatchSampler.java` — `railT` could be `-1` while `rail` was present**,
+   contradicting the documented "0..1 whenever `rail` is present" (a zero-length path
+   segment left the sentinel). Now 0 in that case, and rounded to 4 decimals — it is
+   emitted for every vehicle every tick and full double precision was bloating frames.
+6. **`dispatch/DispatchNetwork.java` — polyline edge cases.** A degenerate rail emitted a
+   ONE-point "polyline"; it now emits two identical points so the frontend never has to
+   special-case it. The sample cap was off by one (up to 97 samples for the documented
+   "≤96"), fixed by dividing by `MAX_SAMPLES_PER_RAIL - 1`. The final endpoint is now
+   always appended (the old `if (samples.size() > 1)` guard was dead after the first fix).
+
+**Verified correct, do not re-litigate:** every MTR member the layer touches exists with
+the used signature in the 4.0.1 jar — `ServletBase.getContent(String,String,
+Object2ObjectAVLTreeMap,JsonReader,Simulator,Consumer<JsonObject>)` (protected abstract),
+`ServletBase.doGet/doPost` (protected, no `throws`), `CachedResponse(Function<Simulator,
+JsonObject>, long)` + `get(Simulator)`, `Webserver.addServlet(ServletHolder,String)`,
+`Simulator.run(Runnable)` / `.dimension` / `.dimensions` / `.railIdMap` / `.stations` /
+`.platforms` / `.routes` / `.sidings`, `Init.getServerPort()`, `Rail.getHexId()` (via
+`TwoPositionsBase`) / `getSignalColors()` (`IntAVLTreeSet`) / `getSpeedLimitKilometersPerHour
+(boolean)` (returns **long**) / `isValid` / `isPlatform` / `isSiding` / `canAccelerate` /
+`canTurnBack` / `getTransportMode`, `RailMath.getPosition(double,boolean)` + `getLength()`,
+`AreaBase.getMinX…getMaxZ` (**long**) + `savedRails`, `SavedRailBase.area` /
+`getRandomPosition` / `getOtherPosition` / `getMidPosition`, `Platform.getDwellTime` /
+`routes`, `Route.getRouteNumber` / `getHidden`, `NameColorDataBase.getId/getName/getColor`,
+`Vehicle.getIsOnRoute/getReversed/getHeadPosition`, every `VehicleExtraData` getter used,
+`Utilities.getIndexFromConditionalList(List<T>,double)`, `PathData.getRail/getStartDistance/
+getEndDistance/getDwellTime/getSavedRailBaseId`, `VehicleCar.getVehicleId`. The three
+accessor mixins target the right owners (`Siding.vehicles` private final —
+`(Object)` bridge cast is required because `Siding` is **final**; `VehicleSchema.speed/
+railProgress/elapsedDwellTime` protected; `Vehicle.deviation` private) and all four
+mixins are in the common `mixins` block, not `client`.
+
+Two specific things worth recording because they are easy to "fix" wrongly:
+
+- **`Rail.iterateCurrentlyBlockedSignalColors` / `iteratePreBlockedSignalColors` take the
+  RELOCATED fastutil `LongConsumer`, not `java.util.function.LongConsumer`** — and
+  `javap -c` shows both iterate the *keySet* of the `Long2LongAVLTreeMap`s, i.e. the
+  colors (the fields are named `…VehicleIds`, which is misleading). The sampler's
+  `LongArrayList` + `occupied::add` is right; colors are longs here but ints in
+  `Rail.getSignalColors()` — that asymmetry is MTR's, and JSON does not care.
+- **The km/h conversion is `speed * 3600`, and that is CORRECT** (the review brief said
+  ×3 600 000). `Utilities.kilometersPerHourToMetersPerMillisecond` is literally
+  `kmh / 3600.0`, so m/ms → km/h is ×3600. Do not "correct" this.
+
+**Could not be verified statically** (needs the orchestrator's compile + a running rig):
+that Fabric's Mixin accepts the `<init>` redirect at all (bytecode says it should, and
+redirects are the supported form); Jetty's `ServletHolder(Servlet)` async default (the
+bytecode shows the `Source.EMBEDDED` branch setting `_asyncSupported = true`, and MTR's
+own `ServletBase.startAsync` proves the path); and whether `getSpeedLimitKilometersPerHour
+(false)` truly corresponds to `RailMath.getPosition(d, false)`'s direction — both use
+`false`, but `getSpeedLimitKilometersPerHour` keys off the rail's own `reversePositions`
+flag, so `speedA`/`speedB` may be swapped on some rails. Frontend impact is cosmetic.

@@ -1,6 +1,9 @@
 package com.stationannouncer.mtraddon;
 
 import com.stationannouncer.StationAnnouncer;
+import com.stationannouncer.mtraddon.dispatch.DispatchRegistry;
+import com.stationannouncer.mtraddon.dispatch.DispatchStreamer;
+import com.stationannouncer.mtraddon.dispatch.DispatchWebSetup;
 import net.fabricmc.fabric.api.event.lifecycle.v1.ServerLifecycleEvents;
 import net.fabricmc.fabric.api.networking.v1.ServerPlayConnectionEvents;
 
@@ -21,8 +24,19 @@ public final class AddonInit {
         ServerLifecycleEvents.SERVER_STARTED.register(server -> {
             AddonServerConfig.get(); // load (and cache) the config before any simulator asks for it
             AddonStore.load(server);
+            // MTR (our dependency, so it initialized and registered first) has already
+            // constructed Main by now; explain in the log when the dispatch UI is absent.
+            DispatchWebSetup.logAvailability();
         });
-        ServerLifecycleEvents.SERVER_STOPPING.register(server -> AddonStore.flush());
+        ServerLifecycleEvents.SERVER_STOPPING.register(server -> {
+            AddonStore.flush();
+            // Dispatch teardown before MTR's Main.stop(). Clear the registry FIRST so
+            // late servlet requests answer 503 and no new SSE client can register (which
+            // would restart the streamer thread we are about to stop), then drop the
+            // connected clients and the streamer thread itself.
+            DispatchRegistry.clear();
+            DispatchStreamer.shutdown();
+        });
         ServerLifecycleEvents.SERVER_STOPPED.register(server -> {
             HoldRuleEngine.clearRuntimeState();
             PlatformGroupEngine.clearRuntimeState();

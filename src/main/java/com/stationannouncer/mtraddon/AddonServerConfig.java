@@ -36,6 +36,9 @@ public class AddonServerConfig {
     /** Feature 5 — dynamic platform selection (platform groups + generation-time rotation). */
     public DynamicPlatforms dynamicPlatforms = new DynamicPlatforms();
 
+    /** Dispatch web UI — real-time network/train map served from MTR's own webserver. */
+    public Dispatch dispatch = new Dispatch();
+
     public static class HoldRules {
         /** Master switch; when false the startUp mixin no-ops with a single field read. */
         public boolean enabled = true;
@@ -81,6 +84,26 @@ public class AddonServerConfig {
          * would be dishonest.
          */
         public boolean enabled = true;
+    }
+
+    public static class Dispatch {
+        /**
+         * Master switch; when false the {@code Main}-constructor mixin bails out with a
+         * single field read and the dispatch servlets are never registered on MTR's
+         * webserver. Read once per server start (the webserver only exists between
+         * server start and stop), so toggling needs a server restart.
+         */
+        public boolean enabled = true;
+
+        /**
+         * How often the SSE stream samples each subscribed dimension and pushes an
+         * update, in milliseconds. Clamped to 100–5000. With zero connected clients
+         * nothing is sampled at all.
+         */
+        public int updateMillis = 333;
+
+        /** Maximum simultaneously connected SSE stream clients; excess connections get HTTP 503. */
+        public int maxClients = 8;
     }
 
     public static AddonServerConfig get() {
@@ -131,8 +154,13 @@ public class AddonServerConfig {
         if (dynamicPlatforms == null) {
             dynamicPlatforms = new DynamicPlatforms();
         }
+        if (dispatch == null) {
+            dispatch = new Dispatch();
+        }
         holdRules.holdArrivalCacheMillis = Math.max(50, Math.min(10_000, holdRules.holdArrivalCacheMillis));
         holdRules.maxHoldSeconds = Math.max(5, Math.min(3_600, holdRules.maxHoldSeconds));
+        dispatch.updateMillis = Math.max(100, Math.min(5_000, dispatch.updateMillis));
+        dispatch.maxClients = Math.max(1, Math.min(64, dispatch.maxClients));
     }
 
     private void save(Path path) {

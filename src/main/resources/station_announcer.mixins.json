@@ -5,11 +5,15 @@
   "compatibilityLevel": "JAVA_17",
   "mixins": [
     "DepotMixin",
+    "MainMixin",
     "PathDataSchemaAccessor",
     "PlatformRouteDetailsAccessor",
     "SidingMixin",
+    "SidingVehiclesAccessor",
+    "VehicleDeviationAccessor",
     "VehicleExtraDataAccessor",
-    "VehicleMixin"
+    "VehicleMixin",
+    "VehicleSchemaAccessor"
   ],
   "client": [
     "RenderLiftsMixin"
