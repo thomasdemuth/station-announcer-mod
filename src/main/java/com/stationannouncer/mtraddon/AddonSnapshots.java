@@ -68,4 +68,48 @@ public final class AddonSnapshots {
         // No runtime caches to clear: DwellOverrideEngine is stateless — overrides
         // only take effect at the next depot path generation anyway.
     }
+
+    // ----------------------------------------- Feature 5: platform groups
+
+    /**
+     * Platform groups: route id → array indexed by stop index (within that
+     * route's platform list) → member platform ids, or null where the stop has
+     * no group. The array-of-arrays shape keeps the simulator-thread lookup
+     * allocation-free (one {@code get(long)} + one bounds-checked index); stop
+     * indices are capped at {@link AddonNetworking#MAX_STOP_INDEX} on the way
+     * in, so array sizes stay sane.
+     */
+    private static volatile Long2ObjectOpenHashMap<long[][]> platformGroups = new Long2ObjectOpenHashMap<>();
+
+    /** Current platform groups keyed by route id. Read-only. */
+    public static Long2ObjectOpenHashMap<long[][]> platformGroups() {
+        return platformGroups;
+    }
+
+    /** Server thread only: replace the published snapshot after a store mutation or load. */
+    static void publishPlatformGroups(Map<String, long[]> groups) {
+        Long2ObjectOpenHashMap<long[][]> snapshot = new Long2ObjectOpenHashMap<>(Math.max(1, groups.size()));
+        groups.forEach((key, members) -> {
+            long[] parsed = PlatformGroupEngine.parseGroupKey(key);
+            if (parsed == null || members == null || members.length == 0) {
+                return;
+            }
+            long routeId = parsed[0];
+            int stopIndex = (int) parsed[1];
+            long[][] byIndex = snapshot.get(routeId);
+            if (byIndex == null || byIndex.length <= stopIndex) {
+                long[][] grown = new long[stopIndex + 1][];
+                if (byIndex != null) {
+                    System.arraycopy(byIndex, 0, grown, 0, byIndex.length);
+                }
+                byIndex = grown;
+                snapshot.put(routeId, byIndex);
+            }
+            byIndex[stopIndex] = members.clone();
+        });
+        platformGroups = snapshot;
+        // Groups changed: drop rotation counters / applied choices of deleted
+        // groups so a removed group stops being re-applied to the route cache.
+        PlatformGroupEngine.pruneRuntime(java.util.Set.copyOf(groups.keySet()));
+    }
 }

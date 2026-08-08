@@ -31,13 +31,19 @@ import java.util.concurrent.atomic.AtomicBoolean;
  * save executor serializes under {@code LOCK} so it never sees a half-applied
  * edit, and file I/O never runs on a server or simulator tick.</p>
  *
- * <p>The {@code platformGroups} section belongs to a later feature agent; it is
- * preserved verbatim across load/save so that feature can formalize it without a
- * migration. {@code dwellOverrides} (Feature 2) and {@code liftDoors} (Feature 3)
- * are fully typed — {@code {"<platformId>": {"<routeId>": dwellMillis}}} and
+ * <p>{@code dwellOverrides} (Feature 2), {@code liftDoors} (Feature 3) and
+ * {@code platformGroups} (Feature 5) are fully typed —
+ * {@code {"<platformId>": {"<routeId>": dwellMillis}}},
  * {@code {"<liftId>": {"front": true, "back": false, "left": true, "right": false}}}
- * respectively — the same shapes the raw passthrough preserved, so no migration
- * was needed.</p>
+ * and {@code {"<routeId>:<stopIndex>": [platformIds]}} respectively — the same
+ * shapes the original raw passthrough preserved, so no migration was needed.</p>
+ *
+ * <p>Feature 5 also persists a {@code platformGroupRuntime} section (per-group
+ * rotation counters and the platform each group last resolved to). Unlike every
+ * other section it is WRITTEN by the simulator thread's
+ * {@link PlatformGroupEngine} (into its own concurrent maps, serialized here at
+ * save time) — the engine only pokes the thread-safe debounced dirty flag via
+ * {@link #requestSaveFromEngine()}, never the store maps.</p>
  */
 public final class AddonStore {
     private static final Gson GSON = new GsonBuilder().setPrettyPrinting().create();
@@ -57,8 +63,8 @@ public final class AddonStore {
     private static final Map<Long, LinkedHashMap<Long, Long>> dwellOverrides = new LinkedHashMap<>();
     /** Feature 3: lift id → configured door sides. */
     private static final Map<Long, LiftDoorSides> liftDoors = new LinkedHashMap<>();
-    /** Section owned by a later feature agent — carried through untouched. */
-    private static JsonObject platformGroups = new JsonObject();
+    /** Feature 5: {@code "<routeId>:<stopIndex>"} → member platform ids. */
+    private static final Map<String, long[]> platformGroups = new LinkedHashMap<>();
 
     private AddonStore() {
     }
@@ -74,14 +80,21 @@ public final class AddonStore {
             holdRules.clear();
             dwellOverrides.clear();
             liftDoors.clear();
-            platformGroups = new JsonObject();
+            platformGroups.clear();
+            // A world without a data file must not inherit a previous world's
+            // rotation/choice state (SERVER_STOPPED normally clears it, but not
+            // after a crash).
+            PlatformGroupEngine.clearRuntimeState();
             try {
                 if (Files.exists(path)) {
                     JsonObject root = JsonParser.parseString(Files.readString(path)).getAsJsonObject();
                     readHoldRules(root.getAsJsonObject("holdRules"));
                     readDwellOverrides(root.getAsJsonObject("dwellOverrides"));
                     readLiftDoors(root.getAsJsonObject("liftDoors"));
-                    platformGroups = objectOrEmpty(root, "platformGroups");
+                    readPlatformGroups(root.getAsJsonObject("platformGroups"));
+                    // Seed the engine's persisted runtime BEFORE publishGroups prunes
+                    // against the freshly loaded group set.
+                    readPlatformGroupRuntime(root.getAsJsonObject("platformGroupRuntime"));
                 }
             } catch (Exception e) {
                 StationAnnouncer.LOGGER.warn("Could not read {}, starting with empty addon data", path, e);
@@ -89,8 +102,9 @@ public final class AddonStore {
         }
         publish();
         publishDwell();
-        StationAnnouncer.LOGGER.info("Addon store loaded ({} hold rules, {} platforms with dwell overrides, {} lift door configs)",
-                holdRuleCount(), dwellOverridePlatformCount(), liftDoorCount());
+        publishGroups();
+        StationAnnouncer.LOGGER.info("Addon store loaded ({} hold rules, {} platforms with dwell overrides, {} lift door configs, {} platform groups)",
+                holdRuleCount(), dwellOverridePlatformCount(), liftDoorCount(), platformGroupCount());
     }
 
     /** SERVER_STOPPING: write the current state right now, on the calling thread. */
@@ -207,6 +221,53 @@ public final class AddonStore {
         markDirty();
     }
 
+    // -------------------------------------------- Feature 5: platform groups
+
+    public static int platformGroupCount() {
+        synchronized (LOCK) {
+            return platformGroups.size();
+        }
+    }
+
+    /** Server thread: a deep copy safe to iterate while building sync packets. */
+    public static Map<String, long[]> platformGroupsView() {
+        synchronized (LOCK) {
+            Map<String, long[]> copy = new LinkedHashMap<>(platformGroups.size());
+            platformGroups.forEach((key, members) -> copy.put(key, members.clone()));
+            return copy;
+        }
+    }
+
+    /**
+     * Server thread: set or clear one {@code (route, stopIndex)} group, then
+     * republish + save. {@code null} or an empty member list removes the entry.
+     */
+    public static void setPlatformGroup(long routeId, int stopIndex, long[] members) {
+        String key = PlatformGroupEngine.groupKey(routeId, stopIndex);
+        synchronized (LOCK) {
+            if (members == null || members.length == 0) {
+                if (platformGroups.remove(key) == null) {
+                    return;
+                }
+            } else {
+                platformGroups.put(key, members.clone());
+            }
+        }
+        publishGroups();
+        markDirty();
+    }
+
+    /**
+     * Thread-safe entry point for {@link PlatformGroupEngine} (SIMULATOR thread)
+     * to persist its rotation/choice runtime after a depot generation. Only the
+     * debounced dirty flag is touched (AtomicBoolean + executor); the engine's
+     * concurrent maps are read later, on the save executor, inside
+     * {@link #saveNow()}.
+     */
+    public static void requestSaveFromEngine() {
+        markDirty();
+    }
+
     // ------------------------------------------------------------- internals
 
     private static void publish() {
@@ -215,6 +276,10 @@ public final class AddonStore {
 
     private static void publishDwell() {
         AddonSnapshots.publishDwellOverrides(dwellOverridesView());
+    }
+
+    private static void publishGroups() {
+        AddonSnapshots.publishPlatformGroups(platformGroupsView());
     }
 
     private static void readDwellOverrides(JsonObject overridesJson) {
@@ -285,14 +350,75 @@ public final class AddonStore {
         }
     }
 
+    private static void readPlatformGroups(JsonObject groupsJson) {
+        if (groupsJson == null) {
+            return;
+        }
+        for (Map.Entry<String, JsonElement> entry : groupsJson.entrySet()) {
+            try {
+                if (PlatformGroupEngine.parseGroupKey(entry.getKey()) == null) {
+                    StationAnnouncer.LOGGER.warn("Skipping malformed platform group key '{}'", entry.getKey());
+                    continue;
+                }
+                JsonArray membersJson = entry.getValue().getAsJsonArray();
+                long[] members = new long[Math.min(membersJson.size(), AddonNetworking.MAX_GROUP_SIZE)];
+                int size = 0;
+                for (int i = 0; i < membersJson.size() && size < members.length; i++) {
+                    long id = membersJson.get(i).getAsLong();
+                    if (id != 0 && !contains(members, size, id)) {
+                        members[size++] = id;
+                    }
+                }
+                if (size > 0) {
+                    platformGroups.put(entry.getKey(), java.util.Arrays.copyOf(members, size));
+                }
+            } catch (Exception e) {
+                StationAnnouncer.LOGGER.warn("Skipping malformed platform group '{}'", entry.getKey(), e);
+            }
+        }
+    }
+
+    /** Seeds {@link PlatformGroupEngine}'s persisted rotation counters + applied choices. */
+    private static void readPlatformGroupRuntime(JsonObject runtimeJson) {
+        Map<String, Integer> rotation = new LinkedHashMap<>();
+        Map<String, Long> choice = new LinkedHashMap<>();
+        if (runtimeJson != null) {
+            try {
+                JsonObject rotationJson = runtimeJson.getAsJsonObject("rotation");
+                if (rotationJson != null) {
+                    for (Map.Entry<String, JsonElement> entry : rotationJson.entrySet()) {
+                        if (PlatformGroupEngine.parseGroupKey(entry.getKey()) != null) {
+                            rotation.put(entry.getKey(), entry.getValue().getAsInt());
+                        }
+                    }
+                }
+                JsonObject choiceJson = runtimeJson.getAsJsonObject("choice");
+                if (choiceJson != null) {
+                    for (Map.Entry<String, JsonElement> entry : choiceJson.entrySet()) {
+                        if (PlatformGroupEngine.parseGroupKey(entry.getKey()) != null) {
+                            choice.put(entry.getKey(), entry.getValue().getAsLong());
+                        }
+                    }
+                }
+            } catch (Exception e) {
+                StationAnnouncer.LOGGER.warn("Skipping malformed platform group runtime state", e);
+            }
+        }
+        PlatformGroupEngine.seedRuntime(rotation, choice);
+    }
+
+    private static boolean contains(long[] array, int size, long value) {
+        for (int i = 0; i < size; i++) {
+            if (array[i] == value) {
+                return true;
+            }
+        }
+        return false;
+    }
+
     private static boolean booleanOrFalse(JsonObject json, String key) {
         JsonElement value = json.get(key);
         return value != null && value.getAsBoolean();
-    }
-
-    private static JsonObject objectOrEmpty(JsonObject root, String key) {
-        JsonObject value = root.getAsJsonObject(key);
-        return value == null ? new JsonObject() : value;
     }
 
     /** Debounce: many GUI edits in a burst produce one write, a couple of seconds later. */
@@ -343,7 +469,25 @@ public final class AddonStore {
                 liftDoorsJson.add(Long.toString(liftId), sidesJson);
             });
             root.add("liftDoors", liftDoorsJson);
-            root.add("platformGroups", platformGroups);
+            JsonObject groupsJson = new JsonObject();
+            platformGroups.forEach((key, members) -> {
+                JsonArray membersJson = new JsonArray(members.length);
+                for (long member : members) {
+                    membersJson.add(member);
+                }
+                groupsJson.add(key, membersJson);
+            });
+            root.add("platformGroups", groupsJson);
+            // Feature 5 runtime state — read from the engine's concurrent maps
+            // (weakly consistent iteration is fine; the next save catches stragglers).
+            JsonObject runtimeJson = new JsonObject();
+            JsonObject rotationJson = new JsonObject();
+            PlatformGroupEngine.rotationSnapshot().forEach(rotationJson::addProperty);
+            runtimeJson.add("rotation", rotationJson);
+            JsonObject choiceJson = new JsonObject();
+            PlatformGroupEngine.appliedChoiceSnapshot().forEach(choiceJson::addProperty);
+            runtimeJson.add("choice", choiceJson);
+            root.add("platformGroupRuntime", runtimeJson);
             json = GSON.toJson(root);
         }
         try {

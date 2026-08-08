@@ -33,6 +33,9 @@ public class AddonServerConfig {
     /** Feature 3 — multi-sided, multi-door elevators. */
     public MultiDoorLifts multiDoorLifts = new MultiDoorLifts();
 
+    /** Feature 5 — dynamic platform selection (platform groups + generation-time rotation). */
+    public DynamicPlatforms dynamicPlatforms = new DynamicPlatforms();
+
     public static class HoldRules {
         /** Master switch; when false the startUp mixin no-ops with a single field read. */
         public boolean enabled = true;
@@ -61,6 +64,21 @@ public class AddonServerConfig {
          * over while at least one lift is configured) fall back to MTR's stock
          * lift rendering entirely. Read at startup like the other flags —
          * changing it needs a server restart plus client rejoin.
+         */
+        public boolean enabled = true;
+    }
+
+    public static class DynamicPlatforms {
+        /**
+         * Master switch for platform groups AND the generation-time platform
+         * rotation; when false the Depot mixin hooks no-op with a single field
+         * read, group saves are refused and the S2C sync sends an empty map.
+         * Turning it off leaves the last generated paths (with their swapped
+         * platforms) untouched until the next depot regeneration — the path is
+         * baked, same rule as the dwell overrides. There is deliberately NO
+         * {@code experimentalRuntimeSwitch} key: runtime platform switching was
+         * not implemented (see PROGRESS.md, Feature 5), and a dead config key
+         * would be dishonest.
          */
         public boolean enabled = true;
     }
@@ -109,6 +127,9 @@ public class AddonServerConfig {
         }
         if (multiDoorLifts == null) {
             multiDoorLifts = new MultiDoorLifts();
+        }
+        if (dynamicPlatforms == null) {
+            dynamicPlatforms = new DynamicPlatforms();
         }
         holdRules.holdArrivalCacheMillis = Math.max(50, Math.min(10_000, holdRules.holdArrivalCacheMillis));
         holdRules.maxHoldSeconds = Math.max(5, Math.min(3_600, holdRules.maxHoldSeconds));

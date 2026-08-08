@@ -23,13 +23,17 @@ public final class AddonInit {
             AddonStore.load(server);
         });
         ServerLifecycleEvents.SERVER_STOPPING.register(server -> AddonStore.flush());
-        ServerLifecycleEvents.SERVER_STOPPED.register(server -> HoldRuleEngine.clearRuntimeState());
+        ServerLifecycleEvents.SERVER_STOPPED.register(server -> {
+            HoldRuleEngine.clearRuntimeState();
+            PlatformGroupEngine.clearRuntimeState();
+        });
 
         // Late joiners need the current rule/override maps for the GUIs (and future HUDs).
         ServerPlayConnectionEvents.JOIN.register((handler, sender, server) -> {
             AddonNetworking.syncHoldRulesTo(sender);
             AddonNetworking.syncDwellOverridesTo(sender);
             AddonNetworking.syncLiftDoorsTo(sender);
+            AddonNetworking.syncPlatformGroupsTo(sender);
         });
 
         StationAnnouncer.LOGGER.info("MTR dispatch addon initialized");

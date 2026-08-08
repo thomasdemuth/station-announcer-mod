@@ -41,6 +41,19 @@ import java.util.Map;
  *   <li>{@code station_announcer:addon_update_lift_doors} (C2S) — the door-sides
  *       GUI's Save/Reset: lift id + a 4-bit side mask; mask 0 clears the entry
  *       (back to stock MTR behavior). Same permission model as the others.</li>
+ *   <li>{@code station_announcer:addon_platform_groups} (S2C) — the full
+ *       platform-group map (Feature 5), sent on join and re-broadcast after
+ *       every change. Sent EMPTY while {@code dynamicPlatforms.enabled} is off,
+ *       like the lift-door sync. A few longs per configured group.</li>
+ *   <li>{@code station_announcer:addon_update_platform_group} (C2S) — the
+ *       platform-group GUI's Save/Clear: route id + stop index + the full
+ *       member list (empty clears). Structural validation here (op level,
+ *       feature flag, size cap, stop-index cap, dedupe, zero ids dropped); the
+ *       AUTHORITATIVE semantic validation — members resolve, same station, same
+ *       transport mode as the stop's original platform — happens at USE time in
+ *       {@link PlatformGroupEngine} on the simulator thread, because route and
+ *       platform data live there (and can change any time after a save). The
+ *       client picker is constrained to same-station platforms as well.</li>
  * </ul>
  */
 public final class AddonNetworking {
@@ -50,6 +63,8 @@ public final class AddonNetworking {
     public static final Identifier UPDATE_DWELL_OVERRIDES_C2S = StationAnnouncer.id("addon_update_dwell_overrides");
     public static final Identifier LIFT_DOORS_S2C = StationAnnouncer.id("addon_lift_doors");
     public static final Identifier UPDATE_LIFT_DOORS_C2S = StationAnnouncer.id("addon_update_lift_doors");
+    public static final Identifier PLATFORM_GROUPS_S2C = StationAnnouncer.id("addon_platform_groups");
+    public static final Identifier UPDATE_PLATFORM_GROUP_C2S = StationAnnouncer.id("addon_update_platform_group");
 
     /** Cap on watched platforms per rule (also the GUI's picker cap). */
     public static final int MAX_WATCHED = 16;
@@ -65,6 +80,11 @@ public final class AddonNetworking {
      */
     public static final int MIN_DWELL_MILLIS = 1_000;
     public static final int MAX_DWELL_MILLIS = 600_000;
+
+    /** Cap on member platforms per platform group (Feature 5, per spec). */
+    public static final int MAX_GROUP_SIZE = 8;
+    /** Sanity cap on a group key's stop index (bounds the snapshot's per-route array). */
+    public static final int MAX_STOP_INDEX = 4_096;
 
     private AddonNetworking() {
     }
@@ -139,6 +159,51 @@ public final class AddonNetworking {
                 broadcastLiftDoors(server);
             });
         });
+
+        ServerPlayNetworking.registerGlobalReceiver(UPDATE_PLATFORM_GROUP_C2S, (server, player, handler, buf, responseSender) -> {
+            long routeId = buf.readLong();
+            int stopIndex = buf.readVarInt();
+            int count = buf.readVarInt();
+            if (stopIndex < 0 || stopIndex > MAX_STOP_INDEX || count < 0 || count > MAX_GROUP_SIZE) {
+                return; // malformed — drop without touching anything
+            }
+            long[] members = new long[count];
+            for (int i = 0; i < count; i++) {
+                members[i] = buf.readLong();
+            }
+
+            server.execute(() -> {
+                if (!AddonServerConfig.get().dynamicPlatforms.enabled
+                        || !player.hasPermissionLevel(AddonServerConfig.get().editPermissionLevel)) {
+                    return;
+                }
+                // Structural cleanup: dedupe + drop zero ids; empty result clears
+                // the group. Semantic validation (same station / transport mode /
+                // resolvable) is enforced at generation time on the simulator
+                // thread — see the class javadoc.
+                AddonStore.setPlatformGroup(routeId, stopIndex, dedupeMembers(members));
+                broadcastPlatformGroups(server);
+            });
+        });
+    }
+
+    /** Drops duplicates and zero ids from a group member list. */
+    private static long[] dedupeMembers(long[] members) {
+        long[] result = new long[members.length];
+        int size = 0;
+        outer:
+        for (long id : members) {
+            if (id == 0) {
+                continue;
+            }
+            for (int i = 0; i < size; i++) {
+                if (result[i] == id) {
+                    continue outer;
+                }
+            }
+            result[size++] = id;
+        }
+        return size == members.length ? result : java.util.Arrays.copyOf(result, size);
     }
 
     /** Drops duplicates and the ruled platform itself (watching yourself is meaningless). */
@@ -225,6 +290,49 @@ public final class AddonNetworking {
         doors.forEach((liftId, sides) -> {
             buf.writeLong(liftId);
             buf.writeByte(sides.mask());
+        });
+        return buf;
+    }
+
+    /** On join, through the connection event's sender. */
+    public static void syncPlatformGroupsTo(PacketSender sender) {
+        sender.sendPacket(PLATFORM_GROUPS_S2C, buildPlatformGroupsBuf());
+    }
+
+    /** After a change, to everyone (a few longs per configured group). */
+    public static void broadcastPlatformGroups(MinecraftServer server) {
+        for (ServerPlayerEntity player : server.getPlayerManager().getPlayerList()) {
+            ServerPlayNetworking.send(player, PLATFORM_GROUPS_S2C, buildPlatformGroupsBuf());
+        }
+    }
+
+    private static PacketByteBuf buildPlatformGroupsBuf() {
+        PacketByteBuf buf = PacketByteBufs.create();
+        if (!AddonServerConfig.get().dynamicPlatforms.enabled) {
+            // Feature off: an empty map keeps the GUI from offering dead edits.
+            buf.writeVarInt(0);
+            return buf;
+        }
+        Map<String, long[]> groups = AddonStore.platformGroupsView();
+        // Malformed keys are filtered on load/save, but count defensively.
+        int valid = 0;
+        for (String key : groups.keySet()) {
+            if (PlatformGroupEngine.parseGroupKey(key) != null) {
+                valid++;
+            }
+        }
+        buf.writeVarInt(valid);
+        groups.forEach((key, members) -> {
+            long[] parsed = PlatformGroupEngine.parseGroupKey(key);
+            if (parsed == null) {
+                return;
+            }
+            buf.writeLong(parsed[0]);
+            buf.writeVarInt((int) parsed[1]);
+            buf.writeVarInt(members.length);
+            for (long member : members) {
+                buf.writeLong(member);
+            }
         });
         return buf;
     }

@@ -226,5 +226,18 @@
   "gui.station_announcer.driving_hud.aspect_clear": "CLEAR",
   "gui.station_announcer.driving_hud.aspect_caution": "CAUTION",
   "gui.station_announcer.driving_hud.aspect_occupied": "OCCUPIED",
-  "gui.station_announcer.driving_hud.obstruction": "OBSTRUCTION AHEAD"
+  "gui.station_announcer.driving_hud.obstruction": "OBSTRUCTION AHEAD",
+  "gui.station_announcer.platform_groups.button": "Platform group...",
+  "gui.station_announcer.platform_groups.title": "Dynamic Platform Groups",
+  "gui.station_announcer.platform_groups.edit_title": "Platform Group",
+  "gui.station_announcer.platform_groups.edit": "Edit...",
+  "gui.station_announcer.platform_groups.stop": "Stop %s of %s",
+  "gui.station_announcer.platform_groups.group_size": "group of %s platform(s)",
+  "gui.station_announcer.platform_groups.no_group": "no group",
+  "gui.station_announcer.platform_groups.no_routes": "No routes call at this platform",
+  "gui.station_announcer.platform_groups.members": "rotate this stop across the ticked platforms:",
+  "gui.station_announcer.platform_groups.clear": "Clear group",
+  "gui.station_announcer.platform_groups.hint_queue": "Trains pick a group platform when the depot regenerates its paths",
+  "gui.station_announcer.platform_groups.hint_queue2": "Occupied platforms already queue via MTR's signal blocks",
+  "gui.station_announcer.platform_groups.hint_include": "Tick this platform itself to keep it in the rotation"
 }

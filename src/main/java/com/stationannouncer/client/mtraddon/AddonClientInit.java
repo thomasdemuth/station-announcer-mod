@@ -78,12 +78,15 @@ public final class AddonClientInit {
             ClientHoldRules.clear();
             ClientDwellOverrides.clear();
             ClientLiftDoors.clear();
+            ClientPlatformGroups.clear();
         });
 
         registerDwellOverrideSync();
         registerRouteDwellButton();
         registerLiftDoorSync();
         registerLiftDoorSidesButton();
+        registerPlatformGroupSync();
+        registerPlatformGroupButton();
         DrivingHud.register(); // Feature 4 — driving HUD (registers its own disconnect cleanup)
 
         ScreenEvents.AFTER_INIT.register((client, screen, scaledWidth, scaledHeight) -> {
@@ -157,6 +160,61 @@ public final class AddonClientInit {
                             Text.translatable("gui.station_announcer.route_dwell.button"),
                             button -> client.setScreen(new RouteDwellScreen(platform, screen)))
                     .dimensions(screen.width - 104, screen.height - 48, 100, 20)
+                    .build());
+        });
+    }
+
+    // ------------------------------------------ Feature 5: platform groups
+
+    /** Server → client platform-group sync (join + after each edit). */
+    private static void registerPlatformGroupSync() {
+        ClientPlayNetworking.registerGlobalReceiver(AddonNetworking.PLATFORM_GROUPS_S2C,
+                (client, handler, buf, responseSender) -> {
+                    int groupCount = buf.readVarInt();
+                    if (groupCount < 0 || groupCount > 10_000) {
+                        return;
+                    }
+                    Map<String, List<Long>> groups = new HashMap<>(Math.max(1, groupCount));
+                    for (int i = 0; i < groupCount; i++) {
+                        long routeId = buf.readLong();
+                        int stopIndex = buf.readVarInt();
+                        int memberCount = buf.readVarInt();
+                        if (stopIndex < 0 || stopIndex > AddonNetworking.MAX_STOP_INDEX
+                                || memberCount < 0 || memberCount > AddonNetworking.MAX_GROUP_SIZE) {
+                            return;
+                        }
+                        List<Long> members = new ArrayList<>(memberCount);
+                        for (int j = 0; j < memberCount; j++) {
+                            members.add(buf.readLong());
+                        }
+                        groups.put(routeId + ":" + stopIndex, members);
+                    }
+                    client.execute(() -> ClientPlatformGroups.replace(groups));
+                });
+    }
+
+    /**
+     * The "Platform group…" button on MTR's {@code PlatformScreen}, one slot
+     * above Feature 2's "Per-route dwell…" button. The platform screen (not
+     * {@code EditRouteScreen}) is the entry point — see
+     * {@link PlatformGroupScreen}'s javadoc for the documented decision.
+     */
+    private static void registerPlatformGroupButton() {
+        ScreenEvents.AFTER_INIT.register((client, screen, scaledWidth, scaledHeight) -> {
+            if (!(screen instanceof PlatformScreen) || !AddonClientConfig.get().showPlatformGroupButton) {
+                return;
+            }
+            if (!MinecraftClientData.hasPermission()) {
+                return;
+            }
+            Platform platform = readPlatform(screen);
+            if (platform == null) {
+                return;
+            }
+            Screens.getButtons(screen).add(ButtonWidget.builder(
+                            Text.translatable("gui.station_announcer.platform_groups.button"),
+                            button -> client.setScreen(new PlatformGroupScreen(platform, screen)))
+                    .dimensions(screen.width - 104, screen.height - 72, 100, 20)
                     .build());
         });
     }

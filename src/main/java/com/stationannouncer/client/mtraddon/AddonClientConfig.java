@@ -29,6 +29,9 @@ public class AddonClientConfig {
     /** Show the "Door sides…" button on MTR's lift customization screen (same permission gating). */
     public boolean showLiftDoorSidesButton = true;
 
+    /** Show the "Platform group…" button on MTR's platform screen (same permission gating). */
+    public boolean showPlatformGroupButton = true;
+
     // ---- Feature 4: advanced manual driving HUD (all read on the client thread) ----
 
     /** Master toggle for the driving HUD overlay. */

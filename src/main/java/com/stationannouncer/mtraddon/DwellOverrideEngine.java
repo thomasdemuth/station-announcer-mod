@@ -59,14 +59,28 @@ public final class DwellOverrideEngine {
      * same platform is both the last stop of one route and the first stop of the
      * next — the collapsed stop belongs to the earlier route, but an override
      * configured for the later route is honored as a fallback.
+     *
+     * <p><b>Feature 5 interplay (minimal change, 2026-08-07):</b>
+     * {@code effectiveId} is the platform id this stop ACTUALLY resolves to on
+     * the generated path — the applied platform-group choice from
+     * {@link PlatformGroupEngine} when the stop has a group, else the original
+     * platform's id. The path's dwell segments carry the SWAPPED id in
+     * {@code getSavedRailBaseId()}, so both the segment↔stop matching AND the
+     * override lookup key by {@code effectiveId}: a per-route dwell override on
+     * a grouped stop must be configured on the member platform(s) the trains
+     * really stop at. Collapse detection still uses ORIGINAL ids, mirroring
+     * {@code Depot.writeRouteCache} (the group engine guarantees a swap never
+     * creates a new consecutive-duplicate pair).</p>
      */
     private static final class Stop {
         final Platform platform;
+        final long effectiveId;
         final long primaryRouteId;
         long secondaryRouteId;
 
-        Stop(Platform platform, long primaryRouteId) {
+        Stop(Platform platform, long effectiveId, long primaryRouteId) {
             this.platform = platform;
+            this.effectiveId = effectiveId;
             this.primaryRouteId = primaryRouteId;
         }
     }
@@ -113,9 +127,11 @@ public final class DwellOverrideEngine {
             // Monotonic match: find the next stop with this platform id. Normally
             // an exact hit at stopPointer; the scan tolerates unexpected segments
             // (defensive — an unmatched segment keeps its generated default).
+            // Matches by effectiveId — the ACTUAL path platform, which is the
+            // group-swapped one for Feature 5 group stops.
             int found = -1;
             for (int j = stopPointer; j < stops.size(); j++) {
-                if (stops.get(j).platform.getId() == platformId) {
+                if (stops.get(j).effectiveId == platformId) {
                     found = j;
                     break;
                 }
@@ -153,10 +169,13 @@ public final class DwellOverrideEngine {
         }
         Stop firstStop = stops.get(0);
         // Exactly one segment of this path has a saved-rail id: the arrival at the
-        // depot route's first platform (the path finder's end saved rail).
+        // depot route's first platform (the path finder's end saved rail) — which
+        // is the group-swapped platform when the first stop has a Feature 5 group
+        // (Depot.tick hands siding.generateRoute the swapped platformsInRoute
+        // entry), hence effectiveId.
         for (int i = 0; i < pathSidingToMainRoute.size(); i++) {
             PathData pathData = pathSidingToMainRoute.get(i);
-            if (pathData.getSavedRailBaseId() == firstStop.platform.getId() && pathData.getDwellTime() > 0) {
+            if (pathData.getSavedRailBaseId() == firstStop.effectiveId && pathData.getDwellTime() > 0) {
                 applyOverride(pathData, firstStop, overrides);
             }
         }
@@ -196,7 +215,11 @@ public final class DwellOverrideEngine {
                     continue;
                 }
                 if (platform.getId() != previousPlatformId) {
-                    stops.add(new Stop(platform, route.getId()));
+                    // Feature 5: the path stops at the group engine's applied
+                    // choice for this (route, index), not necessarily here.
+                    stops.add(new Stop(platform,
+                            PlatformGroupEngine.effectiveStopPlatformId(route.getId(), i, platform.getId()),
+                            route.getId()));
                     previousPlatformId = platform.getId();
                 } else if (i == 0 && !stops.isEmpty()) {
                     // Route boundary: this route starts at the platform the previous
@@ -212,11 +235,13 @@ public final class DwellOverrideEngine {
      * Set the segment's dwell to the configured override for this stop's route,
      * if any. Values are clamped ≥ 1000 ms at the packet boundary, so fastutil's
      * absent-key default of 0 safely means "no override → keep the generated
-     * platform default".
+     * platform default". Looked up by {@code effectiveId} — overrides belong to
+     * the physical platform the trains actually stop at (see the Stop javadoc
+     * for the Feature 5 group interplay).
      */
     private static void applyOverride(PathData pathData, Stop stop,
                                       Long2ObjectOpenHashMap<Long2LongAVLTreeMap> overrides) {
-        Long2LongAVLTreeMap byRoute = overrides.get(stop.platform.getId());
+        Long2LongAVLTreeMap byRoute = overrides.get(stop.effectiveId);
         if (byRoute == null) {
             return;
         }

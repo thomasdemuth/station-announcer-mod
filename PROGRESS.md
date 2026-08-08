@@ -549,3 +549,223 @@ Modified (extending the shared skeleton as intended):
 `client/mtraddon/AddonClientConfig.java` (new fields + `persist()` only),
 `client/mtraddon/AddonClientInit.java` (+1 line: `DrivingHud.register()`),
 `assets/station_announcer/lang/en_us.json` (+31 keys).
+
+---
+
+## Feature Agent 5 — Dynamic platform selection (platform groups) — 2026-08-07
+
+### What was built
+
+TSC generates ONE shared path per depot with precomputed timetables, so
+Feature 5 was scoped per ARCHITECTURE §5: items 1–3 shipped solid, item 4
+(runtime switching) deliberately skipped — see "NOT implemented" below.
+
+**1) Platform groups + storage/sync/GUI:**
+
+- `AddonStore`: the `platformGroups` raw-JSON passthrough (Agent 1) formalized
+  to a typed `Map<String, long[]>` — key `"<routeId>:<stopIndex>"`, value the
+  member platform ids. Same §4 JSON shape, so existing files load without
+  migration. New: `platformGroupsView()`, `setPlatformGroup(routeId, stopIndex,
+  members)` (empty clears), `platformGroupCount()`, plus a NEW persisted
+  section `platformGroupRuntime` (`{"rotation": {key: n}, "choice":
+  {key: platformId}}`) serialized from `PlatformGroupEngine`'s concurrent maps
+  at save time, and `requestSaveFromEngine()` — a thread-safe entry point (it
+  only pokes the existing debounced AtomicBoolean dirty flag) so the SIMULATOR
+  thread can request persistence without touching the store maps.
+- `AddonSnapshots.platformGroups()`: volatile immutable
+  `Long2ObjectOpenHashMap<long[][]>` (route id → stop-index-indexed member
+  arrays; allocation-free simulator-thread lookup). Publishing also prunes the
+  engine's runtime entries for deleted groups — that is what stops a removed
+  group from being re-applied to the route cache.
+- `AddonNetworking`: `addon_platform_groups` S2C full-map sync (join + after
+  every change; EMPTY while the feature is off, like the lift-door sync) and
+  `addon_update_platform_group` C2S (route id + stop index + full member list;
+  empty clears). Validated: op level `editPermissionLevel`, feature flag,
+  `MAX_GROUP_SIZE` = 8, `MAX_STOP_INDEX` = 4096, dedupe, zero ids dropped.
+  **Semantic validation split (documented honestly):** members-are-same-station
+  + same-transport-mode is enforced AT USE TIME on the simulator thread in
+  `PlatformGroupEngine.validMembers` (route/platform data lives on the
+  simulator and can change any time after a save — there is no safe
+  server-thread read of it), and the client picker is constrained to
+  same-station platforms; the C2S handler does structural validation only.
+- **GUI decision (per spec, documented):** `EditRouteScreen` was studied
+  (source + javap against 4.0.1) — it edits ONLY route metadata (name, colour,
+  type, hidden, circular); the per-stop platform list lives in the dashboard
+  sidebar/map flow, so there is no "selected stop" to hang a per-stop button
+  on. The honest, solid entry point is the spec's stated alternative: a
+  **"Platform group…" button on MTR's `PlatformScreen`** (same
+  ScreenEvents.AFTER_INIT + cached-reflection `readPlatform` pattern as
+  Features 1–2, one slot above their buttons, permission-gated, client toggle
+  `showPlatformGroupButton`). It opens `PlatformGroupScreen`: one row per
+  (route, stopIndex) occurrence of this platform across the dashboard routes
+  (route colour, "Stop N of M", live group size), each with Edit → 
+  `PlatformGroupEditScreen`: the shared `PlatformPicker` seeded at this
+  platform's mid position (inside a station the picker lists exactly that
+  station's platforms — the constraint the group needs), preselected with the
+  current group, capped at 8; Save filters to same-station+same-mode via the
+  dashboard `platformIdMap`, Clear removes the group. Client mirror
+  `ClientPlatformGroups` (replaced wholesale by the sync, cleared on
+  disconnect).
+
+**2) Queueing documentation (nothing to build — MTR already provides it):**
+trains targeting an occupied platform already queue via MTR's signal blocks and
+`Vehicle.railBlockedDistance` — `writeVehiclePositions` marks occupied rail and
+reserves signal blocks, and `simulateStopped`/`startUp` refuse to move while
+`railBlockedDistance ≥ 0`. Platform groups therefore compose with stock
+behavior: the depot spreads traffic across the group at generation time, and
+whatever still collides queues safely at runtime. The GUI says so
+(`hint_queue2`: "Occupied platforms already queue via MTR's signal blocks").
+
+**3) Generation-time selection** — `mtraddon/PlatformGroupEngine.java` +
+`mixin/DepotMixin.java` + `mixin/PlatformRouteDetailsAccessor.java`:
+
+- **Injection points (both bytecode-verified against 4.0.1, not master):**
+  - `Depot.generateMainRoute(Depot$OnGenerationComplete)V` **HEAD** (private) —
+    the disassembly shows this is the single place the `SidingPathFinder`
+    chain is built from the private `platformsInRoute` list, so swapping the
+    list entries at HEAD is sufficient AND minimal. `Depot.tick`'s completion
+    callback (`siding.generateRoute(platformsInRoute.get(0)…, size, …)`) reads
+    the same swapped list, so the sidings' first/last platforms stay
+    consistent. This was chosen over the spec's writeRouteCache-TAIL-only
+    sketch because writeRouteCache runs on EVERY `Data.sync()` (client
+    included), which is the wrong moment to advance a "per generation"
+    rotation.
+  - `Depot.writeRouteCache(Long2ObjectOpenHashMap)V` **TAIL** (public) —
+    `Data.sync()` rebuilds `platformsInRoute` from the routes' original
+    platforms; this hook RE-APPLIES the last applied choices (no rotation
+    advance, `data instanceof Simulator` guarded) so
+    `getVehiclePlatformRouteInfo` — the vehicles' this/next-platform info —
+    keeps matching the baked path between generations and across restarts
+    (choices are persisted).
+  - `Depot$PlatformRouteDetails` is a package-private class with
+    `private final Platform platform` (javap-verified — NOT a record in 4.0.1),
+    so `PlatformRouteDetailsAccessor` is an `@Mutable @Accessor` mixin that
+    swaps the field in place; `route`/`platformIndex` stay untouched, and
+    **`Route.getRoutePlatforms()` — the user's route definition — is never
+    modified.**
+- **Strategy:** per-group rotation counter (persisted in
+  `platformGroupRuntime`, advanced once per generation that uses the group) →
+  `validMembers[counter % n]`, with a collision guard: a swap is skipped if it
+  would make two consecutive collapsed stops the same platform (which would
+  create a platform→itself path finder). Member validation at swap time:
+  resolvable in the simulator's `platformIdMap`, same station as the stop's
+  original platform, same transport mode. Invalid/deleted groups fall back to
+  the original platform; a deleted group's stops are actively restored to
+  their originals on the next generation.
+- **Stop attribution** replicates `Depot.writeRouteCache`'s collapse loop
+  exactly (bytecode-verified: null platforms skipped WITHOUT updating the
+  previous id), extended to remember which (route, index) added each collapsed
+  stop; defensive size/entry alignment checks disable the feature with one
+  logged warning if MTR's loop ever drifts.
+- **Feature 2 interplay (checked, minimal change made):** the path's dwell
+  segments carry the SWAPPED platform id in `getSavedRailBaseId()`, and the
+  swapped platform's own `getDwellTime()` is what `SidingPathFinder` bakes —
+  so `DwellOverrideEngine`'s stop matching AND its override lookup now key by
+  a new `Stop.effectiveId` (= `PlatformGroupEngine.effectiveStopPlatformId`,
+  the applied choice or the original). This is exactly the spec's "use the
+  ACTUAL path platform id" resolution. **What per-route dwell means for group
+  stops:** overrides belong to the physical platform trains actually stop at —
+  configure the override on each group member you care about; the platform
+  default likewise comes from the member actually chosen. No other Feature 1–4
+  code was touched (hold rules already key by the actual path platform, so
+  they work on swapped platforms unchanged).
+- Arrivals/PIDS/in-train displays show the swapped platform — correct, the
+  trains really stop there.
+
+**Config keys** (`config/station-announcer-addon.json`):
+`dynamicPlatforms.enabled` (default true) — gates the store saves, the S2C
+sync content and both mixin hooks (single field read when off; both are cold
+paths — depot regeneration and data sync, never per tick). O(1) bail chain
+when idle: enabled → snapshot isEmpty → `data instanceof Simulator` → per-depot
+`containsKey` per route. Client: `showPlatformGroupButton` in
+`station-announcer-addon-client.json`.
+
+### Thread-safety notes
+
+- Both Depot hooks run on the per-dimension SIMULATOR thread (or the server
+  thread with `useThreadedSimulation` off). The engine reads the volatile
+  config, the volatile immutable group snapshot and the simulator's own data;
+  its runtime state is two ConcurrentHashMaps (written by the simulator
+  thread, seeded/cleared/pruned on the server thread, read by the store's save
+  executor — weakly consistent iteration acceptable for persistence).
+- The engine never mutates the store; persistence goes through
+  `AddonStore.requestSaveFromEngine()` (AtomicBoolean + debounced executor —
+  already thread-safe), so no file I/O and no lock contention on any tick.
+
+### Known limitations
+
+- **Selection is static between generations** (the honest scope): the platform
+  choice rotates when the depot regenerates, not per arrival. Runtime
+  occupancy is handled by MTR's existing signal queueing.
+- A route shared by MULTIPLE depots shares one group key: each depot's
+  generation advances the same rotation and overwrites the applied choice, so
+  `platformsInRoute` re-application (and Feature 2 attribution) tracks the
+  most recently generated depot. Same-station platforms bound the blast
+  radius; documented rather than keyed-by-depot to keep the §4 storage shape.
+- At a route boundary collapsed into one stop (route B starts where route A
+  ends), the group key that takes effect is (routeA, lastIndex) — the
+  occurrence that ADDS the collapsed stop. A group configured on (routeB, 0)
+  for that platform never matches; the GUI still lists that occurrence
+  (client can't see depot order), which can look like a dead edit. Documented,
+  matches Feature 2's boundary semantics.
+- If the first/last platform of the whole depot route cycle is swapped, siding
+  approach/return paths regenerate toward the swapped platform (handled —
+  `Depot.tick` hands `generateRoute` the swapped list), but a group member
+  that only some sidings can physically reach will fail those sidings'
+  path-finding for that generation (MTR reports it via the depot's generation
+  status, same as any unreachable platform; next generation rotates onward).
+- Choice persistence keeps `platformsInRoute` consistent with the saved baked
+  path across restarts; if `data.json` is deleted (or the runtime section is
+  hand-edited away) the cache shows originals until the next regeneration,
+  while the baked path keeps the old swap — cosmetic only (station names
+  match; platform numbers in in-train route info may differ until regenerated).
+- Feature toggled off: already-baked swapped paths remain until the next
+  regeneration (path is baked — same rule as dwell overrides).
+- Not compiled or in-game tested by this agent (no-Gradle rule); orchestrator
+  to verify. Specific compile-risk spots: the bare-`CallbackInfo` handler
+  signatures on `DepotMixin` (Mixin allows omitting target args; the
+  alternative needs naming the private `Depot$OnGenerationComplete` type) and
+  the wildcard-typed `@Shadow ObjectArrayList<?> platformsInRoute` (field
+  descriptors are erased, so it binds).
+
+### NOT implemented (deliberate) — item 4, runtime platform switching
+
+`dynamicPlatforms.experimentalRuntimeSwitch` was **not** built, and no config
+key was added for it (a dead key would be dishonest). Why, concretely, against
+the 4.0.1 bytecode:
+
+- A runtime splice must rebuild `VehicleExtraData`'s immutable path and every
+  distance-derived structure: 4.0.1's `Siding` builds `timeSegments`,
+  `platformTripStopTimes` and `Trip`s in the private
+  `generatePathDistancesAndTimeSegments()`; a mid-run path change invalidates
+  all of them (arrivals, deviation, departure slots), and re-running them
+  per-switch on the simulator thread is exactly the class of work §6 forbids.
+- Pre-generating alternates (prev stop → member → next stop) requires driving
+  extra `SidingPathFinder` chains outside `Depot.tick`'s pipeline and stitching
+  `PathData` distance bases (`startDistance/endDistance` are baked into each
+  segment); `SidingPathFinder.generatePathDataDistances` exists, but the
+  spliced result must also agree with `Siding.pathMainRoute`, which every OTHER
+  vehicle of the depot shares — a per-vehicle divergent path needs a private
+  copy of the whole downstream path, which `VehicleExtraData.create` supports
+  only at creation time in 4.0.1.
+- The client partial-path sync (`pathUpdateIndex` / `VehicleExtraData.copy`)
+  exists, but nothing guarantees signal-block reservations taken under the old
+  path are released coherently when the path is swapped mid-dwell
+  (`isSignalBlocked` reservations key off `PathData` identity).
+
+Items 1–3 deliver the value (spread + queue) without touching any of that;
+per ARCHITECTURE §5.4 shipping 1–3 and documenting this gap is the accepted
+outcome.
+
+### Files touched
+
+New: `mtraddon/PlatformGroupEngine.java`,
+`mixin/{DepotMixin,PlatformRouteDetailsAccessor}.java`,
+`client/mtraddon/{ClientPlatformGroups,PlatformGroupScreen,PlatformGroupEditScreen}.java`.
+Modified (extending the shared skeleton as intended):
+`mtraddon/{AddonServerConfig,AddonStore,AddonSnapshots,AddonNetworking,AddonInit}.java`,
+`mtraddon/DwellOverrideEngine.java` (the documented minimal Feature 2 change:
+`Stop.effectiveId` used for segment matching + override lookup),
+`client/mtraddon/{AddonClientInit,AddonClientConfig}.java`,
+`resources/station_announcer.mixins.json` (+2 entries),
+`assets/station_announcer/lang/en_us.json` (+14 keys).
