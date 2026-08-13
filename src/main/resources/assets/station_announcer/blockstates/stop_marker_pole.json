@@ -1,7 +1,16 @@
 {
   "variants": {
-    "": {
+    "axis=y": {
       "model": "station_announcer:block/stop_marker_pole"
+    },
+    "axis=z": {
+      "model": "station_announcer:block/stop_marker_pole",
+      "x": 90
+    },
+    "axis=x": {
+      "model": "station_announcer:block/stop_marker_pole",
+      "x": 90,
+      "y": 90
     }
   }
 }

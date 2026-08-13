@@ -1,0 +1,101 @@
+{
+  "variants": {
+    "": [
+      {
+        "model": "station_announcer:block/platform_tile_floor_0",
+        "weight": 5
+      },
+      {
+        "model": "station_announcer:block/platform_tile_floor_0",
+        "weight": 5,
+        "y": 90
+      },
+      {
+        "model": "station_announcer:block/platform_tile_floor_0",
+        "weight": 5,
+        "y": 180
+      },
+      {
+        "model": "station_announcer:block/platform_tile_floor_0",
+        "weight": 5,
+        "y": 270
+      },
+      {
+        "model": "station_announcer:block/platform_tile_floor_1",
+        "weight": 4
+      },
+      {
+        "model": "station_announcer:block/platform_tile_floor_1",
+        "weight": 4,
+        "y": 90
+      },
+      {
+        "model": "station_announcer:block/platform_tile_floor_1",
+        "weight": 4,
+        "y": 180
+      },
+      {
+        "model": "station_announcer:block/platform_tile_floor_1",
+        "weight": 4,
+        "y": 270
+      },
+      {
+        "model": "station_announcer:block/platform_tile_floor_2",
+        "weight": 4
+      },
+      {
+        "model": "station_announcer:block/platform_tile_floor_2",
+        "weight": 4,
+        "y": 90
+      },
+      {
+        "model": "station_announcer:block/platform_tile_floor_2",
+        "weight": 4,
+        "y": 180
+      },
+      {
+        "model": "station_announcer:block/platform_tile_floor_2",
+        "weight": 4,
+        "y": 270
+      },
+      {
+        "model": "station_announcer:block/platform_tile_floor_3",
+        "weight": 2
+      },
+      {
+        "model": "station_announcer:block/platform_tile_floor_3",
+        "weight": 2,
+        "y": 90
+      },
+      {
+        "model": "station_announcer:block/platform_tile_floor_3",
+        "weight": 2,
+        "y": 180
+      },
+      {
+        "model": "station_announcer:block/platform_tile_floor_3",
+        "weight": 2,
+        "y": 270
+      },
+      {
+        "model": "station_announcer:block/platform_tile_floor_4",
+        "weight": 1
+      },
+      {
+        "model": "station_announcer:block/platform_tile_floor_4",
+        "weight": 1,
+        "y": 90
+      },
+      {
+        "model": "station_announcer:block/platform_tile_floor_4",
+        "weight": 1,
+        "y": 180
+      },
+      {
+        "model": "station_announcer:block/platform_tile_floor_4",
+        "weight": 1,
+        "y": 270
+      }
+    ]
+  }
+}

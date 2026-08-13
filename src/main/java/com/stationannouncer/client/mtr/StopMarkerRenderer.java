@@ -44,23 +44,36 @@ public class StopMarkerRenderer implements BlockEntityRenderer<StopMarkerBlockEn
     public void render(StopMarkerBlockEntity entity, float tickDelta, MatrixStack matrices,
                        VertexConsumerProvider vertexConsumers, int light, int overlay) {
         StopMarkerBlock.Mount mount = entity.getCachedState().get(StopMarkerBlock.MOUNT);
-        boolean standoff = entity.getCachedState().get(StopMarkerBlock.STANDOFF);
+        StopMarkerBlock.Style style = StopMarkerBlock.Style.of(entity.getCachedState());
         Direction facing = entity.getCachedState().get(StopMarkerBlock.FACING);
         List<StopMarkerBlockEntity.Sign> signs = entity.getSigns();
 
-        double front = switch (mount) {
-            case WALL -> standoff
-                    ? StopMarkerBlock.PLATE_FRONT_WALL_BRACKET
-                    : StopMarkerBlock.PLATE_FRONT_WALL_FLUSH;
-            default -> StopMarkerBlock.PLATE_FRONT_CEILING;
+        double front = switch (style) {
+            case BRACKET -> StopMarkerBlock.PLATE_FRONT_WALL_BRACKET;
+            case BLADE -> StopMarkerBlock.PLATE_FRONT_BLADE;
+            case FLUSH -> mount == StopMarkerBlock.Mount.WALL
+                    ? StopMarkerBlock.PLATE_FRONT_WALL_FLUSH
+                    : StopMarkerBlock.PLATE_FRONT_CEILING;
         };
-        // Ceiling markers hang at the bottom of the block; the rest sit at the top.
-        double stackTop = mount == StopMarkerBlock.Mount.CEILING
-                ? StopMarkerBlock.PLATE_SIZE * signs.size() : 16.0;
+        // Ceiling markers hang at the bottom of the block and the rest sit at
+        // the top — except a blade, whose stack is centred on the block's
+        // middle so a pole running past meets it head on.
+        double stackTop = switch (style) {
+            case BLADE -> StopMarkerBlock.BLADE_CENTRE + StopMarkerBlock.PLATE_SIZE * signs.size() / 2.0;
+            default -> mount == StopMarkerBlock.Mount.CEILING
+                    ? StopMarkerBlock.PLATE_SIZE * signs.size() : 16.0;
+        };
 
         matrices.push();
         matrices.translate(0.5, 0.0, 0.5);
         matrices.multiply(RotationAxis.POSITIVE_Y.rotationDegrees(180.0f - facing.asRotation()));
+        // A blade plate is the ordinary plate turned a quarter turn: rotating
+        // the whole frame draws it side-on to the wall without a second set of
+        // geometry. The turned plate lands centred on the block's middle, which
+        // is exactly where a pole beside it runs.
+        if (style == StopMarkerBlock.Style.BLADE) {
+            matrices.multiply(RotationAxis.POSITIVE_Y.rotationDegrees(90.0f));
+        }
 
         // Two passes on purpose: drawing text switches render layer, which
         // flushes the quad buffer, so a buffer reference must never be held
@@ -79,6 +92,15 @@ public class StopMarkerRenderer implements BlockEntityRenderer<StopMarkerBlockEn
         for (int i = 0; i < signs.size(); i++) {
             paintFace(matrices, vertexConsumers, signs.get(i),
                     stackTop - StopMarkerBlock.PLATE_SIZE * i, front);
+        }
+        // A blade is read from both sides — the plate hangs in the open, so a
+        // blank back face would be half the sign missing.
+        if (style == StopMarkerBlock.Style.BLADE) {
+            matrices.multiply(RotationAxis.POSITIVE_Y.rotationDegrees(180.0f));
+            for (int i = 0; i < signs.size(); i++) {
+                paintFace(matrices, vertexConsumers, signs.get(i),
+                        stackTop - StopMarkerBlock.PLATE_SIZE * i, front);
+            }
         }
         matrices.pop();
     }

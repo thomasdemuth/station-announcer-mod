@@ -35,6 +35,8 @@ import java.util.Map;
 public final class DepotGroupNetworking {
     public static final Identifier DEPOT_GROUPS_S2C = StationAnnouncer.id("addon_depot_groups");
     public static final Identifier UPDATE_DEPOT_GROUP_C2S = StationAnnouncer.id("addon_update_depot_group");
+    /** C2S, empty payload: recompute every group's offsets and re-write the grouped depots' departures. */
+    public static final Identifier REFRESH_DEPOT_GROUPS_C2S = StationAnnouncer.id("addon_refresh_depot_groups");
 
     /** Hard wire cap on members per group; the effective limit is {@code depotGroups.maxDepotsPerGroup}. */
     public static final int MAX_DEPOTS = 32;
@@ -49,6 +51,20 @@ public final class DepotGroupNetworking {
     }
 
     public static void registerServerReceivers() {
+        // The refresh button: same recompute-and-rewrite pass a group edit runs,
+        // for when something OUTSIDE the group changed — depot frequencies most
+        // of all, since the offset is derived from them and a frequency edit
+        // does not necessarily make MTR re-write the departure lists.
+        ServerPlayNetworking.registerGlobalReceiver(REFRESH_DEPOT_GROUPS_C2S,
+                (server, player, handler, buf, responseSender) -> server.execute(() -> {
+                    AddonServerConfig config = AddonServerConfig.get();
+                    if (!config.depotGroups.enabled || !player.hasPermissionLevel(config.editPermissionLevel)) {
+                        return;
+                    }
+                    DepotGroupEngine.refreshOffsets(server, true);
+                    player.sendMessage(Text.translatable("msg.station_announcer.depot_group.refreshed"), true);
+                }));
+
         ServerPlayNetworking.registerGlobalReceiver(UPDATE_DEPOT_GROUP_C2S, (server, player, handler, buf, responseSender) -> {
             boolean delete = buf.readBoolean();
             long id = buf.readLong();

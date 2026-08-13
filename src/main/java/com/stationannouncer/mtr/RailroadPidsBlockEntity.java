@@ -56,19 +56,45 @@ public class RailroadPidsBlockEntity extends BlockEntity {
     public static final int MAX_FLIP_SECONDS = 60;
     public static final int DEFAULT_FLIP_SECONDS = 14;
 
+    public static final int MAX_TITLE_LENGTH = 64;
+
+    /**
+     * How long before departure the track number appears, in seconds.
+     *
+     * <p>Real boards withhold the track until the platform is committed, and
+     * the crowd moves when it appears — so this is the single most important
+     * setting on the departure board. Default six minutes.</p>
+     */
+    public static final int MIN_TRACK_REVEAL_SECONDS = 0;
+    public static final int MAX_TRACK_REVEAL_SECONDS = 60 * 60;
+    public static final int DEFAULT_TRACK_REVEAL_SECONDS = 6 * 60;
+
     /** Watched platforms; empty means "auto-detect the closest one". */
     private long[] platformIds = NO_PLATFORMS;
     private int connectionModes = DEFAULT_MODES;
     private DisplayMode displayMode = DisplayMode.FLIP;
     private int flipSeconds = DEFAULT_FLIP_SECONDS;
 
+    /** Departure-board only: header text, and when the track is announced. */
+    private String title = "";
+    private int trackRevealSeconds = DEFAULT_TRACK_REVEAL_SECONDS;
+
     public RailroadPidsBlockEntity(BlockPos pos, BlockState state) {
-        // Same settings and same class either way — but the hanging board draws
-        // a completely different screen, and a block entity type may only carry
-        // one renderer, so the two shapes register as separate types.
-        super(state.getBlock() instanceof RailroadPidsHangingBlock
+        // Same settings and same class throughout — but each shape draws a
+        // completely different screen, and a block entity type may only carry
+        // one renderer, so each registers as its own type.
+        super(typeFor(state), pos, state);
+    }
+
+    private static net.minecraft.block.entity.BlockEntityType<RailroadPidsBlockEntity> typeFor(BlockState state) {
+        // RailroadDepartureBlock extends RailroadPidsBlock, so it must be
+        // tested first or it would come out as an ordinary wall board.
+        if (state.getBlock() instanceof RailroadDepartureBlock) {
+            return MtrPids.RAILROAD_DEPARTURE_BLOCK_ENTITY;
+        }
+        return state.getBlock() instanceof RailroadPidsHangingBlock
                 ? MtrPids.RAILROAD_HANGING_BLOCK_ENTITY
-                : MtrPids.RAILROAD_PIDS_BLOCK_ENTITY, pos, state);
+                : MtrPids.RAILROAD_PIDS_BLOCK_ENTITY;
     }
 
     @Override
@@ -78,6 +104,8 @@ public class RailroadPidsBlockEntity extends BlockEntity {
         nbt.putInt("ConnectionModes", connectionModes);
         nbt.putInt("DisplayMode", displayMode.ordinal());
         nbt.putInt("FlipSeconds", flipSeconds);
+        nbt.putString("Title", title);
+        nbt.putInt("TrackRevealSeconds", trackRevealSeconds);
     }
 
     @Override
@@ -90,6 +118,11 @@ public class RailroadPidsBlockEntity extends BlockEntity {
         connectionModes = nbt.contains("ConnectionModes") ? nbt.getInt("ConnectionModes") : DEFAULT_MODES;
         displayMode = DisplayMode.byOrdinal(nbt.getInt("DisplayMode"));
         setFlipSeconds(nbt.contains("FlipSeconds") ? nbt.getInt("FlipSeconds") : DEFAULT_FLIP_SECONDS);
+        setTitle(nbt.getString("Title"));
+        // Absent on boards placed before the field existed, and 0 ("always
+        // show the track") is a legitimate value - so contains(), not != 0.
+        setTrackRevealSeconds(nbt.contains("TrackRevealSeconds")
+                ? nbt.getInt("TrackRevealSeconds") : DEFAULT_TRACK_REVEAL_SECONDS);
     }
 
     @Nullable
@@ -148,6 +181,26 @@ public class RailroadPidsBlockEntity extends BlockEntity {
 
     public void setFlipSeconds(int seconds) {
         this.flipSeconds = Math.max(MIN_FLIP_SECONDS, Math.min(MAX_FLIP_SECONDS, seconds));
+    }
+
+    /** Departure board header; empty falls back to the station name. */
+    public String getTitle() {
+        return title;
+    }
+
+    public void setTitle(String title) {
+        String value = title == null ? "" : title;
+        this.title = value.length() <= MAX_TITLE_LENGTH ? value : value.substring(0, MAX_TITLE_LENGTH);
+    }
+
+    /** Seconds before departure at which the track number is announced. */
+    public int getTrackRevealSeconds() {
+        return trackRevealSeconds;
+    }
+
+    public void setTrackRevealSeconds(int seconds) {
+        this.trackRevealSeconds = Math.max(MIN_TRACK_REVEAL_SECONDS,
+                Math.min(MAX_TRACK_REVEAL_SECONDS, seconds));
     }
 
     /** Whether connections on the given MTR transport mode ordinal are shown. */

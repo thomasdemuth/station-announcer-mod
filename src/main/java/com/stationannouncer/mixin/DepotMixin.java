@@ -142,6 +142,12 @@ public abstract class DepotMixin extends DepotSchema {
      */
     @Inject(method = "generatePlatformDirectionsAndWriteDeparturesToSidings()V", at = @At("HEAD"))
     private void stationAnnouncer$computeDepartureOffset(CallbackInfo ci) {
+        // Feature 5 commit point: this method's only callers are
+        // Depot.finishGeneratingPath (a generation that actually completed) and
+        // Depot.init (server load, nothing pending) — so a rotation staged at
+        // generateMainRoute HEAD becomes the applied truth exactly when the
+        // path it describes exists, and an aborted generation never commits.
+        PlatformGroupEngine.commitPending((Depot) (Object) this);
         stationAnnouncer$departureOffsetMillis = DepotGroupEngine.departureOffsetMillis((Depot) (Object) this, data);
     }
 

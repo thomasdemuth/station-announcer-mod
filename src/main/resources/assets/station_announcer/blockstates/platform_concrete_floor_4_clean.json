@@ -1,0 +1,44 @@
+{
+  "variants": {
+    "joint_north=false,joint_west=false": [
+      {
+        "model": "station_announcer:block/platform_concrete_floor_clean_c0_0",
+        "weight": 1
+      },
+      {
+        "model": "station_announcer:block/platform_concrete_floor_clean_c0_1",
+        "weight": 1
+      }
+    ],
+    "joint_north=true,joint_west=false": [
+      {
+        "model": "station_announcer:block/platform_concrete_floor_clean_c1_0",
+        "weight": 1
+      },
+      {
+        "model": "station_announcer:block/platform_concrete_floor_clean_c1_1",
+        "weight": 1
+      }
+    ],
+    "joint_north=false,joint_west=true": [
+      {
+        "model": "station_announcer:block/platform_concrete_floor_clean_c2_0",
+        "weight": 1
+      },
+      {
+        "model": "station_announcer:block/platform_concrete_floor_clean_c2_1",
+        "weight": 1
+      }
+    ],
+    "joint_north=true,joint_west=true": [
+      {
+        "model": "station_announcer:block/platform_concrete_floor_clean_c3_0",
+        "weight": 1
+      },
+      {
+        "model": "station_announcer:block/platform_concrete_floor_clean_c3_1",
+        "weight": 1
+      }
+    ]
+  }
+}

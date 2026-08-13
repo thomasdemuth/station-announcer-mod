@@ -42,6 +42,23 @@ public final class MtrPids {
     public static final BlockItem HANGING_ITEM = new BlockItem(HANGING, new Item.Settings());
     public static final BlockItem HANGING_MINI_ITEM = new BlockItem(HANGING_MINI, new Item.Settings());
 
+    /** The small concourse departure board: next trains out, stops for the top two. */
+    public static final RailroadDepartureBlock RAILROAD_DEPARTURE_WALL = new RailroadDepartureBlock(
+            AbstractBlock.Settings.create().strength(2.0f).sounds(BlockSoundGroup.METAL).nonOpaque());
+
+    /** The big concourse board: place a rectangle of them and they merge into one screen. */
+    public static final DepartureBoardBlock DEPARTURE_BOARD_WALL = new DepartureBoardBlock(
+            AbstractBlock.Settings.create().strength(2.0f).sounds(BlockSoundGroup.METAL).nonOpaque(), false);
+    public static final DepartureBoardBlock DEPARTURE_BOARD_HANGING = new DepartureBoardBlock(
+            AbstractBlock.Settings.create().strength(2.0f).sounds(BlockSoundGroup.METAL).nonOpaque(), true);
+
+    public static final BlockItem RAILROAD_DEPARTURE_WALL_ITEM =
+            new BlockItem(RAILROAD_DEPARTURE_WALL, new Item.Settings());
+    public static final BlockItem DEPARTURE_BOARD_WALL_ITEM =
+            new BlockItem(DEPARTURE_BOARD_WALL, new Item.Settings());
+    public static final BlockItem DEPARTURE_BOARD_HANGING_ITEM =
+            new BlockItem(DEPARTURE_BOARD_HANGING, new Item.Settings());
+
     /** Ceiling-hung railroad board: two alternating screens in a deep case. */
     public static final RailroadPidsHangingBlock RAILROAD_HANGING = new RailroadPidsHangingBlock(
             AbstractBlock.Settings.create().strength(2.0f).sounds(BlockSoundGroup.METAL).nonOpaque());
@@ -55,6 +72,13 @@ public final class MtrPids {
             BlockEntityType.Builder.create(RailroadPidsBlockEntity::new, RAILROAD_WALL, RAILROAD_STANDING).build(null);
     public static final BlockEntityType<RailroadPidsBlockEntity> RAILROAD_HANGING_BLOCK_ENTITY =
             BlockEntityType.Builder.create(RailroadPidsBlockEntity::new, RAILROAD_HANGING).build(null);
+    /** Its own type only so it can carry its own renderer. */
+    public static final BlockEntityType<RailroadPidsBlockEntity> RAILROAD_DEPARTURE_BLOCK_ENTITY =
+            BlockEntityType.Builder.create(RailroadPidsBlockEntity::new, RAILROAD_DEPARTURE_WALL).build(null);
+    public static final BlockEntityType<DepartureBoardBlockEntity> DEPARTURE_BOARD_BLOCK_ENTITY =
+            BlockEntityType.Builder.create(DepartureBoardBlockEntity::new, DEPARTURE_BOARD_WALL).build(null);
+    public static final BlockEntityType<DepartureBoardBlockEntity> DEPARTURE_BOARD_HANGING_BLOCK_ENTITY =
+            BlockEntityType.Builder.create(DepartureBoardBlockEntity::new, DEPARTURE_BOARD_HANGING).build(null);
 
     public static final BlockEntityType<PidsBlockEntity> PIDS_BLOCK_ENTITY =
             BlockEntityType.Builder.<PidsBlockEntity>create((pos, state) -> {
@@ -83,6 +107,7 @@ public final class MtrPids {
 
     /** C2S: the railroad board's settings screen saves (pos + mode mask + platform ids). */
     public static final Identifier UPDATE_RAILROAD_PIDS_C2S = StationAnnouncer.id("update_railroad_pids");
+    public static final Identifier UPDATE_DEPARTURE_BOARD_C2S = StationAnnouncer.id("update_departure_board");
 
     private MtrPids() {
     }
@@ -107,6 +132,8 @@ public final class MtrPids {
             int modes = buf.readInt();
             int displayMode = buf.readVarInt();
             int flipSeconds = buf.readVarInt();
+            String title = buf.readString(RailroadPidsBlockEntity.MAX_TITLE_LENGTH);
+            int trackRevealSeconds = buf.readVarInt();
             int count = Math.min(buf.readVarInt(), RailroadPidsBlockEntity.MAX_PLATFORMS);
             long[] platformIds = new long[Math.max(0, count)];
             for (int i = 0; i < platformIds.length; i++) {
@@ -121,7 +148,44 @@ public final class MtrPids {
                     pids.setConnectionModes(modes);
                     pids.setDisplayMode(RailroadPidsBlockEntity.DisplayMode.byOrdinal(displayMode));
                     pids.setFlipSeconds(flipSeconds);
+                    pids.setTitle(title);
+                    pids.setTrackRevealSeconds(trackRevealSeconds);
                     pids.sync();
+                }
+            });
+        });
+
+        ServerPlayNetworking.registerGlobalReceiver(UPDATE_DEPARTURE_BOARD_C2S, (server, player, handler, buf, responseSender) -> {
+            BlockPos pos = buf.readBlockPos();
+            String title = buf.readString(DepartureBoardBlockEntity.MAX_TITLE_LENGTH);
+            int count = Math.min(buf.readVarInt(), DepartureBoardBlockEntity.MAX_PLATFORMS);
+            long[] platformIds = new long[Math.max(0, count)];
+            for (int i = 0; i < platformIds.length; i++) {
+                platformIds[i] = buf.readLong();
+            }
+            server.execute(() -> {
+                ServerWorld world = player.getServerWorld();
+                if (player.squaredDistanceTo(Vec3d.ofCenter(pos)) > 64.0 * 64.0
+                        || !world.canPlayerModifyAt(player, pos)
+                        || !(world.getBlockState(pos).getBlock() instanceof DepartureBoardBlock)) {
+                    return;
+                }
+                // Write to EVERY cell of the merged board, not just the clicked
+                // one: the origin moves when the board grows, and settings kept
+                // on the origin alone would appear to vanish.
+                net.minecraft.block.BlockState state = world.getBlockState(pos);
+                DepartureBoardBlock.Rect rect = DepartureBoardBlock.rectangle(world, pos, state);
+                net.minecraft.util.math.Direction right =
+                        DepartureBoardBlock.screenRight(state.get(DepartureBoardBlock.FACING));
+                for (int y = 0; y < rect.height(); y++) {
+                    for (int x = 0; x < rect.width(); x++) {
+                        BlockPos cell = rect.origin().up(y).offset(right, x);
+                        if (world.getBlockEntity(cell) instanceof DepartureBoardBlockEntity board) {
+                            board.setTitle(title);
+                            board.setPlatformIds(platformIds);
+                            board.sync();
+                        }
+                    }
                 }
             });
         });
@@ -174,6 +238,9 @@ public final class MtrPids {
         Registry.register(Registries.BLOCK, StationAnnouncer.id("railroad_pids_wall"), RAILROAD_WALL);
         Registry.register(Registries.BLOCK, StationAnnouncer.id("railroad_pids_standing"), RAILROAD_STANDING);
         Registry.register(Registries.BLOCK, StationAnnouncer.id("railroad_pids_hanging"), RAILROAD_HANGING);
+        Registry.register(Registries.BLOCK, StationAnnouncer.id("railroad_departure_wall"), RAILROAD_DEPARTURE_WALL);
+        Registry.register(Registries.BLOCK, StationAnnouncer.id("departure_board_wall"), DEPARTURE_BOARD_WALL);
+        Registry.register(Registries.BLOCK, StationAnnouncer.id("departure_board_hanging"), DEPARTURE_BOARD_HANGING);
 
         Registry.register(Registries.ITEM, StationAnnouncer.id("pids_nyc_wall_1"), WALL_1_ITEM);
         Registry.register(Registries.ITEM, StationAnnouncer.id("pids_nyc_wall_2"), WALL_2_ITEM);
@@ -184,19 +251,28 @@ public final class MtrPids {
         Registry.register(Registries.ITEM, StationAnnouncer.id("railroad_pids_wall"), RAILROAD_WALL_ITEM);
         Registry.register(Registries.ITEM, StationAnnouncer.id("railroad_pids_standing"), RAILROAD_STANDING_ITEM);
         Registry.register(Registries.ITEM, StationAnnouncer.id("railroad_pids_hanging"), RAILROAD_HANGING_ITEM);
+        Registry.register(Registries.ITEM, StationAnnouncer.id("railroad_departure_wall"), RAILROAD_DEPARTURE_WALL_ITEM);
+        Registry.register(Registries.ITEM, StationAnnouncer.id("departure_board_wall"), DEPARTURE_BOARD_WALL_ITEM);
+        Registry.register(Registries.ITEM, StationAnnouncer.id("departure_board_hanging"), DEPARTURE_BOARD_HANGING_ITEM);
 
         Registry.register(Registries.BLOCK_ENTITY_TYPE, StationAnnouncer.id("pids_nyc"), PIDS_BLOCK_ENTITY);
         Registry.register(Registries.BLOCK_ENTITY_TYPE, StationAnnouncer.id("railroad_pids"), RAILROAD_PIDS_BLOCK_ENTITY);
         Registry.register(Registries.BLOCK_ENTITY_TYPE, StationAnnouncer.id("railroad_pids_hanging"), RAILROAD_HANGING_BLOCK_ENTITY);
+        Registry.register(Registries.BLOCK_ENTITY_TYPE, StationAnnouncer.id("railroad_departure"), RAILROAD_DEPARTURE_BLOCK_ENTITY);
+        Registry.register(Registries.BLOCK_ENTITY_TYPE, StationAnnouncer.id("departure_board"), DEPARTURE_BOARD_BLOCK_ENTITY);
+        Registry.register(Registries.BLOCK_ENTITY_TYPE, StationAnnouncer.id("departure_board_hanging"), DEPARTURE_BOARD_HANGING_BLOCK_ENTITY);
 
-        ModContent.BAKER_CITY_ENTRIES.add(WALL_1_ITEM);
-        ModContent.BAKER_CITY_ENTRIES.add(WALL_2_ITEM);
-        ModContent.BAKER_CITY_ENTRIES.add(STANDING_1_ITEM);
-        ModContent.BAKER_CITY_ENTRIES.add(STANDING_2_ITEM);
-        ModContent.BAKER_CITY_ENTRIES.add(HANGING_ITEM);
-        ModContent.BAKER_CITY_ENTRIES.add(HANGING_MINI_ITEM);
-        ModContent.BAKER_CITY_ENTRIES.add(RAILROAD_WALL_ITEM);
-        ModContent.BAKER_CITY_ENTRIES.add(RAILROAD_STANDING_ITEM);
-        ModContent.BAKER_CITY_ENTRIES.add(RAILROAD_HANGING_ITEM);
+        ModContent.OPERATIONS_ENTRIES.add(WALL_1_ITEM);
+        ModContent.OPERATIONS_ENTRIES.add(WALL_2_ITEM);
+        ModContent.OPERATIONS_ENTRIES.add(STANDING_1_ITEM);
+        ModContent.OPERATIONS_ENTRIES.add(STANDING_2_ITEM);
+        ModContent.OPERATIONS_ENTRIES.add(HANGING_ITEM);
+        ModContent.OPERATIONS_ENTRIES.add(HANGING_MINI_ITEM);
+        ModContent.OPERATIONS_ENTRIES.add(RAILROAD_WALL_ITEM);
+        ModContent.OPERATIONS_ENTRIES.add(RAILROAD_STANDING_ITEM);
+        ModContent.OPERATIONS_ENTRIES.add(RAILROAD_HANGING_ITEM);
+        ModContent.OPERATIONS_ENTRIES.add(RAILROAD_DEPARTURE_WALL_ITEM);
+        ModContent.OPERATIONS_ENTRIES.add(DEPARTURE_BOARD_WALL_ITEM);
+        ModContent.OPERATIONS_ENTRIES.add(DEPARTURE_BOARD_HANGING_ITEM);
     }
 }

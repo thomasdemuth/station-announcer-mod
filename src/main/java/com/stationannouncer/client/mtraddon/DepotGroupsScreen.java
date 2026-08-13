@@ -104,6 +104,7 @@ public class DepotGroupsScreen extends Screen {
 
         hintY = listTop + visibleRows * ROW_HEIGHT + 2;
         int footerY = hintY + 24;
+        int half = (PANEL_WIDTH - GAP) / 2;
         addDrawableChild(ButtonWidget.builder(
                         Text.translatable("gui.station_announcer.depot_groups.new"),
                         button -> {
@@ -111,7 +112,18 @@ public class DepotGroupsScreen extends Screen {
                                 client.setScreen(new DepotGroupEditScreen(null, this));
                             }
                         })
-                .dimensions(left, footerY, PANEL_WIDTH, WIDGET_HEIGHT).build());
+                .dimensions(left, footerY, half, WIDGET_HEIGHT).build());
+        // Offsets derive from depot frequencies at the moment departures are
+        // written, so a frequency change needs this to take effect now rather
+        // than at the next regeneration or restart.
+        addDrawableChild(ButtonWidget.builder(
+                        Text.translatable("gui.station_announcer.depot_groups.refresh"),
+                        button -> net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking.send(
+                                com.stationannouncer.mtraddon.DepotGroupNetworking.REFRESH_DEPOT_GROUPS_C2S,
+                                net.fabricmc.fabric.api.networking.v1.PacketByteBufs.create()))
+                .tooltip(net.minecraft.client.gui.tooltip.Tooltip.of(
+                        Text.translatable("gui.station_announcer.depot_groups.refresh.tip")))
+                .dimensions(left + half + GAP, footerY, half, WIDGET_HEIGHT).build());
         addDrawableChild(ButtonWidget.builder(ScreenTexts.DONE, button -> close())
                 .dimensions(left, footerY + WIDGET_HEIGHT + GAP, PANEL_WIDTH, WIDGET_HEIGHT).build());
     }

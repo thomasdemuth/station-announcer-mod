@@ -30,7 +30,7 @@ import java.util.List;
  * arrival / 6 s before departure, green 3 s before departure / 15 s after).</p>
  *
  * <p>Yellow lights additionally choose what to do about the dispatch addon's
- * platform hold rules: ignore them, flash while a train is held, or act purely
+ * platform hold rules: ignore them, stay lit while a train is held, or act purely
  * as a hold indicator. Green ones do not — green means "time to leave", which a
  * hold is precisely the absence of.</p>
  *

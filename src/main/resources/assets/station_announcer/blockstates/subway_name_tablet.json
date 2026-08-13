@@ -1,0 +1,64 @@
+{
+  "variants": {
+    "row=0,facing=north": {
+      "model": "station_announcer:block/subway_name_tablet"
+    },
+    "row=0,facing=east": {
+      "model": "station_announcer:block/subway_name_tablet",
+      "y": 90
+    },
+    "row=0,facing=south": {
+      "model": "station_announcer:block/subway_name_tablet",
+      "y": 180
+    },
+    "row=0,facing=west": {
+      "model": "station_announcer:block/subway_name_tablet",
+      "y": 270
+    },
+    "row=1,facing=north": {
+      "model": "station_announcer:block/subway_name_tablet"
+    },
+    "row=1,facing=east": {
+      "model": "station_announcer:block/subway_name_tablet",
+      "y": 90
+    },
+    "row=1,facing=south": {
+      "model": "station_announcer:block/subway_name_tablet",
+      "y": 180
+    },
+    "row=1,facing=west": {
+      "model": "station_announcer:block/subway_name_tablet",
+      "y": 270
+    },
+    "row=2,facing=north": {
+      "model": "station_announcer:block/subway_name_tablet"
+    },
+    "row=2,facing=east": {
+      "model": "station_announcer:block/subway_name_tablet",
+      "y": 90
+    },
+    "row=2,facing=south": {
+      "model": "station_announcer:block/subway_name_tablet",
+      "y": 180
+    },
+    "row=2,facing=west": {
+      "model": "station_announcer:block/subway_name_tablet",
+      "y": 270
+    },
+    "row=3,facing=north": {
+      "model": "station_announcer:block/subway_name_tablet"
+    },
+    "row=3,facing=east": {
+      "model": "station_announcer:block/subway_name_tablet",
+      "y": 90
+    },
+    "row=3,facing=south": {
+      "model": "station_announcer:block/subway_name_tablet",
+      "y": 180
+    },
+    "row=3,facing=west": {
+      "model": "station_announcer:block/subway_name_tablet",
+      "y": 270
+    }
+  }
+}

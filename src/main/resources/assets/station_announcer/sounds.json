@@ -256,5 +256,14 @@
         "attenuation_distance": 32
       }
     ]
+  },
+  "gate_alarm": {
+    "category": "block",
+    "sounds": [
+      {
+        "name": "station_announcer:gate_alarm",
+        "stream": false
+      }
+    ]
   }
 }

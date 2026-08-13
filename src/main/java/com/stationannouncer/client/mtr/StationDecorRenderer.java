@@ -47,11 +47,9 @@ public class StationDecorRenderer implements BlockEntityRenderer<StationDecorBlo
 
         Direction facing;
         if (block instanceof com.stationannouncer.mtr.RailingSignBlock) {
-            // The panel plane follows the railing run: connected east/west ->
-            // the run goes along X and the panel faces north/south.
-            boolean alongX = entity.getCachedState().get(com.stationannouncer.block.RailingBlock.EAST)
-                    || entity.getCachedState().get(com.stationannouncer.block.RailingBlock.WEST);
-            facing = alongX ? Direction.NORTH : Direction.EAST;
+            // The panel plane follows the railing run; the block owns that rule
+            // so the settings screen can name the two faces the same way.
+            facing = com.stationannouncer.mtr.RailingSignBlock.frontOf(entity.getCachedState());
         } else {
             facing = entity.getCachedState().contains(StationDecorBlock.FACING)
                     ? entity.getCachedState().get(StationDecorBlock.FACING)
@@ -98,6 +96,7 @@ public class StationDecorRenderer implements BlockEntityRenderer<StationDecorBlo
     static void clearWorldState() {
         LAST_DEPARTURE.clear();
         SIGN_PANELS.clear();
+        RouteBullets.clearCache();
         lastNameInput = null;
         lastNameUpper = "";
     }
@@ -118,10 +117,6 @@ public class StationDecorRenderer implements BlockEntityRenderer<StationDecorBlo
         return lastNameUpper;
     }
 
-    /** A dispatcher hold flashes rather than glowing steadily: on/period, in millis. */
-    private static final long HOLD_FLASH_PERIOD_MS = 1000;
-    private static final long HOLD_FLASH_ON_MS = 550;
-
     /**
      * Three round lenses on both faces of the hanging box. Yellow: lit from
      * {@code on} seconds before arrival until {@code off} seconds before
@@ -132,7 +127,9 @@ public class StationDecorRenderer implements BlockEntityRenderer<StationDecorBlo
      *
      * <p>A yellow light may additionally follow the addon's platform hold rules
      * (Feature 1): while a rule is actually holding a train at its platform the
-     * lenses flash, and in {@code ONLY} mode that is all the light ever does.</p>
+     * lenses are lit, and in {@code ONLY} mode that is all the light ever does.
+     * Every state of every holding light is solid — a lamp on a platform is
+     * either on or it is off.</p>
      */
     private void paintHoldingLight(StationDecorBlockEntity entity, MatrixStack matrices,
                                    VertexConsumerProvider vertexConsumers,
@@ -172,10 +169,10 @@ public class StationDecorRenderer implements BlockEntityRenderer<StationDecorBlo
         }
 
         // A dispatcher hold overrides the timetable: the schedule says go, the
-        // rule says wait, so the lenses flash for as long as the hold lasts.
+        // rule says wait, so the lenses stay lit for as long as the hold lasts.
         if (holdMode.followsHoldRules() && platformId != 0
                 && com.stationannouncer.client.mtraddon.ClientHoldState.isHeld(platformId)) {
-            active = System.currentTimeMillis() % HOLD_FLASH_PERIOD_MS < HOLD_FLASH_ON_MS;
+            active = true;
         }
 
         int lit = green ? 0xFF38E464 : 0xFFFFC03C;
@@ -224,8 +221,22 @@ public class StationDecorRenderer implements BlockEntityRenderer<StationDecorBlo
     /** Longest run of adjacent sign segments merged into one panel. */
     private static final int MAX_SIGN_RUN = 8;
 
-    /** A merged sign panel: how many segments it spans (0 = this segment draws nothing) and its text. */
-    private record SignPanel(int run, String text) {
+    /**
+     * A merged sign panel: how many segments it spans (0 = this segment draws
+     * nothing), its text, which faces carry a sign and the route bullets on
+     * each face.
+     *
+     * <p>Every segment of a run can be brushed, so the run has to agree on one
+     * answer: a face is off when ANY segment says off (switching a face off
+     * anywhere switches the whole merged panel), and the bullets come from the
+     * first segment that has any — the same "first one that says something
+     * wins" rule the custom name follows.</p>
+     */
+    private record SignPanel(int run, String text, boolean front, boolean back,
+                             java.util.List<String> frontRoutes, java.util.List<String> backRoutes) {
+        java.util.List<String> routes(boolean isFront) {
+            return isFront ? frontRoutes : backRoutes;
+        }
     }
 
     /**
@@ -249,15 +260,15 @@ public class StationDecorRenderer implements BlockEntityRenderer<StationDecorBlo
         if (cached != null) {
             return cached;
         }
-        boolean alongX = entity.getCachedState().get(com.stationannouncer.block.RailingBlock.EAST)
-                || entity.getCachedState().get(com.stationannouncer.block.RailingBlock.WEST);
-        Direction negDir = alongX ? Direction.WEST : Direction.NORTH;
-        Direction posDir = alongX ? Direction.EAST : Direction.SOUTH;
+        // The run is perpendicular to the face the panel looks at.
+        Direction frontFace = com.stationannouncer.mtr.RailingSignBlock.frontOf(entity.getCachedState());
+        Direction negDir = frontFace.rotateYCounterclockwise();
+        Direction posDir = frontFace.rotateYClockwise();
 
         SignPanel panel;
         // Only the first segment of a contiguous run draws (the merged panel).
         if (world.getBlockState(pos.offset(negDir)).getBlock() instanceof com.stationannouncer.mtr.RailingSignBlock) {
-            panel = new SignPanel(0, "");
+            panel = new SignPanel(0, "", false, false, java.util.List.of(), java.util.List.of());
         } else {
             int run = 1;
             while (run < MAX_SIGN_RUN
@@ -266,23 +277,62 @@ public class StationDecorRenderer implements BlockEntityRenderer<StationDecorBlo
             }
             // A custom name typed on ANY segment of the run wins over the auto name.
             String custom = entity.getCustomName();
-            for (int i = 1; i < run && custom.isEmpty(); i++) {
-                if (world.getBlockEntity(pos.offset(posDir, i)) instanceof StationDecorBlockEntity other) {
+            boolean front = entity.isSignFront();
+            boolean back = entity.isSignBack();
+            java.util.List<String> frontRoutes = entity.getFrontRoutes();
+            java.util.List<String> backRoutes = entity.getBackRoutes();
+            for (int i = 1; i < run; i++) {
+                if (!(world.getBlockEntity(pos.offset(posDir, i)) instanceof StationDecorBlockEntity other)) {
+                    continue;
+                }
+                if (custom.isEmpty()) {
                     custom = other.getCustomName();
                 }
+                front &= other.isSignFront();
+                back &= other.isSignBack();
+                if (frontRoutes.isEmpty()) {
+                    frontRoutes = other.getFrontRoutes();
+                }
+                if (backRoutes.isEmpty()) {
+                    backRoutes = other.getBackRoutes();
+                }
             }
-            panel = new SignPanel(run, !custom.isEmpty() ? custom : (autoName.isEmpty() ? "Subway" : autoName));
+            panel = new SignPanel(run, !custom.isEmpty() ? custom : (autoName.isEmpty() ? "Subway" : autoName),
+                    front, back, frontRoutes, backRoutes);
         }
         SIGN_PANELS.put(pos.asLong(), panel);
         return panel;
     }
 
+    /** Canvas z of the panel's two faces: model x 5..11 either side of the railing's centre plane. */
+    private static final float PANEL_FRONT_Z = 0.0f;
+    private static final float PANEL_CENTRE_Z = 12.25f;
+    private static final float PANEL_BACK_Z = 24.5f;
+
     /**
-     * The black station-name panel set into the entrance railing, readable
-     * from both sides (panel faces at ±3/16 from the railing's center plane,
-     * tucked inside the post width so nothing z-fights). Adjacent sign
-     * segments merge: the run's first block draws one continuous panel
-     * across all of them, so long station names get the room they need.
+     * How far in front of the panel face its inner keyline sits. Both are
+     * quads in the SAME debug-quad layer, and the hanging board's z-fighting
+     * cost us a lesson here: 0.001 blocks apart is not enough. 0.4 canvas
+     * units is ~0.006 blocks.
+     */
+    private static final float KEYLINE_STANDOFF = 0.4f;
+
+    /** How far the slab's lids clear the rails they meet, in canvas units (~0.005 blocks). */
+    private static final float SLAB_OVERSHOOT = 0.3f;
+
+    /**
+     * The black station-name panel set into the entrance railing. It is a
+     * SOLID slab, not two facing sheets: the two faces sit at ±3/16 from the
+     * railing's centre plane (inside the post width, so nothing z-fights) and
+     * the space between them is filled, which is what stops the lettering
+     * reading as though it were floating in mid-air with the balusters showing
+     * through. Adjacent sign segments merge: the run's first block draws one
+     * continuous panel across all of them, so long station names get the room
+     * they need.
+     *
+     * <p>Each face is independent — it can be switched off (that side then
+     * shows plain railing, and the slab stops at the centre plane) and carries
+     * its own route bullets.</p>
      */
     private void paintRailingSign(StationDecorBlockEntity entity, MatrixStack matrices,
                                   VertexConsumerProvider vertexConsumers, String autoName) {
@@ -295,6 +345,11 @@ public class StationDecorRenderer implements BlockEntityRenderer<StationDecorBlo
         if (panel.run() == 0) {
             return; // not the first segment of the run: the first one draws it all
         }
+        boolean front = panel.front();
+        boolean back = panel.back();
+        if (!front && !back) {
+            return; // both faces off: a plain railing segment
+        }
         int run = panel.run();
         String text = panel.text();
 
@@ -303,6 +358,7 @@ public class StationDecorRenderer implements BlockEntityRenderer<StationDecorBlo
         float centerOffset = (run - 1) / 2.0f;     // run center, in blocks from this segment
 
         for (int side = 0; side < 2; side++) {
+            boolean thisSide = side == 0 ? front : back;
             matrices.push();
             if (side == 1) {
                 matrices.multiply(RotationAxis.POSITIVE_Y.rotationDegrees(180.0f));
@@ -312,25 +368,102 @@ public class StationDecorRenderer implements BlockEntityRenderer<StationDecorBlo
                     1.125, -0.1875 - 0.004);
             matrices.scale(-UNIT, -UNIT, UNIT);
             CanvasPainter painter = new CanvasPainter(matrices, vertexConsumers);
-            painter.quad(0, 0, panelWidth, 48, 0.0f, BOARD_BLACK);
-            painter.quad(1, 1, panelWidth - 1, 47, -0.05f, 0xFF17171A);
 
-            float center = panelWidth / 2.0f;
-            float maxWidth = panelWidth - 6;
-            if (painter.width(text, 12) <= maxWidth) {
-                painter.textCentered(text, center, 24 - 6, 12, TEXT_WHITE);
-            } else {
-                java.util.List<String> lines = painter.wrap(text, 9, maxWidth);
-                if (lines.size() == 1) {
-                    // one very long word: shrink it onto a single line
-                    float size = Math.max(5, maxWidth / Math.max(1, painter.width(text, 1)));
-                    painter.textCentered(text, center, 24 - size / 2.0f, size, TEXT_WHITE);
-                } else {
-                    painter.textCentered(lines.get(0), center, 24 - 11, 9, TEXT_WHITE);
-                    painter.textCentered(lines.get(1), center, 24 + 2, 9, TEXT_WHITE);
-                }
+            // The slab itself is drawn once, from the first side's frame: a face
+            // that is switched off stops the mass at the railing's centre plane.
+            if (side == 0) {
+                // The slab OVERSHOOTS the panel's 48 units top and bottom: the
+                // railing's balusters end at exactly model y 6 and y 18, and a
+                // lid flush with them would be coplanar with the rails they meet.
+                // Overshooting buries those faces inside the slab instead.
+                CanvasPainter.box(vertexConsumers.getBuffer(net.minecraft.client.render.RenderLayer.getDebugQuads()),
+                        matrices.peek().getPositionMatrix(),
+                        0, -SLAB_OVERSHOOT, front ? PANEL_FRONT_Z : PANEL_CENTRE_Z,
+                        panelWidth, 48 + SLAB_OVERSHOOT, back ? PANEL_BACK_Z : PANEL_CENTRE_Z,
+                        BOARD_BLACK);
+            }
+            if (thisSide) {
+                painter.quad(1, 1, panelWidth - 1, 47, -KEYLINE_STANDOFF, 0xFF17171A);
+                paintRailingFace(painter, text, panel.routes(side == 0), panelWidth);
             }
             matrices.pop();
+        }
+    }
+
+    /**
+     * Bullet geometry on a 48-unit-tall panel, in canvas units.
+     *
+     * <p>The bullets sit UNDER the station name, left-aligned and small — the
+     * real entrance signs read that way ("Borough Hall Station" over a row of
+     * small ② ③ discs), not as one big disc beside the name.</p>
+     */
+    private static final float BULLET_DIAMETER = 13;
+    private static final float BULLET_GAP = 3;
+    /** Left margin for both the name and the bullet row, so their edges line up. */
+    private static final float SIGN_LEFT = 9;
+    private static final float SIGN_BOTTOM = 5;
+    /** The bullet row never takes more than this share of the panel width. */
+    private static final float BULLET_MAX_SHARE = 0.8f;
+
+    /**
+     * One face of the sign: the station name, and beneath it the route bullets
+     * in a left-aligned row.
+     */
+    private void paintRailingFace(CanvasPainter painter, String text, java.util.List<String> routes, float panelWidth) {
+        int count = routes.size();
+        float maxWidth = Math.max(20, panelWidth - 2 * SIGN_LEFT);
+
+        float diameter = BULLET_DIAMETER;
+        float gap = BULLET_GAP;
+        if (count > 0) {
+            float rowWidth = count * diameter + (count - 1) * gap;
+            float allowed = maxWidth * BULLET_MAX_SHARE;
+            if (rowWidth > allowed) {
+                float scale = allowed / rowWidth;
+                diameter *= scale;
+                gap *= scale;
+            }
+        }
+
+        // The name gets whatever height the bullet row does not need.
+        float bulletBand = count > 0 ? diameter + SIGN_BOTTOM + 2 : 0;
+        float nameHeight = 48 - bulletBand;
+
+        float size = 13;
+        java.util.List<String> lines;
+        if (painter.width(text, size) <= maxWidth) {
+            lines = java.util.List.of(text);
+        } else {
+            size = 9;
+            java.util.List<String> wrapped = painter.wrap(text, size, maxWidth);
+            if (wrapped.size() == 1) {
+                // one very long word: shrink it onto a single line instead
+                size = Math.max(5, maxWidth / Math.max(1, painter.width(text, 1)));
+                lines = java.util.List.of(text);
+            } else {
+                lines = java.util.List.of(painter.trimToWidth(wrapped.get(0), size, maxWidth),
+                        painter.trimToWidth(wrapped.get(1), size, maxWidth));
+            }
+        }
+
+        if (lines.size() == 1) {
+            painter.text(lines.get(0), SIGN_LEFT, nameHeight / 2 - size / 2.0f, size, TEXT_WHITE);
+        } else {
+            painter.text(lines.get(0), SIGN_LEFT, nameHeight / 2 - size - 1, size, TEXT_WHITE);
+            painter.text(lines.get(1), SIGN_LEFT, nameHeight / 2 + 1, size, TEXT_WHITE);
+        }
+
+        float bulletY = 48 - SIGN_BOTTOM - diameter / 2.0f;
+        float bulletX = SIGN_LEFT + diameter / 2.0f;
+        for (String routeName : routes) {
+            RouteBullets.Bullet bullet = RouteBullets.bulletFor(routeName);
+            if (RouteBullets.isNoEntry(routeName)) {
+                painter.prohibitionBullet(bulletX, bulletY, diameter / 2.0f, bullet.color());
+            } else {
+                painter.circleBullet(bulletX, bulletY, diameter / 2.0f, bullet.color(), bullet.label(),
+                        RouteBullets.needsDarkText(bullet.color()));
+            }
+            bulletX += diameter + gap;
         }
     }
 

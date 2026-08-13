@@ -1,0 +1,21 @@
+{
+  "type": "minecraft:crafting_shaped",
+  "category": "building",
+  "key": {
+    "S": {
+      "item": "minecraft:smooth_stone"
+    },
+    "D": {
+      "item": "minecraft:white_dye"
+    }
+  },
+  "pattern": [
+    "SSS",
+    "SDS",
+    "SSS"
+  ],
+  "result": {
+    "item": "station_announcer:platform_tile_floor_clean",
+    "count": 8
+  }
+}

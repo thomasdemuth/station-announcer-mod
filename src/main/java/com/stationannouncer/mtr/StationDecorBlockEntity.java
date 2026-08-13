@@ -3,12 +3,17 @@ package com.stationannouncer.mtr;
 import net.minecraft.block.BlockState;
 import net.minecraft.block.entity.BlockEntity;
 import net.minecraft.nbt.NbtCompound;
+import net.minecraft.nbt.NbtElement;
+import net.minecraft.nbt.NbtList;
+import net.minecraft.nbt.NbtString;
 import net.minecraft.network.listener.ClientPlayPacketListener;
 import net.minecraft.network.packet.Packet;
 import net.minecraft.network.packet.s2c.play.BlockEntityUpdateS2CPacket;
 import net.minecraft.server.world.ServerWorld;
 import net.minecraft.util.math.BlockPos;
 import org.jetbrains.annotations.Nullable;
+import java.util.ArrayList;
+import java.util.List;
 
 /**
  * Block entity for the station decor blocks (mosaic name sign, named
@@ -18,6 +23,10 @@ import org.jetbrains.annotations.Nullable;
 public class StationDecorBlockEntity extends BlockEntity {
     public static final int MAX_NAME_LENGTH = 64;
 
+    /** Railing signs: how many route bullets fit beside the name, and how long a route name may be. */
+    public static final int MAX_ROUTE_BULLETS = 6;
+    public static final int MAX_ROUTE_NAME_LENGTH = 64;
+
     /** Holding-light timing: this means "use the light's own default". */
     public static final int UNSET_SECONDS = -1;
     public static final int MAX_LIGHT_SECONDS = 60;
@@ -25,14 +34,18 @@ public class StationDecorBlockEntity extends BlockEntity {
     /**
      * Yellow holding lights only: what the light does about the dispatch addon's
      * platform hold rules (Feature 1). A held train is the one case where the
-     * arrival timetable says "go" and the dispatcher says "wait", so it gets its
-     * own flashing state rather than sharing the steady dwell light.
+     * arrival timetable says "go" and the dispatcher says "wait", so the light
+     * stays lit through it instead of going out on the timetable's cue.
+     *
+     * <p>The constants keep their order: the mode is stored as an ordinal, so
+     * renaming one is safe but reordering them would silently re-point every
+     * light already placed.</p>
      */
     public enum HoldIndicator {
         /** Hold rules are ignored; the light follows arrivals only (the old behaviour). */
         OFF,
-        /** Arrivals as usual, plus flashing for as long as a hold rule holds the train. */
-        FLASH,
+        /** Arrivals as usual, plus staying lit for as long as a hold rule holds the train. */
+        HELD,
         /** Dark except while a train is being held — a dedicated "HOLD" indicator. */
         ONLY;
 
@@ -55,6 +68,18 @@ public class StationDecorBlockEntity extends BlockEntity {
     /** Yellow holding lights only: how this light reacts to platform hold rules. */
     private HoldIndicator holdIndicator = HoldIndicator.OFF;
 
+    /**
+     * Railing signs only: whether each face of the panel carries a sign. Both
+     * faces on is the default (and what every sign placed before this existed
+     * did); turning one off leaves the plain railing on that side.
+     */
+    private boolean signFront = true;
+    private boolean signBack = true;
+
+    /** Railing signs only: the routes shown as bullets on each face, by MTR route name. */
+    private List<String> frontRoutes = List.of();
+    private List<String> backRoutes = List.of();
+
     public StationDecorBlockEntity(BlockPos pos, BlockState state) {
         super(MtrStationDecor.DECOR_BLOCK_ENTITY, pos, state);
     }
@@ -66,6 +91,18 @@ public class StationDecorBlockEntity extends BlockEntity {
         nbt.putInt("LightOnSeconds", lightOnSeconds);
         nbt.putInt("LightOffSeconds", lightOffSeconds);
         nbt.putByte("HoldIndicator", (byte) holdIndicator.ordinal());
+        nbt.putBoolean("SignFront", signFront);
+        nbt.putBoolean("SignBack", signBack);
+        nbt.put("RoutesFront", routeList(frontRoutes));
+        nbt.put("RoutesBack", routeList(backRoutes));
+    }
+
+    private static NbtList routeList(List<String> routes) {
+        NbtList list = new NbtList();
+        for (String route : routes) {
+            list.add(NbtString.of(route));
+        }
+        return list;
     }
 
     @Override
@@ -78,6 +115,20 @@ public class StationDecorBlockEntity extends BlockEntity {
         setLightOffSeconds(nbt.contains("LightOffSeconds") ? nbt.getInt("LightOffSeconds") : UNSET_SECONDS);
         // Absent on blocks placed before hold rules existed: those ignore them.
         setHoldIndicator(HoldIndicator.byOrdinal(nbt.getByte("HoldIndicator")));
+        // Absent on signs placed before the faces were switchable: both are on.
+        setSignFront(!nbt.contains("SignFront") || nbt.getBoolean("SignFront"));
+        setSignBack(!nbt.contains("SignBack") || nbt.getBoolean("SignBack"));
+        setFrontRoutes(readRoutes(nbt, "RoutesFront"));
+        setBackRoutes(readRoutes(nbt, "RoutesBack"));
+    }
+
+    private static List<String> readRoutes(NbtCompound nbt, String key) {
+        NbtList list = nbt.getList(key, NbtElement.STRING_TYPE);
+        List<String> routes = new ArrayList<>(list.size());
+        for (int i = 0; i < list.size(); i++) {
+            routes.add(list.getString(i));
+        }
+        return routes;
     }
 
     @Nullable
@@ -133,6 +184,62 @@ public class StationDecorBlockEntity extends BlockEntity {
 
     public void setHoldIndicator(HoldIndicator holdIndicator) {
         this.holdIndicator = holdIndicator == null ? HoldIndicator.OFF : holdIndicator;
+    }
+
+    // -------------------------------------------------------- railing signs
+
+    /** Whether the panel's front face (the block's first sign side) carries a sign. */
+    public boolean isSignFront() {
+        return signFront;
+    }
+
+    public void setSignFront(boolean signFront) {
+        this.signFront = signFront;
+    }
+
+    /** Whether the panel's back face carries a sign. */
+    public boolean isSignBack() {
+        return signBack;
+    }
+
+    public void setSignBack(boolean signBack) {
+        this.signBack = signBack;
+    }
+
+    /** Route names shown as bullets on the front face. */
+    public List<String> getFrontRoutes() {
+        return frontRoutes;
+    }
+
+    public void setFrontRoutes(List<String> routes) {
+        this.frontRoutes = clampRoutes(routes);
+    }
+
+    /** Route names shown as bullets on the back face. */
+    public List<String> getBackRoutes() {
+        return backRoutes;
+    }
+
+    public void setBackRoutes(List<String> routes) {
+        this.backRoutes = clampRoutes(routes);
+    }
+
+    private static List<String> clampRoutes(List<String> routes) {
+        if (routes == null || routes.isEmpty()) {
+            return List.of();
+        }
+        List<String> clamped = new ArrayList<>(Math.min(routes.size(), MAX_ROUTE_BULLETS));
+        for (String route : routes) {
+            if (clamped.size() >= MAX_ROUTE_BULLETS) {
+                break;
+            }
+            if (route == null || route.isEmpty()) {
+                continue;
+            }
+            clamped.add(route.length() > MAX_ROUTE_NAME_LENGTH
+                    ? route.substring(0, MAX_ROUTE_NAME_LENGTH) : route);
+        }
+        return List.copyOf(clamped);
     }
 
     private static int clampSeconds(int seconds) {

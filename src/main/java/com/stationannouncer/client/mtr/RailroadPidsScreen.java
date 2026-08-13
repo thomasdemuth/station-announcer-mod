@@ -37,6 +37,17 @@ public class RailroadPidsScreen extends Screen {
     private int flipSeconds;
     /** Hanging boards have two screens, so only they get the flip controls. */
     private final boolean hanging;
+    /**
+     * The small departure board is the only shape with a header and a track
+     * announcement, so only it gets those two controls. Every board still
+     * WRITES both fields in the packet — echoing its own values back untouched,
+     * the way the station-sign screen does — so one screen serves the family
+     * without a shape silently resetting a field it does not show.
+     */
+    private final boolean departureBoard;
+    private String title;
+    private int trackRevealSeconds;
+    private net.minecraft.client.gui.widget.TextFieldWidget titleField;
 
     private int listLeft;
     /** Caption positions, recorded by {@link #init} so render() never re-walks the layout. */
@@ -53,6 +64,10 @@ public class RailroadPidsScreen extends Screen {
         this.flipSeconds = pids.getFlipSeconds();
         this.hanging = pids.getCachedState().getBlock()
                 instanceof com.stationannouncer.mtr.RailroadPidsHangingBlock;
+        this.departureBoard = pids.getCachedState().getBlock()
+                instanceof com.stationannouncer.mtr.RailroadDepartureBlock;
+        this.title = pids.getTitle();
+        this.trackRevealSeconds = pids.getTrackRevealSeconds();
         java.util.List<Long> configured = new java.util.ArrayList<>();
         for (long id : pids.getPlatformIds()) {
             configured.add(id);
@@ -69,6 +84,7 @@ public class RailroadPidsScreen extends Screen {
         int modeRows = (Math.min(TransportMode.values().length, RailroadPidsBlockEntity.MODE_COUNT) + 1) / 2;
         int fixed = 14 + 14 + 16 + modeRows * (WIDGET_HEIGHT + GAP)
                 + (hanging ? 2 * (WIDGET_HEIGHT + GAP) + 8 : 0)
+                + (departureBoard ? 2 * (WIDGET_HEIGHT + GAP) + 8 : 0)
                 + 8 + WIDGET_HEIGHT;
         // The list is the one flexible block, so it absorbs a short window.
         picker.fitTo(height - fixed - 44);
@@ -125,6 +141,28 @@ public class RailroadPidsScreen extends Screen {
             y += WIDGET_HEIGHT + GAP;
         }
 
+        if (departureBoard) {
+            y += 8;
+            titleField = new net.minecraft.client.gui.widget.TextFieldWidget(
+                    textRenderer, left, y, PANEL_WIDTH, WIDGET_HEIGHT,
+                    Text.translatable("gui.station_announcer.departure_board.header"));
+            titleField.setMaxLength(RailroadPidsBlockEntity.MAX_TITLE_LENGTH);
+            titleField.setText(title);
+            titleField.setChangedListener(value -> title = value);
+            titleField.setPlaceholder(Text.translatable("gui.station_announcer.departure_board.header_hint"));
+            addDrawableChild(titleField);
+            y += WIDGET_HEIGHT + GAP;
+            // In minutes on the slider; stored in seconds, so 0 can mean
+            // "always show the track" if anyone wants that.
+            addDrawableChild(new com.stationannouncer.client.gui.IntSlider(left, y, PANEL_WIDTH, WIDGET_HEIGHT,
+                    0, 30, trackRevealSeconds / 60,
+                    value -> value == 0
+                            ? Text.translatable("gui.station_announcer.departure_board.track_always")
+                            : Text.translatable("gui.station_announcer.departure_board.track_reveal", value),
+                    value -> trackRevealSeconds = value * 60));
+            y += WIDGET_HEIGHT + GAP;
+        }
+
         y += 8;
         addDrawableChild(ButtonWidget.builder(ScreenTexts.DONE, button -> saveAndClose())
                 .dimensions(left, y, half, WIDGET_HEIGHT).build());
@@ -156,6 +194,8 @@ public class RailroadPidsScreen extends Screen {
         buf.writeInt(modes);
         buf.writeVarInt(displayMode.ordinal());
         buf.writeVarInt(flipSeconds);
+        buf.writeString(title, RailroadPidsBlockEntity.MAX_TITLE_LENGTH);
+        buf.writeVarInt(trackRevealSeconds);
         java.util.Set<Long> selected = picker.getSelected();
         int count = Math.min(selected.size(), RailroadPidsBlockEntity.MAX_PLATFORMS);
         buf.writeVarInt(count);

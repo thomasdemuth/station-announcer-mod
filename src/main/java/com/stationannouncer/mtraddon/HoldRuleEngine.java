@@ -37,17 +37,35 @@ public final class HoldRuleEngine {
     private static final long ARRIVALS_PER_SIDING = 3;
 
     /**
-     * A vehicle whose hold state was last touched longer ago than this is at a
-     * NEW stop — held vehicles retry every simulation tick, so any real gap means
-     * it departed in between and the deadlock timer must restart.
+     * A vehicle that has not attempted {@code startUp} at the SAME platform for
+     * this long has been away and come back — held (and dwelling) vehicles retry
+     * every simulation tick, so a gap this large means a full lap. Moving to a
+     * different platform resets the stop immediately, without waiting this out.
      */
-    private static final long NEW_STOP_GAP_MILLIS = 5_000;
+    private static final long SAME_PLATFORM_RESET_MILLIS = 30_000;
 
     /** watched platform id → {computedAtMillis, soonestUpcomingArrivalMillis, latestPastArrivalMillis} (0 = none). */
     private static final ConcurrentHashMap<Long, long[]> ARRIVAL_CACHE = new ConcurrentHashMap<>();
 
-    /** vehicle id → {firstHeldMillis, lastHeldMillis} for the maxHoldSeconds deadlock guard. */
+    /**
+     * vehicle id → the current stop's hold state:
+     * {@code {startedMillis, lastSeenMillis, platformId, awaitedArrivalMillis, served}}.
+     *
+     * <p>{@code awaitedArrivalMillis} is the whole point: it is captured ONCE,
+     * when the hold begins, and the train waits for THAT arrival and no other.
+     * Re-reading "is anything approaching?" every tick is what used to let a
+     * hold chain from one connection to the next — on a platform served every
+     * minute by a rule watching two minutes ahead, something is always
+     * approaching, so the train sat there until the deadlock cap fired.</p>
+     */
     private static final ConcurrentHashMap<Long, long[]> HOLD_STATE = new ConcurrentHashMap<>();
+
+    // Indices into the hold-state array above.
+    private static final int STARTED = 0;
+    private static final int LAST_SEEN = 1;
+    private static final int PLATFORM = 2;
+    private static final int AWAITED = 3;
+    private static final int SERVED = 4;
 
     /**
      * Ruled platform id → wall-clock millis of the last tick a vehicle was actually
@@ -119,36 +137,49 @@ public final class HoldRuleEngine {
             return false;
         }
 
-        // 6. Only now evaluate the (cached) arrival condition.
+        // 6. ONE HOLD PER STOP. Everything below hangs off this: a train waits
+        // for a single connection at a platform and then goes, whatever else is
+        // approaching by the time that one has landed.
         long now = data.getCurrentMillis();
-        if (!anyWatchedApproaching(rule, config, data, now)) {
-            HOLD_STATE.remove(vehicleId);
+        long[] state = HOLD_STATE.get(vehicleId);
+        boolean sameStop = state != null && state[PLATFORM] == platformId
+                && now - state[LAST_SEEN] <= SAME_PLATFORM_RESET_MILLIS;
+        if (sameStop && state[SERVED] != 0) {
+            // Already had its hold here. Keep the entry alive (so the door-close
+            // ticks that follow cannot start a second one) and let it go.
+            state[LAST_SEEN] = now;
             HELD_PLATFORMS.remove(platformId);
             return false;
         }
 
-        // 7. Deadlock guard: never hold one stop longer than the cap. Rules with a
-        // transfer window may legitimately run ~seconds + transferSeconds, so the
-        // effective cap is maxHoldSeconds + transferSeconds — maxHoldSeconds keeps
-        // its meaning ("longest wait FOR a train") regardless of the transfer
-        // setting. The state entry survives the give-up so retries (e.g. while the
-        // track ahead is briefly blocked) cannot restart the timer; it only resets
-        // once the vehicle has actually been gone for a while (NEW_STOP_GAP_MILLIS).
-        long[] state = HOLD_STATE.get(vehicleId);
-        if (state == null || now - state[1] > NEW_STOP_GAP_MILLIS) {
-            state = new long[]{now, now};
+        // 7. Starting a hold: pick the ONE arrival to wait for, now, and commit
+        // to it. Nothing that turns up later can extend this stop.
+        if (!sameStop) {
+            long awaited = arrivalToWaitFor(rule, config, data, now);
+            if (awaited == 0) {
+                HOLD_STATE.remove(vehicleId);
+                HELD_PLATFORMS.remove(platformId);
+                return false;
+            }
+            state = new long[]{now, now, platformId, awaited, 0};
             HOLD_STATE.put(vehicleId, state);
         } else {
-            state[1] = now;
+            state[LAST_SEEN] = now;
         }
-        boolean hold = now - state[0] < (config.maxHoldSeconds + rule.transferSeconds()) * 1_000L;
-        if (hold) {
-            HELD_PLATFORMS.put(platformId, System.currentTimeMillis());
-        } else {
-            // Gave up on the cap: the train is leaving, so the indicator must not linger.
+
+        // 8. Release once the awaited train is in and the transfer window is up.
+        // The deadlock cap stays as a backstop for a connection that never comes:
+        // a cancelled train simply stops being projected, which would otherwise
+        // leave the awaited time sitting in the future forever.
+        long releaseAt = state[AWAITED] + rule.transferSeconds() * 1_000L;
+        boolean capExpired = now - state[STARTED] >= (config.maxHoldSeconds + rule.transferSeconds()) * 1_000L;
+        if (now >= releaseAt || capExpired) {
+            state[SERVED] = 1;
             HELD_PLATFORMS.remove(platformId);
+            return false;
         }
-        return hold;
+        HELD_PLATFORMS.put(platformId, System.currentTimeMillis());
+        return true;
     }
 
     /**
@@ -174,30 +205,33 @@ public final class HoldRuleEngine {
     }
 
     /**
-     * Any watched platform with an arrival in
-     * {@code (now - transferSeconds*1000, now + seconds*1000]}? The past side of
-     * the window is the transfer time: a watched train that has just landed keeps
-     * the hold alive for transferSeconds so passengers can walk across, doors open
-     * on both trains. Past arrivals only exist while the arrived train is still
-     * dwelling (its entry then rolls over to the next run), so if it leaves early
-     * the hold releases early — and self-arrivals cannot occur because the ruled
-     * platform is filtered out of every watched set on save.
+     * The single arrival this stop will wait for, or 0 for "nothing worth
+     * waiting for, depart now". Chosen once per stop.
+     *
+     * <p>The soonest watched arrival inside the rule's window wins. Failing
+     * that, a watched train that has JUST landed counts, so a train pulling in
+     * as we are about to leave still gets its transfer time — past arrivals
+     * only exist while the arrived train is still dwelling (the entry then
+     * rolls over to its next run). Self-arrivals cannot occur: the ruled
+     * platform is filtered out of every watched set on save.</p>
      */
-    private static boolean anyWatchedApproaching(AddonSnapshots.HoldRule rule, AddonServerConfig.HoldRules config,
-                                                 Data data, long now) {
+    private static long arrivalToWaitFor(AddonSnapshots.HoldRule rule, AddonServerConfig.HoldRules config,
+                                         Data data, long now) {
+        long best = 0;
         for (long watchedId : rule.watched()) {
             long[] times = arrivalTimes(watchedId, data, now, config.holdArrivalCacheMillis);
             long soonestUpcoming = times[1];
             long latestPast = times[2];
-            if (soonestUpcoming > now && soonestUpcoming - now <= rule.seconds() * 1_000L) {
-                return true;
+            if (soonestUpcoming > now && soonestUpcoming - now <= rule.seconds() * 1_000L
+                    && (best == 0 || soonestUpcoming < best)) {
+                best = soonestUpcoming;
             }
-            if (rule.transferSeconds() > 0 && latestPast > 0
+            if (best == 0 && rule.transferSeconds() > 0 && latestPast > 0
                     && now - latestPast < rule.transferSeconds() * 1_000L) {
-                return true;
+                best = latestPast;
             }
         }
-        return false;
+        return best;
     }
 
     /**

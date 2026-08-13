@@ -47,6 +47,20 @@ public class CanvasPainter {
         quad3d(buffer, matrix, x1, y1, z, x2, y1, z, x2, y2, z, x1, y2, z, argb);
     }
 
+    /**
+     * A prohibition roundel: a filled disc with a white bar across it, the
+     * "do not enter" symbol used on entrance signs and trackside warnings.
+     *
+     * <p>Drawn in front of the disc rather than as a gap in it, so it reads at
+     * any size — a hole would vanish once the roundel is small.</p>
+     */
+    public void prohibitionBullet(float cx, float cy, float radius, int color) {
+        circleBullet(cx, cy, radius, color, "", false);
+        float halfHeight = Math.max(1.0f, radius * 0.17f);
+        float halfWidth = radius * 0.62f;
+        quad(cx - halfWidth, cy - halfHeight, cx + halfWidth, cy + halfHeight, -0.8f, 0xFFFFFFFF);
+    }
+
     /** Proper circular route bullet with a centered label. */
     public void circleBullet(float cx, float cy, float radius, int color, String label, boolean inverted) {
         VertexConsumer buffer = consumers.getBuffer(RenderLayer.getDebugQuads());

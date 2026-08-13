@@ -1,0 +1,21 @@
+{
+  "type": "minecraft:crafting_shaped",
+  "category": "building",
+  "key": {
+    "I": {
+      "item": "minecraft:iron_bars"
+    },
+    "N": {
+      "item": "minecraft:iron_nugget"
+    }
+  },
+  "pattern": [
+    "III",
+    "INI",
+    "III"
+  ],
+  "result": {
+    "item": "station_announcer:gate_grille",
+    "count": 6
+  }
+}

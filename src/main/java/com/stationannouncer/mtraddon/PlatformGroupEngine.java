@@ -9,6 +9,7 @@ import org.mtr.core.data.Route;
 import org.mtr.core.data.RoutePlatformData;
 import org.mtr.core.simulation.Simulator;
 import org.mtr.libraries.it.unimi.dsi.fastutil.longs.Long2ObjectOpenHashMap;
+import org.mtr.libraries.it.unimi.dsi.fastutil.longs.LongOpenHashSet;
 import org.mtr.libraries.it.unimi.dsi.fastutil.objects.ObjectArrayList;
 import java.util.HashMap;
 import java.util.Map;
@@ -95,14 +96,44 @@ public final class PlatformGroupEngine {
 
     private static volatile boolean warnedWalkMismatch;
 
+    /**
+     * Choices and counter advances made at generation START, held back until the
+     * generation actually FINISHES (per depot id). {@code Depot.finishGeneratingPath}
+     * is the only caller of the departures writer, so committing there means the
+     * applied maps only ever describe a path that really got baked — an aborted
+     * generation (blocked track, server stop, re-generate pressed again) leaves
+     * them untouched and the route cache keeps matching the OLD path, which is
+     * still the one the trains are on.
+     */
+    private static final ConcurrentHashMap<Long, PendingGeneration> PENDING = new ConcurrentHashMap<>();
+
+    /** One generation's not-yet-committed effects. Plain maps: built and read on one thread. */
+    private static final class PendingGeneration {
+        final Map<String, Integer> rotation = new HashMap<>();
+        final Map<String, Long> choice = new HashMap<>();
+        final Map<String, Long> choiceByDepot = new HashMap<>();
+        final Set<String> dropChoice = new java.util.HashSet<>();
+        final Set<String> dropChoiceByDepot = new java.util.HashSet<>();
+    }
+
     private PlatformGroupEngine() {
     }
 
-    /** One collapsed stop with its group-key attribution (route + index within that route). */
+    /**
+     * One collapsed stop with its group-key attribution (route + index within
+     * that route) — plus, at a route boundary, the attribution of the entry the
+     * collapse swallowed. At a terminus the inbound route's last stop and the
+     * outbound route's first stop are one collapsed entry; a platform group may
+     * legitimately have been configured against EITHER of them, and matching
+     * only the first would make a group on the outbound stop a silent no-op —
+     * at exactly the place (a two-track terminal) groups are most wanted.
+     */
     private static final class StopRef {
         final long routeId;
         final int indexInRoute;
         final Platform original;
+        long altRouteId;
+        int altIndexInRoute = -1;
 
         StopRef(long routeId, int indexInRoute, Platform original) {
             this.routeId = routeId;
@@ -277,6 +308,7 @@ public final class PlatformGroupEngine {
         ROTATION.clear();
         APPLIED_CHOICE.clear();
         APPLIED_CHOICE_BY_DEPOT.clear();
+        PENDING.clear();
         warnedWalkMismatch = false;
     }
 
@@ -312,9 +344,22 @@ public final class PlatformGroupEngine {
             ObjectArrayList<RoutePlatformData> routePlatforms = route.getRoutePlatforms();
             for (int i = 0; i < routePlatforms.size(); i++) {
                 Platform platform = routePlatforms.get(i).platform;
-                if (platform != null && platform.getId() != previousPlatformId) {
+                if (platform == null) {
+                    continue;
+                }
+                if (platform.getId() != previousPlatformId) {
                     walk.add(new StopRef(route.getId(), i, platform));
                     previousPlatformId = platform.getId();
+                } else if (!walk.isEmpty()) {
+                    // Collapsed into the previous entry (a terminus turnback):
+                    // remember this entry's attribution too, so a group keyed on
+                    // either side of the boundary finds the collapsed stop. First
+                    // swallowed entry wins, matching how the collapse itself works.
+                    StopRef last = walk.get(walk.size() - 1);
+                    if (last.altIndexInRoute < 0) {
+                        last.altRouteId = route.getId();
+                        last.altIndexInRoute = i;
+                    }
                 }
             }
         }
@@ -357,8 +402,12 @@ public final class PlatformGroupEngine {
             return;
         }
 
+        PendingGeneration pending = advanceRotation ? new PendingGeneration() : null;
         boolean runtimeChanged = false;
         long previousEffectiveId = 0;
+        // Ground truth for re-apply: the platforms the baked path actually dwells
+        // at. Anything the recorded choices claim beyond this is stale.
+        LongOpenHashSet pathPlatforms = advanceRotation ? null : bakedPathPlatforms(depot);
         // route id → this depot's offset among the depots serving it; computed at most
         // once per route per generation (a depot has a handful of routes).
         Map<Long, Integer> depotOffsets = new HashMap<>();
@@ -383,32 +432,37 @@ public final class PlatformGroupEngine {
             }
 
             Platform target = stop.original;
-            long[] members = membersFor(groups, stop);
-            if (members != null) {
-                String key = groupKey(stop.routeId, stop.indexInRoute);
+            Object[] group = groupFor(groups, stop);
+            if (group != null) {
+                long[] members = (long[]) group[0];
+                String key = (String) group[1];
                 String depotKey = depotChoiceKey(depot.getId(), key);
                 ObjectArrayList<Platform> valid = validMembers(data, stop.original, members);
                 if (advanceRotation) {
                     if (valid.isEmpty()) {
-                        // Group configured but nothing usable: fall back + forget any stale choice.
-                        runtimeChanged |= APPLIED_CHOICE.remove(key) != null;
-                        runtimeChanged |= APPLIED_CHOICE_BY_DEPOT.remove(depotKey) != null;
+                        // Group configured but nothing usable: fall back, and forget
+                        // any stale choice once this generation commits.
+                        pending.dropChoice.add(key);
+                        pending.dropChoiceByDepot.add(depotKey);
                     } else {
-                        int counter = ROTATION.merge(key, 1, Integer::sum);
+                        // Counter read but NOT written: the advance sits in pending
+                        // until the generation finishes, so an aborted one neither
+                        // skips a member of the rotation nor records a choice for a
+                        // path that never got baked.
+                        int counter = ROTATION.getOrDefault(key, 0) + 1;
+                        pending.rotation.put(key, counter);
                         int depotOffset = depotOffsets.computeIfAbsent(stop.routeId,
                                 routeId -> depotOffsetForRoute(data, depot, routeId));
                         Platform chosen = pickNonColliding(valid, counter - 1 + depotOffset,
                                 previousEffectiveId, nextOriginalId);
                         if (chosen != null) {
                             target = chosen;
-                            Long previous = APPLIED_CHOICE.put(key, chosen.getId());
-                            APPLIED_CHOICE_BY_DEPOT.put(depotKey, chosen.getId());
-                            runtimeChanged |= previous == null || previous != chosen.getId();
+                            pending.choice.put(key, chosen.getId());
+                            pending.choiceByDepot.put(depotKey, chosen.getId());
                         } else {
-                            runtimeChanged |= APPLIED_CHOICE.remove(key) != null;
-                            runtimeChanged |= APPLIED_CHOICE_BY_DEPOT.remove(depotKey) != null;
+                            pending.dropChoice.add(key);
+                            pending.dropChoiceByDepot.add(depotKey);
                         }
-                        runtimeChanged = true; // the counter advanced either way
                     }
                 } else {
                     // Re-apply THIS depot's own choice; the shared entry is only the
@@ -418,13 +472,26 @@ public final class PlatformGroupEngine {
                         chosenId = APPLIED_CHOICE.get(key);
                     }
                     if (chosenId != null) {
-                        for (int v = 0; v < valid.size(); v++) {
-                            Platform candidate = valid.get(v);
-                            if (candidate.getId() == chosenId
-                                    && candidate.getId() != previousEffectiveId
-                                    && candidate.getId() != nextOriginalId) {
-                                target = candidate;
-                                break;
+                        // VERBATIM, verified against the PATH — never second-guessed.
+                        // The cache must mirror what was baked: MTR's trip builder
+                        // matches the two in lockstep, and one disagreement silently
+                        // drops the timetable for everything after it (the empty-PIDS
+                        // one-direction bug). The old collision guards belong to
+                        // generation, where a path finder is about to run; here they
+                        // could refuse a choice the path already uses.
+                        if (pathPlatforms != null && !pathPlatforms.contains(chosenId.longValue())) {
+                            // Stale: the baked path does not visit this platform (e.g.
+                            // paths were regenerated while the feature was off). Drop
+                            // it so it cannot poison the cache, now or after restart.
+                            runtimeChanged |= APPLIED_CHOICE.remove(key) != null;
+                            runtimeChanged |= APPLIED_CHOICE_BY_DEPOT.remove(depotKey) != null;
+                        } else {
+                            for (int v = 0; v < valid.size(); v++) {
+                                Platform candidate = valid.get(v);
+                                if (candidate.getId() == chosenId) {
+                                    target = candidate;
+                                    break;
+                                }
                             }
                         }
                     }
@@ -437,10 +504,64 @@ public final class PlatformGroupEngine {
             previousEffectiveId = target.getId();
         }
 
-        if (advanceRotation && runtimeChanged) {
-            // Thread-safe debounced persistence (AtomicBoolean + executor); never file I/O here.
+        if (advanceRotation) {
+            PENDING.put(depot.getId(), pending);
+        } else if (runtimeChanged) {
+            // Stale choices were dropped; persist so they stay gone after restart.
             AddonStore.requestSaveFromEngine();
         }
+    }
+
+    /**
+     * {@code Depot.finishGeneratingPath} → departures writer HEAD (via
+     * {@link com.stationannouncer.mixin.DepotMixin}): the generation that staged
+     * {@code PENDING} actually finished, so its rotation advances and choices
+     * become the applied truth. No pending entry (plain server load, group-less
+     * depot, or a commit that already happened) is a cheap no-op.
+     */
+    public static void commitPending(Depot depot) {
+        if (depot == null) {
+            return;
+        }
+        PendingGeneration pending = PENDING.remove(depot.getId());
+        if (pending == null) {
+            return;
+        }
+        ROTATION.putAll(pending.rotation);
+        APPLIED_CHOICE.putAll(pending.choice);
+        APPLIED_CHOICE_BY_DEPOT.putAll(pending.choiceByDepot);
+        pending.dropChoice.forEach(APPLIED_CHOICE::remove);
+        pending.dropChoiceByDepot.forEach(APPLIED_CHOICE_BY_DEPOT::remove);
+        // Thread-safe debounced persistence (AtomicBoolean + executor); never file I/O here.
+        AddonStore.requestSaveFromEngine();
+    }
+
+    /**
+     * The platforms the depot's baked main-route path actually dwells at, read
+     * from the first siding that has one (all sidings of a depot share the
+     * main-route stop sequence). Null when nothing is baked yet — re-apply then
+     * has no truth to check against and applies nothing.
+     */
+    private static LongOpenHashSet bakedPathPlatforms(Depot depot) {
+        // savedRails is a set, not a list; any one siding will do — all sidings
+        // of a depot share the main-route stop sequence.
+        for (Object rail : depot.savedRails) {
+            ObjectArrayList<org.mtr.core.data.PathData> path =
+                    ((com.stationannouncer.mixin.SidingPathAccessor) rail)
+                            .stationAnnouncer$getPathMainRoute();
+            if (path == null || path.isEmpty()) {
+                continue;
+            }
+            LongOpenHashSet platforms = new LongOpenHashSet();
+            for (int j = 0; j < path.size(); j++) {
+                org.mtr.core.data.PathData segment = path.get(j);
+                if (segment.getDwellTime() > 0 && segment.getSavedRailBaseId() != 0) {
+                    platforms.add(segment.getSavedRailBaseId());
+                }
+            }
+            return platforms;
+        }
+        return null;
     }
 
     /**
@@ -480,12 +601,33 @@ public final class PlatformGroupEngine {
         return offset;
     }
 
-    private static long[] membersFor(Long2ObjectOpenHashMap<long[][]> groups, StopRef stop) {
-        long[][] byIndex = groups.get(stop.routeId);
-        if (byIndex == null || stop.indexInRoute >= byIndex.length) {
+    /**
+     * The group configured for a collapsed stop, under whichever of its
+     * attributions the user configured it — the primary (route, index), or at a
+     * route boundary the swallowed entry's. Returns the members and the KEY they
+     * were found under, so the applied choice is recorded where the group lives
+     * and the GUI keeps agreeing with the runtime.
+     */
+    private static Object[] groupFor(Long2ObjectOpenHashMap<long[][]> groups, StopRef stop) {
+        long[] members = membersAt(groups, stop.routeId, stop.indexInRoute);
+        if (members != null) {
+            return new Object[]{members, groupKey(stop.routeId, stop.indexInRoute)};
+        }
+        if (stop.altIndexInRoute >= 0) {
+            members = membersAt(groups, stop.altRouteId, stop.altIndexInRoute);
+            if (members != null) {
+                return new Object[]{members, groupKey(stop.altRouteId, stop.altIndexInRoute)};
+            }
+        }
+        return null;
+    }
+
+    private static long[] membersAt(Long2ObjectOpenHashMap<long[][]> groups, long routeId, int indexInRoute) {
+        long[][] byIndex = groups.get(routeId);
+        if (byIndex == null || indexInRoute >= byIndex.length) {
             return null;
         }
-        long[] members = byIndex[stop.indexInRoute];
+        long[] members = byIndex[indexInRoute];
         return members == null || members.length == 0 ? null : members;
     }
 

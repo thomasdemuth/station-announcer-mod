@@ -9,6 +9,14 @@
     "station_announcer:globe_lamp_pole",
     "station_announcer:entrance_railing",
     "station_announcer:platform_barrier",
+    "station_announcer:platform_tile_floor",
+    "station_announcer:platform_tile_floor_clean",
+    "station_announcer:platform_concrete_floor_2",
+    "station_announcer:platform_concrete_floor_2_clean",
+    "station_announcer:platform_concrete_floor_3",
+    "station_announcer:platform_concrete_floor_3_clean",
+    "station_announcer:platform_concrete_floor_4",
+    "station_announcer:platform_concrete_floor_4_clean",
     "station_announcer:zebra_board_wall",
     "station_announcer:zebra_board_hanging",
     "station_announcer:fare_machine",
@@ -104,6 +112,64 @@
     {
       "id": "station_announcer:railroad_pids_hanging",
       "required": false
-    }
+    },
+    {
+      "id": "station_announcer:railroad_departure_wall",
+      "required": false
+    },
+    {
+      "id": "station_announcer:departure_board_wall",
+      "required": false
+    },
+    {
+      "id": "station_announcer:departure_board_hanging",
+      "required": false
+    },
+    {
+      "id": "station_announcer:subway_tile_wall",
+      "required": false
+    },
+    {
+      "id": "station_announcer:subway_tile_wall_clean",
+      "required": false
+    },
+    {
+      "id": "station_announcer:subway_tile_band",
+      "required": false
+    },
+    {
+      "id": "station_announcer:subway_tile_dark",
+      "required": false
+    },
+    {
+      "id": "station_announcer:subway_tile_alcove",
+      "required": false
+    },
+    {
+      "id": "station_announcer:subway_name_tablet",
+      "required": false
+    },
+    {
+      "id": "station_announcer:subway_tile_alcove_dark",
+      "required": false
+    },
+    {
+      "id": "station_announcer:no_clearance_stripe",
+      "required": false
+    },
+    {
+      "id": "station_announcer:emergency_exit_door",
+      "required": false
+    },
+    {
+      "id": "station_announcer:gate_scroll",
+      "required": false
+    },
+    {
+      "id": "station_announcer:gate_grille",
+      "required": false
+    },
+    "station_announcer:track_warning_sign_wall",
+    "station_announcer:track_warning_sign_gate"
   ]
 }

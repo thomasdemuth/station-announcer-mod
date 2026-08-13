@@ -1,0 +1,19 @@
+{
+  "variants": {
+    "facing=north": {
+      "model": "station_announcer:block/departure_board_hanging"
+    },
+    "facing=east": {
+      "model": "station_announcer:block/departure_board_hanging",
+      "y": 90
+    },
+    "facing=south": {
+      "model": "station_announcer:block/departure_board_hanging",
+      "y": 180
+    },
+    "facing=west": {
+      "model": "station_announcer:block/departure_board_hanging",
+      "y": 270
+    }
+  }
+}

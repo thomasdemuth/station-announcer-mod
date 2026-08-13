@@ -1,0 +1,20 @@
+{
+  "type": "minecraft:crafting_shaped",
+  "category": "building",
+  "key": {
+    "I": {
+      "item": "minecraft:iron_ingot"
+    },
+    "R": {
+      "item": "minecraft:red_dye"
+    }
+  },
+  "pattern": [
+    "IRI",
+    "IRI"
+  ],
+  "result": {
+    "item": "station_announcer:track_warning_sign_wall",
+    "count": 2
+  }
+}

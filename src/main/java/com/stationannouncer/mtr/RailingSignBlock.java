@@ -10,6 +10,7 @@ import net.minecraft.util.ActionResult;
 import net.minecraft.util.Hand;
 import net.minecraft.util.hit.BlockHitResult;
 import net.minecraft.util.math.BlockPos;
+import net.minecraft.util.math.Direction;
 import net.minecraft.world.World;
 import org.jetbrains.annotations.Nullable;
 
@@ -29,6 +30,20 @@ public class RailingSignBlock extends RailingBlock implements BlockEntityProvide
     @Override
     public BlockEntity createBlockEntity(BlockPos pos, BlockState state) {
         return new StationDecorBlockEntity(pos, state);
+    }
+
+    /**
+     * The direction the panel's FRONT face looks at (its back face is the
+     * opposite). The panel plane follows the railing run: connected east/west
+     * means the run goes along X, so the faces look north and south.
+     *
+     * <p>The renderer draws its first side toward this direction, which is
+     * what lets the settings screen name the two faces after real compass
+     * directions instead of an arbitrary "side 1 / side 2".</p>
+     */
+    public static Direction frontOf(BlockState state) {
+        boolean alongX = state.contains(EAST) && (state.get(EAST) || state.get(WEST));
+        return alongX ? Direction.NORTH : Direction.EAST;
     }
 
     @Override

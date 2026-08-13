@@ -45,6 +45,7 @@ public class DrivingHudScreen extends Screen {
     private final int oldLookaheadMeters;
     private final int oldOnTimeThresholdSeconds;
     private final String oldCorner;
+    private final int oldMargin;
 
     private int titleY;
     private int hintY;
@@ -63,6 +64,7 @@ public class DrivingHudScreen extends Screen {
         oldLookaheadMeters = config.hudLookaheadMeters;
         oldOnTimeThresholdSeconds = config.hudOnTimeThresholdSeconds;
         oldCorner = config.hudCorner;
+        oldMargin = config.hudMargin;
     }
 
     @Override
@@ -129,6 +131,10 @@ public class DrivingHudScreen extends Screen {
                 .build(rightX, y, COLUMN_WIDTH, WIDGET_HEIGHT,
                         Text.translatable("gui.station_announcer.driving_hud.corner"),
                         (button, value) -> config.hudCorner = value));
+        y += ROW;
+        addDrawableChild(new IntSlider(rightX, y, COLUMN_WIDTH, WIDGET_HEIGHT, 0, 40, config.hudMargin,
+                value -> Text.translatable("gui.station_announcer.driving_hud.margin", value),
+                value -> config.hudMargin = value));
 
         // Bottom row: Done / Cancel, spanning both columns.
         int bottomY = top + 6 * ROW + 8 + 14;
@@ -157,6 +163,7 @@ public class DrivingHudScreen extends Screen {
         config.hudLookaheadMeters = oldLookaheadMeters;
         config.hudOnTimeThresholdSeconds = oldOnTimeThresholdSeconds;
         config.hudCorner = oldCorner;
+        config.hudMargin = oldMargin;
         close();
     }
 

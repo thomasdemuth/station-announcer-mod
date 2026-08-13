@@ -35,17 +35,17 @@ public final class MtrPillars {
             ItemPillarCreator item = new ItemPillarCreator(size[0], size[1]);
             Registry.register(Registries.ITEM,
                     StationAnnouncer.id("pillar_creator_" + size[0] + "x" + size[1]), item);
-            ModContent.BAKER_CITY_ENTRIES.add(item);
+            ModContent.OPERATIONS_ENTRIES.add(item);
         }
         for (int width : RAILING_WIDTHS) {
             ItemRailingCreator item = new ItemRailingCreator(width);
             Registry.register(Registries.ITEM, StationAnnouncer.id("railing_creator_" + width), item);
-            ModContent.BAKER_CITY_ENTRIES.add(item);
+            ModContent.OPERATIONS_ENTRIES.add(item);
         }
         for (int width : VIADUCT_WIDTHS) {
             ItemViaductCreator item = new ItemViaductCreator(width);
             Registry.register(Registries.ITEM, StationAnnouncer.id("viaduct_creator_" + width), item);
-            ModContent.BAKER_CITY_ENTRIES.add(item);
+            ModContent.OPERATIONS_ENTRIES.add(item);
         }
     }
 }

@@ -1,0 +1,13 @@
+{
+  "type": "minecraft:crafting_shapeless",
+  "category": "building",
+  "ingredients": [
+    {
+      "item": "station_announcer:platform_concrete_floor_3_clean"
+    }
+  ],
+  "result": {
+    "item": "station_announcer:platform_concrete_floor_2_clean",
+    "count": 1
+  }
+}

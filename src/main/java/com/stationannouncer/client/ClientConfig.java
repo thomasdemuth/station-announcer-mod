@@ -42,6 +42,26 @@ public class ClientConfig {
      */
     public String voice = "";
 
+    /**
+     * Which volume slider the chime answers to: {@code master}, {@code blocks},
+     * {@code ambient} or {@code voice}.
+     *
+     * <p>Master by default, and deliberately NOT voice: that slider is meant
+     * for narration and voice chat, it is one a lot of players turn down, and
+     * a chime nobody can hear is indistinguishable from a broken mod.</p>
+     */
+    public String chimeCategory = "master";
+
+    /** The chime's sound category, falling back to master for an unknown name. */
+    public net.minecraft.sound.SoundCategory chimeSoundCategory() {
+        return switch (chimeCategory == null ? "" : chimeCategory.toLowerCase(Locale.ROOT)) {
+            case "blocks" -> net.minecraft.sound.SoundCategory.BLOCKS;
+            case "ambient" -> net.minecraft.sound.SoundCategory.AMBIENT;
+            case "voice" -> net.minecraft.sound.SoundCategory.VOICE;
+            default -> net.minecraft.sound.SoundCategory.MASTER;
+        };
+    }
+
     public boolean useActionBar() {
         return "actionbar".equalsIgnoreCase(displayMode);
     }
@@ -57,8 +77,19 @@ public class ClientConfig {
         return instance;
     }
 
+    /** Writes the current values back to disk (the settings screen saves through this). */
+    public static synchronized void persist() {
+        if (instance != null) {
+            instance.save(path());
+        }
+    }
+
+    private static Path path() {
+        return FabricLoader.getInstance().getConfigDir().resolve("station_announcer").resolve("client.json");
+    }
+
     private static ClientConfig load() {
-        Path path = FabricLoader.getInstance().getConfigDir().resolve("station_announcer").resolve("client.json");
+        Path path = path();
         try {
             if (Files.exists(path)) {
                 try (var reader = Files.newBufferedReader(path)) {

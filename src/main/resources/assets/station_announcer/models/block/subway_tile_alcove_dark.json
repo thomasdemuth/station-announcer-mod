@@ -1,0 +1,105 @@
+{
+  "parent": "minecraft:block/block",
+  "textures": {
+    "in": "station_announcer:block/subway_tile_dark",
+    "particle": "station_announcer:block/subway_tile_dark"
+  },
+  "elements": [
+    {
+      "from": [
+        0,
+        0,
+        8
+      ],
+      "to": [
+        16,
+        16,
+        16
+      ],
+      "faces": {
+        "north": {
+          "texture": "#in"
+        },
+        "south": {
+          "texture": "#in"
+        },
+        "east": {
+          "texture": "#in"
+        },
+        "west": {
+          "texture": "#in"
+        },
+        "up": {
+          "texture": "#in"
+        },
+        "down": {
+          "texture": "#in"
+        }
+      }
+    },
+    {
+      "from": [
+        0,
+        0,
+        0
+      ],
+      "to": [
+        1,
+        16,
+        8
+      ],
+      "faces": {
+        "north": {
+          "texture": "#in"
+        },
+        "south": {
+          "texture": "#in"
+        },
+        "east": {
+          "texture": "#in"
+        },
+        "west": {
+          "texture": "#in"
+        },
+        "up": {
+          "texture": "#in"
+        },
+        "down": {
+          "texture": "#in"
+        }
+      }
+    },
+    {
+      "from": [
+        15,
+        0,
+        0
+      ],
+      "to": [
+        16,
+        16,
+        8
+      ],
+      "faces": {
+        "north": {
+          "texture": "#in"
+        },
+        "south": {
+          "texture": "#in"
+        },
+        "east": {
+          "texture": "#in"
+        },
+        "west": {
+          "texture": "#in"
+        },
+        "up": {
+          "texture": "#in"
+        },
+        "down": {
+          "texture": "#in"
+        }
+      }
+    }
+  ]
+}

@@ -1,0 +1,24 @@
+{
+  "type": "minecraft:crafting_shaped",
+  "category": "building",
+  "key": {
+    "I": {
+      "item": "minecraft:iron_ingot"
+    },
+    "R": {
+      "item": "minecraft:redstone"
+    },
+    "D": {
+      "item": "minecraft:red_dye"
+    }
+  },
+  "pattern": [
+    "IDI",
+    "IRI",
+    "III"
+  ],
+  "result": {
+    "item": "station_announcer:emergency_exit_door",
+    "count": 1
+  }
+}

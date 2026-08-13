@@ -1,0 +1,110 @@
+{
+  "parent": "minecraft:block/block",
+  "textures": {
+    "s": "station_announcer:block/pids_pole",
+    "particle": "station_announcer:block/pids_pole"
+  },
+  "elements": [
+    {
+      "from": [
+        7,
+        7,
+        9.9
+      ],
+      "to": [
+        9,
+        9,
+        15.9
+      ],
+      "faces": {
+        "north": {
+          "texture": "#s"
+        },
+        "south": {
+          "texture": "#s"
+        },
+        "east": {
+          "texture": "#s"
+        },
+        "west": {
+          "texture": "#s"
+        },
+        "up": {
+          "texture": "#s"
+        },
+        "down": {
+          "texture": "#s"
+        }
+      }
+    },
+    {
+      "from": [
+        5.5,
+        5.5,
+        15.4
+      ],
+      "to": [
+        10.5,
+        10.5,
+        16
+      ],
+      "faces": {
+        "north": {
+          "texture": "#s",
+          "uv": [
+            5.5,
+            4,
+            10.5,
+            9.0
+          ]
+        },
+        "south": {
+          "texture": "#s",
+          "uv": [
+            5.5,
+            4,
+            10.5,
+            9.0
+          ],
+          "cullface": "south"
+        },
+        "east": {
+          "texture": "#s",
+          "uv": [
+            9,
+            4,
+            9.6,
+            9.0
+          ]
+        },
+        "west": {
+          "texture": "#s",
+          "uv": [
+            9,
+            4,
+            9.6,
+            9.0
+          ]
+        },
+        "up": {
+          "texture": "#s",
+          "uv": [
+            5.5,
+            9,
+            10.5,
+            9.6
+          ]
+        },
+        "down": {
+          "texture": "#s",
+          "uv": [
+            5.5,
+            9,
+            10.5,
+            9.6
+          ]
+        }
+      }
+    }
+  ]
+}

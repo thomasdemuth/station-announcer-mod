@@ -1,0 +1,28 @@
+{
+  "type": "minecraft:crafting_shaped",
+  "pattern": [
+    "TTT",
+    "TQT",
+    "TTT"
+  ],
+  "key": {
+    "T": {
+      "item": "station_announcer:subway_tile_wall"
+    },
+    "Q": {
+      "item": "minecraft:water_bucket"
+    }
+  },
+  "result": {
+    "item": "station_announcer:subway_tile_wall_clean",
+    "count": 8
+  },
+  "fabric:load_conditions": [
+    {
+      "condition": "fabric:all_mods_loaded",
+      "values": [
+        "mtr"
+      ]
+    }
+  ]
+}

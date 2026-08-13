@@ -1,0 +1,77 @@
+{
+  "parent": "minecraft:block/block",
+  "textures": {
+    "lamp": "station_announcer:block/gate_alarm_lamp_on",
+    "particle": "station_announcer:block/gate_alarm_lamp_on"
+  },
+  "elements": [
+    {
+      "from": [
+        -1.8,
+        11,
+        4.2
+      ],
+      "to": [
+        1.8,
+        14.2,
+        11.8
+      ],
+      "faces": {
+        "north": {
+          "texture": "#lamp",
+          "uv": [
+            2,
+            2,
+            14,
+            14
+          ]
+        },
+        "south": {
+          "texture": "#lamp",
+          "uv": [
+            2,
+            2,
+            14,
+            14
+          ]
+        },
+        "east": {
+          "texture": "#lamp",
+          "uv": [
+            2,
+            2,
+            14,
+            14
+          ]
+        },
+        "west": {
+          "texture": "#lamp",
+          "uv": [
+            2,
+            2,
+            14,
+            14
+          ]
+        },
+        "up": {
+          "texture": "#lamp",
+          "uv": [
+            2,
+            2,
+            14,
+            14
+          ]
+        },
+        "down": {
+          "texture": "#lamp",
+          "uv": [
+            2,
+            2,
+            14,
+            14
+          ]
+        }
+      }
+    }
+  ]
+}

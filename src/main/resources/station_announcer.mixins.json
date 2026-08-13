@@ -10,6 +10,7 @@
     "PathDataSchemaAccessor",
     "PlatformRouteDetailsAccessor",
     "SidingMixin",
+    "SidingPathAccessor",
     "SidingVehiclesAccessor",
     "VehicleDeviationAccessor",
     "VehicleExtraDataAccessor",

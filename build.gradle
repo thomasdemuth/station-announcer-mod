@@ -39,6 +39,11 @@ dependencies {
     modLocalRuntime "maven.modrinth:minecraft-transit-railway:${project.mtr_version}"
     // JSR-305 annotations referenced by MTR's class files.
     compileOnly "com.google.code.findbugs:jsr305:3.0.2"
+
+    // Mod Menu, for the settings screen its mod list links to. Compile-only:
+    // Fabric never loads the "modmenu" entrypoint unless Mod Menu is installed,
+    // so the shipped jar neither needs nor depends on it.
+    modCompileOnly "maven.modrinth:modmenu:${project.modmenu_version}"
 }
 
 processResources {

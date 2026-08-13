@@ -85,6 +85,431 @@ renderer flashes the lenses. Green lights are unchanged (see PROGRESS.md's known
 
 ## Current state: v2.4.0 shipped (station suite, trainless); M7 continues toward 2.5.0
 
+### BUG-FIX + QOL SESSION (2026-08-09..11) — signs, markers, subway walls, config, dispatch fixes
+
+**THE STALE-JAR TRAP BIT US.** Another session bumped mod_version 2.4.6→2.4.8 mid-work
+and this session's `cp build/libs/station-announcer-2.4.6...` kept shipping an Aug-9 jar
+for hours. **Before copying a jar to the play profile, read mod_version from
+gradle.properties and copy THAT file** — never a hardcoded name.
+
+**Entrance railing sign reworked** (`RailingSignScreen` + `RouteBullets`/`RoutePicker`,
+`update_railing_sign` C2S). The panel is a SOLID black slab (the old two facing quads let
+balusters show through between them = "floating text"); slab lids overshoot y by ~0.3
+canvas units because the balusters end exactly at model y6/y18 (coplanar lids z-fight).
+Each face is independently on/off and carries its own ordered route-bullet list (stored
+as MTR route NAMES — repainted/renamed lines follow along; unknown names draw grey).
+`RailingSignBlock.frontOf(state)` owns the face-direction rule; faces are named by
+compass direction in the GUI. Merged runs: a face off on ANY segment turns it off for the
+panel; first segment with bullets wins (the custom-name rule).
+
+**ATLAS-BLEED (PINK LINE) LESSON — and an audit for it.** A face whose auto-UV window is
+a sliver (<1 texel) pressed against the sprite edge (outside texel centres 0.5/15.5)
+samples the NEIGHBOURING atlas sprite: a 0.1 px-deep wall pad drew a 1 px magenta line
+with zero log warnings. Fixed with explicit interior UV slices; same latent bug fixed in
+`railing_post`/`railing_item` (uv [0,0,6,0.5] → v 8..8.5). An audit replicating vanilla's
+auto-UV rules over every block model reports 0 sliver faces — re-run the idea when adding
+models with thin elements.
+
+**Stop markers**: the wall bracket floated with one plate because the arm sat at y 7..9
+while plates hang from the TOP (y 12..16) — the arm now holds the top plate (y 13..15),
+which always exists. New BLADE style (third `Style` beside flush/bracket; `BLADE`
+BooleanProperty kept SEPARATE from `standoff` so old markers keep their value): plates
+turned 90°, centred on the block's centre line in BOTH axes (renderer rotates the frame
+90° — no second geometry; stub = exactly a pole's cross-section x/y 7..9), legends drawn
+on BOTH faces, stack centred so 4 plates fill the block exactly. `stop_marker_pole` is
+now a `block/PoleBlock` (AXIS property like a log; placement takes the clicked face's
+axis; old placements default axis=y).
+
+**Globe lamps fixed** (`tools/gen_globe_assets.py` — generated, never hand-edit): the
+green/red tops rendered yellow because auto-UV maps horizontal faces by FOOTPRINT (u=x,
+v=z), so every up/down face of the 5-box orb sampled rows 4..12 regardless of height.
+Every horizontal face now takes an explicit one-row slice AT ITS OWN HEIGHT (row 16−y,
+matching what auto-UV gives the side faces), texel-centre to texel-centre. Textures are a
+vertical gradient: colour above, white-yellow lamp glow below; edge shading confined to
+the outer 2 columns which the slices never touch.
+
+**SUBWAY TILE WALLS** (`tools/gen_subway_wall.py` — generated; registration self-contained
+in `mtr/SubwayWalls` + `client/mtr/SubwayWallsClient`, one call each from
+MtrStationDecor/MtrPidsClient). Grid: FOUR TILES PER BLOCK at 32 px (8 px tile, 1 px
+grout — 16 px would force a heavy quarter-tile line). 8 blocks: white wall (+fresh),
+station-colour band, painted black, 2 alcoves, no-clearance stripe, name tablet.
+- Band = THREE stacked elements (white tile row / 2 tinted rows / white tile row) because
+  a quad has one tintindex; tint reuses `MtrPidsClient.stationColor` (now package-visible,
+  `FALLBACK_STATION_COLOR`).
+- Name tablet (`TileTabletBlock`+BE+renderer+screen, `update_tile_tablet` C2S): letters
+  drawn as INDIVIDUAL black tiles inset by the grout (2 canvas units = the texture's 1 px
+  line), one letter per tile, word centred on the block, snapped to the grid, ROW 0-3
+  blockstate property picks the tile row. Font: size derived from CAP height (vanilla ink
+  is 7 of the 8-unit box), centred on INK not the type box (measured width includes the
+  spacing column), and the whole alphabet widened 7/5 (a capital is 5×7 ink) so standard
+  capitals get equal margins all round; narrow glyphs stay narrow.
+- Alcove: back+jambs only, open top/bottom (stack 2 = walk-in niche), half-block deep,
+  tiled + black variants. No-clearance stripe: model 15 px tall but FULL-CUBE collision
+  (reads as a set-in painted band, still spaces the block); stripes 16 px period (divides
+  32), true 45° verified per-pixel, NO shading (any banding breaks the diagonal).
+
+**Config screen + Mod Menu + keybinds**: `StationAnnouncerConfigScreen` (all client
+settings; working copies, nothing written till Done; links to DrivingHudScreen and
+KeybindsScreen — yarn 1.20.4 spells it `KeybindsScreen`), `modmenu` entrypoint
+(`modCompileOnly maven.modrinth:modmenu` — jar stays standalone, Fabric only loads the
+entrypoint when Mod Menu is present), `StationAnnouncerKeys` (settings + TTS-mute keys,
+both UNBOUND on purpose). ClientConfig gained `persist()` and `chimeCategory`.
+
+**CHIMES WERE SILENT AT RANGE — two stacked bugs, not the ogg files** (all 11 decode
+fine): (1) the chime played as a positional sound at the block, so vanilla's ~16-block
+rolloff attenuated ON TOP of the server's radius-based volume — beyond ~16 blocks of a
+128-radius PA, silence; now AttenuationType.NONE at the listener at exactly the server's
+volume (the ambience block's pattern). (2) it was on the VOICE slider (players turn it
+down; the dropdown preview used MASTER, which is why previews worked) — now a config
+choice, default master.
+
+**Holding lights are binary** (user rule: solid on or solid off — no flashing anywhere).
+`HoldIndicator.FLASH` renamed `HELD` (ordinal preserved — the mode is stored by ordinal,
+so renaming is safe, REORDERING would re-point every placed light).
+
+**HOLD RULES: one hold per stop.** The engine re-asked "anything approaching?" every tick,
+so on a busy watched platform the hold chained connection-to-connection until the 120 s
+deadlock cap. Now the ONE arrival to wait for is chosen when the hold starts
+(`HOLD_STATE` = {started, lastSeen, platformId, awaitedArrival, served}); release at
+awaited+transfer, then the stop is SERVED and cannot re-hold until the vehicle has been
+away (different platform = instant reset, same platform = 30 s gap). Cap stays as
+backstop for cancelled connections.
+
+**PLATFORM GROUPS: the empty-PIDS one-direction bug (root cause + fix).** MTR's trip
+builder (`Siding.generatePathDistancesAndTimeSegments`, bytecode-verified) walks the
+baked path's dwell segments IN LOCKSTEP with the depot's cached `platformsInRoute`,
+matching platform ids — ONE disagreement and every stop after it gets no
+platformTripStopTimes entry: arrivals dead for the rest of the route cycle (= one whole
+direction) on every PIDS, trains unaffected. Cache/path drift had two sources: rotation
+advanced + choice recorded at generation START (an aborted generation recorded a choice
+for a path never baked), and the cache re-apply re-checked collision guards and silently
+fell back to originals. Fix in `PlatformGroupEngine`: (1) choices+counters stage in
+PENDING, committed at the departures writer (only callers: finishGeneratingPath + init —
+success only; also = failed generations no longer skip rotation members); (2) re-apply is
+VERBATIM (guards belong to generation only); (3) re-apply verifies each choice against
+the platforms the baked path actually dwells at (`SidingPathAccessor` on
+`Siding.pathMainRoute`) and drops stale ones — self-heals data.json written before this.
+Also: collapsed terminus stops carry BOTH attributions (inbound-last + swallowed
+outbound-first) so a group configured on either side of the route boundary works.
+
+**Terminal alternation recipe** (per-train choice is impossible — one shared path per
+depot; this is the faithful version): two depots, same route, sidings split between them,
+both in a DEPOT GROUP (member 2 shifts half a headway), platform group of the two
+terminal tracks on the terminus stop. Per-depot rotation lands them on different members,
+deterministically (sorted by depot id). **The stagger derives from FREQUENCY SLIDERS** —
+offset is 0 (lockstep timetables, paired PIDS times) for real-time departures,
+continuous movement, or no frequency. New **Refresh Offsets** button on the depot-groups
+screen (`REFRESH_DEPOT_GROUPS_C2S`, permission-gated) recomputes + rewrites departures
+NOW — needed after frequency edits, which the addon cannot see.
+
+**Session audit also fixed**: no_clearance_stripe missing loot+item model (the
+generator's BLOCKS list drives both — a block left off it drops NOTHING); missing
+`railroad_pids.platforms_hint` lang key; per-frame allocation in the new renderers
+(RouteBullets memoizes finished bullets, TileTabletRenderer memoizes upper-casing).
+Diagnosed via world data at `<save>/station-announcer-addon/data.json` — reading it
+directly beats guessing (found the stale platform-group choice, the never-expiring
+disabled stop, the active disruption).
+
+**NOT play-tested**: entrance-sign faces/bullets in game, blade markers against a
+horizontal pole after the centring fix, subway walls (all of it), tablet font, config
+screen, Mod Menu entry, chime fix at range, one-hold-per-stop, the platform-group fix
+under rotation (user confirmed groups OFF cures the dead direction; the FIX itself is
+unverified), Refresh Offsets button. User confirmed working: depot-group stagger +
+alternating terminal tracks, platform groups as culprit.
+
+### TRACKSIDE / ENTRANCE SIGNAGE (2026-08-09)
+
+- `track_warning_sign_wall` / `_gate` — the red "Do not enter or cross tracks" plate.
+  The GATE variant sits on the block CENTRE plane (z 6..10), the same plane
+  `GateWallBlock` uses, so it drops into a run of dividing walls and reads as part of the
+  fence; the wall variant hugs the wall behind (z 13..16). Texture generated by
+  `tools/gen_gate_assets.py`. The roundel is a RING with a slash, not a filled disc with a
+  hole — at 64 px a hole closes up in the mip chain.
+
+- **The no-entry tile** (`RouteBullets.NO_ENTRY = "!no_entry"`). Signs persist plain route
+  NAMES, so the roundel rides the existing storage and packets with **no schema change** —
+  the `!` prefix cannot collide with an MTR route name. `bulletFor` returns the MTA red
+  with an EMPTY label (a letter on the bar would read as a route bullet in the wrong
+  colour); `CanvasPainter.prohibitionBullet` draws disc + white bar; `RoutePicker` offers
+  it first and everywhere (a no-entry sign is most useful exactly where the sign is NOT in
+  a station area), and its list row draws the bar rather than a blank red disc.
+  Putting "No Entry" on a station entrance sign is then just: pick the tile, and set the
+  custom name to the wording you want.
+
+### FARE-CONTROL GATES (2026-08-09) — BUILT; alarm/stacking server-verified, visuals NOT seen
+
+Three blocks from the user's photos: `emergency_exit_door` (MTR module — it needs
+TicketSystem), plus `gate_scroll` and `gate_grille` (common). All in the DECORATION tab.
+Assets generated by `tools/gen_gate_assets.py` — never hand-edit.
+
+**COMPLETENESS PASS (2026-08-10, self-audit) — all server-verified in one run:**
+- **Loot dupe fixed**: the door's loot table predated the two-half rewrite and dropped one
+  item PER HALF; now gated `half=lower` like every other 2-block multiblock. Verified:
+  breaking the lower half drops exactly one item (scoreboard-counted).
+- **Redstone = vanilla iron-door semantics**: power OPENS the door (which sounds the
+  alarm, since opening always does), losing power closes it; either half's power counts.
+  The old behaviour (alarm without opening) read as broken to anyone wiring it.
+- **POWERED is now the redstone input; the alarm rides a new ALARM property**, and the
+  blockstate finally shows it: a strobe lamp on the hinge post above the door (dark
+  maroon at rest, blazing + hot core while sounding). The lamp is on the POST piece, so
+  it stays put when the leaf swings.
+- **Flat 2D item icon** for the door (the 3D lower-half model read as half a door in the
+  slot); fine now plays ENTITY_VILLAGER_NO beside the action-bar message.
+- The blockstate contract check now runs INSIDE gen_gate_assets.py on every regen.
+- **2.4.8 doors do NOT survive into 2.4.9** (POWERED semantics changed, ALARM added —
+  states reset; 2.4.7 stacked doors were already lost to the HALF/OPEN rewrite).
+- Ships as 2.4.9. Repo pushed to a PRIVATE GitHub repo (thomasdemuth) this session.
+
+**THE PURPLE-BOX BUG (2026-08-10, found by the user in game).** When the grille gained
+its every-third-block POST property, the shared multipart builder put a `post=true`
+condition on the hinge post for ALL sections — but the DOOR has no `post` property, and
+one when-condition naming a property the block lacks makes the client reject the ENTIRE
+blockstate file: every door rendered as the purple missing-model checkerboard. The fix is
+one line (the door's post is unconditional), but the lesson is the check: the asset
+verifier now asserts every when-key/variant-key in a gate blockstate against the Java
+block's declared properties — model-file existence alone missed this completely. Ships in
+2.4.8 (bumped so the stale-jar trap can't hide it).
+
+**THIRD PASS — the door rebuilt as a material assembly (2026-08-10, Fable taking over
+after two failed door models).** The painted-leaf approach was the mistake both times: a
+flat box with the whole design on one 64 px texture reads as a sticker no matter how the
+geometry around it improves. The door is now built the way the photos are built:
+
+- **Lower half:** solid stainless kick panel (turnstile_steel), iron rail behind the bar
+  zone, the red PUSH BAR sign plate proud, and the crash bar outermost on two brackets.
+- **Upper half:** wire-mesh window (gate_grille texture, cutout — the door now needs
+  getCutoutMipped, registered in MtrPidsClient), red EMERGENCY EXIT header plate proud,
+  top rail. Stiles both sides on both halves.
+- **Signs face SOUTH (the paid side)** — you read them as you push your way out; FACING
+  is the unpaid side and the leaf swings that way.
+- **Sign plates carry their own textures** (gate_door_sign_header 128x40, _pushbar
+  128x32, `sign_plate()` in the generator) so the FULL wording fits — "PUSH BAR FOR
+  EMERGENCY EXIT / ALARM WILL SOUND" — where the old shared 64 px plate could only fit
+  "PUSH BAR / ALARM SOUNDS". The painted emergency_exit_door.png is deleted.
+- **The open model is a real 90° swing** of the closed elements (`swing()` in the
+  generator: point map about the hinge at the shared post, faces remapped
+  north→west→south→east). The previous "open" model was a separately-authored slab of
+  different proportions — that is what read as the door warping. Swung boxes leave the
+  0..16 range, which is legal but REQUIRES the explicit uv every door face now carries.
+- **THE COLLISION BUG:** getCollisionShape was never overridden, so the door was solid
+  even when open — nobody could walk through, and onEntityCollision (the fare-evasion
+  detection) could never fire, silently. Closed → slab, open → empty. Verified live: an
+  armor stand summoned inside the open doorway stays put; all four state tests pass.
+- Leaf spans 0.5..15.5 so its ends bury INSIDE the 4.5..11.5-deep posts (a 1..15 leaf
+  left a visible 0.2 px gap; a leaf ending at 0.8 would be coplanar and z-fight).
+- Ten orphaned models from the stacking era deleted (they referenced the deleted texture
+  and would have warned on every resource load).
+
+**SECOND PASS after the user's screenshot ("still looks super sloppy"):**
+- **Uniform bar spacing.** Uprights sit on a pitch of 4 (which divides 16) and the boundary
+  one STRADDLES x=0 at -0.8..0.8. Sitting it at 0..1.6 instead makes the joint gap 1.6
+  against 2.4 inside a block; the first version's bars ran 4.2..13.6 and gapped **6.6 at a
+  joint against 1.0 inside**, which is what read as sloppy. Bars are 1.6 px, gaps 2.4 px
+  everywhere - asserted in the generator, not eyeballed.
+- The post is the SAME WIDTH as the bars (a fatter post pinches the gaps beside it and the
+  rhythm breaks) and is distinguished by DEPTH instead - 7 px front to back against 2.5.
+- **Mesh spans the full block** (0..16, was 3..13, which left a 3 px hole at each end) and
+  the grille posts only every THIRD block via a POST property computed from distance along
+  the run, so the mesh runs unbroken for up to three blocks. The bar fence posts every
+  block, because there the post is part of the bar rhythm.
+- **The door is a fixed 2-block door again**, HALF + OPEN, right-click to swing, breaking
+  either half takes the other. Stacking let the leaf art warp over however many cells it
+  was given. Opening it is itself what sets the alarm off. The crash bar swings with it.
+
+**REBUILT IN 3D (user: "they are horrible, try again from scratch, both 3D").** The first
+cut was a 4 px slab with the ironwork PAINTED on two faces — it read as a sticker. Now the
+frame is real geometry and the textures only skin it:
+
+- **Posts** 3x3x6 px at the block edges, **rails** 2 px deep at top and bottom, **balusters**
+  four 1.6 px uprights on a shallower plane than the posts. The frame standing proud of the
+  infill is what makes it read as structure rather than a printed panel.
+- The **ornate scrollwork was dropped** (user decision): curves at this scale quantise into
+  blobs whichever way they are drawn. `gate_scroll` is now a plain iron BAR fence — the id
+  is unchanged, only the geometry and its lang name ("Iron Bar Dividing Wall").
+- **SHARED POSTS.** Every section draws its LEFT post and only a right-hand end closes the
+  run, so a joint shows one post, not two jammed together. That needed horizontal LEFT/RIGHT
+  properties the first version lacked, and a `block/GateSection` marker interface so the
+  door (MTR package, it charges fares) and the walls (common package) can see each other.
+  Any section joins any other, so bars → door → grille is one continuous fence.
+- **Only the push bar stands proud** of the door leaf (user's choice), on two brackets.
+- **Multipart, not one model per state**: the frame is five independent decisions, and
+  baking all 16 combinations per variant would be 32 near-identical models. Cost is
+  1,280 selector-states per wall and 4,608 for the door — nothing next to the pipe's 16.6M.
+- Vertical-only shading on `gate_iron` (a horizontal band repeats on every stacked block —
+  the globe-pole lesson).
+
+Verified on a live server: a wall|door|wall run resolves left/right correctly at both ends
+and across both joints; boot 1.42 s.
+
+**Behaviour, all verified on a live server:** stacking resolves UP/DOWN correctly across a
+3-tall run (bottom/middle/top); a redstone rising edge starts the alarm; POWERED
+propagates to the whole stack; it times out after 15 s and clears the whole stack. Only
+the BOTTOM cell keeps time and plays the sound, so a 4-tall door is one alarm, not four.
+The 2 s loop is re-issued every 38 ticks so there is no gap between repeats.
+**The alarm being audible is NOT verified** — a dedicated server does not log playSound.
+
+Exit-only: the door faces the unpaid side, so velocity along the facing is an exit
+(alarm only) and against it is fare evasion (alarm + a $100 TicketSystem fine, action-bar
+message). Never blocks movement — the turnstile's precedent.
+
+What exists:
+
+- `textures/block/emergency_exit_door.png` (64px), `gate_scroll.png`, `gate_grille.png`
+  (64px), all CUTOUT — they need `getCutoutMipped()` at registration like the platform
+  barrier. Generated by `tools/gen_gate_assets.py`, never hand-edit.
+- `sounds/gate_alarm.ogg` — 2.0 s seamless LOOP, played repeatedly rather than baked to
+  length. Rapid 5/sec pulses ALTERNATING 1180 Hz / 880 Hz (the user asked for beeping and
+  a hi-lo whoop at once), odd-harmonic piezo tone. Still needs a sounds.json entry and a
+  `SoundEvent`. **The user has not heard it yet.**
+
+**CONFIRMED DESIGN (do not re-ask):**
+- All three STACK: one unit per block, auto-merging into a run like the entrance railing.
+  The door draws its push bar and panel on the bottom cell and the EMERGENCY EXIT header
+  on the top; the walls cap their top cell. The two walls share a frame (posts at the
+  block edges, rails at matching heights) so scroll and grille runs meet cleanly.
+- Alarm: trips when a player passes through, runs ~15 s then stops on its own, also
+  fireable by redstone. **Heard by everyone nearby**, not just whoever tripped it.
+- The door is **exit only** and does NOT physically block movement (the turnstile's
+  precedent — walking through is what triggers the behaviour).
+- **Fare evasion:** a player entering the WRONG way (unpaid side -> paid side) is fined
+  through MTR's `TicketSystem`, the same API the fare machine and turnstile already use.
+  Exiting the intended way sounds the alarm but costs nothing.
+  ASSUMPTION TO CONFIRM: fine amount. MTR's own rate is 1 emerald = $10; a real NYC
+  evasion fine is $100, so $100 unless the user says otherwise.
+- These are DECORATION-tab blocks: furniture you build with, same call as the turnstile.
+
+**TEXTURE LESSONS (three passes to get the scrollwork right):**
+1. At 32 px the arcs quantise into blobs — the wall textures are 64 px.
+2. Centre the ring motif on the block EDGES as well as the middle. Halves complete against
+   the neighbour so a run reads as continuous ironwork; the whole motif in the middle
+   stamps an identical medallion on every block and reads as wallpaper.
+3. Keep the decorative band CLEAR of the uprights. Running them through chopped every arc
+   into dashes and the panel read as brambles.
+4. The 3x5 font is 4 px per character, so 16 characters is an entire 64 px texture with no
+   margin — the door's "Push Bar for Emergency Exit / Alarm Will Sound" had to become
+   "PUSH BAR / ALARM SOUNDS". Drawing it as renderer text on a canvas would allow the full
+   wording and stay crisp close up; not done.
+
+### DEPARTURE BOARDS (2026-08-09) — 3 new PIDS blocks from the user's Penn/Moynihan photos
+
+- `railroad_departure_wall` — the small portrait concourse screen. Same door-style
+  two-block envelope as `railroad_pids_wall` and it REUSES that block's models and
+  blockstate geometry; it is its own class only so it can carry its own BE type (a type
+  holds one renderer). Editable title + live clock, one departure per row on a chevron in
+  the route colour, **route number instead of MTR's "peak" badge** — `ArrivalResponse
+  .getRouteNumber()` is a real field in 4.0.1, so no name-parsing heuristic. Stopping
+  pattern spelled out for the **top two only**. The **track column stays blank until the
+  board announces it** (default 6 min, per-board slider, 0 = always show).
+- `departure_board_wall` / `departure_board_hanging` — the big concourse board. Place a
+  RECTANGLE of blocks facing the same way and they merge into one screen; row height is
+  fixed in canvas units so a taller board simply lists more trains. Rows are filled in the
+  route colour, station name along the bottom. Hanging is double-sided and sits at z 5..11
+  to line up under a `pids_pole`; its case is full block height because cells stack.
+
+**THE ORIGIN-CORNER TRAP.** `DepartureBoardBlock.screenRight` is
+`facing.rotateYCounterclockwise()`, NOT clockwise. After the renderer's
+`180 - facing.asRotation()` turn the viewer is on local -Z, so their LEFT hand is toward
+local +X, and the painter's canvas x grows from there — for a north-facing board the
+canvas runs east→west, and the origin (canvas x=0) is the EASTMOST, lowest cell. Get it
+backwards and the screen is built off the end of the blocks.
+
+`rectangle()` walks to that corner, measures each axis, then shrinks the height to the
+tallest FULL rectangle so an L-shape draws a whole screen rather than a torn one. Only the
+origin cell draws; every other returns immediately (the mosaic's pattern). **Settings live
+on EVERY cell** and the server writes the whole rectangle on save — keeping them on the
+origin alone would strand them the moment the board grew to the left.
+
+`DepartureBoardData` is a second data assembler beside `RailroadRouteData`, because that
+one's `Departure` carries no route number and resolves stops for the next train only;
+here every row needs its own stop list, looked up per arrival via `simplifiedRouteIdMap`.
+
+The railroad packet gained title + trackRevealSeconds; `RailroadPidsScreen` shows those
+two controls only on the departure board but ALWAYS writes both, echoing its own values
+back untouched, so no shape silently resets a field it does not display.
+
+### CREATIVE TABS SPLIT IN TWO (2026-08-09, user request) — the mod outgrew one tab
+
+`BAKER_CITY` / `BAKER_CITY_ENTRIES` are **gone**. There are now two groups registered as
+`station_announcer:decoration` ("Baker City: Decoration", 44 items, bench icon) and
+`station_announcer:operations` ("Baker City: Operations", 18 items, control-box icon),
+each with its own `ModContent.*_ENTRIES` list.
+
+**The rule:** OPERATIONS holds everything that is not a block you place by hand to build
+scenery — the PA network + link item, every NYC and Railroad PIDS, holding lights, the
+ambience block, and (user decision 2026-08-09) **all 18 pillar/railing/viaduct creator
+tools**, which are items rather than decor and were crowding the decoration tab.
+DECORATION is the rest, including the fare machine and turnstiles: functional, but
+furniture you build with. **Mounting poles go with what they hold up**, so
+`pids_pole`/`holding_light_pole` are OPERATIONS while `globe_lamp_pole`/
+`stop_marker_pole` are DECORATION.
+
+`MtrStationDecor.registerBlock` now takes the target list as a third argument — that file
+registers blocks for BOTH tabs. `MtrPids` and `MtrPillars` → OPERATIONS.
+Audited: all 56 registered items land in exactly one tab, none in both or neither.
+
+### STATION FLOORS (2026-08-09) — 8 blocks, assets GENERATED by `tools/gen_floor_assets.py`
+
+Two NYC floors from the user's photos, each grimy and fresh. **Never hand-edit the
+textures/models/blockstates/loot/recipes — re-run the generator.** Built, dedicated-server
+verified (boots clean in 1.28 s, zero errors), **NOT yet seen in a client** (the user was
+on his machine; rendering is the one unverified part).
+
+- `platform_tile_floor[_clean]` — 6×6 greyish ceramic/marble tiles per block (~17 cm).
+- `platform_concrete_floor_{2,3,4}[_clean]` — poured slabs 2/3/4 BLOCKS across. Three
+  widths are separate blocks so the slab size is picked per area; they share every
+  texture and model. The user chose "pure world grid, no editing" — grid phase is fixed
+  to world coordinates, aligned by choosing where the floor starts.
+
+**Randomisation — everything is plain vanilla weighted blockstate variants:**
+- Tiles: 5 dirty / 3 fresh textures × 4 y-rotations, weights 5/4/4/2/1.
+- Concrete: `block/ConcreteFloorBlock` carries `joint_north`/`joint_west` BooleanProperties
+  computed from `floorMod(z,N)==0` / `floorMod(x,N)==0` in **`getPlacementState` AND
+  `onBlockAdded`** — the latter is what fixes `/fill`, `/setblock`, structure pastes and
+  WorldEdit, which never call `getPlacementState`. Each of the 4 combos then lists its
+  grime variants with weights (4/2/1/1 dirty, 1/1 fresh). Joints are drawn inside the
+  NORTH and WEST edges only — one groove per boundary, never doubled.
+
+> **SODIUM BREAKS THE FABRIC RENDERER API — the mod must not depend on it.**
+> The first cut of the concrete floor was a Fabric `BakedModel` + `BlockStateResolver`
+> reading the `BlockPos` at mesh time (the old conduit pipe's trick, zero blockstates).
+> Thomas plays with **Sodium 0.5.8 and no Indium**, and Sodium does not implement the
+> Fabric Renderer API: it never calls `emitBlockQuads` and falls back to `getQuads`,
+> which has no position — so every slab drew piece 0, i.e. no joints and no grime
+> variation at all. Anything position- or context-dependent in this mod's rendering has
+> to go through blockstate properties, not `emitBlockQuads`. (Check the play profile's
+> mods folder before reaching for the renderer API again:
+> `~/Library/Application Support/ModrinthApp/profiles/Baker City 1.20.4/mods`.)
+
+**TEXTURE LESSONS (each one cost a visible artifact):**
+1. **A rotated block shifts the grid by one pixel.** Rotation maps column x to SIZE-1-x,
+   i.e. cell offset k to PITCH-1-k, so grout at offset {0} lands at {PITCH-1} when
+   rotated — floors came out covered in stair-stepped dark seams. The grout offsets must
+   equal their own mirror; a **centred pair** `{PITCH/2-1, PITCH/2}` is the narrowest set
+   that does. That forces 2 px grout, which is why the canvas is **96 px** and not 48 —
+   2 of an 8 px cell reads as a waffle, 2 of a 16 px cell reads as tilework.
+2. **Keep the lowest noise octave quiet.** An octave whose features span the canvas gives
+   every block its own overall tone, so a floor of mixed variants reads as a quilt of
+   shaded squares. Weight the mid octaves; and include a FINE octave too, or the bilinear
+   value-noise grid itself shows up as a lattice of diamonds.
+3. **Grout must not ride the per-variant wash.** The grout line on a shared boundary is
+   drawn entirely by the east/south block, so if it varies per variant that one block's
+   tone outlines every block.
+4. **Gum must NOT wrap** (everything else should). Wrapping keeps a texture seamless
+   against *itself*, but the neighbour usually draws a different variant, so a wrapped
+   splat became two half-blobs stranded either side of a boundary. Gum is kept a full
+   radius clear of the edges; soft smears still wrap through `put()`.
+5. Artifact counts come from **per-variant profiles**, never a random range — a range puts
+   gum on every block, which read as measles.
+6. **Gum is not a disc and not black** (`gum_splat`). Discs — even a disc with satellite
+   discs bolted on — read as a drawn dot; the outline is a radius modulated by three
+   angular harmonics plus a squash, so each splat is a different lopsided blob. And it is
+   *blended* at ~0.7, not written, over a core lifted well off black (84,80,74), so the
+   floor's own grain shows through it. Earlier passes gave black circles that punched
+   holes in the floor, and before that two offset discs that looked like cherries.
+
+`tools/gen_floor_assets.py --preview DIR` writes 8×8-block field previews and a labelled
+contact sheet of all six floors — judge the art there, not by restarting a client.
+
 **CONDUIT PIPE REMOVED (2026-07-29, user decision).** The `pipe` block is gone entirely —
 `mtr/PipeBlock`, `client/mtr/PipeModel`, `tools/gen_pipe_assets.py`, all 44 pipe models,
 both textures, the item model, loot table, recipe, lang key and pickaxe-tag entry. The
@@ -1248,5 +1673,7 @@ com.stationannouncer.client       (all @Environment(CLIENT))
 - Package root `com.stationannouncer`; ids via `StationAnnouncer.id(path)`.
 - Translation keys: `gui.station_announcer.*`, `commands.station_announcer.announce.*`,
   `subtitles.station_announcer.chime`.
-- Not a git repository (as of 2026-07-19). No CI. No mixins — keep it that way unless
-  something truly needs one.
+- A git repository since 2026-08-07 (baseline = pre-addon v2.4.0; one commit per
+  feature). No CI. Mixins exist but ONLY for the dispatch addon
+  (`station_announcer.mixins.json`, package `com.stationannouncer.mixin`) — the base
+  mod's blocks/renderers stay mixin-free.

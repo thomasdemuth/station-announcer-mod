@@ -34,13 +34,13 @@ public class StopMarkerScreen extends Screen {
     private final StopMarkerBlockEntity marker;
     private final List<StopMarkerBlockEntity.Sign> signs = new ArrayList<>();
     private final List<TextFieldWidget> textFields = new ArrayList<>();
-    private boolean standoff;
+    private StopMarkerBlock.Style style;
 
     public StopMarkerScreen(StopMarkerBlockEntity marker) {
         super(Text.translatable("gui.station_announcer.stop_marker.title"));
         this.marker = marker;
         this.signs.addAll(marker.getSigns());
-        this.standoff = marker.getCachedState().get(StopMarkerBlock.STANDOFF);
+        this.style = StopMarkerBlock.Style.of(marker.getCachedState());
     }
 
     private boolean isWall() {
@@ -106,13 +106,16 @@ public class StopMarkerScreen extends Screen {
         y += WIDGET_HEIGHT + GAP;
 
         if (isWall()) {
-            addDrawableChild(CyclingButtonWidget.onOffBuilder(
-                            Text.translatable("gui.station_announcer.stop_marker.bracket"),
-                            Text.translatable("gui.station_announcer.stop_marker.flush"))
-                    .initially(standoff)
+            addDrawableChild(CyclingButtonWidget.<StopMarkerBlock.Style>builder(
+                            value -> Text.translatable(
+                                    "gui.station_announcer.stop_marker." + value.name().toLowerCase()))
+                    .values(StopMarkerBlock.Style.values())
+                    .initially(style)
+                    .tooltip(value -> net.minecraft.client.gui.tooltip.Tooltip.of(Text.translatable(
+                            "gui.station_announcer.stop_marker." + value.name().toLowerCase() + ".tip")))
                     .build(left, y, PANEL_WIDTH, WIDGET_HEIGHT,
                             Text.translatable("gui.station_announcer.stop_marker.mounting"),
-                            (button, value) -> standoff = value));
+                            (button, value) -> style = value));
             y += WIDGET_HEIGHT + GAP;
         }
 
@@ -134,7 +137,7 @@ public class StopMarkerScreen extends Screen {
         captureText();
         PacketByteBuf buf = PacketByteBufs.create();
         buf.writeBlockPos(marker.getPos());
-        buf.writeBoolean(standoff);
+        buf.writeEnumConstant(style);
         buf.writeVarInt(signs.size());
         for (StopMarkerBlockEntity.Sign sign : signs) {
             buf.writeEnumConstant(sign.color());

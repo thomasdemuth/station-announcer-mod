@@ -1,0 +1,8 @@
+{
+  "parent": "minecraft:block/cube_bottom_top",
+  "textures": {
+    "top": "station_announcer:block/platform_tile_floor_top_1",
+    "side": "station_announcer:block/platform_tile_floor_side",
+    "bottom": "station_announcer:block/platform_tile_floor_side"
+  }
+}

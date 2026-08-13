@@ -19,7 +19,7 @@ public final class MtrPidsClient {
     }
 
     /** Fallback tint when a station-colored block sits outside any MTR station area. */
-    private static final int FALLBACK_COLUMN_COLOR = 0x1F4D3A;
+    static final int FALLBACK_STATION_COLOR = 0x1F4D3A;
 
     /**
      * Station tint per column position. The block color provider is called
@@ -39,14 +39,14 @@ public final class MtrPidsClient {
     private record ColorEntry(long expiry, int color) {
     }
 
-    private static int stationColor(net.minecraft.util.math.BlockPos pos) {
+    static int stationColor(net.minecraft.util.math.BlockPos pos) {
         long key = pos.asLong();
         long now = System.currentTimeMillis();
         ColorEntry entry = STATION_COLORS.get(key);
         if (entry != null && now < entry.expiry()) {
             return entry.color();
         }
-        int color = FALLBACK_COLUMN_COLOR;
+        int color = FALLBACK_STATION_COLOR;
         try {
             // Guarded: this runs on chunk-meshing threads while MTR data may
             // be updating underneath us.
@@ -66,11 +66,19 @@ public final class MtrPidsClient {
     }
 
     public static void register() {
+        // The exit door's upper half is a wire-mesh window (alpha holes).
+        net.fabricmc.fabric.api.blockrenderlayer.v1.BlockRenderLayerMap.INSTANCE.putBlock(
+                com.stationannouncer.mtr.MtrStationDecor.EMERGENCY_EXIT_DOOR,
+                net.minecraft.client.render.RenderLayer.getCutoutMipped());
+
         BlockEntityRendererFactories.register(MtrPids.PIDS_BLOCK_ENTITY, context -> new PidsNycRenderer());
         BlockEntityRendererFactories.register(MtrStationDecor.DECOR_BLOCK_ENTITY, context -> new StationDecorRenderer());
         BlockEntityRendererFactories.register(MtrStationDecor.STOP_MARKER_BLOCK_ENTITY, context -> new StopMarkerRenderer());
         BlockEntityRendererFactories.register(MtrPids.RAILROAD_PIDS_BLOCK_ENTITY, context -> new RailroadPidsRenderer());
         BlockEntityRendererFactories.register(MtrPids.RAILROAD_HANGING_BLOCK_ENTITY, context -> new RailroadHangingRenderer());
+        BlockEntityRendererFactories.register(MtrPids.RAILROAD_DEPARTURE_BLOCK_ENTITY, context -> new RailroadDepartureRenderer());
+        BlockEntityRendererFactories.register(MtrPids.DEPARTURE_BOARD_BLOCK_ENTITY, context -> new DepartureBoardRenderer());
+        BlockEntityRendererFactories.register(MtrPids.DEPARTURE_BOARD_HANGING_BLOCK_ENTITY, context -> new DepartureBoardRenderer());
 
         // The renderers keep small per-position state maps (holding-light
         // departure windows, next-train lit state); drop them when leaving a
@@ -104,11 +112,14 @@ public final class MtrPidsClient {
         // rivets and shading stay visible. Guarded because the provider runs
         // on chunk-meshing worker threads while MTR data may be updating.
         net.fabricmc.fabric.api.client.rendering.v1.ColorProviderRegistry.BLOCK.register(
-                (state, world, pos, tintIndex) -> pos == null ? FALLBACK_COLUMN_COLOR : stationColor(pos),
+                (state, world, pos, tintIndex) -> pos == null ? FALLBACK_STATION_COLOR : stationColor(pos),
                 MtrStationDecor.COLUMN_IRON_STATION, MtrStationDecor.COLUMN_IRON_NAMED_STATION);
         net.fabricmc.fabric.api.client.rendering.v1.ColorProviderRegistry.ITEM.register(
-                (stack, tintIndex) -> FALLBACK_COLUMN_COLOR,
+                (stack, tintIndex) -> FALLBACK_STATION_COLOR,
                 MtrStationDecor.COLUMN_IRON_STATION, MtrStationDecor.COLUMN_IRON_NAMED_STATION);
+
+        // Tile wall: the band's station tint and the name tablet's renderer.
+        SubwayWallsClient.register();
 
         // The brush's full PIDS settings screen (the bare-click mini toggle
         // stays on the shared GUI opener below).
@@ -123,7 +134,9 @@ public final class MtrPidsClient {
         // else falls through to the base mod.
         Consumer<BlockEntity> previous = StationAnnouncer.GUI_OPENER;
         StationAnnouncer.GUI_OPENER = blockEntity -> {
-            if (blockEntity instanceof com.stationannouncer.mtr.RailroadPidsBlockEntity railroad) {
+            if (blockEntity instanceof com.stationannouncer.mtr.DepartureBoardBlockEntity board) {
+                net.minecraft.client.MinecraftClient.getInstance().setScreen(new DepartureBoardScreen(board));
+            } else if (blockEntity instanceof com.stationannouncer.mtr.RailroadPidsBlockEntity railroad) {
                 MinecraftClient.getInstance().setScreen(new RailroadPidsScreen(railroad));
             } else if (blockEntity instanceof com.stationannouncer.mtr.StopMarkerBlockEntity marker) {
                 MinecraftClient.getInstance().setScreen(new StopMarkerScreen(marker));
@@ -134,6 +147,10 @@ public final class MtrPidsClient {
                 // platform, everything else edits its name text.
                 if (decor.getCachedState().getBlock() instanceof com.stationannouncer.mtr.HoldingLightBlock) {
                     MinecraftClient.getInstance().setScreen(new HoldingLightScreen(decor));
+                } else if (decor.getCachedState().getBlock() instanceof com.stationannouncer.mtr.RailingSignBlock) {
+                    // Entrance signs have two independently configurable faces
+                    // and carry route bullets, so they get their own screen.
+                    MinecraftClient.getInstance().setScreen(new RailingSignScreen(decor));
                 } else {
                     MinecraftClient.getInstance().setScreen(new StationSignScreen(decor));
                 }

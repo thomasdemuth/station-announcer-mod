@@ -49,9 +49,18 @@ public class StationAnnouncerClient implements ClientModInitializer {
 
     @Override
     public void onInitializeClient() {
+        // Key binds (both unbound by default) show up in vanilla's Controls screen.
+        StationAnnouncerKeys.register();
+
         // The barrier's wire mesh is a cutout texture (alpha holes).
         BlockRenderLayerMap.INSTANCE.putBlock(ModContent.PLATFORM_BARRIER,
                 net.minecraft.client.render.RenderLayer.getCutoutMipped());
+        // The gate ironwork is see-through between the bars.
+        BlockRenderLayerMap.INSTANCE.putBlock(ModContent.GATE_SCROLL,
+                net.minecraft.client.render.RenderLayer.getCutoutMipped());
+        BlockRenderLayerMap.INSTANCE.putBlock(ModContent.GATE_GRILLE,
+                net.minecraft.client.render.RenderLayer.getCutoutMipped());
+
 
         // Lets the (common) block classes open the matching client-only screen safely.
         StationAnnouncer.GUI_OPENER = be -> {
@@ -160,8 +169,18 @@ public class StationAnnouncerClient implements ClientModInitializer {
         if (chime) {
             // Played through the sound manager (not world.playSound) so the next
             // announcement can cut it off.
-            currentChime = new PositionedSoundInstance(resolveChime(client, chimeSound), SoundCategory.VOICE,
-                    volume, 1.0f, SoundInstance.createRandom(), pos);
+            //
+            // NO ATTENUATION, and at the listener rather than at the speaker.
+            // The server has already worked out this player's volume from their
+            // distance to the loudest source in range; letting Minecraft apply
+            // its own distance rolloff on top attenuated it TWICE, and its
+            // rolloff runs out around 16 blocks while a PA radius may be 128 —
+            // so anyone standing further than that from the block heard nothing
+            // at all. The ambience block solves it the same way.
+            currentChime = new PositionedSoundInstance(
+                    resolveChime(client, chimeSound).getId(), config.chimeSoundCategory(),
+                    volume, 1.0f, SoundInstance.createRandom(), false, 0,
+                    SoundInstance.AttenuationType.NONE, 0.0, 0.0, 0.0, true);
             client.getSoundManager().play(currentChime);
         }
         if (audible && config.enableTts) {

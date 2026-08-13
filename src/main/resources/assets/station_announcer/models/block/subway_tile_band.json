@@ -1,0 +1,112 @@
+{
+  "parent": "minecraft:block/block",
+  "textures": {
+    "band": "station_announcer:block/subway_tile_band",
+    "tile": "station_announcer:block/subway_tile_white",
+    "particle": "station_announcer:block/subway_tile_band"
+  },
+  "elements": [
+    {
+      "from": [
+        0,
+        0,
+        0
+      ],
+      "to": [
+        16,
+        4,
+        16
+      ],
+      "faces": {
+        "north": {
+          "texture": "#tile",
+          "cullface": "north"
+        },
+        "south": {
+          "texture": "#tile",
+          "cullface": "south"
+        },
+        "east": {
+          "texture": "#tile",
+          "cullface": "east"
+        },
+        "west": {
+          "texture": "#tile",
+          "cullface": "west"
+        },
+        "down": {
+          "texture": "#tile",
+          "cullface": "down"
+        }
+      }
+    },
+    {
+      "from": [
+        0,
+        4,
+        0
+      ],
+      "to": [
+        16,
+        12,
+        16
+      ],
+      "faces": {
+        "north": {
+          "texture": "#band",
+          "cullface": "north",
+          "tintindex": 0
+        },
+        "south": {
+          "texture": "#band",
+          "cullface": "south",
+          "tintindex": 0
+        },
+        "east": {
+          "texture": "#band",
+          "cullface": "east",
+          "tintindex": 0
+        },
+        "west": {
+          "texture": "#band",
+          "cullface": "west",
+          "tintindex": 0
+        }
+      }
+    },
+    {
+      "from": [
+        0,
+        12,
+        0
+      ],
+      "to": [
+        16,
+        16,
+        16
+      ],
+      "faces": {
+        "north": {
+          "texture": "#tile",
+          "cullface": "north"
+        },
+        "south": {
+          "texture": "#tile",
+          "cullface": "south"
+        },
+        "east": {
+          "texture": "#tile",
+          "cullface": "east"
+        },
+        "west": {
+          "texture": "#tile",
+          "cullface": "west"
+        },
+        "up": {
+          "texture": "#tile",
+          "cullface": "up"
+        }
+      }
+    }
+  ]
+}

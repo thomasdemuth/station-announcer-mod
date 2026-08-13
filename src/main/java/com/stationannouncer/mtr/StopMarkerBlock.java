@@ -38,8 +38,10 @@ import org.jetbrains.annotations.Nullable;
  *   <li>CEILING — a drop pole down the whole block with the plates at its
  *       bottom end, so stacking {@code stop_marker_pole} above lowers it;</li>
  *   <li>FLOOR — the same pole standing up with the plates on top;</li>
- *   <li>WALL — plates against the wall face, either flush ({@link #STANDOFF}
- *       false) or held out on a short bracket arm.</li>
+ *   <li>WALL — plates against the wall face: flush, held out on a short
+ *       bracket arm ({@link #STANDOFF}), or turned 90° into a blade sign
+ *       standing just off the wall ({@link #BLADE}), which is what you read
+ *       from a train coming along the platform rather than from in front.</li>
  * </ul>
  */
 public class StopMarkerBlock extends Block implements BlockEntityProvider {
@@ -60,10 +62,36 @@ public class StopMarkerBlock extends Block implements BlockEntityProvider {
         }
     }
 
+    /**
+     * How a wall unit carries its plates. Kept as two independent booleans
+     * rather than one enum so markers placed before the blade mount existed
+     * keep their {@code standoff} value instead of resetting to flush.
+     */
+    public enum Style {
+        /** Plates flat against the wall. */
+        FLUSH,
+        /** Plates held out from the wall on a short arm, still facing out of it. */
+        BRACKET,
+        /** Plates turned 90° and held just off the wall, read along it from both sides. */
+        BLADE;
+
+        /** The style a state is actually in (the enum constants shadow the property names, hence the qualifiers). */
+        public static Style of(BlockState state) {
+            if (state.get(MOUNT) != Mount.WALL) {
+                return FLUSH;
+            }
+            // Blade wins: it IS held off the wall, so standoff adds nothing.
+            return state.get(StopMarkerBlock.BLADE) ? BLADE
+                    : state.get(StopMarkerBlock.STANDOFF) ? BRACKET : FLUSH;
+        }
+    }
+
     public static final EnumProperty<Mount> MOUNT = EnumProperty.of("mount", Mount.class);
     public static final DirectionProperty FACING = Properties.HORIZONTAL_FACING;
     /** Wall units only: hold the plates out on a bracket instead of flat on the wall. */
     public static final BooleanProperty STANDOFF = BooleanProperty.of("standoff");
+    /** Wall units only: turn the plates 90° into a blade sign read along the wall. */
+    public static final BooleanProperty BLADE = BooleanProperty.of("blade");
 
     /** Plate geometry, in model pixels: 4x4 squares stacked along the pole. */
     public static final double PLATE_SIZE = 4.0;
@@ -71,13 +99,32 @@ public class StopMarkerBlock extends Block implements BlockEntityProvider {
     public static final double PLATE_FRONT_WALL_FLUSH = 15.4;
     public static final double PLATE_FRONT_WALL_BRACKET = 7.4;
     public static final double PLATE_DEPTH = 0.6;
+    /** Blade plates straddle the block's centre line, so their faces sit either side of x 8. */
+    public static final double PLATE_FRONT_BLADE = 8.0 - PLATE_DEPTH / 2.0;
 
     /**
-     * Outline shapes by [mount][standoff][signs - 1][horizontal facing];
+     * The wall-side edge of a blade plate. The plate reaches from here inward,
+     * landing centred on the block's middle — which is where every pole in the
+     * mod runs, so a blade lines up with a horizontal pole beside it.
+     */
+    public static final double BLADE_NEAR = 10.0;
+
+    /**
+     * A blade's stack is centred on the block's HORIZONTAL centre line too, not
+     * hung from the top of the block like a flush or bracket marker. That line
+     * is where a pole runs, so the blade's stub becomes exactly a pole's own
+     * cross-section (x/y 7..9) and a horizontal pole runs straight into it.
+     * Centring also means the stack always fits: four plates fill the block
+     * exactly instead of hanging out of the bottom.
+     */
+    public static final double BLADE_CENTRE = 8.0;
+
+    /**
+     * Outline shapes by [mount][style][signs - 1][horizontal facing];
      * collision by [mount] (the pole is symmetric, so it needs no rotation).
      */
     private final VoxelShape[][][][] outlines =
-            new VoxelShape[Mount.values().length][2][StopMarkerBlockEntity.MAX_SIGNS][];
+            new VoxelShape[Mount.values().length][Style.values().length][StopMarkerBlockEntity.MAX_SIGNS][];
     private final VoxelShape[] collisions = new VoxelShape[Mount.values().length];
 
     public StopMarkerBlock(Settings settings) {
@@ -85,21 +132,29 @@ public class StopMarkerBlock extends Block implements BlockEntityProvider {
         setDefaultState(getDefaultState()
                 .with(MOUNT, Mount.CEILING)
                 .with(FACING, Direction.NORTH)
-                .with(STANDOFF, false));
+                .with(STANDOFF, false)
+                .with(BLADE, false));
         VoxelShape pole = createCuboidShape(7.0, 0.0, 7.0, 9.0, 16.0, 9.0);
-        VoxelShape bracket = createCuboidShape(7.0, 7.0, 7.0, 9.0, 9.0, 16.0);
+        // Both arms hold the TOP plate (the one plate that always exists), so a
+        // single-plate marker's bracket has something to hold instead of hanging
+        // in mid-air below it.
+        VoxelShape bracket = createCuboidShape(7.0, 13.0, 7.9, 9.0, 15.0, 16.0);
+        // Exactly a pole's gauge, at a pole's height: the two read as one run.
+        VoxelShape bladeArm = createCuboidShape(7.0, 7.0, BLADE_NEAR - 0.1, 9.0, 9.0, 16.0);
         for (Mount mount : Mount.values()) {
             // Only the pole itself blocks movement; the plates are thin hardware.
             collisions[mount.ordinal()] = mount == Mount.WALL ? VoxelShapes.empty() : pole;
-            for (int standoff = 0; standoff <= 1; standoff++) {
+            for (Style style : Style.values()) {
                 for (int signs = 1; signs <= StopMarkerBlockEntity.MAX_SIGNS; signs++) {
-                    VoxelShape shape = plates(mount, standoff == 1, signs);
+                    VoxelShape shape = plates(mount, style, signs);
                     if (mount != Mount.WALL) {
                         shape = VoxelShapes.union(shape, pole);
-                    } else if (standoff == 1) {
+                    } else if (style == Style.BRACKET) {
                         shape = VoxelShapes.union(shape, bracket);
+                    } else if (style == Style.BLADE) {
+                        shape = VoxelShapes.union(shape, bladeArm);
                     }
-                    outlines[mount.ordinal()][standoff][signs - 1] = rotations(shape.simplify());
+                    outlines[mount.ordinal()][style.ordinal()][signs - 1] = rotations(shape.simplify());
                 }
             }
         }
@@ -115,13 +170,21 @@ public class StopMarkerBlock extends Block implements BlockEntityProvider {
     }
 
     /** The box the plate stack occupies, in the north-facing model frame. */
-    private static VoxelShape plates(Mount mount, boolean standoff, int signs) {
+    private static VoxelShape plates(Mount mount, Style style, int signs) {
         double height = PLATE_SIZE * signs;
         // Ceiling markers hang at the bottom of the block so poles stacked
         // above push them down; everything else sits at the top.
         double top = mount == Mount.CEILING ? height : 16.0;
+        if (mount == Mount.WALL && style == Style.BLADE) {
+            // Turned 90°: the plate's width runs out from the wall, its
+            // thickness across the block's centre line, and the stack centred
+            // on that line vertically as well.
+            double bladeTop = BLADE_CENTRE + height / 2.0;
+            return createCuboidShape(PLATE_FRONT_BLADE, bladeTop - height, BLADE_NEAR - PLATE_SIZE,
+                    PLATE_FRONT_BLADE + PLATE_DEPTH, bladeTop, BLADE_NEAR);
+        }
         double front = switch (mount) {
-            case WALL -> standoff ? PLATE_FRONT_WALL_BRACKET : PLATE_FRONT_WALL_FLUSH;
+            case WALL -> style == Style.BRACKET ? PLATE_FRONT_WALL_BRACKET : PLATE_FRONT_WALL_FLUSH;
             default -> PLATE_FRONT_CEILING;
         };
         return createCuboidShape(6.0, top - height, front, 10.0, top, front + PLATE_DEPTH);
@@ -129,7 +192,7 @@ public class StopMarkerBlock extends Block implements BlockEntityProvider {
 
     @Override
     protected void appendProperties(StateManager.Builder<Block, BlockState> builder) {
-        builder.add(MOUNT, FACING, STANDOFF);
+        builder.add(MOUNT, FACING, STANDOFF, BLADE);
     }
 
     @Nullable
@@ -173,7 +236,7 @@ public class StopMarkerBlock extends Block implements BlockEntityProvider {
         // this with an empty view, which just yields the single-plate shape.
         int signs = world.getBlockEntity(pos) instanceof StopMarkerBlockEntity marker
                 ? marker.getSigns().size() : 1;
-        return outlines[state.get(MOUNT).ordinal()][state.get(STANDOFF) ? 1 : 0]
+        return outlines[state.get(MOUNT).ordinal()][Style.of(state).ordinal()]
                 [Math.min(signs, StopMarkerBlockEntity.MAX_SIGNS) - 1]
                 [state.get(FACING).getHorizontal()];
     }
