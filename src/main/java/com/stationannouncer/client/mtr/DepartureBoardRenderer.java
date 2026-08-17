@@ -132,7 +132,8 @@ public class DepartureBoardRenderer implements BlockEntityRenderer<DepartureBoar
             return;
         }
         for (int i = 0; i < rows && i < departures.size(); i++) {
-            paintRow(painter, departures.get(i), top + i * ROW_H, canvasWidth);
+            paintRow(painter, departures.get(i), top + i * ROW_H, canvasWidth,
+                    entity.getTrackRevealSeconds());
         }
         matrices.pop();
     }
@@ -177,7 +178,7 @@ public class DepartureBoardRenderer implements BlockEntityRenderer<DepartureBoar
     }
 
     private void paintRow(CanvasPainter painter, DepartureBoardData.Departure departure,
-                          float y, float canvasWidth) {
+                          float y, float canvasWidth, int trackRevealSeconds) {
         painter.quad(0, y, canvasWidth, y + ROW_H - 1, LAYER_PANEL, departure.color());
         painter.quad(0, y + ROW_H - 1, canvasWidth, y + ROW_H, LAYER_TRIM, RULE);
 
@@ -207,7 +208,11 @@ public class DepartureBoardRenderer implements BlockEntityRenderer<DepartureBoar
             painter.textFitted(joined.toString(), stopsColumn, textY + 1, 11, 7, ink,
                     canvasWidth - stopsColumn - 40);
         }
-        if (!departure.track().isBlank()) {
+        // Track: blank until the board announces it — the same rule as the
+        // small railroad departure screen, with the same per-board window.
+        long secondsOut = (departure.departureMillis() - System.currentTimeMillis()) / 1000L;
+        if (!departure.track().isBlank()
+                && (trackRevealSeconds <= 0 || secondsOut <= trackRevealSeconds)) {
             painter.textRight(departure.track(), canvasWidth - MARGIN, textY, 13, ink);
         }
     }

@@ -2,19 +2,20 @@
   "parent": "minecraft:block/block",
   "textures": {
     "sign": "station_announcer:block/track_warning_sign",
-    "frame": "station_announcer:block/pids_frame",
+    "iron": "station_announcer:block/gate_iron",
+    "steel": "station_announcer:block/turnstile_steel",
     "particle": "station_announcer:block/track_warning_sign"
   },
   "elements": [
     {
       "from": [
-        0,
-        0,
-        13
+        1.0,
+        1.0,
+        12.5
       ],
       "to": [
-        16,
-        16,
+        15.0,
+        15.0,
         16
       ],
       "faces": {
@@ -27,51 +28,51 @@
             16
           ]
         },
-        "south": {
-          "texture": "#frame",
-          "uv": [
-            0,
-            0,
-            16,
-            16
-          ],
-          "cullface": "south"
-        },
         "east": {
-          "texture": "#frame",
+          "texture": "#sign",
           "uv": [
-            0,
-            0,
-            16,
-            3
+            0.5,
+            0.5,
+            4.0,
+            15.5
           ]
         },
         "west": {
-          "texture": "#frame",
+          "texture": "#sign",
           "uv": [
-            0,
-            0,
-            16,
-            3
+            0.5,
+            0.5,
+            4.0,
+            15.5
           ]
         },
         "up": {
-          "texture": "#frame",
+          "texture": "#sign",
           "uv": [
+            1,
             0,
-            0,
-            16,
-            3
+            15,
+            1.5
           ]
         },
         "down": {
-          "texture": "#frame",
+          "texture": "#sign",
           "uv": [
-            0,
-            0,
-            16,
-            3
+            1,
+            14.5,
+            15,
+            16
           ]
+        },
+        "south": {
+          "texture": "#sign",
+          "uv": [
+            2,
+            2,
+            14,
+            14
+          ],
+          "cullface": "south"
         }
       }
     }

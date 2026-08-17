@@ -31,6 +31,13 @@ public class DepartureBoardBlockEntity extends BlockEntity {
     /** Header text. Empty falls back to the operator name the renderer supplies. */
     private String title = "";
 
+    /**
+     * Seconds before departure at which the track number is announced —
+     * identical semantics (and constants) to the small railroad departure
+     * screen, so the two boards in one concourse agree.
+     */
+    private int trackRevealSeconds = RailroadPidsBlockEntity.DEFAULT_TRACK_REVEAL_SECONDS;
+
     public DepartureBoardBlockEntity(BlockPos pos, BlockState state) {
         super(state.getBlock() instanceof DepartureBoardBlock board && board.hanging
                 ? MtrPids.DEPARTURE_BOARD_HANGING_BLOCK_ENTITY
@@ -42,6 +49,7 @@ public class DepartureBoardBlockEntity extends BlockEntity {
         super.writeNbt(nbt);
         nbt.putLongArray("Platforms", platformIds);
         nbt.putString("Title", title);
+        nbt.putInt("TrackRevealSeconds", trackRevealSeconds);
     }
 
     @Override
@@ -49,6 +57,9 @@ public class DepartureBoardBlockEntity extends BlockEntity {
         super.readNbt(nbt);
         setPlatformIds(nbt.getLongArray("Platforms"));
         setTitle(nbt.getString("Title"));
+        // Absent on boards placed before the reveal window existed: the default.
+        setTrackRevealSeconds(nbt.contains("TrackRevealSeconds")
+                ? nbt.getInt("TrackRevealSeconds") : RailroadPidsBlockEntity.DEFAULT_TRACK_REVEAL_SECONDS);
     }
 
     @Nullable
@@ -86,6 +97,16 @@ public class DepartureBoardBlockEntity extends BlockEntity {
 
     public String getTitle() {
         return title;
+    }
+
+    /** Seconds before departure at which the track number is announced (0 = always shown). */
+    public int getTrackRevealSeconds() {
+        return trackRevealSeconds;
+    }
+
+    public void setTrackRevealSeconds(int seconds) {
+        this.trackRevealSeconds = Math.max(RailroadPidsBlockEntity.MIN_TRACK_REVEAL_SECONDS,
+                Math.min(RailroadPidsBlockEntity.MAX_TRACK_REVEAL_SECONDS, seconds));
     }
 
     public void setTitle(String title) {

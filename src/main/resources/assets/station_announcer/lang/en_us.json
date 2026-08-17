@@ -486,5 +486,16 @@
   "block.station_announcer.track_warning_sign_gate": "Do Not Cross Tracks Sign (Gate)",
   "gui.station_announcer.depot_groups.refresh": "Refresh Offsets",
   "gui.station_announcer.depot_groups.refresh.tip": "Recompute the stagger from each depot's current frequency and rewrite the grouped depots' departures now. Use after changing a depot's frequency. Offsets are 0 for real-time departures - the stagger needs frequency sliders.",
-  "msg.station_announcer.depot_group.refreshed": "Depot group offsets recomputed and departures rewritten"
+  "msg.station_announcer.depot_group.refreshed": "Depot group offsets recomputed and departures rewritten",
+  "gui.station_announcer.next_train.on": "Light up: %ss before arrival",
+  "gui.station_announcer.next_train.off": "Go dark: %ss after arrival",
+  "gui.station_announcer.next_train.arrows": "Arrow per track",
+  "gui.station_announcer.next_train.arrow": "%s",
+  "gui.station_announcer.next_train.arrow.auto": "Auto (toward platform)",
+  "gui.station_announcer.next_train.arrow.left": "← Left",
+  "gui.station_announcer.next_train.arrow.right": "Right →",
+  "gui.station_announcer.next_train.arrow.down": "↓ Below",
+  "gui.station_announcer.next_train.arrow.tip": "Left/Right are as seen from the sign's front face; the back face mirrors automatically, so both faces point at the same physical track.",
+  "gui.station_announcer.next_train.more": "Timing...",
+  "gui.station_announcer.next_train.more.tip": "Light-up/go-dark timing and the per-track arrows. Also opens by right-clicking the mini with an empty hand."
 }

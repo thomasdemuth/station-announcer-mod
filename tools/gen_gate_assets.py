@@ -335,6 +335,23 @@ def swing(element):
     return swung
 
 
+def swing_about(element, hx, hz):
+    """Rotate a box 90 degrees about a vertical hinge line, faces and all.
+
+    Same point map as the exit door's swing, but with the hinge passed in so
+    the track gate can use its own. Boxes leave the 0..16 range when they swing
+    - legal, and the reason every face here already carries explicit uv.
+    """
+    x0, y0, z0 = element["from"]
+    x1, y1, z1 = element["to"]
+    ax, az = hx + (z0 - hz), hz - (x0 - hx)
+    bx, bz = hx + (z1 - hz), hz - (x1 - hx)
+    swung = {"from": [min(ax, bx), y0, min(az, bz)],
+             "to": [max(ax, bx), y1, max(az, bz)],
+             "faces": {SWING_FACES[f]: dict(face) for f, face in element["faces"].items()}}
+    return swung
+
+
 def face_set(tex, uv, sides=("north", "south", "east", "west", "up", "down")):
     return {f: {"texture": tex, "uv": list(uv)} for f in sides}
 
@@ -483,6 +500,8 @@ BLOCK_PROPS = {
     "gate_scroll": {"facing", "up", "down", "left", "right", "post"},
     "gate_grille": {"facing", "up", "down", "left", "right", "post"},
     "emergency_exit_door": {"facing", "half", "open", "powered", "alarm", "left", "right"},
+    "track_warning_sign_wall": {"facing"},
+    "track_warning_sign_gate": {"facing", "open"},
 }
 
 
@@ -490,6 +509,13 @@ def verify_blockstates():
     problems = []
     for name, props in BLOCK_PROPS.items():
         bs = json.load(open(os.path.join(ASSETS, "blockstates", name + ".json")))
+        for key, entry in bs.get("variants", {}).items():
+            unknown = {kv.split("=")[0] for kv in key.split(",") if kv} - props
+            if unknown:
+                problems.append(f"{name}: variant keys {sorted(unknown)} not on the block")
+            model = entry["model"].split(":")[1]
+            if not os.path.exists(os.path.join(ASSETS, "models", model + ".json")):
+                problems.append(f"{name}: missing model {model}")
         for part in bs.get("multipart", []):
             when = part["when"]
             for clause in (when.get("OR", [when]) if "OR" in when else [when]):
@@ -595,15 +621,22 @@ def warning_sign():
     for y in range(64):
         for x in range(64):
             rows[y][x] = RED
+    # THE BLACK TOP CAP. Every one of these plates has it, and it is what the
+    # box edges sample: a vertical strip taken from the plate's left edge comes
+    # out black at the top and red below, which is exactly the side of the box
+    # in the photos. Keeping it in the texture rather than as geometry means
+    # one 64 px plate skins the front, both sides and the cap.
+    for y in range(CAP_ROWS):
+        for x in range(64):
+            rows[y][x] = IRON if y else IRON_LIT
     for x in range(64):                    # a darker rim so the plate has an edge
-        rows[0][x] = RED_DARK
         rows[63][x] = RED_DARK
-    for y in range(64):
+    for y in range(CAP_ROWS, 64):
         rows[y][0] = RED_DARK
         rows[y][63] = RED_DARK
 
-    # the roundel, top-centre
-    cx, cy, r = 32.0, 19.0, 13.0
+    # the roundel, below the cap
+    cx, cy, r = 32.0, 23.0, 11.0
     arc(rows, cx, cy, r, WHITE, 3.0)
     for i in range(-int(r), int(r) + 1):    # the slash
         for t in (-1, 0, 1):
@@ -618,32 +651,93 @@ def warning_sign():
     return rows
 
 
+# Cap depth in texture rows, and the same measurement in uv units (4 rows = 1 uv).
+CAP_ROWS = 6
+CAP_UV = CAP_ROWS / 4.0
+
+
+SIGN_TEX = f"{MOD}:block/track_warning_sign"
+
+# The plate box: 14 x 14 face, standing 3.5 px proud of whatever it is on.
+PLATE = dict(x0=1.0, x1=15.0, y0=1.0, y1=15.0, depth=3.5)
+
+# Hinge geometry for the gate variant, in the FACING=north frame: a square
+# steel post at the left edge, the plate hung off it on two visible hinges.
+POST = dict(x0=0.0, x1=3.0, z0=4.5, z1=10.5)
+LEAF = dict(x0=3.0, x1=14.5, y0=2.5, y1=14.5, z0=6.75, z1=9.25)
+HINGE_X, HINGE_Z = 3.0, 8.0
+
+
+def sign_faces(depth, front="north", back=None, back_cull=None):
+    """Faces for a sign box, every edge taking a real slice of the plate.
+
+    The edges are NOT a separate flat texture: a vertical strip cut from the
+    plate's own left margin is black across the cap and red below it, which is
+    what the side of the box actually looks like. The previous version
+    stretched pids_frame over all four edges, and that is what made it read as
+    a floating panel rather than a box screwed to the wall.
+    """
+    faces = {front: {"texture": "#sign", "uv": [0, 0, 16, 16]}}
+    # left-margin strip, as deep as the box and as tall as the plate
+    edge_uv = [0.5, 0.5, 0.5 + depth, 15.5]
+    faces["east"] = {"texture": "#sign", "uv": list(edge_uv)}
+    faces["west"] = {"texture": "#sign", "uv": list(edge_uv)}
+    # the cap wraps over the top; the underside is plain red
+    faces["up"] = {"texture": "#sign", "uv": [1, 0, 15, CAP_UV]}
+    faces["down"] = {"texture": "#sign", "uv": [1, 16 - CAP_UV, 15, 16]}
+    if back:
+        faces[back] = {"texture": "#sign", "uv": [16, 0, 0, 16]}
+    elif back_cull:
+        faces[back_cull[0]] = {"texture": "#sign", "uv": [2, 2, 14, 14],
+                               "cullface": back_cull[1]}
+    return faces
+
+
 def write_warning_models():
-    """Wall variant sits on the wall behind; gate variant sits on the block
-    centre plane, the SAME plane as the dividing walls, so it can be dropped
-    into a run of them and read as one fence."""
-    for name, z1, z2, double_sided in (("track_warning_sign_wall", 13, 16, False),
-                                       ("track_warning_sign_gate", 6, 10, True)):
-        faces = {"north": {"texture": "#sign", "uv": [0, 0, 16, 16]}}
-        if double_sided:
-            faces["south"] = {"texture": "#sign", "uv": [16, 0, 0, 16]}
-        else:
-            faces["south"] = {"texture": "#frame", "uv": [0, 0, 16, 16], "cullface": "south"}
-        for side in ("east", "west", "up", "down"):
-            faces[side] = {"texture": "#frame", "uv": [0, 0, 16, 3]}
-        wj(os.path.join(ASSETS, "models/block", name + ".json"), {
-            "parent": "minecraft:block/block",
-            "textures": {"sign": f"{MOD}:block/track_warning_sign",
-                         "frame": f"{MOD}:block/pids_frame",
-                         "particle": f"{MOD}:block/track_warning_sign"},
-            "elements": [{"from": [0, 0, z1], "to": [16, 16, z2], "faces": faces}],
-        })
-        wj(os.path.join(ASSETS, "blockstates", name + ".json"), {"variants": {
-            f"facing={d}": ({"model": f"{MOD}:block/{name}"} if r == 0
-                            else {"model": f"{MOD}:block/{name}", "y": r})
-            for d, r in (("north", 0), ("east", 90), ("south", 180), ("west", 270))}})
-        wj(os.path.join(ASSETS, "models/item", name + ".json"), {"parent": f"{MOD}:block/{name}"})
-    print("warning sign models written")
+    """The wall plate is a box proud of the wall; the gate is a hinged leaf."""
+    textures = {"sign": SIGN_TEX, "iron": IRON_TEX, "steel": STEEL_TEX,
+                "particle": SIGN_TEX}
+
+    # ---- wall variant: a box screwed to the wall behind it
+    piece("track_warning_sign_wall", [{
+        "from": [PLATE["x0"], PLATE["y0"], 16 - PLATE["depth"]],
+        "to": [PLATE["x1"], PLATE["y1"], 16],
+        "faces": sign_faces(PLATE["depth"], back_cull=("south", "south")),
+    }], textures)
+
+    # ---- gate variant: hinge post (fixed) + leaf (swings)
+    post = {"from": [POST["x0"], 0, POST["z0"]],
+            "to": [POST["x1"], 16, POST["z1"]],
+            "faces": face_set("#iron", [0, 0, 3, 16],
+                              ("north", "south", "east", "west", "up", "down"))}
+
+    def hinge(y):
+        return {"from": [POST["x1"] - 0.5, y, LEAF["z0"] - 0.5],
+                "to": [LEAF["x0"] + 1.5, y + 1.5, LEAF["z1"] + 0.5],
+                "faces": face_set("#steel", [0, 0, 2, 2])}
+
+    leaf = {"from": [LEAF["x0"], LEAF["y0"], LEAF["z0"]],
+            "to": [LEAF["x1"], LEAF["y1"], LEAF["z1"]],
+            "faces": sign_faces(LEAF["z1"] - LEAF["z0"], back="south")}
+
+    swinging = [leaf, hinge(4.0), hinge(11.0)]
+    piece("track_warning_sign_gate", [post] + swinging, textures)
+    piece("track_warning_sign_gate_open",
+          [post] + [swing_about(e, HINGE_X, HINGE_Z) for e in swinging], textures)
+
+    wj(os.path.join(ASSETS, "blockstates", "track_warning_sign_wall.json"), {"variants": {
+        f"facing={d}": ({"model": f"{MOD}:block/track_warning_sign_wall"} if r == 0
+                        else {"model": f"{MOD}:block/track_warning_sign_wall", "y": r})
+        for d, r in FACINGS}})
+    wj(os.path.join(ASSETS, "blockstates", "track_warning_sign_gate.json"), {"variants": {
+        f"facing={d},open={o}": ({"model": f"{MOD}:block/track_warning_sign_gate{suffix}"}
+                                 if r == 0 else
+                                 {"model": f"{MOD}:block/track_warning_sign_gate{suffix}", "y": r})
+        for d, r in FACINGS for o, suffix in (("false", ""), ("true", "_open"))}})
+    for name in ("track_warning_sign_wall", "track_warning_sign_gate"):
+        wj(os.path.join(ASSETS, "models/item", name + ".json"),
+           {"parent": f"{MOD}:block/{name}"})
+    print("warning sign + gate models written")
 
 
 def main():

@@ -136,9 +136,10 @@ public final class ModContent {
     public static final FacingDecorBlock TRACK_WARNING_SIGN_WALL = new FacingDecorBlock(
             AbstractBlock.Settings.create().strength(1.5f).sounds(BlockSoundGroup.METAL).nonOpaque(),
             Block.createCuboidShape(0.0, 0.0, 13.0, 16.0, 16.0, 16.0));
-    public static final FacingDecorBlock TRACK_WARNING_SIGN_GATE = new FacingDecorBlock(
-            AbstractBlock.Settings.create().strength(1.5f).sounds(BlockSoundGroup.METAL).nonOpaque(),
-            Block.createCuboidShape(0.0, 0.0, 6.0, 16.0, 16.0, 10.0));
+    /** A real hinged gate: right-click swings the plate off its post. */
+    public static final com.stationannouncer.block.TrackWarningGateBlock TRACK_WARNING_SIGN_GATE =
+            new com.stationannouncer.block.TrackWarningGateBlock(
+                    AbstractBlock.Settings.create().strength(1.5f).sounds(BlockSoundGroup.METAL).nonOpaque());
 
     public static final BlockItem TRACK_WARNING_SIGN_WALL_ITEM =
             new BlockItem(TRACK_WARNING_SIGN_WALL, new Item.Settings());

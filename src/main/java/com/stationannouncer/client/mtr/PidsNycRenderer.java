@@ -74,9 +74,10 @@ public class PidsNycRenderer implements BlockEntityRenderer<PidsBlockEntity> {
                 matrices.multiply(RotationAxis.POSITIVE_Y.rotationDegrees(180.0f));
             }
             // Each side of a double-sided screen faces the opposite way — the
-            // next-train arrow must flip with it.
+            // next-train arrow must flip with it (mirrored = the back face, so
+            // a fixed left/right override still points at the same physical track).
             paintScreen(entity, matrices, vertexConsumers, side == 1 ? facing.getOpposite() : facing,
-                    data, happeningNow);
+                    side == 1, data, happeningNow);
             matrices.pop();
         }
         matrices.pop();
@@ -91,7 +92,7 @@ public class PidsNycRenderer implements BlockEntityRenderer<PidsBlockEntity> {
     }
 
     private void paintScreen(PidsBlockEntity entity, MatrixStack matrices, VertexConsumerProvider vertexConsumers,
-                             Direction screenFacing, ArrivalData data, String happeningNow) {
+                             Direction screenFacing, boolean mirrored, ArrivalData data, String happeningNow) {
         PidsStyle style = entity.style;
         float screenWidth;
         float top;
@@ -140,7 +141,7 @@ public class PidsNycRenderer implements BlockEntityRenderer<PidsBlockEntity> {
                     paintDepartures(painter, arrivals, happeningNow, noPlatforms, canvasHeight);
             case HANGING_MINI -> {
                 if (entity.isNextTrainMode()) {
-                    paintNextTrain(painter, entity, arrivals, canvasHeight, screenFacing);
+                    paintNextTrain(painter, entity, arrivals, canvasHeight, screenFacing, mirrored);
                 } else {
                     paintHangingMini(painter, arrivals, noPlatforms, canvasHeight);
                 }
@@ -596,15 +597,17 @@ public class PidsNycRenderer implements BlockEntityRenderer<PidsBlockEntity> {
     }
 
     /**
-     * "Next train" indicator: lit (centered white text on black) while the
-     * next train is ≤1 min away; goes dark 5 s after the countdown hits 0 and
-     * won't relight for at least 10 s.
+     * "Next train" indicator: lit (centered white text on black) from the
+     * configured seconds before arrival until the configured seconds after,
+     * with a 10 s relight cooldown so it never flickers between close trains.
+     * Both edges are per-block sliders on the mini's click screen.
      */
     private void paintNextTrain(CanvasPainter painter, PidsBlockEntity entity, List<ArrivalResponse> arrivals,
-                                int canvasHeight, Direction screenFacing) {
+                                int canvasHeight, Direction screenFacing, boolean mirrored) {
         long now = System.currentTimeMillis();
         long remaining = arrivals.isEmpty() ? Long.MAX_VALUE : remainingMillis(arrivals.get(0));
-        boolean shouldLight = remaining <= 60_000 && remaining > -5_000;
+        boolean shouldLight = remaining <= entity.getNextTrainOnSeconds() * 1_000L
+                && remaining > -entity.getNextTrainOffSeconds() * 1_000L;
 
         long[] state = NEXT_TRAIN_STATE.computeIfAbsent(entity.getPos().asLong(), key -> new long[]{0, 0});
         boolean lit = state[0] == 1;
@@ -619,8 +622,19 @@ public class PidsNycRenderer implements BlockEntityRenderer<PidsBlockEntity> {
         if (!lit) {
             return;
         }
-        // Point toward the arriving train's platform, like the real mezzanine signs.
-        String arrow = arrivals.isEmpty() ? "" : platformArrow(entity, arrivals.get(0), screenFacing);
+        // Point toward the arriving train's platform, like the real mezzanine
+        // signs — unless this track carries an override. Overrides are stored
+        // as seen from the FRONT face; the back face mirrors left/right so both
+        // faces point at the same physical direction.
+        String arrow = "";
+        if (!arrivals.isEmpty()) {
+            arrow = switch (entity.arrowFor(arrivals.get(0).getPlatformId())) {
+                case PidsBlockEntity.ARROW_LEFT -> mirrored ? "→" : "←";
+                case PidsBlockEntity.ARROW_RIGHT -> mirrored ? "←" : "→";
+                case PidsBlockEntity.ARROW_DOWN -> "↓";
+                default -> platformArrow(entity, arrivals.get(0), screenFacing);
+            };
+        }
         String text = switch (arrow) {
             case "←" -> "← Next train";
             case "→" -> "Next train →";

@@ -1,18 +1,33 @@
 {
   "variants": {
-    "facing=north": {
+    "facing=north,open=false": {
       "model": "station_announcer:block/track_warning_sign_gate"
     },
-    "facing=east": {
+    "facing=north,open=true": {
+      "model": "station_announcer:block/track_warning_sign_gate_open"
+    },
+    "facing=east,open=false": {
       "model": "station_announcer:block/track_warning_sign_gate",
       "y": 90
     },
-    "facing=south": {
+    "facing=east,open=true": {
+      "model": "station_announcer:block/track_warning_sign_gate_open",
+      "y": 90
+    },
+    "facing=south,open=false": {
       "model": "station_announcer:block/track_warning_sign_gate",
       "y": 180
     },
-    "facing=west": {
+    "facing=south,open=true": {
+      "model": "station_announcer:block/track_warning_sign_gate_open",
+      "y": 180
+    },
+    "facing=west,open=false": {
       "model": "station_announcer:block/track_warning_sign_gate",
+      "y": 270
+    },
+    "facing=west,open=true": {
+      "model": "station_announcer:block/track_warning_sign_gate_open",
       "y": 270
     }
   }

@@ -37,7 +37,7 @@ import java.util.List;
  * </ul>
  * Linking a speaker that already belongs to another box moves it (both boxes
  * update). All logic runs on the server; distance limit comes from the server
- * config ({@code maxLinkDistance}, default 128 blocks, same dimension only).
+ * config ({@code maxLinkDistance}, default 500 blocks, same dimension only).
  */
 public class SpeakerLinkItem extends Item {
     private static final String NBT_SELECTED_POS = "SelectedPos";

@@ -219,6 +219,24 @@ alternating terminal tracks, platform groups as culprit.
 
 ### TRACKSIDE / ENTRANCE SIGNAGE (2026-08-09)
 
+**REBUILT FROM THE PHOTOS (2026-08-10).** Both variants were one 16x16 box with
+`pids_frame` stretched over every edge (`uv [0,0,16,3]`) — a floating panel, not a sign.
+Now:
+- The plate texture carries a **black top cap** (rows 0..5), and the box edges take REAL
+  SLICES of that same plate: a vertical strip from its left margin is black across the cap
+  and red below, which is exactly what the side of the box looks like in the photo. One
+  64 px texture skins the front, both sides and the cap — no separate edge texture.
+- **Wall variant** is a 14x14 box standing 3.5 px proud of the wall (was flush and
+  full-block), `cullface: south` on the back.
+- **Gate variant** is a real hinged gate: a fixed square post at the left edge, two steel
+  hinges, and a leaf that SWINGS on right-click. `block/TrackWarningGateBlock` (common —
+  no MTR needed) with FACING + OPEN; it implements `GateSection` so it drops into an
+  ironwork run. Closed it blocks the walkway; open, collision drops to nothing (the post
+  keeps only its outline). The open model is a true 90° rotation via `swing_about()`, a
+  generalised version of the exit door's swing that takes the hinge line as an argument —
+  the leaf pokes 3.5 px into the next block, which is what an open gate does.
+- The blockstate contract check now covers plain `variants` files too, not just multipart.
+
 - `track_warning_sign_wall` / `_gate` — the red "Do not enter or cross tracks" plate.
   The GATE variant sits on the block CENTRE plane (z 6..10), the same plane
   `GateWallBlock` uses, so it drops into a run of dividing walls and reads as part of the

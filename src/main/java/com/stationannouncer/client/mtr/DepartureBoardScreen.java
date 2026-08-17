@@ -32,6 +32,7 @@ public class DepartureBoardScreen extends Screen {
     private final DepartureBoardBlockEntity board;
     private final PlatformPicker picker;
     private String title;
+    private int trackRevealSeconds;
     private TextFieldWidget titleField;
 
     private int listLeft;
@@ -44,6 +45,7 @@ public class DepartureBoardScreen extends Screen {
         super(Text.translatable("gui.station_announcer.departure_board.title"));
         this.board = board;
         this.title = board.getTitle();
+        this.trackRevealSeconds = board.getTrackRevealSeconds();
         java.util.List<Long> configured = new java.util.ArrayList<>();
         for (long id : board.getPlatformIds()) {
             configured.add(id);
@@ -57,7 +59,7 @@ public class DepartureBoardScreen extends Screen {
         int left = (width - PANEL_WIDTH) / 2;
         int half = (PANEL_WIDTH - GAP) / 2;
 
-        int fixed = 14 + WIDGET_HEIGHT + GAP + 14 + 14 + 8 + WIDGET_HEIGHT;
+        int fixed = 14 + 2 * (WIDGET_HEIGHT + GAP) + 14 + 14 + 8 + WIDGET_HEIGHT;
         picker.fitTo(height - fixed - 44);
         int content = fixed + picker.getHeight();
         int y = Math.max(28, (height - content) / 2);
@@ -72,6 +74,15 @@ public class DepartureBoardScreen extends Screen {
         titleField.setChangedListener(value -> title = value);
         titleField.setPlaceholder(Text.translatable("gui.station_announcer.departure_board.header_hint"));
         addDrawableChild(titleField);
+        y += WIDGET_HEIGHT + GAP;
+
+        // In minutes on the slider; stored in seconds. 0 = always show the track.
+        addDrawableChild(new com.stationannouncer.client.gui.IntSlider(left, y, PANEL_WIDTH, WIDGET_HEIGHT,
+                0, 30, trackRevealSeconds / 60,
+                value -> value == 0
+                        ? Text.translatable("gui.station_announcer.departure_board.track_always")
+                        : Text.translatable("gui.station_announcer.departure_board.track_reveal", value),
+                value -> trackRevealSeconds = value * 60));
         y += WIDGET_HEIGHT + GAP;
 
         platformsCaptionY = y + 2;
@@ -104,6 +115,7 @@ public class DepartureBoardScreen extends Screen {
         PacketByteBuf buf = PacketByteBufs.create();
         buf.writeBlockPos(board.getPos());
         buf.writeString(title, DepartureBoardBlockEntity.MAX_TITLE_LENGTH);
+        buf.writeVarInt(trackRevealSeconds);
         java.util.Set<Long> selected = picker.getSelected();
         int count = Math.min(selected.size(), DepartureBoardBlockEntity.MAX_PLATFORMS);
         buf.writeVarInt(count);

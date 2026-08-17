@@ -116,12 +116,29 @@ public final class MtrPids {
         ServerPlayNetworking.registerGlobalReceiver(UPDATE_MINI_C2S, (server, player, handler, buf, responseSender) -> {
             BlockPos pos = buf.readBlockPos();
             boolean nextTrainMode = buf.readBoolean();
+            int onSeconds = buf.readVarInt();
+            int offSeconds = buf.readVarInt();
+            int count = Math.min(buf.readVarInt(), PidsBlockEntity.MAX_ARROW_OVERRIDES);
+            long[] arrowPlatforms = new long[Math.max(0, count)];
+            int[] arrowDirs = new int[arrowPlatforms.length];
+            for (int i = 0; i < arrowPlatforms.length; i++) {
+                arrowPlatforms[i] = buf.readLong();
+                arrowDirs[i] = buf.readByte();
+            }
             server.execute(() -> {
                 ServerWorld world = player.getServerWorld();
                 if (player.squaredDistanceTo(Vec3d.ofCenter(pos)) <= 64.0 * 64.0
                         && world.canPlayerModifyAt(player, pos)
                         && world.getBlockEntity(pos) instanceof PidsBlockEntity pids) {
                     pids.setNextTrainMode(nextTrainMode);
+                    pids.setNextTrainOnSeconds(onSeconds);
+                    pids.setNextTrainOffSeconds(offSeconds);
+                    // The screen sends the whole map every save; AUTO entries
+                    // are simply not sent, so replacing wholesale is correct.
+                    pids.clearNextTrainArrows();
+                    for (int i = 0; i < arrowPlatforms.length; i++) {
+                        pids.putNextTrainArrow(arrowPlatforms[i], arrowDirs[i]);
+                    }
                     pids.markDirty();
                     world.getChunkManager().markForUpdate(pos);
                 }
@@ -158,6 +175,7 @@ public final class MtrPids {
         ServerPlayNetworking.registerGlobalReceiver(UPDATE_DEPARTURE_BOARD_C2S, (server, player, handler, buf, responseSender) -> {
             BlockPos pos = buf.readBlockPos();
             String title = buf.readString(DepartureBoardBlockEntity.MAX_TITLE_LENGTH);
+            int trackRevealSeconds = buf.readVarInt();
             int count = Math.min(buf.readVarInt(), DepartureBoardBlockEntity.MAX_PLATFORMS);
             long[] platformIds = new long[Math.max(0, count)];
             for (int i = 0; i < platformIds.length; i++) {
@@ -182,6 +200,7 @@ public final class MtrPids {
                         BlockPos cell = rect.origin().up(y).offset(right, x);
                         if (world.getBlockEntity(cell) instanceof DepartureBoardBlockEntity board) {
                             board.setTitle(title);
+                            board.setTrackRevealSeconds(trackRevealSeconds);
                             board.setPlatformIds(platformIds);
                             board.sync();
                         }

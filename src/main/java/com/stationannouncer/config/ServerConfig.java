@@ -23,7 +23,7 @@ public class ServerConfig {
     public int maxTextLength = 512;
 
     /** Farthest a Speaker may be from the PA Control Box it links to (blocks). */
-    public int maxLinkDistance = 128;
+    public int maxLinkDistance = 500;
 
     public static synchronized ServerConfig get() {
         if (instance == null) {

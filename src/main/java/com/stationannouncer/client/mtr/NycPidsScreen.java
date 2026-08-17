@@ -127,10 +127,28 @@ public class NycPidsScreen extends Screen {
 
         if (style == PidsStyle.HANGING_MINI) {
             y += 8;
+            int toggleWidth = PANEL_WIDTH - 90 - GAP;
             addDrawableChild(CyclingButtonWidget.onOffBuilder(nextTrainMode)
-                    .build(left, y, PANEL_WIDTH, WIDGET_HEIGHT,
+                    .build(left, y, toggleWidth, WIDGET_HEIGHT,
                             Text.translatable("gui.station_announcer.next_train"),
                             (button, value) -> nextTrainMode = value));
+            // Timing sliders and per-track arrows live on the mini's own
+            // bare-click screen; the brush screen links there rather than
+            // duplicating them, but it must be reachable from HERE — the brush
+            // screen is where people look. Platforms/messages typed so far are
+            // NOT saved by this jump (this screen saves on Done only), which
+            // matches what Cancel already promises.
+            addDrawableChild(net.minecraft.client.gui.widget.ButtonWidget.builder(
+                            Text.translatable("gui.station_announcer.next_train.more"),
+                            button -> {
+                                if (client != null) {
+                                    MiniPidsScreen more = new MiniPidsScreen(pids);
+                                    client.setScreen(more);
+                                }
+                            })
+                    .tooltip(net.minecraft.client.gui.tooltip.Tooltip.of(
+                            Text.translatable("gui.station_announcer.next_train.more.tip")))
+                    .dimensions(left + toggleWidth + GAP, y, 90, WIDGET_HEIGHT).build());
             y += WIDGET_HEIGHT + GAP;
         }
 
