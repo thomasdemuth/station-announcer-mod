@@ -1,0 +1,16 @@
+{
+  "type": "minecraft:crafting_shaped",
+  "category": "building",
+  "key": {
+    "I": {
+      "item": "minecraft:iron_ingot"
+    }
+  },
+  "pattern": [
+    "III"
+  ],
+  "result": {
+    "item": "station_announcer:subway_handrail_floating",
+    "count": 6
+  }
+}

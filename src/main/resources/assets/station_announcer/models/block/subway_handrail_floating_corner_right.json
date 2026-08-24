@@ -1,0 +1,263 @@
+{
+  "parent": "minecraft:block/block",
+  "textures": {
+    "rail": "station_announcer:block/handrail_steel",
+    "particle": "station_announcer:block/handrail_steel"
+  },
+  "elements": [
+    {
+      "from": [
+        7,
+        13.5,
+        7
+      ],
+      "to": [
+        9,
+        15.5,
+        16
+      ],
+      "faces": {
+        "up": {
+          "texture": "#rail",
+          "uv": [
+            0.25,
+            8,
+            9.25,
+            10
+          ]
+        },
+        "down": {
+          "texture": "#rail",
+          "uv": [
+            0.25,
+            8,
+            9.25,
+            10
+          ]
+        },
+        "north": {
+          "texture": "#rail",
+          "uv": [
+            2,
+            2,
+            4,
+            4
+          ]
+        },
+        "south": {
+          "texture": "#rail",
+          "uv": [
+            2,
+            2,
+            4,
+            4
+          ]
+        },
+        "west": {
+          "texture": "#rail",
+          "uv": [
+            0.25,
+            8,
+            9.25,
+            10
+          ]
+        },
+        "east": {
+          "texture": "#rail",
+          "uv": [
+            0.25,
+            8,
+            9.25,
+            10
+          ]
+        }
+      }
+    },
+    {
+      "from": [
+        7,
+        13.5,
+        7
+      ],
+      "to": [
+        9,
+        15.5,
+        16
+      ],
+      "faces": {
+        "up": {
+          "texture": "#rail",
+          "uv": [
+            0.25,
+            8,
+            9.25,
+            10
+          ]
+        },
+        "down": {
+          "texture": "#rail",
+          "uv": [
+            0.25,
+            8,
+            9.25,
+            10
+          ]
+        },
+        "west": {
+          "texture": "#rail",
+          "uv": [
+            0.25,
+            8,
+            9.25,
+            10
+          ]
+        },
+        "east": {
+          "texture": "#rail",
+          "uv": [
+            0.25,
+            8,
+            9.25,
+            10
+          ]
+        }
+      },
+      "rotation": {
+        "origin": [
+          8.0,
+          14.5,
+          11.5
+        ],
+        "axis": "z",
+        "angle": -45
+      }
+    },
+    {
+      "from": [
+        7,
+        13.5,
+        7
+      ],
+      "to": [
+        16,
+        15.5,
+        9
+      ],
+      "faces": {
+        "north": {
+          "texture": "#rail",
+          "uv": [
+            0.25,
+            8,
+            9.25,
+            10
+          ]
+        },
+        "south": {
+          "texture": "#rail",
+          "uv": [
+            0.25,
+            8,
+            9.25,
+            10
+          ]
+        },
+        "up": {
+          "texture": "#rail",
+          "uv": [
+            0.25,
+            8,
+            9.25,
+            10
+          ]
+        },
+        "down": {
+          "texture": "#rail",
+          "uv": [
+            0.25,
+            8,
+            9.25,
+            10
+          ]
+        },
+        "west": {
+          "texture": "#rail",
+          "uv": [
+            2,
+            2,
+            4,
+            4
+          ]
+        },
+        "east": {
+          "texture": "#rail",
+          "uv": [
+            2,
+            2,
+            4,
+            4
+          ]
+        }
+      }
+    },
+    {
+      "from": [
+        7,
+        13.5,
+        7
+      ],
+      "to": [
+        16,
+        15.5,
+        9
+      ],
+      "faces": {
+        "north": {
+          "texture": "#rail",
+          "uv": [
+            0.25,
+            8,
+            9.25,
+            10
+          ]
+        },
+        "south": {
+          "texture": "#rail",
+          "uv": [
+            0.25,
+            8,
+            9.25,
+            10
+          ]
+        },
+        "up": {
+          "texture": "#rail",
+          "uv": [
+            0.25,
+            8,
+            9.25,
+            10
+          ]
+        },
+        "down": {
+          "texture": "#rail",
+          "uv": [
+            0.25,
+            8,
+            9.25,
+            10
+          ]
+        }
+      },
+      "rotation": {
+        "origin": [
+          11.5,
+          14.5,
+          8.0
+        ],
+        "axis": "x",
+        "angle": 45
+      }
+    }
+  ]
+}
