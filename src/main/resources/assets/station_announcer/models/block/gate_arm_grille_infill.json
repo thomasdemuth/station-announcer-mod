@@ -1,0 +1,29 @@
+{
+  "parent": "minecraft:block/block",
+  "textures": {
+    "mesh": "station_announcer:block/gate_grille",
+    "particle": "station_announcer:block/gate_iron"
+  },
+  "elements": [
+    {
+      "from": [
+        0,
+        0,
+        7.5
+      ],
+      "to": [
+        8,
+        16,
+        8.5
+      ],
+      "faces": {
+        "north": {
+          "texture": "#mesh"
+        },
+        "south": {
+          "texture": "#mesh"
+        }
+      }
+    }
+  ]
+}

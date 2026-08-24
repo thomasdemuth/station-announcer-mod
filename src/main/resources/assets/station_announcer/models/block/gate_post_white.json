@@ -1,0 +1,59 @@
+{
+  "parent": "minecraft:block/block",
+  "textures": {
+    "iron": "station_announcer:block/employee_door_paint",
+    "particle": "station_announcer:block/employee_door_paint"
+  },
+  "elements": [
+    {
+      "from": [
+        -0.8,
+        0,
+        4.5
+      ],
+      "to": [
+        0.8,
+        16,
+        11.5
+      ],
+      "faces": {
+        "north": {
+          "texture": "#iron",
+          "uv": [
+            0,
+            0,
+            3,
+            16
+          ]
+        },
+        "south": {
+          "texture": "#iron",
+          "uv": [
+            0,
+            0,
+            3,
+            16
+          ]
+        },
+        "east": {
+          "texture": "#iron",
+          "uv": [
+            0,
+            0,
+            3,
+            16
+          ]
+        },
+        "west": {
+          "texture": "#iron",
+          "uv": [
+            0,
+            0,
+            3,
+            16
+          ]
+        }
+      }
+    }
+  ]
+}

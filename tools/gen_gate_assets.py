@@ -292,6 +292,26 @@ def write_gate_pieces():
                          ("north", "south", "east", "west")))
     piece("gate_bars_infill", bars, iron)
 
+    # ---- corner pieces (fence logic): where a run TURNS, the cell renders as
+    # half-arms meeting at a square centre post instead of a flat panel. The
+    # arm is authored pointing WEST (x 0..8) and the blockstate rotates it to
+    # whichever sides connect; its inner end buries inside the centre post
+    # (4.5..11.5 both axes) and its outer end stops at the boundary, where the
+    # neighbouring straight cell's panel or post takes over.
+    piece("gate_corner_post", [elem((POST_Z[0], 0, POST_Z[0]), (POST_Z[1], 16, POST_Z[1]),
+                                    "#iron", ("north", "south", "east", "west"),
+                                    uv=[0, 0, 7, 16])], iron)
+    for name, y0, y1 in (("gate_arm_rail_bottom", 0.5, 2.5), ("gate_arm_rail_top", 13.5, 15.5)):
+        piece(name, [elem((0, y0, RAIL_Z[0]), (8, y1, RAIL_Z[1]), "#iron",
+                          ("north", "south", "up", "down"))], iron)
+    # one upright per half-arm, on the same pitch as the run
+    piece("gate_arm_bars_infill",
+          [elem((BAR_PITCH - BAR_HALF, 0, BAR_Z[0]), (BAR_PITCH + BAR_HALF, 16, BAR_Z[1]),
+                "#iron", ("north", "south", "east", "west"))], iron)
+    piece("gate_arm_grille_infill",
+          [elem((0, 0, 7.5), (8, 16, 8.5), "#mesh", ("north", "south"))],
+          {"mesh": f"{MOD}:block/gate_grille", "particle": IRON_TEX})
+
     # The grille variant fills the same frame with a mesh panel, recessed
     # slightly so the frame still stands proud of it.
     # Full block width: at 3..13 it left a 3 px hole at each end and the run
@@ -307,9 +327,16 @@ MESH_TEX = f"{MOD}:block/gate_grille"
 SIGN_HEADER_TEX = f"{MOD}:block/gate_door_sign_header"
 SIGN_PUSHBAR_TEX = f"{MOD}:block/gate_door_sign_pushbar"
 
-# The door leaf hinges on the shared post at the left block edge and swings
+# The door leaf hinges at the shared post on the left block edge and swings
 # toward the UNPAID side (model north) - you push your way out.
-HINGE_X, HINGE_Z = 0.0, 8.0
+#
+# NAME COLLISION, found 2026-08-17: this used to be called HINGE_X/HINGE_Z, and
+# the track gate's constants of the same name are defined LATER at module scope
+# - so swing() has always run on the gate's hinge line (3.0), never the 0.0
+# written here, and every shipped door open model is the x=3 swing. Renaming
+# both keeps that geometry exactly as it is in game rather than changing an
+# unrelated block; 3.0 is the value in force, hinging on the post's inner face.
+DOOR_HINGE_X, DOOR_HINGE_Z = 3.0, 8.0
 
 # Face remap for a 90-degree swing about the hinge: north ends up facing west.
 SWING_FACES = {"north": "west", "west": "south", "south": "east", "east": "north",
@@ -328,8 +355,8 @@ def swing(element):
     x0, y0, z0 = element["from"]
     x1, y1, z1 = element["to"]
     # point map: x' = hx + (z - hz), z' = hz - (x - hx)
-    ax, az = HINGE_X + (z0 - HINGE_Z), HINGE_Z - (x0 - HINGE_X)
-    bx, bz = HINGE_X + (z1 - HINGE_Z), HINGE_Z - (x1 - HINGE_X)
+    ax, az = DOOR_HINGE_X + (z0 - DOOR_HINGE_Z), DOOR_HINGE_Z - (x0 - DOOR_HINGE_X)
+    bx, bz = DOOR_HINGE_X + (z1 - DOOR_HINGE_Z), DOOR_HINGE_Z - (x1 - DOOR_HINGE_X)
     swung = {"from": [min(ax, bx), y0, min(az, bz)], "to": [max(ax, bx), y1, max(az, bz)]}
     swung["faces"] = {SWING_FACES[f]: dict(face) for f, face in element["faces"].items()}
     return swung
@@ -430,22 +457,31 @@ FACINGS = (("north", 0), ("east", 90), ("south", 180), ("west", 270))
 
 
 def multipart(infill_model, leaf=False):
-    """The shared frame, plus whatever fills it."""
+    """The shared frame, plus whatever fills it.
+
+    Walls carry a BEND state (fence logic, 2026-08-18): where the run turns a
+    corner, the flat panel is replaced by half-arms meeting at a square centre
+    post. Every straight part is therefore gated on bend=none, and the arm
+    parts below draw the corner. The doors have no bend property.
+    """
     parts = []
+    arm_infill = None if leaf else ("gate_arm_grille_infill" if "grille" in infill_model
+                                    else "gate_arm_bars_infill")
     for facing, y in FACINGS:
         base = {"facing": facing}
+        straight = base if leaf else dict(base, bend="none")
         # Every section draws its LEFT post; only a right-hand end closes the
         # run. That is what makes a joint one post instead of two.
         # The POST condition exists only on the walls. The door has no such
         # property - a doorway always needs its hinge post - and conditioning
         # on a property the block lacks makes the CLIENT reject the whole
         # blockstate file: every door rendered as the purple missing-model box.
-        parts.append({"when": dict(base, **({} if leaf else {"post": "true"})),
+        parts.append({"when": dict(straight, **({} if leaf else {"post": "true"})),
                       "apply": rot("gate_post", y)})
-        parts.append({"when": dict(base, right="false"), "apply": rot("gate_post_right", y)})
+        parts.append({"when": dict(straight, right="false"), "apply": rot("gate_post_right", y)})
         if not leaf:
-            parts.append({"when": dict(base, down="false"), "apply": rot("gate_rail_bottom", y)})
-            parts.append({"when": dict(base, up="false"), "apply": rot("gate_rail_top", y)})
+            parts.append({"when": dict(straight, down="false"), "apply": rot("gate_rail_bottom", y)})
+            parts.append({"when": dict(straight, up="false"), "apply": rot("gate_rail_top", y)})
         if leaf:
             for half in ("lower", "upper"):
                 parts.append({"when": dict(base, half=half, open="false"),
@@ -454,7 +490,26 @@ def multipart(infill_model, leaf=False):
                               "apply": rot("gate_door_leaf_open_" + half, y)})
 
         else:
-            parts.append({"when": dict(base), "apply": rot(infill_model, y)})
+            parts.append({"when": dict(straight), "apply": rot(infill_model, y)})
+
+        if leaf:
+            continue
+        # ---- the corner: centre post + an arm per connected side. The arm
+        # model is authored toward WEST; +90 steps go west->north->east->south
+        # (vanilla blockstate y rotation), and the run's left for facing=north
+        # IS west, so left/right arms are +0/+180 off the facing rotation and
+        # the bend arm +90 (front, toward the facing) or +270 (back).
+        parts.append({"when": dict(base, bend="front|back"),
+                      "apply": rot("gate_corner_post", y)})
+        arms = (("front", {"bend": "front"}, 90), ("back", {"bend": "back"}, 270),
+                ("left", {"bend": "front|back", "left": "true"}, 0),
+                ("right", {"bend": "front|back", "right": "true"}, 180))
+        for _, cond, off in arms:
+            arm_rot = (y + off) % 360
+            when = dict(base, **cond)
+            parts.append({"when": when, "apply": rot(arm_infill, arm_rot)})
+            parts.append({"when": dict(when, down="false"), "apply": rot("gate_arm_rail_bottom", arm_rot)})
+            parts.append({"when": dict(when, up="false"), "apply": rot("gate_arm_rail_top", arm_rot)})
     return parts
 
 
@@ -491,17 +546,19 @@ def write_models():
        {"parent": "minecraft:item/generated",
         "textures": {"layer0": f"{MOD}:item/emergency_exit_door"}})
     print("3D gate geometry written")
-    verify_blockstates()
 
 
 # Every when-key must be a property the Java block declares - one unknown key
 # makes the client reject the whole file (the 2.4.8 purple-box bug).
 BLOCK_PROPS = {
-    "gate_scroll": {"facing", "up", "down", "left", "right", "post"},
-    "gate_grille": {"facing", "up", "down", "left", "right", "post"},
+    "gate_scroll": {"facing", "up", "down", "left", "right", "post", "bend"},
+    "gate_grille": {"facing", "up", "down", "left", "right", "post", "bend"},
     "emergency_exit_door": {"facing", "half", "open", "powered", "alarm", "left", "right"},
     "track_warning_sign_wall": {"facing"},
-    "track_warning_sign_gate": {"facing", "open"},
+    "track_warning_sign_gate": {"facing", "open", "hinge"},
+    "employee_door_mesh": {"facing", "half", "left", "right"},
+    "employee_door_black": {"facing", "half", "left", "right"},
+    "employee_door_white": {"facing", "half", "left", "right"},
 }
 
 
@@ -658,14 +715,34 @@ CAP_UV = CAP_ROWS / 4.0
 
 SIGN_TEX = f"{MOD}:block/track_warning_sign"
 
-# The plate box: 14 x 14 face, standing 3.5 px proud of whatever it is on.
-PLATE = dict(x0=1.0, x1=15.0, y0=1.0, y1=15.0, depth=3.5)
+# The plate box: 14 x 14 face, standing ONE PIXEL proud of whatever it is on.
+# It is a sign screwed flat to the wall, not a cabinet: 3.5 px read as a box.
+PLATE = dict(x0=1.0, x1=15.0, y0=1.0, y1=15.0, depth=1.0)
 
-# Hinge geometry for the gate variant, in the FACING=north frame: a square
-# steel post at the left edge, the plate hung off it on two visible hinges.
-POST = dict(x0=0.0, x1=3.0, z0=4.5, z1=10.5)
-LEAF = dict(x0=3.0, x1=14.5, y0=2.5, y1=14.5, z0=6.75, z1=9.25)
-HINGE_X, HINGE_Z = 3.0, 8.0
+# Hinge geometry for the gate variant, in the FACING=north frame: a slim steel
+# post at the left edge, the plate hung off it on two visible hinges. The post
+# is 2 px wide - the same gauge as the ironwork it stands in a run with.
+POST = dict(x0=0.0, x1=2.0, z0=4.5, z1=10.5)
+LEAF = dict(x0=2.0, x1=14.5, y0=2.5, y1=14.5, z0=6.75, z1=9.25)
+GATE_HINGE_X, GATE_HINGE_Z = 2.0, 8.0
+
+# Mirroring a gate across the block's centre line gives the right-hinged
+# variant: geometry mirrors and east/west face names swap, but the uv stays AS
+# AUTHORED. Face uv is oriented to the viewer's screen, not to geometry x, so
+# moving a box does not turn its texture - and swapping the u range is exactly
+# what MIRRORS the lettering (learned in game: the first cut flipped u and the
+# right-hand gate read "RETNE TON OD"). The swung-open model mirrors too, so
+# it opens the other way.
+MIRROR_FACES = {"north": "north", "south": "south", "up": "up", "down": "down",
+                "east": "west", "west": "east"}
+
+
+def mirror_x(element):
+    x0, y0, z0 = element["from"]
+    x1, y1, z1 = element["to"]
+    return {"from": [16 - x1, y0, z0], "to": [16 - x0, y1, z1],
+            "faces": {MIRROR_FACES[name]: dict(face)
+                      for name, face in element["faces"].items()}}
 
 
 def sign_faces(depth, front="north", back=None, back_cull=None):
@@ -693,6 +770,146 @@ def sign_faces(depth, front="north", back=None, back_cull=None):
     return faces
 
 
+WHITE_TEX = f"{MOD}:block/employee_door_paint"
+
+EMPLOYEE_STYLES = ("mesh", "black", "white")
+
+
+def employee_paint():
+    """Off-white painted steel for the tiled variant.
+
+    The tone sits between the tile walls' white tile and their grout so the
+    door reads as part of the same wall. Shading varies VERTICALLY only (the
+    globe-pole rule): the leaf models span two stacked blocks and share this
+    texture, so any horizontal band would repeat at the half seam.
+    """
+    rows = canvas(16)
+    for y in range(16):
+        for x in range(16):
+            rows[y][x] = (224, 222, 215, 255)
+    for y in range(16):
+        rows[y][3] = (238, 236, 230, 255)    # sheen column
+        rows[y][4] = (231, 229, 223, 255)
+        rows[y][12] = (207, 205, 198, 255)   # shadowed side
+        rows[y][13] = (215, 213, 206, 255)
+    return rows
+
+
+def employee_leaf_elements(upper, style):
+    """One half of the employees-only door leaf.
+
+    Same bones as the emergency exit door (stiles burying inside the
+    4.5..11.5-deep posts, leaf 0.5..15.5) but a fixed leaf that never swings:
+    kick rail, two panels with a lock rail at the half seam, top rail. The
+    panels are wire mesh (cutout, top AND bottom - the user's spec), solid
+    black, or solid painted steel depending on the variant; the geometry is
+    shared so the three doors line up in a mixed run.
+    """
+    frame = "#frame"
+    e = []
+    # stiles both sides, full height of the half
+    e.append({"from": [0.5, 0, 6.5], "to": [2.5, 16, 9.5], "faces": face_set(frame, [0, 0, 2, 16])})
+    e.append({"from": [13.5, 0, 6.5], "to": [15.5, 16, 9.5], "faces": face_set(frame, [0, 0, 2, 16])})
+    if upper:
+        rails = ((0, 1.5), (14, 16))     # lock rail's upper lip + top rail
+        panel_y = (1.5, 14)
+    else:
+        rails = ((0, 2.5), (14.5, 16))   # kick rail + lock rail's lower lip
+        panel_y = (2.5, 14.5)
+    for y0, y1 in rails:
+        e.append({"from": [2.5, y0, 6.5], "to": [13.5, y1, 9.5],
+                  "faces": face_set(frame, [0, 0, 11, max(1, y1 - y0)])})
+    y0, y1 = panel_y
+    if style == "mesh":
+        # one cutout plane, like the exit door's window
+        e.append({"from": [2.5, y0, 7.6], "to": [13.5, y1, 8.4],
+                  "faces": face_set("#mesh", [1, 1, 12, 13], ("north", "south"))})
+    else:
+        e.append({"from": [2.5, y0, 7], "to": [13.5, y1, 9],
+                  "faces": face_set(frame, [1, 2, 15, 14])})
+    return e
+
+
+def employee_door_icon(style):
+    """Flat 16 px inventory icon per variant (2-tall models don't fit slots)."""
+    if style == "white":
+        body, frame_c = (224, 222, 215, 255), (196, 194, 187, 255)
+    else:
+        body, frame_c = (32, 33, 31, 255), (20, 20, 19, 255)
+    rows = canvas(16)
+    for y in range(0, 16):
+        for x in range(3, 13):
+            rows[y][x] = body
+    for y in range(0, 16):                  # stiles
+        rows[y][3] = frame_c
+        rows[y][12] = frame_c
+    for x in range(3, 13):                  # rails: top, lock, kick
+        rows[0][x] = frame_c
+        rows[7][x] = frame_c
+        rows[8][x] = frame_c
+        rows[15][x] = frame_c
+    if style == "mesh":
+        for y0, y1 in ((1, 7), (9, 15)):
+            for y in range(y0, y1):
+                for x in range(4, 12):
+                    if (x + y) % 2 == 0:
+                        rows[y][x] = (70, 72, 68, 255)
+    # the little label plate at eye level
+    for x in range(5, 11):
+        rows[3][x] = (233, 231, 226, 255)
+        rows[4][x] = (233, 231, 226, 255)
+    return rows
+
+
+def write_employee_doors():
+    """Three fixed staff doors sharing the gates' post rhythm.
+
+    No OPEN state and no swing models - an employees-only door is scenery that
+    never opens. The white variant carries white posts too, so it blends into
+    a tiled wall the way the user asked; the mesh and black ones keep the
+    ironwork posts of the run they stand in.
+    """
+    # white post pair: the shared gate_post geometry re-skinned
+    white = {"iron": WHITE_TEX, "particle": WHITE_TEX}
+    piece("gate_post_white", [elem((-BAR_HALF, 0, POST_Z[0]), (BAR_HALF, 16, POST_Z[1]),
+                                   "#iron", ("north", "south", "east", "west"),
+                                   uv=[0, 0, 3, 16])], white)
+    piece("gate_post_white_right", [elem((16 - BAR_HALF, 0, POST_Z[0]), (16 + BAR_HALF, 16, POST_Z[1]),
+                                         "#iron", ("north", "south", "east", "west"),
+                                         uv=[0, 0, 3, 16])], white)
+
+    for style in EMPLOYEE_STYLES:
+        frame_tex = WHITE_TEX if style == "white" else IRON_TEX
+        textures = {"frame": frame_tex, "mesh": MESH_TEX, "particle": frame_tex}
+        for half, upper in (("lower", False), ("upper", True)):
+            piece(f"employee_door_{style}_{half}", employee_leaf_elements(upper, style), textures)
+
+        post = "gate_post_white" if style == "white" else "gate_post"
+        post_right = "gate_post_white_right" if style == "white" else "gate_post_right"
+        parts = []
+        for facing, y in FACINGS:
+            base = {"facing": facing}
+            # The door always carries its left post (a doorway needs its frame;
+            # conditioning on the walls' POST property would purple-box the
+            # client - the 2.4.8 lesson), and closes the run when nothing joins
+            # on the right, same as every other GateSection.
+            parts.append({"when": dict(base), "apply": rot(post, y)})
+            parts.append({"when": dict(base, right="false"), "apply": rot(post_right, y)})
+            for half in ("lower", "upper"):
+                parts.append({"when": dict(base, half=half),
+                              "apply": rot(f"employee_door_{style}_{half}", y)})
+        wj(os.path.join(ASSETS, "blockstates", f"employee_door_{style}.json"), {"multipart": parts})
+
+        pngtool.write_png(os.path.join(ROOT,
+            f"src/main/resources/assets/station_announcer/textures/item/employee_door_{style}.png"),
+            employee_door_icon(style))
+        wj(os.path.join(ASSETS, "models/item", f"employee_door_{style}.json"),
+           {"parent": "minecraft:item/generated",
+            "textures": {"layer0": f"{MOD}:item/employee_door_{style}"}})
+    pngtool.write_png(os.path.join(TEXTURES, "employee_door_paint.png"), employee_paint())
+    print("employee door models written")
+
+
 def write_warning_models():
     """The wall plate is a box proud of the wall; the gate is a hinged leaf."""
     textures = {"sign": SIGN_TEX, "iron": IRON_TEX, "steel": STEEL_TEX,
@@ -706,10 +923,13 @@ def write_warning_models():
     }], textures)
 
     # ---- gate variant: hinge post (fixed) + leaf (swings)
+    # A 2 px post takes a 2 px slice of the iron texture, centred on its lit
+    # column - stretching the whole 16 px width over it flattens the bar.
+    post_faces = face_set("#iron", [3, 0, 5, 16], ("north", "south", "east", "west"))
+    post_faces.update(face_set("#iron", [3, 0, 5, 11], ("up", "down")))
     post = {"from": [POST["x0"], 0, POST["z0"]],
             "to": [POST["x1"], 16, POST["z1"]],
-            "faces": face_set("#iron", [0, 0, 3, 16],
-                              ("north", "south", "east", "west", "up", "down"))}
+            "faces": post_faces}
 
     def hinge(y):
         return {"from": [POST["x1"] - 0.5, y, LEAF["z0"] - 0.5],
@@ -721,19 +941,25 @@ def write_warning_models():
             "faces": sign_faces(LEAF["z1"] - LEAF["z0"], back="south")}
 
     swinging = [leaf, hinge(4.0), hinge(11.0)]
-    piece("track_warning_sign_gate", [post] + swinging, textures)
-    piece("track_warning_sign_gate_open",
-          [post] + [swing_about(e, HINGE_X, HINGE_Z) for e in swinging], textures)
+    closed = [post] + swinging
+    opened = [post] + [swing_about(e, GATE_HINGE_X, GATE_HINGE_Z) for e in swinging]
+    piece("track_warning_sign_gate", closed, textures)
+    piece("track_warning_sign_gate_open", opened, textures)
+    # right-hand gate: the same gate mirrored, post at the other edge
+    piece("track_warning_sign_gate_right", [mirror_x(e) for e in closed], textures)
+    piece("track_warning_sign_gate_right_open", [mirror_x(e) for e in opened], textures)
 
     wj(os.path.join(ASSETS, "blockstates", "track_warning_sign_wall.json"), {"variants": {
         f"facing={d}": ({"model": f"{MOD}:block/track_warning_sign_wall"} if r == 0
                         else {"model": f"{MOD}:block/track_warning_sign_wall", "y": r})
         for d, r in FACINGS}})
     wj(os.path.join(ASSETS, "blockstates", "track_warning_sign_gate.json"), {"variants": {
-        f"facing={d},open={o}": ({"model": f"{MOD}:block/track_warning_sign_gate{suffix}"}
-                                 if r == 0 else
-                                 {"model": f"{MOD}:block/track_warning_sign_gate{suffix}", "y": r})
-        for d, r in FACINGS for o, suffix in (("false", ""), ("true", "_open"))}})
+        f"facing={d},hinge={h},open={o}":
+            ({"model": f"{MOD}:block/track_warning_sign_gate{hand}{suffix}"} if r == 0 else
+             {"model": f"{MOD}:block/track_warning_sign_gate{hand}{suffix}", "y": r})
+        for d, r in FACINGS
+        for h, hand in (("left", ""), ("right", "_right"))
+        for o, suffix in (("false", ""), ("true", "_open"))}})
     for name in ("track_warning_sign_wall", "track_warning_sign_gate"):
         wj(os.path.join(ASSETS, "models/item", name + ".json"),
            {"parent": f"{MOD}:block/{name}"})
@@ -760,7 +986,11 @@ def main():
     pngtool.write_png(os.path.join(TEXTURES, "gate_iron.png"), iron())
     print("wrote", ", ".join(out), ", track_warning_sign")
     write_models()
+    write_employee_doors()
     write_warning_models()
+    # AFTER both writers: verifying before the warning-sign blockstates are
+    # rewritten would only ever check the previous run's file.
+    verify_blockstates()
 
     if args.preview:
         os.makedirs(args.preview, exist_ok=True)

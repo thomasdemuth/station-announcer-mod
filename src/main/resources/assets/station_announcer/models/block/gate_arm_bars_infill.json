@@ -1,0 +1,35 @@
+{
+  "parent": "minecraft:block/block",
+  "textures": {
+    "iron": "station_announcer:block/gate_iron",
+    "particle": "station_announcer:block/gate_iron"
+  },
+  "elements": [
+    {
+      "from": [
+        3.2,
+        0,
+        6.75
+      ],
+      "to": [
+        4.8,
+        16,
+        9.25
+      ],
+      "faces": {
+        "north": {
+          "texture": "#iron"
+        },
+        "south": {
+          "texture": "#iron"
+        },
+        "east": {
+          "texture": "#iron"
+        },
+        "west": {
+          "texture": "#iron"
+        }
+      }
+    }
+  ]
+}
