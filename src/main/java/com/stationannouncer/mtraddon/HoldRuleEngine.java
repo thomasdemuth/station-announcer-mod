@@ -44,6 +44,9 @@ public final class HoldRuleEngine {
      */
     private static final long SAME_PLATFORM_RESET_MILLIS = 30_000;
 
+    /** See DoorObstructionEngine.FUTURE_SLACK_MILLIS — instant-deploy debris detector. */
+    private static final long FUTURE_SLACK_MILLIS = 30_000;
+
     /** watched platform id → {computedAtMillis, soonestUpcomingArrivalMillis, latestPastArrivalMillis} (0 = none). */
     private static final ConcurrentHashMap<Long, long[]> ARRIVAL_CACHE = new ConcurrentHashMap<>();
 
@@ -142,6 +145,14 @@ public final class HoldRuleEngine {
         // approaching by the time that one has landed.
         long now = data.getCurrentMillis();
         long[] state = HOLD_STATE.get(vehicleId);
+        // A state stamped in the future is debris from Instant Deploy's
+        // day-long clock fast-forward (the clock rewinds afterwards); honouring
+        // it would hold the train until the wall clock catches up — the same
+        // wedge the door-obstruction engine had. Start this stop afresh.
+        if (state != null && state[LAST_SEEN] > now + FUTURE_SLACK_MILLIS) {
+            HOLD_STATE.remove(vehicleId);
+            state = null;
+        }
         boolean sameStop = state != null && state[PLATFORM] == platformId
                 && now - state[LAST_SEEN] <= SAME_PLATFORM_RESET_MILLIS;
         if (sameStop && state[SERVED] != 0) {

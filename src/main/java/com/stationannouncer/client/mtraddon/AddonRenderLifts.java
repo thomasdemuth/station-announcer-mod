@@ -13,16 +13,24 @@ import org.mtr.libraries.it.unimi.dsi.fastutil.ints.IntObjectImmutablePair;
 import org.mtr.libraries.it.unimi.dsi.fastutil.objects.ObjectArrayList;
 import org.mtr.libraries.it.unimi.dsi.fastutil.objects.ObjectBooleanImmutablePair;
 import org.mtr.libraries.it.unimi.dsi.fastutil.objects.ObjectObjectImmutablePair;
+import org.mtr.mapping.holder.Block;
+import org.mtr.mapping.holder.BlockEntity;
+import org.mtr.mapping.holder.BlockPos;
+import org.mtr.mapping.holder.BlockState;
 import org.mtr.mapping.holder.Box;
 import org.mtr.mapping.holder.ClientPlayerEntity;
 import org.mtr.mapping.holder.ClientWorld;
 import org.mtr.mapping.holder.Identifier;
 import org.mtr.mapping.holder.MinecraftClient;
+import org.mtr.mapping.holder.Property;
 import org.mtr.mapping.holder.Vector3d;
 import org.mtr.mapping.holder.World;
 import org.mtr.mapping.mapper.GraphicsHolder;
 import org.mtr.mapping.mapper.OptimizedRenderer;
+import org.mtr.mod.Init;
 import org.mtr.mod.Items;
+import org.mtr.mod.block.BlockPSDAPGDoorBase;
+import org.mtr.mod.block.PlatformHelper;
 import org.mtr.mod.client.MinecraftClientData;
 import org.mtr.mod.client.VehicleRidingMovement;
 import org.mtr.mod.data.IGui;
@@ -169,10 +177,20 @@ public final class AddonRenderLifts implements IGui {
                 final ObjectArrayList<Box> openDoorways = new ObjectArrayList<>();
 
                 // Stock ±Z doorway boxes; the ±X ones mirror them with width/depth swapped.
+                //
+                // THE X-FLIP (bug fixed 2026-08-18): the cab MODEL renders through
+                // rotateY(yaw + PI) * rotateX(pitch + PI), which composes to
+                // R_y(yaw) * diag(-1, -1, 1) — model X is NEGATED relative to the
+                // doorway-box space (transformForwards applies plain R_y(yaw)).
+                // Stock never notices because everything stock is X-symmetric, but
+                // it means the wall the model draws the LEFT (-X) door on sits at
+                // box-space +X. The boxes below are therefore mirrored so each
+                // side's doorway (boarding, holograms, landing checks) lands on
+                // the wall its door actually renders on.
                 final Box doorwayFront = new Box(-LIFT_DOOR_VALUE, 0, -lift.getDepth() / 2 + LIFT_FLOOR_PADDING, LIFT_DOOR_VALUE, 0, -lift.getDepth() / 2);
                 final Box doorwayBack = new Box(-LIFT_DOOR_VALUE, 0, lift.getDepth() / 2 - LIFT_FLOOR_PADDING, LIFT_DOOR_VALUE, 0, lift.getDepth() / 2);
-                final Box doorwayLeft = new Box(-lift.getWidth() / 2 + LIFT_FLOOR_PADDING, 0, -LIFT_DOOR_VALUE, -lift.getWidth() / 2, 0, LIFT_DOOR_VALUE);
-                final Box doorwayRight = new Box(lift.getWidth() / 2 - LIFT_FLOOR_PADDING, 0, -LIFT_DOOR_VALUE, lift.getWidth() / 2, 0, LIFT_DOOR_VALUE);
+                final Box doorwayLeft = new Box(lift.getWidth() / 2 - LIFT_FLOOR_PADDING, 0, -LIFT_DOOR_VALUE, lift.getWidth() / 2, 0, LIFT_DOOR_VALUE);
+                final Box doorwayRight = new Box(-lift.getWidth() / 2 + LIFT_FLOOR_PADDING, 0, -LIFT_DOOR_VALUE, -lift.getWidth() / 2, 0, LIFT_DOOR_VALUE);
 
                 // Which sides HAVE doors: configured sides, or stock's front + back-if-double-sided.
                 final boolean hasFront = doorSides == null || doorSides.front();
@@ -187,10 +205,32 @@ public final class AddonRenderLifts implements IGui {
                 final boolean rightOpen;
                 if (lift.hasCoolDown()) {
                     final double doorCheckValue = Math.min(lift.getDoorValue(), LIFT_DOOR_VALUE);
-                    frontOpen = hasFront && RenderVehicleHelper.canOpenDoors(doorwayFront, absolutePositionAndRotation, doorCheckValue);
-                    backOpen = hasBack && RenderVehicleHelper.canOpenDoors(doorwayBack, absolutePositionAndRotation, doorCheckValue);
-                    leftOpen = hasLeft && RenderVehicleHelper.canOpenDoors(doorwayLeft, absolutePositionAndRotation, doorCheckValue);
-                    rightOpen = hasRight && RenderVehicleHelper.canOpenDoors(doorwayRight, absolutePositionAndRotation, doorCheckValue);
+                    final double halfWidth = lift.getWidth() / 2;
+                    final double halfDepth = lift.getDepth() / 2;
+                    if (doorSides == null) {
+                        // Stock checks, verbatim (hasLeft/hasRight are false here).
+                        frontOpen = hasFront && RenderVehicleHelper.canOpenDoors(doorwayFront, absolutePositionAndRotation, doorCheckValue);
+                        backOpen = hasBack && RenderVehicleHelper.canOpenDoors(doorwayBack, absolutePositionAndRotation, doorCheckValue);
+                        leftOpen = false;
+                        rightOpen = false;
+                    } else {
+                        // Stock canOpenDoors expands the doorway by a WORLD-AXIS
+                        // radius of 1 block; on a small cab that reach covers most
+                        // of the footprint, so one landing opened EVERY configured
+                        // side ("doors open on every floor"). Each side instead
+                        // scans only the strip just beyond its own cab edge —
+                        // outward 1.75, sideways ±0.75 (the doorway's own span),
+                        // nothing lateral enough to see a neighbouring landing.
+                        frontOpen = hasFront && canOpenDoorsTight(absolutePositionAndRotation, doorCheckValue,
+                                -LIFT_DOOR_VALUE, -halfDepth - 1.75, LIFT_DOOR_VALUE, -halfDepth + LIFT_FLOOR_PADDING);
+                        backOpen = hasBack && canOpenDoorsTight(absolutePositionAndRotation, doorCheckValue,
+                                -LIFT_DOOR_VALUE, halfDepth - LIFT_FLOOR_PADDING, LIFT_DOOR_VALUE, halfDepth + 1.75);
+                        // Same X-flip as the doorway boxes above: model-left = box +X.
+                        leftOpen = hasLeft && canOpenDoorsTight(absolutePositionAndRotation, doorCheckValue,
+                                halfWidth - LIFT_FLOOR_PADDING, -LIFT_DOOR_VALUE, halfWidth + 1.75, LIFT_DOOR_VALUE);
+                        rightOpen = hasRight && canOpenDoorsTight(absolutePositionAndRotation, doorCheckValue,
+                                -halfWidth - 1.75, -LIFT_DOOR_VALUE, -halfWidth + LIFT_FLOOR_PADDING, LIFT_DOOR_VALUE);
+                    }
                     if (frontOpen) {
                         openDoorways.add(doorwayFront);
                     }
@@ -249,9 +289,18 @@ public final class AddonRenderLifts implements IGui {
                     );
                 }
 
-                // Render the display inside the lift: stock puts one above the front door and one
-                // above the back door when double-sided; we put one above every door side.
-                renderDisplays(storedMatrixTransformations, clientWorld, lift, hasFront, hasBack, hasLeft, hasRight);
+                // Render the display inside the lift. Stock puts one beside the front
+                // door (and the back when double-sided) — unconfigured lifts keep that.
+                // Configured lifts mount displays on the walls WITHOUT doors (user
+                // request 2026-08-18: the panels crowded every doorway jamb); if all
+                // four walls have doors, fall back to the stock front position.
+                if (doorSides == null) {
+                    renderDisplays(storedMatrixTransformations, clientWorld, lift, hasFront, hasBack, hasLeft, hasRight);
+                } else {
+                    final boolean allDoors = hasFront && hasBack && hasLeft && hasRight;
+                    renderDisplays(storedMatrixTransformations, clientWorld, lift,
+                            !hasFront || allDoors, !hasBack && !allDoors, !hasLeft && !allDoors, !hasRight && !allDoors);
+                }
 
                 if (canRide) {
                     // Main logic for player movement inside the car (stock, verbatim)
@@ -305,6 +354,53 @@ public final class AddonRenderLifts implements IGui {
             graphicsHolder.translate(0.875F, -1.5, wallDistance / 2 - 0.25 - SMALL_OFFSET);
         });
         RenderLifts.renderLiftDisplay(storedMatrixTransformationsNew, new World(clientWorld.data), lift, 0.1875F, 0.3125F);
+    }
+
+    /**
+     * Stock {@code RenderVehicleHelper.canOpenDoors} with a TIGHT scan region:
+     * the caller passes the exact box-space rectangle to probe (at cab-floor
+     * level) and no world-axis radius is added — only stock's ±2 vertical
+     * reach is kept. The block tests and the {@code setDoorValue} side effect
+     * (which is what animates the LANDING doors) are stock's, verbatim, so the
+     * correct side's landing doors still swing with the cab's.
+     */
+    private static boolean canOpenDoorsTight(PositionAndRotation positionAndRotation, double doorValue,
+                                             double minX, double minZ, double maxX, double maxZ) {
+        final ClientWorld clientWorld = MinecraftClient.getInstance().getWorldMapped();
+        if (clientWorld == null) {
+            return false;
+        }
+        final Vector3d corner1 = positionAndRotation.transformForwards(new Vector3d(minX, 0, minZ), Vector3d::rotateX, Vector3d::rotateY, Vector3d::add);
+        final Vector3d corner2 = positionAndRotation.transformForwards(new Vector3d(maxX, 0, minZ), Vector3d::rotateX, Vector3d::rotateY, Vector3d::add);
+        final Vector3d corner3 = positionAndRotation.transformForwards(new Vector3d(maxX, 0, maxZ), Vector3d::rotateX, Vector3d::rotateY, Vector3d::add);
+        final Vector3d corner4 = positionAndRotation.transformForwards(new Vector3d(minX, 0, maxZ), Vector3d::rotateX, Vector3d::rotateY, Vector3d::add);
+        final double worldMinX = Math.min(Math.min(corner1.getXMapped(), corner2.getXMapped()), Math.min(corner3.getXMapped(), corner4.getXMapped()));
+        final double worldMaxX = Math.max(Math.max(corner1.getXMapped(), corner2.getXMapped()), Math.max(corner3.getXMapped(), corner4.getXMapped()));
+        final double worldY = corner1.getYMapped();
+        final double worldMinZ = Math.min(Math.min(corner1.getZMapped(), corner2.getZMapped()), Math.min(corner3.getZMapped(), corner4.getZMapped()));
+        final double worldMaxZ = Math.max(Math.max(corner1.getZMapped(), corner2.getZMapped()), Math.max(corner3.getZMapped(), corner4.getZMapped()));
+        boolean canOpenDoors = false;
+
+        for (double checkX = worldMinX; checkX <= worldMaxX; checkX++) {
+            for (double checkY = worldY - 2; checkY <= worldY + 2; checkY++) {
+                for (double checkZ = worldMinZ; checkZ <= worldMaxZ; checkZ++) {
+                    final BlockPos checkPos = Init.newBlockPos(checkX, checkY, checkZ);
+                    final BlockState blockState = clientWorld.getBlockState(checkPos);
+                    final Block block = blockState.getBlock();
+                    if (block.data instanceof PlatformHelper) {
+                        canOpenDoors = true;
+                    } else if (block.data instanceof BlockPSDAPGDoorBase && blockState.get(new Property<>(BlockPSDAPGDoorBase.UNLOCKED.data))) {
+                        canOpenDoors = true;
+                        final BlockEntity blockEntity = clientWorld.getBlockEntity(checkPos);
+                        if (blockEntity != null && blockEntity.data instanceof BlockPSDAPGDoorBase.BlockEntityBase) {
+                            ((BlockPSDAPGDoorBase.BlockEntityBase) blockEntity.data).setDoorValue(doorValue);
+                        }
+                    }
+                }
+            }
+        }
+
+        return canOpenDoors;
     }
 
     /** Stock RenderLifts' private getLiftPositionAndRotation, reimplemented (all APIs public). */

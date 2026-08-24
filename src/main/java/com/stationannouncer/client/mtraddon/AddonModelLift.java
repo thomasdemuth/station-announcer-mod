@@ -44,6 +44,17 @@ public class AddonModelLift extends ModelTrainBase {
 
     private static final float PI = (float) Math.PI;
     private static final float HALF_PI = (float) (Math.PI / 2);
+    /**
+     * Corner de-fighting nudge for the ±X door assemblies, in model pixels
+     * (0.1 px = 1/160 block). Where two adjacent walls both carry doors, the
+     * assemblies' frame posts overlap with coplanar faces at the shared corner,
+     * and their floor/ceiling strips share the y=0 / ceiling planes — stock
+     * never hits this because stock doors only exist on opposite walls. The
+     * side assemblies are shifted this much toward the cab centre (kills the
+     * post-face pairs, and pulls the exterior skin off the block boundary) and
+     * their floor raised / ceiling lowered by the same amount.
+     */
+    private static final float CORNER_EPS = 0.1f;
 
     private final ModelPartExtension main;
     private final ModelPartExtension main_ceiling;
@@ -351,12 +362,13 @@ public class AddonModelLift extends ModelTrainBase {
             wallBands(doorWallPiece, graphicsHolder, light, 0, 8 - halfDepth, PI);
             part(doorCeilingPiece, graphicsHolder, light, 0, heightOffset, 8 - halfDepth, PI);
             if (isInterior && width == 2) {
-                // Skip a stub when the wall it returns onto is itself a full-width door wall.
-                if (!fullDoorLeft) {
+                // Skip a stub when the wall it returns onto is itself a full-width
+                // door wall. Flipped by PI, patch_a lands at the +X (right) end.
+                if (!fullDoorRight) {
                     part(wall_patch_a, graphicsHolder, light, 0, 0, 8 - halfDepth, PI);
                     wallBands(wall_patch_wall_a, graphicsHolder, light, 0, 8 - halfDepth, PI);
                 }
-                if (!fullDoorRight) {
+                if (!fullDoorLeft) {
                     part(wall_patch_b, graphicsHolder, light, 0, 0, 8 - halfDepth, PI);
                     wallBands(wall_patch_wall_b, graphicsHolder, light, 0, 8 - halfDepth, PI);
                 }
@@ -396,11 +408,12 @@ public class AddonModelLift extends ModelTrainBase {
             wallBands(doorWallPiece, graphicsHolder, light, 0, halfDepth - 8, 0);
             part(doorCeilingPiece, graphicsHolder, light, 0, heightOffset, halfDepth - 8, 0);
             if (isInterior && width == 2) {
-                if (!fullDoorRight) {
+                // Unflipped, patch_a lands at the -X (left) end.
+                if (!fullDoorLeft) {
                     part(wall_patch_a, graphicsHolder, light, 0, 0, halfDepth - 8, 0);
                     wallBands(wall_patch_wall_a, graphicsHolder, light, 0, halfDepth - 8, 0);
                 }
-                if (!fullDoorLeft) {
+                if (!fullDoorRight) {
                     part(wall_patch_b, graphicsHolder, light, 0, 0, halfDepth - 8, 0);
                     wallBands(wall_patch_wall_b, graphicsHolder, light, 0, halfDepth - 8, 0);
                 }
@@ -431,35 +444,43 @@ public class AddonModelLift extends ModelTrainBase {
             }
         }
 
-        // ---- LEFT wall (-X): the front-door assembly rotated -90° about the cab centre
-        // (pivots transformed by (x, y, z) -> (z, y, -x), rotation -90°; distance uses width),
+        // ---- LEFT wall (-X): the stock door assembly turned onto the -X wall
+        // (same -HALF_PI as edge1X; the wall distance uses width instead of depth),
         // or the stock edge1X solid side wall.
         if (doorLeft) {
-            part(doorLeftPiece, graphicsHolder, light, 8 - halfWidth, 0, -leftDoorSlideZ, HALF_PI);
-            part(doorRightPiece, graphicsHolder, light, 8 - halfWidth, 0, leftDoorSlideZ, HALF_PI);
-            part(doorPiece, graphicsHolder, light, 8 - halfWidth, 0, 0, HALF_PI);
-            wallBands(doorWallPiece, graphicsHolder, light, 8 - halfWidth, 0, HALF_PI);
-            part(doorCeilingPiece, graphicsHolder, light, 8 - halfWidth, heightOffset, 0, HALF_PI);
+            // -HALF_PI, matching the solid edge1X branch below: vanilla yaw +90
+            // maps local +z to world +x, and this assembly's wall side is local
+            // +z, so the -X wall needs the NEGATIVE rotation. +HALF_PI here put
+            // the whole assembly ~12 px inboard - the door stood at the cab
+            // centre and its leaves crossed into an overlapped middle column.
+            final float leftPivotX = 8 - halfWidth + CORNER_EPS;
+            part(doorLeftPiece, graphicsHolder, light, leftPivotX, -CORNER_EPS, -leftDoorSlideZ, -HALF_PI);
+            part(doorRightPiece, graphicsHolder, light, leftPivotX, -CORNER_EPS, leftDoorSlideZ, -HALF_PI);
+            part(doorPiece, graphicsHolder, light, leftPivotX, -CORNER_EPS, 0, -HALF_PI);
+            wallBands(doorWallPiece, graphicsHolder, light, leftPivotX, 0, -HALF_PI);
+            part(doorCeilingPiece, graphicsHolder, light, leftPivotX, heightOffset + CORNER_EPS, 0, -HALF_PI);
             if (isInterior && depth == 2) {
-                if (!fullDoorBack) {
-                    part(wall_patch_a, graphicsHolder, light, 8 - halfWidth, 0, 0, HALF_PI);
-                    wallBands(wall_patch_wall_a, graphicsHolder, light, 8 - halfWidth, 0, HALF_PI);
-                }
+                // At -HALF_PI, patch_a lands at the doorway's -Z (front) end and
+                // patch_b at the +Z (back) end - gate each on the wall it returns onto.
                 if (!fullDoorFront) {
-                    part(wall_patch_b, graphicsHolder, light, 8 - halfWidth, 0, 0, HALF_PI);
-                    wallBands(wall_patch_wall_b, graphicsHolder, light, 8 - halfWidth, 0, HALF_PI);
+                    part(wall_patch_a, graphicsHolder, light, leftPivotX, -CORNER_EPS, 0, -HALF_PI);
+                    wallBands(wall_patch_wall_a, graphicsHolder, light, leftPivotX, 0, -HALF_PI);
+                }
+                if (!fullDoorBack) {
+                    part(wall_patch_b, graphicsHolder, light, leftPivotX, -CORNER_EPS, 0, -HALF_PI);
+                    wallBands(wall_patch_wall_b, graphicsHolder, light, leftPivotX, 0, -HALF_PI);
                 }
             }
             for (int i = 1; i < depth - 2; i++) {
                 final float p = i * 8 - halfDepth + 4;
-                part(mainEdgePiece, graphicsHolder, light, -halfWidth, 0, p, HALF_PI);
-                part(mainEdgePiece, graphicsHolder, light, -halfWidth, 0, -p, HALF_PI);
+                part(mainEdgePiece, graphicsHolder, light, -halfWidth, 0, p, -HALF_PI);
+                part(mainEdgePiece, graphicsHolder, light, -halfWidth, 0, -p, -HALF_PI);
                 if (isInterior) {
-                    wallBands(main_edge_wall, graphicsHolder, light, -halfWidth, p, HALF_PI);
-                    wallBands(main_edge_wall, graphicsHolder, light, -halfWidth, -p, HALF_PI);
+                    wallBands(main_edge_wall, graphicsHolder, light, -halfWidth, p, -HALF_PI);
+                    wallBands(main_edge_wall, graphicsHolder, light, -halfWidth, -p, -HALF_PI);
                 }
-                part(mainEdgeCeilingPiece, graphicsHolder, light, -halfWidth, heightOffset, p, HALF_PI);
-                part(mainEdgeCeilingPiece, graphicsHolder, light, -halfWidth, heightOffset, -p, HALF_PI);
+                part(mainEdgeCeilingPiece, graphicsHolder, light, -halfWidth, heightOffset, p, -HALF_PI);
+                part(mainEdgeCeilingPiece, graphicsHolder, light, -halfWidth, heightOffset, -p, -HALF_PI);
             }
         } else {
             // Stock's edge1X branch, verbatim.
@@ -476,34 +497,37 @@ public class AddonModelLift extends ModelTrainBase {
             }
         }
 
-        // ---- RIGHT wall (+X): the back-door assembly rotated -90° about the cab centre,
-        // or the stock edge2X solid side wall.
+        // ---- RIGHT wall (+X): the stock door assembly turned onto the +X wall
+        // (same +HALF_PI as edge2X), or the stock edge2X solid side wall.
         if (doorRight) {
-            part(doorLeftPiece, graphicsHolder, light, halfWidth - 8, 0, rightDoorSlideZ, -HALF_PI);
-            part(doorRightPiece, graphicsHolder, light, halfWidth - 8, 0, -rightDoorSlideZ, -HALF_PI);
-            part(doorPiece, graphicsHolder, light, halfWidth - 8, 0, 0, -HALF_PI);
-            wallBands(doorWallPiece, graphicsHolder, light, halfWidth - 8, 0, -HALF_PI);
-            part(doorCeilingPiece, graphicsHolder, light, halfWidth - 8, heightOffset, 0, -HALF_PI);
+            // +HALF_PI, the mirror of the left wall (see comment there).
+            final float rightPivotX = halfWidth - 8 - CORNER_EPS;
+            part(doorLeftPiece, graphicsHolder, light, rightPivotX, -CORNER_EPS, rightDoorSlideZ, HALF_PI);
+            part(doorRightPiece, graphicsHolder, light, rightPivotX, -CORNER_EPS, -rightDoorSlideZ, HALF_PI);
+            part(doorPiece, graphicsHolder, light, rightPivotX, -CORNER_EPS, 0, HALF_PI);
+            wallBands(doorWallPiece, graphicsHolder, light, rightPivotX, 0, HALF_PI);
+            part(doorCeilingPiece, graphicsHolder, light, rightPivotX, heightOffset + CORNER_EPS, 0, HALF_PI);
             if (isInterior && depth == 2) {
-                if (!fullDoorFront) {
-                    part(wall_patch_a, graphicsHolder, light, halfWidth - 8, 0, 0, -HALF_PI);
-                    wallBands(wall_patch_wall_a, graphicsHolder, light, halfWidth - 8, 0, -HALF_PI);
-                }
+                // At +HALF_PI, patch_a lands at the doorway's +Z (back) end.
                 if (!fullDoorBack) {
-                    part(wall_patch_b, graphicsHolder, light, halfWidth - 8, 0, 0, -HALF_PI);
-                    wallBands(wall_patch_wall_b, graphicsHolder, light, halfWidth - 8, 0, -HALF_PI);
+                    part(wall_patch_a, graphicsHolder, light, rightPivotX, -CORNER_EPS, 0, HALF_PI);
+                    wallBands(wall_patch_wall_a, graphicsHolder, light, rightPivotX, 0, HALF_PI);
+                }
+                if (!fullDoorFront) {
+                    part(wall_patch_b, graphicsHolder, light, rightPivotX, -CORNER_EPS, 0, HALF_PI);
+                    wallBands(wall_patch_wall_b, graphicsHolder, light, rightPivotX, 0, HALF_PI);
                 }
             }
             for (int i = 1; i < depth - 2; i++) {
                 final float p = i * 8 - halfDepth + 4;
-                part(mainEdgePiece, graphicsHolder, light, halfWidth, 0, -p, -HALF_PI);
-                part(mainEdgePiece, graphicsHolder, light, halfWidth, 0, p, -HALF_PI);
+                part(mainEdgePiece, graphicsHolder, light, halfWidth, 0, -p, HALF_PI);
+                part(mainEdgePiece, graphicsHolder, light, halfWidth, 0, p, HALF_PI);
                 if (isInterior) {
-                    wallBands(main_edge_wall, graphicsHolder, light, halfWidth, -p, -HALF_PI);
-                    wallBands(main_edge_wall, graphicsHolder, light, halfWidth, p, -HALF_PI);
+                    wallBands(main_edge_wall, graphicsHolder, light, halfWidth, -p, HALF_PI);
+                    wallBands(main_edge_wall, graphicsHolder, light, halfWidth, p, HALF_PI);
                 }
-                part(mainEdgeCeilingPiece, graphicsHolder, light, halfWidth, heightOffset, -p, -HALF_PI);
-                part(mainEdgeCeilingPiece, graphicsHolder, light, halfWidth, heightOffset, p, -HALF_PI);
+                part(mainEdgeCeilingPiece, graphicsHolder, light, halfWidth, heightOffset, -p, HALF_PI);
+                part(mainEdgeCeilingPiece, graphicsHolder, light, halfWidth, heightOffset, p, HALF_PI);
             }
         } else {
             // Stock's edge2X branch, verbatim.

@@ -49,10 +49,32 @@ public final class DoorObstructionEngine {
      */
     private static final long NEW_STOP_GAP_MILLIS = 5_000;
 
-    /** ATO path: vehicle id → {lastAttemptMillis, stuckUntilMillis (0 = rolled clean)}. */
+    /**
+     * Hard backstop, mirroring the hold engine's deadlock cap: whatever the
+     * clocks or state maps get up to, a vehicle is never refused departure by
+     * this engine for longer than the configured maximum plus this grace. A
+     * wedged obstruction strands a train and every rider on it, so this caps
+     * the blast radius of any bug the expiry logic still hides.
+     */
+    private static final long BACKSTOP_GRACE_MILLIS = 10_000;
+
+    /**
+     * State stamped further than this AHEAD of the simulator clock is debris
+     * from the dashboard's Instant Deploy: {@code Simulator.instantDeployDepots}
+     * fast-forwards {@code currentMillis} through a FULL DAY of simulation
+     * (rolling obstructions the whole way, with deadlines up to 24 h out) and
+     * then rewinds the clock. Honouring such a deadline refuses departure until
+     * tomorrow — Thomas's permanently-stuck train (2026-08-19, reproduced on the
+     * dev rig: /mtr instantDeploy froze every obstructed train). Anything from
+     * the fast-forward is therefore detected by its future timestamp and
+     * discarded at the first real-time attempt.
+     */
+    private static final long FUTURE_SLACK_MILLIS = 30_000;
+
+    /** ATO path: vehicle id → {lastAttemptMillis, stuckUntilMillis (0 = rolled clean), rollMillis}. */
     private static final ConcurrentHashMap<Long, long[]> AUTO_STATE = new ConcurrentHashMap<>();
 
-    /** Manual path: vehicle id → {platformId of the roll, stuckUntilMillis (0 = rolled clean)}. */
+    /** Manual path: vehicle id → {platformId of the roll, stuckUntilMillis (0 = rolled clean), rollMillis}. */
     private static final ConcurrentHashMap<Long, long[]> MANUAL_STATE = new ConcurrentHashMap<>();
 
     /**
@@ -92,7 +114,11 @@ public final class DoorObstructionEngine {
         // An active manual-path obstruction also refuses startUp: the driver must
         // not be able to power away while something is stuck in the doors.
         long[] manualState = MANUAL_STATE.get(vehicleId);
-        if (manualState != null && manualState[1] > now) {
+        if (manualState != null && manualState[2] > now + FUTURE_SLACK_MILLIS) {
+            MANUAL_STATE.remove(vehicleId);   // rolled during an instant-deploy fast-forward
+            manualState = null;
+        }
+        if (manualState != null && manualState[1] > now && !backstopExpired(config, manualState, now)) {
             reopenAndMark(vehicleId, vehicleExtraData, manualState[1] - now);
             return true;
         }
@@ -104,15 +130,16 @@ public final class DoorObstructionEngine {
         }
 
         long[] state = AUTO_STATE.get(vehicleId);
-        if (state == null || now - state[0] > NEW_STOP_GAP_MILLIS) {
+        if (state == null || now - state[0] > NEW_STOP_GAP_MILLIS
+                || state[2] > now + FUTURE_SLACK_MILLIS) {
             // First departure-ready attempt at this stop: roll exactly once.
-            state = new long[]{now, roll(config, now, vehicleId)};
+            state = new long[]{now, roll(config, now, vehicleId), now};
             AUTO_STATE.put(vehicleId, state);
         } else {
             // Same stop (held ticks or blocked-track retries): keep the outcome.
             state[0] = now;
         }
-        if (state[1] > now) {
+        if (state[1] > now && !backstopExpired(config, state, now)) {
             reopenAndMark(vehicleId, vehicleExtraData, state[1] - now);
             return true;
         }
@@ -153,20 +180,37 @@ public final class DoorObstructionEngine {
         }
         long now = data.getCurrentMillis();
         long[] state = MANUAL_STATE.get(vehicleId);
-        if (state == null || state[0] != platformId) {
+        if (state == null || state[0] != platformId || state[2] > now + FUTURE_SLACK_MILLIS) {
             // First close attempt at this platform visit: roll exactly once.
             // (Movement clears the entry, so a loop route revisiting the same
             // platform rolls again next time around.)
-            state = new long[]{platformId, roll(config, now, vehicleId)};
+            state = new long[]{platformId, roll(config, now, vehicleId), now};
             MANUAL_STATE.put(vehicleId, state);
         }
-        if (state[1] > now) {
+        if (state[1] > now && !backstopExpired(config, state, now)) {
             // Stuck: bounce this close attempt straight back open.
             reopenAndMark(vehicleId, vehicleExtraData, state[1] - now);
         }
     }
 
     // ------------------------------------------------------------- internals
+
+    /**
+     * True when this obstruction has outlived any duration the config could
+     * legitimately have produced — force-release it (and log, so a wedge is
+     * visible in the log instead of on a stranded platform).
+     */
+    private static boolean backstopExpired(AddonServerConfig.DoorObstruction config, long[] state, long now) {
+        long cap = 1_000L * Math.max(config.minSeconds, config.maxSeconds) + BACKSTOP_GRACE_MILLIS;
+        if (now - state[2] < cap) {
+            return false;
+        }
+        StationAnnouncer.LOGGER.warn(
+                "Door obstruction exceeded its cap ({} ms past roll) — force-releasing; report this",
+                now - state[2]);
+        state[1] = 0;
+        return true;
+    }
 
     /**
      * Rolls the obstruction chance; returns the sim-clock millis the doors stay
