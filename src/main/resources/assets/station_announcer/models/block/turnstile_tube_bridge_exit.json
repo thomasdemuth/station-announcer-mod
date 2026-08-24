@@ -133,7 +133,7 @@
       ],
       "faces": {
         "north": {
-          "texture": "#sign",
+          "texture": "#sign_exit",
           "uv": [
             0,
             0,
@@ -142,7 +142,7 @@
           ]
         },
         "south": {
-          "texture": "#sign",
+          "texture": "#sign_exit",
           "uv": [
             0,
             4.25,
@@ -151,7 +151,7 @@
           ]
         },
         "east": {
-          "texture": "#sign",
+          "texture": "#sign_exit",
           "uv": [
             2,
             4.5,
@@ -160,7 +160,7 @@
           ]
         },
         "west": {
-          "texture": "#sign",
+          "texture": "#sign_exit",
           "uv": [
             2,
             4.5,
@@ -169,7 +169,7 @@
           ]
         },
         "down": {
-          "texture": "#sign",
+          "texture": "#sign_exit",
           "uv": [
             2,
             4.5,

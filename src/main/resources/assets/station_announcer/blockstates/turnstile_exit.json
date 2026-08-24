@@ -24,7 +24,7 @@
         "half": "upper"
       },
       "apply": {
-        "model": "station_announcer:block/turnstile_upper"
+        "model": "station_announcer:block/turnstile_upper_exit"
       }
     },
     {
@@ -64,7 +64,7 @@
         "right": "true"
       },
       "apply": {
-        "model": "station_announcer:block/turnstile_tube_bridge"
+        "model": "station_announcer:block/turnstile_tube_bridge_exit"
       }
     },
     {
@@ -103,7 +103,7 @@
         "half": "upper"
       },
       "apply": {
-        "model": "station_announcer:block/turnstile_upper",
+        "model": "station_announcer:block/turnstile_upper_exit",
         "y": 90
       }
     },
@@ -147,7 +147,7 @@
         "right": "true"
       },
       "apply": {
-        "model": "station_announcer:block/turnstile_tube_bridge",
+        "model": "station_announcer:block/turnstile_tube_bridge_exit",
         "y": 90
       }
     },
@@ -188,7 +188,7 @@
         "half": "upper"
       },
       "apply": {
-        "model": "station_announcer:block/turnstile_upper",
+        "model": "station_announcer:block/turnstile_upper_exit",
         "y": 180
       }
     },
@@ -232,7 +232,7 @@
         "right": "true"
       },
       "apply": {
-        "model": "station_announcer:block/turnstile_tube_bridge",
+        "model": "station_announcer:block/turnstile_tube_bridge_exit",
         "y": 180
       }
     },
@@ -273,7 +273,7 @@
         "half": "upper"
       },
       "apply": {
-        "model": "station_announcer:block/turnstile_upper",
+        "model": "station_announcer:block/turnstile_upper_exit",
         "y": 270
       }
     },
@@ -317,7 +317,7 @@
         "right": "true"
       },
       "apply": {
-        "model": "station_announcer:block/turnstile_tube_bridge",
+        "model": "station_announcer:block/turnstile_tube_bridge_exit",
         "y": 270
       }
     },

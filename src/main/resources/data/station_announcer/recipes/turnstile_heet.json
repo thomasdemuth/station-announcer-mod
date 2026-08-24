@@ -1,0 +1,28 @@
+{
+  "type": "minecraft:crafting_shaped",
+  "category": "redstone",
+  "key": {
+    "B": {
+      "item": "minecraft:iron_bars"
+    },
+    "T": {
+      "item": "station_announcer:turnstile"
+    }
+  },
+  "pattern": [
+    "BB",
+    "TB",
+    "BB"
+  ],
+  "result": {
+    "item": "station_announcer:turnstile_heet"
+  },
+  "fabric:load_conditions": [
+    {
+      "condition": "fabric:all_mods_loaded",
+      "values": [
+        "mtr"
+      ]
+    }
+  ]
+}

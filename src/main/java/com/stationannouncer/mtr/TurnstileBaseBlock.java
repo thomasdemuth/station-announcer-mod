@@ -86,10 +86,22 @@ public abstract class TurnstileBaseBlock extends Block {
         return state.with(RIGHT, connectsRight(state, world, pos));
     }
 
+    /**
+     * Whether this unit takes part in a fare array row (shared overhead tubing).
+     * The full-height gate is a self-contained cage, so it opts out and its
+     * neighbors end their tube runs against it with a cap.
+     */
+    protected boolean joinsRow() {
+        return true;
+    }
+
     /** True when the same-half block of another fare-control unit with the same facing sits to the right. */
-    private static boolean connectsRight(BlockState state, WorldAccess world, BlockPos pos) {
+    private boolean connectsRight(BlockState state, WorldAccess world, BlockPos pos) {
+        if (!joinsRow()) {
+            return false;
+        }
         BlockState neighbor = world.getBlockState(pos.offset(rightDirection(state)));
-        return neighbor.getBlock() instanceof TurnstileBaseBlock
+        return neighbor.getBlock() instanceof TurnstileBaseBlock other && other.joinsRow()
                 && neighbor.get(HALF) == state.get(HALF)
                 && neighbor.get(FACING) == state.get(FACING);
     }

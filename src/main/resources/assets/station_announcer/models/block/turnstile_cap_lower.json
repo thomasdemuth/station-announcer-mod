@@ -5,6 +5,9 @@
     "face": "station_announcer:block/turnstile_face",
     "tube": "station_announcer:block/turnstile_tube",
     "arm": "station_announcer:block/turnstile_arm",
+    "lamp": "station_announcer:block/turnstile_lamp",
+    "sign": "station_announcer:block/turnstile_sign",
+    "sign_exit": "station_announcer:block/turnstile_sign_exit",
     "particle": "station_announcer:block/turnstile_steel"
   },
   "elements": [
@@ -12,6 +15,75 @@
       "from": [
         0,
         0,
+        0.75
+      ],
+      "to": [
+        8.25,
+        1.5,
+        15.25
+      ],
+      "faces": {
+        "north": {
+          "texture": "#face",
+          "uv": [
+            0,
+            13,
+            4.1,
+            13.75
+          ]
+        },
+        "south": {
+          "texture": "#face",
+          "uv": [
+            0,
+            13,
+            4.1,
+            13.75
+          ]
+        },
+        "east": {
+          "texture": "#face",
+          "uv": [
+            0,
+            12.6,
+            7.25,
+            13.35
+          ]
+        },
+        "west": {
+          "texture": "#face",
+          "uv": [
+            0,
+            12.6,
+            7.25,
+            13.35
+          ]
+        },
+        "up": {
+          "texture": "#face",
+          "uv": [
+            0,
+            10.5,
+            4.1,
+            12
+          ]
+        },
+        "down": {
+          "texture": "#face",
+          "uv": [
+            0,
+            14,
+            4.1,
+            15.75
+          ],
+          "cullface": "down"
+        }
+      }
+    },
+    {
+      "from": [
+        0.25,
+        1.5,
         1
       ],
       "to": [
@@ -23,55 +95,46 @@
         "north": {
           "texture": "#steel",
           "uv": [
-            0,
-            0,
-            8.0,
-            14.0
+            0.75,
+            1.0,
+            8.5,
+            13.5
           ]
         },
         "south": {
           "texture": "#steel",
           "uv": [
-            0,
-            0,
-            8.0,
-            14.0
+            0.75,
+            1.0,
+            8.5,
+            13.5
           ]
         },
         "east": {
           "texture": "#steel",
           "uv": [
-            0,
-            0,
-            14.0,
-            14.0
+            0.75,
+            1.0,
+            14.75,
+            13.5
           ]
         },
         "west": {
           "texture": "#steel",
           "uv": [
-            0,
-            0,
-            14.0,
-            14.0
+            0.75,
+            1.0,
+            14.75,
+            13.5
           ]
         },
         "up": {
           "texture": "#steel",
           "uv": [
-            0,
-            0,
-            8.0,
-            14.0
-          ]
-        },
-        "down": {
-          "texture": "#steel",
-          "uv": [
-            0,
-            0,
-            8.0,
-            14.0
+            0.75,
+            1.0,
+            8.5,
+            15.0
           ]
         }
       }
@@ -91,55 +154,55 @@
         "north": {
           "texture": "#steel",
           "uv": [
-            0,
-            0,
-            8.0,
-            2.0
+            0.75,
+            3.0,
+            8.75,
+            5.0
           ]
         },
         "south": {
           "texture": "#steel",
           "uv": [
-            0,
-            0,
-            8.0,
-            2.0
+            0.75,
+            3.0,
+            8.75,
+            5.0
           ]
         },
         "east": {
           "texture": "#steel",
           "uv": [
-            0,
-            0,
-            12.0,
-            2.0
+            0.75,
+            3.0,
+            12.75,
+            5.0
           ]
         },
         "west": {
           "texture": "#steel",
           "uv": [
-            0,
-            0,
-            12.0,
-            2.0
+            0.75,
+            3.0,
+            12.75,
+            5.0
           ]
         },
         "up": {
           "texture": "#steel",
           "uv": [
-            0,
-            0,
-            8.0,
-            12.0
+            0.75,
+            3.0,
+            8.75,
+            15.0
           ]
         },
         "down": {
           "texture": "#steel",
           "uv": [
-            0,
-            0,
-            8.0,
-            12.0
+            0.75,
+            3.0,
+            8.75,
+            15.0
           ]
         }
       }
