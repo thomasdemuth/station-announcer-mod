@@ -55,6 +55,8 @@ public class StationAnnouncerClient implements ClientModInitializer {
         // The barrier's wire mesh is a cutout texture (alpha holes).
         BlockRenderLayerMap.INSTANCE.putBlock(ModContent.PLATFORM_BARRIER,
                 net.minecraft.client.render.RenderLayer.getCutoutMipped());
+        BlockRenderLayerMap.INSTANCE.putBlock(ModContent.SUBWAY_STAIRS,
+                net.minecraft.client.render.RenderLayer.getCutoutMipped());
         // The gate ironwork is see-through between the bars.
         BlockRenderLayerMap.INSTANCE.putBlock(ModContent.GATE_SCROLL,
                 net.minecraft.client.render.RenderLayer.getCutoutMipped());

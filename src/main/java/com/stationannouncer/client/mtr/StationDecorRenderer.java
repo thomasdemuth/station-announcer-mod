@@ -45,6 +45,13 @@ public class StationDecorRenderer implements BlockEntityRenderer<StationDecorBlo
             return;
         }
 
+        // Employee doors carry only a label plate — no station lookup at all,
+        // and an empty label means a genuinely blank door, not "automatic".
+        if (block instanceof com.stationannouncer.mtr.EmployeeDoorBlock) {
+            paintDoorLabel(entity, matrices, vertexConsumers);
+            return;
+        }
+
         Direction facing;
         if (block instanceof com.stationannouncer.mtr.RailingSignBlock) {
             // The panel plane follows the railing run; the block owns that rule
@@ -634,6 +641,52 @@ public class StationDecorRenderer implements BlockEntityRenderer<StationDecorBlo
             painter.textCentered(text, 20, 8 - size / 2.0f, size, TEXT_WHITE);
             matrices.pop();
         }
+    }
+
+    // ------------------------------------------------------ employee doors
+
+    private static final int DOOR_PLATE_FACE = 0xFFE9E7E1;
+    private static final int DOOR_PLATE_BORDER = 0xFF3A3A3C;
+    private static final int DOOR_PLATE_TEXT = 0xFF17171B;
+
+    /**
+     * The label plate on an employees-only door, drawn on both faces at eye
+     * level. The block entity sits on the LOWER half, so the plate is painted a
+     * block and a half up, on the upper leaf ({@code rendersOutsideBoundingBox}
+     * is already true for this renderer). An empty label draws nothing — that
+     * is the door's "blank" option.
+     */
+    private void paintDoorLabel(StationDecorBlockEntity entity, MatrixStack matrices,
+                                VertexConsumerProvider vertexConsumers) {
+        String label = entity.getCustomName();
+        if (label.isEmpty()) {
+            return;
+        }
+        // Plate proportions in canvas units (64/block): sized to the leaf's
+        // panel width (11 px = 44 units), one text line tall.
+        final float plateWidth = 44;
+        final float plateHeight = 12;
+        matrices.push();
+        matrices.translate(0.5, 0.0, 0.5);
+        matrices.multiply(RotationAxis.POSITIVE_Y.rotationDegrees(180.0f - facingOf(entity).asRotation()));
+        for (int side = 0; side < 2; side++) {
+            matrices.push();
+            if (side == 1) {
+                matrices.multiply(RotationAxis.POSITIVE_Y.rotationDegrees(180.0f));
+            }
+            // Leaf faces sit at local ±(9.5/16 − 0.5); the plate floats just proud.
+            matrices.translate(plateWidth / 2.0f * UNIT, 1.55, -(0.09375f + 0.004f));
+            matrices.scale(-UNIT, -UNIT, UNIT);
+            CanvasPainter painter = new CanvasPainter(matrices, vertexConsumers);
+            painter.quad(0, 0, plateWidth, plateHeight, 0.0f, DOOR_PLATE_BORDER);
+            painter.quad(0.8f, 0.8f, plateWidth - 0.8f, plateHeight - 0.8f, -0.5f, DOOR_PLATE_FACE);
+            String text = upperCase(label);
+            float size = Math.min(6.5f, (plateWidth - 6) / Math.max(1, painter.width(text, 1)));
+            matrices.translate(0, 0, -1.0); // text plane just proud of the plate face
+            painter.textCentered(text, plateWidth / 2.0f, plateHeight / 2.0f - size / 2.0f, size, DOOR_PLATE_TEXT);
+            matrices.pop();
+        }
+        matrices.pop();
     }
 
     @Override

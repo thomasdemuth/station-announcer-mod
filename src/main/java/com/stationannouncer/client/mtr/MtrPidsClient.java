@@ -66,9 +66,13 @@ public final class MtrPidsClient {
     }
 
     public static void register() {
-        // The exit door's upper half is a wire-mesh window (alpha holes).
+        // The exit door's upper half is a wire-mesh window (alpha holes),
+        // and the mesh employee door is wire mesh top and bottom.
         net.fabricmc.fabric.api.blockrenderlayer.v1.BlockRenderLayerMap.INSTANCE.putBlock(
                 com.stationannouncer.mtr.MtrStationDecor.EMERGENCY_EXIT_DOOR,
+                net.minecraft.client.render.RenderLayer.getCutoutMipped());
+        net.fabricmc.fabric.api.blockrenderlayer.v1.BlockRenderLayerMap.INSTANCE.putBlock(
+                com.stationannouncer.mtr.MtrStationDecor.EMPLOYEE_DOOR_MESH,
                 net.minecraft.client.render.RenderLayer.getCutoutMipped());
 
         BlockEntityRendererFactories.register(MtrPids.PIDS_BLOCK_ENTITY, context -> new PidsNycRenderer());

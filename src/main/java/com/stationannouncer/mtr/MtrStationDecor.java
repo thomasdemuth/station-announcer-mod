@@ -46,8 +46,19 @@ public final class MtrStationDecor {
     /** Emergency exit door: exit-only, alarms, fines anyone coming the wrong way. */
     public static final EmergencyExitDoorBlock EMERGENCY_EXIT_DOOR = new EmergencyExitDoorBlock(settings());
 
+    /**
+     * Employees-only doors: fixed two-block staff doors that never open, in
+     * three finishes — wire mesh, solid black, and off-white for tiled walls.
+     * The brush edits the label plate (stored as the decor CustomName).
+     */
+    public static final EmployeeDoorBlock EMPLOYEE_DOOR_MESH = new EmployeeDoorBlock(settings());
+    public static final EmployeeDoorBlock EMPLOYEE_DOOR_BLACK = new EmployeeDoorBlock(settings());
+    public static final EmployeeDoorBlock EMPLOYEE_DOOR_WHITE = new EmployeeDoorBlock(settings());
+
     /** Fare-control turnstiles: MTR-charging lane + solid end cap. */
     public static final TurnstileBlock TURNSTILE = new TurnstileBlock(settings());
+    public static final TurnstileBlock TURNSTILE_EXIT = new TurnstileBlock(settings(), false);
+    public static final TurnstileHeetBlock TURNSTILE_HEET = new TurnstileHeetBlock(settings());
     public static final TurnstileCapBlock TURNSTILE_CAP = new TurnstileCapBlock(settings());
 
     /** Holding lights (timed off MTR arrivals) and their hanging hardware. */
@@ -83,7 +94,8 @@ public final class MtrStationDecor {
     public static final BlockEntityType<StationDecorBlockEntity> DECOR_BLOCK_ENTITY =
             BlockEntityType.Builder.create(StationDecorBlockEntity::new,
                     STATION_NAME_MOSAIC, COLUMN_IRON_NAMED, COLUMN_IRON_NAMED_STATION,
-                    ENTRANCE_RAILING_SIGN, HOLDING_LIGHT_YELLOW, HOLDING_LIGHT_GREEN).build(null);
+                    ENTRANCE_RAILING_SIGN, HOLDING_LIGHT_YELLOW, HOLDING_LIGHT_GREEN,
+                    EMPLOYEE_DOOR_MESH, EMPLOYEE_DOOR_BLACK, EMPLOYEE_DOOR_WHITE).build(null);
 
     /** C2S: the sign name screen saves (pos + custom name; "" = automatic). */
     public static final Identifier UPDATE_DECOR_C2S = StationAnnouncer.id("update_decor");
@@ -212,7 +224,12 @@ public final class MtrStationDecor {
         registerBlock("column_iron_named_station", COLUMN_IRON_NAMED_STATION, ModContent.DECORATION_ENTRIES);
         registerBlock("entrance_railing_sign", ENTRANCE_RAILING_SIGN, ModContent.DECORATION_ENTRIES);
         registerBlock("emergency_exit_door", EMERGENCY_EXIT_DOOR, ModContent.DECORATION_ENTRIES);
+        registerBlock("employee_door_mesh", EMPLOYEE_DOOR_MESH, ModContent.DECORATION_ENTRIES);
+        registerBlock("employee_door_black", EMPLOYEE_DOOR_BLACK, ModContent.DECORATION_ENTRIES);
+        registerBlock("employee_door_white", EMPLOYEE_DOOR_WHITE, ModContent.DECORATION_ENTRIES);
         registerBlock("turnstile", TURNSTILE, ModContent.DECORATION_ENTRIES);
+        registerBlock("turnstile_exit", TURNSTILE_EXIT, ModContent.DECORATION_ENTRIES);
+        registerBlock("turnstile_heet", TURNSTILE_HEET, ModContent.DECORATION_ENTRIES);
         registerBlock("turnstile_cap", TURNSTILE_CAP, ModContent.DECORATION_ENTRIES);
         registerBlock("stop_marker", STOP_MARKER, ModContent.DECORATION_ENTRIES);
         registerBlock("stop_marker_pole", STOP_MARKER_POLE, ModContent.DECORATION_ENTRIES);

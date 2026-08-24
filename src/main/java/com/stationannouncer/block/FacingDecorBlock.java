@@ -42,6 +42,15 @@ public class FacingDecorBlock extends Block {
      * Simplified afterwards: merging the boxes back together once at startup
      * makes every later collision and raycast against the shape cheaper.
      */
+    /** Builds the four horizontal rotations of a NORTH shape, indexed by Direction.getHorizontal(). */
+    public static VoxelShape[] rotations(VoxelShape north) {
+        VoxelShape east = rotateClockwise(north);
+        VoxelShape south = rotateClockwise(east);
+        VoxelShape west = rotateClockwise(south);
+        // Direction.getHorizontal(): 0=south, 1=west, 2=north, 3=east
+        return new VoxelShape[]{south, west, north, east};
+    }
+
     public static VoxelShape rotateClockwise(VoxelShape shape) {
         VoxelShape[] result = {VoxelShapes.empty()};
         for (Box box : shape.getBoundingBoxes()) {

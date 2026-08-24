@@ -91,6 +91,37 @@ public final class ModContent {
                     AbstractBlock.Settings.create().strength(1.5f).sounds(BlockSoundGroup.METAL).nonOpaque(),
                     Block.createCuboidShape(0.0, 4.0, 10.0, 16.0, 14.0, 16.0), null);
 
+    /** NYC subway staircases: two 8 px steps per block, yellow safety ends. */
+    public static final com.stationannouncer.block.SubwayStairBlock SUBWAY_STAIRS =
+            new com.stationannouncer.block.SubwayStairBlock(
+                    AbstractBlock.Settings.create().strength(2.0f).sounds(BlockSoundGroup.METAL).nonOpaque());
+    public static final com.stationannouncer.block.SubwayStairBlock SUBWAY_STAIRS_OLD =
+            new com.stationannouncer.block.SubwayStairBlock(
+                    AbstractBlock.Settings.create().strength(2.0f).sounds(BlockSoundGroup.STONE).nonOpaque());
+
+    /** Black stringer beam dividing a wide staircase into lanes. */
+    public static final com.stationannouncer.block.StairDividerBlock SUBWAY_STAIR_DIVIDER =
+            new com.stationannouncer.block.StairDividerBlock(
+                    AbstractBlock.Settings.create().strength(2.0f).sounds(BlockSoundGroup.METAL).nonOpaque());
+
+    /** Steel tube handrails: one block per mounting style, variants on the item. */
+    public static final com.stationannouncer.block.HandrailBlock SUBWAY_HANDRAIL_WALL =
+            new com.stationannouncer.block.HandrailBlock(
+                    AbstractBlock.Settings.create().strength(1.5f).sounds(BlockSoundGroup.METAL).nonOpaque(),
+                    com.stationannouncer.block.HandrailBlock.Style.WALL);
+    public static final com.stationannouncer.block.HandrailBlock SUBWAY_HANDRAIL_STANDING =
+            new com.stationannouncer.block.HandrailBlock(
+                    AbstractBlock.Settings.create().strength(1.5f).sounds(BlockSoundGroup.METAL).nonOpaque(),
+                    com.stationannouncer.block.HandrailBlock.Style.STANDING);
+    public static final com.stationannouncer.block.HandrailBlock SUBWAY_HANDRAIL_DOUBLE =
+            new com.stationannouncer.block.HandrailBlock(
+                    AbstractBlock.Settings.create().strength(1.5f).sounds(BlockSoundGroup.METAL).nonOpaque(),
+                    com.stationannouncer.block.HandrailBlock.Style.DOUBLE);
+    public static final com.stationannouncer.block.HandrailBlock SUBWAY_HANDRAIL_FLOATING =
+            new com.stationannouncer.block.HandrailBlock(
+                    AbstractBlock.Settings.create().strength(1.5f).sounds(BlockSoundGroup.METAL).nonOpaque(),
+                    com.stationannouncer.block.HandrailBlock.Style.FLOATING);
+
     /** Zebra board slung under the ceiling; the end blocks carry the drop pole. */
     public static final com.stationannouncer.block.ZebraBoardBlock ZEBRA_BOARD_HANGING =
             new com.stationannouncer.block.ZebraBoardBlock(
@@ -180,6 +211,17 @@ public final class ModContent {
     public static final BlockItem ENTRANCE_RAILING_ITEM = new BlockItem(ENTRANCE_RAILING, new Item.Settings());
     public static final BlockItem BENCH_ITEM = new BlockItem(BENCH, new Item.Settings());
     public static final BlockItem PLATFORM_BARRIER_ITEM = new BlockItem(PLATFORM_BARRIER, new Item.Settings());
+    public static final BlockItem SUBWAY_STAIRS_ITEM = new BlockItem(SUBWAY_STAIRS, new Item.Settings());
+    public static final BlockItem SUBWAY_STAIRS_OLD_ITEM = new BlockItem(SUBWAY_STAIRS_OLD, new Item.Settings());
+    public static final BlockItem SUBWAY_STAIR_DIVIDER_ITEM = new BlockItem(SUBWAY_STAIR_DIVIDER, new Item.Settings());
+    public static final BlockItem SUBWAY_HANDRAIL_WALL_ITEM =
+            new com.stationannouncer.item.HandrailItem(SUBWAY_HANDRAIL_WALL, new Item.Settings());
+    public static final BlockItem SUBWAY_HANDRAIL_STANDING_ITEM =
+            new com.stationannouncer.item.HandrailItem(SUBWAY_HANDRAIL_STANDING, new Item.Settings());
+    public static final BlockItem SUBWAY_HANDRAIL_DOUBLE_ITEM =
+            new com.stationannouncer.item.HandrailItem(SUBWAY_HANDRAIL_DOUBLE, new Item.Settings());
+    public static final BlockItem SUBWAY_HANDRAIL_FLOATING_ITEM =
+            new com.stationannouncer.item.HandrailItem(SUBWAY_HANDRAIL_FLOATING, new Item.Settings());
     public static final BlockItem ZEBRA_BOARD_WALL_ITEM = new BlockItem(ZEBRA_BOARD_WALL, new Item.Settings());
     public static final BlockItem ZEBRA_BOARD_HANGING_ITEM = new BlockItem(ZEBRA_BOARD_HANGING, new Item.Settings());
     public static final BlockItem PLATFORM_TILE_FLOOR_ITEM =
@@ -298,6 +340,13 @@ public final class ModContent {
         Registry.register(Registries.BLOCK, StationAnnouncer.id("entrance_railing"), ENTRANCE_RAILING);
         Registry.register(Registries.BLOCK, StationAnnouncer.id("bench"), BENCH);
         Registry.register(Registries.BLOCK, StationAnnouncer.id("platform_barrier"), PLATFORM_BARRIER);
+        Registry.register(Registries.BLOCK, StationAnnouncer.id("subway_stairs"), SUBWAY_STAIRS);
+        Registry.register(Registries.BLOCK, StationAnnouncer.id("subway_stairs_old"), SUBWAY_STAIRS_OLD);
+        Registry.register(Registries.BLOCK, StationAnnouncer.id("subway_stair_divider"), SUBWAY_STAIR_DIVIDER);
+        Registry.register(Registries.BLOCK, StationAnnouncer.id("subway_handrail_wall"), SUBWAY_HANDRAIL_WALL);
+        Registry.register(Registries.BLOCK, StationAnnouncer.id("subway_handrail_standing"), SUBWAY_HANDRAIL_STANDING);
+        Registry.register(Registries.BLOCK, StationAnnouncer.id("subway_handrail_double"), SUBWAY_HANDRAIL_DOUBLE);
+        Registry.register(Registries.BLOCK, StationAnnouncer.id("subway_handrail_floating"), SUBWAY_HANDRAIL_FLOATING);
         Registry.register(Registries.BLOCK, StationAnnouncer.id("zebra_board_wall"), ZEBRA_BOARD_WALL);
         Registry.register(Registries.BLOCK, StationAnnouncer.id("zebra_board_hanging"), ZEBRA_BOARD_HANGING);
         Registry.register(Registries.BLOCK, StationAnnouncer.id("platform_tile_floor"), PLATFORM_TILE_FLOOR);
@@ -327,6 +376,13 @@ public final class ModContent {
         Registry.register(Registries.ITEM, StationAnnouncer.id("entrance_railing"), ENTRANCE_RAILING_ITEM);
         Registry.register(Registries.ITEM, StationAnnouncer.id("bench"), BENCH_ITEM);
         Registry.register(Registries.ITEM, StationAnnouncer.id("platform_barrier"), PLATFORM_BARRIER_ITEM);
+        Registry.register(Registries.ITEM, StationAnnouncer.id("subway_stairs"), SUBWAY_STAIRS_ITEM);
+        Registry.register(Registries.ITEM, StationAnnouncer.id("subway_stairs_old"), SUBWAY_STAIRS_OLD_ITEM);
+        Registry.register(Registries.ITEM, StationAnnouncer.id("subway_stair_divider"), SUBWAY_STAIR_DIVIDER_ITEM);
+        Registry.register(Registries.ITEM, StationAnnouncer.id("subway_handrail_wall"), SUBWAY_HANDRAIL_WALL_ITEM);
+        Registry.register(Registries.ITEM, StationAnnouncer.id("subway_handrail_standing"), SUBWAY_HANDRAIL_STANDING_ITEM);
+        Registry.register(Registries.ITEM, StationAnnouncer.id("subway_handrail_double"), SUBWAY_HANDRAIL_DOUBLE_ITEM);
+        Registry.register(Registries.ITEM, StationAnnouncer.id("subway_handrail_floating"), SUBWAY_HANDRAIL_FLOATING_ITEM);
         Registry.register(Registries.ITEM, StationAnnouncer.id("zebra_board_wall"), ZEBRA_BOARD_WALL_ITEM);
         Registry.register(Registries.ITEM, StationAnnouncer.id("zebra_board_hanging"), ZEBRA_BOARD_HANGING_ITEM);
         Registry.register(Registries.ITEM, StationAnnouncer.id("platform_tile_floor"), PLATFORM_TILE_FLOOR_ITEM);
@@ -378,6 +434,13 @@ public final class ModContent {
         DECORATION_ENTRIES.add(BENCH_ITEM);
         DECORATION_ENTRIES.add(PLATFORM_BARRIER_ITEM);
         DECORATION_ENTRIES.add(ZEBRA_BOARD_WALL_ITEM);
+        DECORATION_ENTRIES.add(SUBWAY_STAIRS_ITEM);
+        DECORATION_ENTRIES.add(SUBWAY_STAIRS_OLD_ITEM);
+        DECORATION_ENTRIES.add(SUBWAY_STAIR_DIVIDER_ITEM);
+        DECORATION_ENTRIES.add(SUBWAY_HANDRAIL_WALL_ITEM);
+        DECORATION_ENTRIES.add(SUBWAY_HANDRAIL_STANDING_ITEM);
+        DECORATION_ENTRIES.add(SUBWAY_HANDRAIL_DOUBLE_ITEM);
+        DECORATION_ENTRIES.add(SUBWAY_HANDRAIL_FLOATING_ITEM);
         DECORATION_ENTRIES.add(ZEBRA_BOARD_HANGING_ITEM);
         DECORATION_ENTRIES.add(FARE_MACHINE_ITEM);
         DECORATION_ENTRIES.add(TRACK_WARNING_SIGN_WALL_ITEM);

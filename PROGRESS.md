@@ -333,7 +333,47 @@ reusing MTR's lift textures via `RenderLifts.getLiftResource`:
   rotated ±90° about the cab centre (pivot translations transformed by
   (x,y,z)→(z,y,−x) since ModelPart pivots translate in the parent frame, wall
   distance switched from depth·8 to width·8); solid front walls reuse the stock
-  back-wall cell layout flipped. Corner posts keep stock positions/rotations
+  back-wall cell layout flipped.
+  **BUG FIXED 2026-08-17 (user screenshot: side doors rendered at the cab
+  CENTRE, leaves converging into one overlapped mid-doorway column):** the side
+  walls' yaw signs were inverted. Vanilla yaw +90° maps local +z → world +x
+  (derivable from the stock corner handrail child, or edge1X vs edge2X), and
+  the door assembly's wall side is local **+z** — so the −X wall needs
+  −HALF_PI (like edge1X) and +X needs +HALF_PI. Swapped, the assembly lands
+  12 px inboard and the leaf slide offsets point the wrong way, so opening
+  drove both leaves to the middle. Same swap fixed in the door branches' extra
+  edge strips (width>3 cabs; they rendered outside the cab), and the
+  wall_patch a/b gating conditions were inverted in all four branches
+  (patch_a = +X end on the flipped front wall, −X end on the back, front end
+  on the left wall, back end on the right — each gates on the wall it returns
+  onto). In-game confirmed by Thomas (doors now on their walls); three follow-ups
+  fixed 2026-08-18 from his play-test:
+  1. **Doorway boxes X-flipped** (`AddonRenderLifts`): the cab model renders
+     through rotateY(yaw+PI)*rotateX(pitch+PI) = R_y(yaw)*diag(-1,-1,1), so
+     MODEL X is negated vs the doorway-box space (transformForwards is plain
+     R_y(yaw)). Stock is X-symmetric and never notices; our left/right doorway
+     boxes (boarding, holograms, canOpenDoors) sat on the OPPOSITE wall from
+     the rendered door — the side facing the landing stayed shut while the far
+     side opened. Boxes mirrored to match the model. Displays are INSIDE the
+     model matrix, so they were already consistent.
+  2. **Per-side landing checks tightened** (`canOpenDoorsTight`): stock
+     canOpenDoors adds a 1-block WORLD-AXIS radius around the doorway; on a
+     2x2 cab that covers most of the footprint, so one landing opened every
+     configured side on every floor. Configured lifts now probe only the strip
+     just beyond their own cab edge (outward 1.75, sideways ±0.75, stock's ±2
+     vertical); the stock block tests + setDoorValue side effect (which is
+     what animates the LANDING doors) are kept verbatim, so only the correct
+     side's landing doors swing. Unconfigured lifts keep stock checks.
+  3. **Displays moved off door walls** (user request): configured lifts mount
+     the floor display on walls WITHOUT doors (all-four-doors falls back to
+     the stock front position); unconfigured lifts keep stock placement. And
+     **corner z-fighting** killed via CORNER_EPS = 0.1 model px in
+     AddonModelLift: adjacent door assemblies' frame posts overlap with
+     coplanar faces at a shared corner, and their floor/ceiling strips share
+     the y-planes — the ±X assemblies are nudged toward the cab centre with
+     floor raised / ceiling lowered by the same amount.
+  All compile-verified + deployed (cmp-checked into BOTH mods folders);
+  awaiting in-game confirmation. Corner posts keep stock positions/rotations
   and are suppressed exactly per stock's generalized rule (an adjacent wall
   whose door spans the whole 2-block wall). Stock's `wall_patch` (side stubs
   beside a full-width door) is split into its two halves so a stub is skipped
