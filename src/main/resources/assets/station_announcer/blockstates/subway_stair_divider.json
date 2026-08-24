@@ -1,0 +1,332 @@
+{
+  "multipart": [
+    {
+      "when": {
+        "facing": "north",
+        "bottom": "true",
+        "top": "true"
+      },
+      "apply": {
+        "model": "station_announcer:block/subway_stair_divider_both"
+      }
+    },
+    {
+      "when": {
+        "facing": "north",
+        "bottom": "true",
+        "top": "false"
+      },
+      "apply": {
+        "model": "station_announcer:block/subway_stair_divider_bottom"
+      }
+    },
+    {
+      "when": {
+        "facing": "north",
+        "bottom": "false",
+        "top": "true"
+      },
+      "apply": {
+        "model": "station_announcer:block/subway_stair_divider_top"
+      }
+    },
+    {
+      "when": {
+        "facing": "north",
+        "bottom": "false",
+        "top": "false"
+      },
+      "apply": {
+        "model": "station_announcer:block/subway_stair_divider_mid"
+      }
+    },
+    {
+      "when": {
+        "facing": "north",
+        "left": "modern"
+      },
+      "apply": {
+        "model": "station_announcer:block/subway_stair_divider_wing_modern_left"
+      }
+    },
+    {
+      "when": {
+        "facing": "north",
+        "left": "old"
+      },
+      "apply": {
+        "model": "station_announcer:block/subway_stair_divider_wing_old_left"
+      }
+    },
+    {
+      "when": {
+        "facing": "north",
+        "right": "modern"
+      },
+      "apply": {
+        "model": "station_announcer:block/subway_stair_divider_wing_modern_right"
+      }
+    },
+    {
+      "when": {
+        "facing": "north",
+        "right": "old"
+      },
+      "apply": {
+        "model": "station_announcer:block/subway_stair_divider_wing_old_right"
+      }
+    },
+    {
+      "when": {
+        "facing": "east",
+        "bottom": "true",
+        "top": "true"
+      },
+      "apply": {
+        "model": "station_announcer:block/subway_stair_divider_both",
+        "y": 90
+      }
+    },
+    {
+      "when": {
+        "facing": "east",
+        "bottom": "true",
+        "top": "false"
+      },
+      "apply": {
+        "model": "station_announcer:block/subway_stair_divider_bottom",
+        "y": 90
+      }
+    },
+    {
+      "when": {
+        "facing": "east",
+        "bottom": "false",
+        "top": "true"
+      },
+      "apply": {
+        "model": "station_announcer:block/subway_stair_divider_top",
+        "y": 90
+      }
+    },
+    {
+      "when": {
+        "facing": "east",
+        "bottom": "false",
+        "top": "false"
+      },
+      "apply": {
+        "model": "station_announcer:block/subway_stair_divider_mid",
+        "y": 90
+      }
+    },
+    {
+      "when": {
+        "facing": "east",
+        "left": "modern"
+      },
+      "apply": {
+        "model": "station_announcer:block/subway_stair_divider_wing_modern_left",
+        "y": 90
+      }
+    },
+    {
+      "when": {
+        "facing": "east",
+        "left": "old"
+      },
+      "apply": {
+        "model": "station_announcer:block/subway_stair_divider_wing_old_left",
+        "y": 90
+      }
+    },
+    {
+      "when": {
+        "facing": "east",
+        "right": "modern"
+      },
+      "apply": {
+        "model": "station_announcer:block/subway_stair_divider_wing_modern_right",
+        "y": 90
+      }
+    },
+    {
+      "when": {
+        "facing": "east",
+        "right": "old"
+      },
+      "apply": {
+        "model": "station_announcer:block/subway_stair_divider_wing_old_right",
+        "y": 90
+      }
+    },
+    {
+      "when": {
+        "facing": "south",
+        "bottom": "true",
+        "top": "true"
+      },
+      "apply": {
+        "model": "station_announcer:block/subway_stair_divider_both",
+        "y": 180
+      }
+    },
+    {
+      "when": {
+        "facing": "south",
+        "bottom": "true",
+        "top": "false"
+      },
+      "apply": {
+        "model": "station_announcer:block/subway_stair_divider_bottom",
+        "y": 180
+      }
+    },
+    {
+      "when": {
+        "facing": "south",
+        "bottom": "false",
+        "top": "true"
+      },
+      "apply": {
+        "model": "station_announcer:block/subway_stair_divider_top",
+        "y": 180
+      }
+    },
+    {
+      "when": {
+        "facing": "south",
+        "bottom": "false",
+        "top": "false"
+      },
+      "apply": {
+        "model": "station_announcer:block/subway_stair_divider_mid",
+        "y": 180
+      }
+    },
+    {
+      "when": {
+        "facing": "south",
+        "left": "modern"
+      },
+      "apply": {
+        "model": "station_announcer:block/subway_stair_divider_wing_modern_left",
+        "y": 180
+      }
+    },
+    {
+      "when": {
+        "facing": "south",
+        "left": "old"
+      },
+      "apply": {
+        "model": "station_announcer:block/subway_stair_divider_wing_old_left",
+        "y": 180
+      }
+    },
+    {
+      "when": {
+        "facing": "south",
+        "right": "modern"
+      },
+      "apply": {
+        "model": "station_announcer:block/subway_stair_divider_wing_modern_right",
+        "y": 180
+      }
+    },
+    {
+      "when": {
+        "facing": "south",
+        "right": "old"
+      },
+      "apply": {
+        "model": "station_announcer:block/subway_stair_divider_wing_old_right",
+        "y": 180
+      }
+    },
+    {
+      "when": {
+        "facing": "west",
+        "bottom": "true",
+        "top": "true"
+      },
+      "apply": {
+        "model": "station_announcer:block/subway_stair_divider_both",
+        "y": 270
+      }
+    },
+    {
+      "when": {
+        "facing": "west",
+        "bottom": "true",
+        "top": "false"
+      },
+      "apply": {
+        "model": "station_announcer:block/subway_stair_divider_bottom",
+        "y": 270
+      }
+    },
+    {
+      "when": {
+        "facing": "west",
+        "bottom": "false",
+        "top": "true"
+      },
+      "apply": {
+        "model": "station_announcer:block/subway_stair_divider_top",
+        "y": 270
+      }
+    },
+    {
+      "when": {
+        "facing": "west",
+        "bottom": "false",
+        "top": "false"
+      },
+      "apply": {
+        "model": "station_announcer:block/subway_stair_divider_mid",
+        "y": 270
+      }
+    },
+    {
+      "when": {
+        "facing": "west",
+        "left": "modern"
+      },
+      "apply": {
+        "model": "station_announcer:block/subway_stair_divider_wing_modern_left",
+        "y": 270
+      }
+    },
+    {
+      "when": {
+        "facing": "west",
+        "left": "old"
+      },
+      "apply": {
+        "model": "station_announcer:block/subway_stair_divider_wing_old_left",
+        "y": 270
+      }
+    },
+    {
+      "when": {
+        "facing": "west",
+        "right": "modern"
+      },
+      "apply": {
+        "model": "station_announcer:block/subway_stair_divider_wing_modern_right",
+        "y": 270
+      }
+    },
+    {
+      "when": {
+        "facing": "west",
+        "right": "old"
+      },
+      "apply": {
+        "model": "station_announcer:block/subway_stair_divider_wing_old_right",
+        "y": 270
+      }
+    }
+  ]
+}

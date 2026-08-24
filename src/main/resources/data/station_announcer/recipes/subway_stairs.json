@@ -1,0 +1,21 @@
+{
+  "type": "minecraft:crafting_shaped",
+  "category": "building",
+  "key": {
+    "I": {
+      "item": "minecraft:iron_ingot"
+    },
+    "B": {
+      "item": "minecraft:iron_bars"
+    }
+  },
+  "pattern": [
+    "I  ",
+    "IB ",
+    "IIB"
+  ],
+  "result": {
+    "item": "station_announcer:subway_stairs",
+    "count": 4
+  }
+}

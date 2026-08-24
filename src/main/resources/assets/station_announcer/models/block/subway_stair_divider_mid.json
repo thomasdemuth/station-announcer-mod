@@ -1,0 +1,87 @@
+{
+  "parent": "minecraft:block/block",
+  "textures": {
+    "steel": "station_announcer:block/stair_divider_steel",
+    "particle": "station_announcer:block/stair_divider_steel"
+  },
+  "elements": [
+    {
+      "from": [
+        7.25,
+        4.5,
+        0
+      ],
+      "to": [
+        8.75,
+        11.5,
+        16
+      ],
+      "faces": {
+        "east": {
+          "texture": "#steel",
+          "uv": [
+            0.25,
+            4.5,
+            15.75,
+            11.5
+          ]
+        },
+        "west": {
+          "texture": "#steel",
+          "uv": [
+            0.25,
+            4.5,
+            15.75,
+            11.5
+          ]
+        },
+        "up": {
+          "texture": "#steel",
+          "uv": [
+            0.25,
+            7.25,
+            15.75,
+            8.75
+          ]
+        },
+        "down": {
+          "texture": "#steel",
+          "uv": [
+            0.25,
+            7.25,
+            15.75,
+            8.75
+          ]
+        },
+        "north": {
+          "texture": "#steel",
+          "uv": [
+            7.25,
+            4.5,
+            8.75,
+            11.5
+          ]
+        },
+        "south": {
+          "texture": "#steel",
+          "uv": [
+            7.25,
+            4.5,
+            8.75,
+            11.5
+          ]
+        }
+      },
+      "rotation": {
+        "origin": [
+          8,
+          8,
+          8
+        ],
+        "axis": "x",
+        "angle": 45,
+        "rescale": true
+      }
+    }
+  ]
+}

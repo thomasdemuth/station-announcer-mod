@@ -1,0 +1,64 @@
+{
+  "variants": {
+    "facing=north,bottom=true,top=true": {
+      "model": "station_announcer:block/subway_stairs_both"
+    },
+    "facing=north,bottom=true,top=false": {
+      "model": "station_announcer:block/subway_stairs_bottom"
+    },
+    "facing=north,bottom=false,top=true": {
+      "model": "station_announcer:block/subway_stairs_top"
+    },
+    "facing=north,bottom=false,top=false": {
+      "model": "station_announcer:block/subway_stairs_plain"
+    },
+    "facing=east,bottom=true,top=true": {
+      "model": "station_announcer:block/subway_stairs_both",
+      "y": 90
+    },
+    "facing=east,bottom=true,top=false": {
+      "model": "station_announcer:block/subway_stairs_bottom",
+      "y": 90
+    },
+    "facing=east,bottom=false,top=true": {
+      "model": "station_announcer:block/subway_stairs_top",
+      "y": 90
+    },
+    "facing=east,bottom=false,top=false": {
+      "model": "station_announcer:block/subway_stairs_plain",
+      "y": 90
+    },
+    "facing=south,bottom=true,top=true": {
+      "model": "station_announcer:block/subway_stairs_both",
+      "y": 180
+    },
+    "facing=south,bottom=true,top=false": {
+      "model": "station_announcer:block/subway_stairs_bottom",
+      "y": 180
+    },
+    "facing=south,bottom=false,top=true": {
+      "model": "station_announcer:block/subway_stairs_top",
+      "y": 180
+    },
+    "facing=south,bottom=false,top=false": {
+      "model": "station_announcer:block/subway_stairs_plain",
+      "y": 180
+    },
+    "facing=west,bottom=true,top=true": {
+      "model": "station_announcer:block/subway_stairs_both",
+      "y": 270
+    },
+    "facing=west,bottom=true,top=false": {
+      "model": "station_announcer:block/subway_stairs_bottom",
+      "y": 270
+    },
+    "facing=west,bottom=false,top=true": {
+      "model": "station_announcer:block/subway_stairs_top",
+      "y": 270
+    },
+    "facing=west,bottom=false,top=false": {
+      "model": "station_announcer:block/subway_stairs_plain",
+      "y": 270
+    }
+  }
+}

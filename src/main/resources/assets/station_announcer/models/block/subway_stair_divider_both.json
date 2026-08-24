@@ -1,0 +1,223 @@
+{
+  "parent": "minecraft:block/block",
+  "textures": {
+    "steel": "station_announcer:block/stair_divider_steel",
+    "particle": "station_announcer:block/stair_divider_steel"
+  },
+  "elements": [
+    {
+      "from": [
+        7.25,
+        4.5,
+        3.5
+      ],
+      "to": [
+        8.75,
+        11.5,
+        12.5
+      ],
+      "faces": {
+        "east": {
+          "texture": "#steel",
+          "uv": [
+            0.25,
+            4.5,
+            9.25,
+            11.5
+          ]
+        },
+        "west": {
+          "texture": "#steel",
+          "uv": [
+            0.25,
+            4.5,
+            9.25,
+            11.5
+          ]
+        },
+        "up": {
+          "texture": "#steel",
+          "uv": [
+            0.25,
+            7.25,
+            9.25,
+            8.75
+          ]
+        },
+        "down": {
+          "texture": "#steel",
+          "uv": [
+            0.25,
+            7.25,
+            9.25,
+            8.75
+          ]
+        },
+        "north": {
+          "texture": "#steel",
+          "uv": [
+            7.25,
+            4.5,
+            8.75,
+            11.5
+          ]
+        },
+        "south": {
+          "texture": "#steel",
+          "uv": [
+            7.25,
+            4.5,
+            8.75,
+            11.5
+          ]
+        }
+      },
+      "rotation": {
+        "origin": [
+          8,
+          8,
+          8
+        ],
+        "axis": "x",
+        "angle": 45,
+        "rescale": true
+      }
+    },
+    {
+      "from": [
+        7.25,
+        11,
+        0
+      ],
+      "to": [
+        8.75,
+        16,
+        7.5
+      ],
+      "faces": {
+        "east": {
+          "texture": "#steel",
+          "uv": [
+            0.25,
+            4.5,
+            7.75,
+            11.5
+          ]
+        },
+        "west": {
+          "texture": "#steel",
+          "uv": [
+            0.25,
+            4.5,
+            7.75,
+            11.5
+          ]
+        },
+        "up": {
+          "texture": "#steel",
+          "uv": [
+            0.25,
+            7.25,
+            7.75,
+            8.75
+          ]
+        },
+        "down": {
+          "texture": "#steel",
+          "uv": [
+            0.25,
+            7.25,
+            7.75,
+            8.75
+          ]
+        },
+        "north": {
+          "texture": "#steel",
+          "uv": [
+            7.25,
+            4.5,
+            8.75,
+            11.5
+          ]
+        },
+        "south": {
+          "texture": "#steel",
+          "uv": [
+            7.25,
+            4.5,
+            8.75,
+            11.5
+          ]
+        }
+      }
+    },
+    {
+      "from": [
+        7.25,
+        0,
+        9
+      ],
+      "to": [
+        8.75,
+        6,
+        16
+      ],
+      "faces": {
+        "east": {
+          "texture": "#steel",
+          "uv": [
+            0.25,
+            4.5,
+            7.25,
+            11.5
+          ]
+        },
+        "west": {
+          "texture": "#steel",
+          "uv": [
+            0.25,
+            4.5,
+            7.25,
+            11.5
+          ]
+        },
+        "up": {
+          "texture": "#steel",
+          "uv": [
+            0.25,
+            7.25,
+            7.25,
+            8.75
+          ]
+        },
+        "down": {
+          "texture": "#steel",
+          "uv": [
+            0.25,
+            7.25,
+            7.25,
+            8.75
+          ]
+        },
+        "north": {
+          "texture": "#steel",
+          "uv": [
+            7.25,
+            4.5,
+            8.75,
+            11.5
+          ]
+        },
+        "south": {
+          "texture": "#steel",
+          "uv": [
+            7.25,
+            4.5,
+            8.75,
+            11.5
+          ]
+        }
+      }
+    }
+  ]
+}
