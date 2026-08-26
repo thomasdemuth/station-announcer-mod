@@ -211,7 +211,8 @@ public final class ModContent {
     public static final BlockItem ENTRANCE_RAILING_ITEM = new BlockItem(ENTRANCE_RAILING, new Item.Settings());
     public static final BlockItem BENCH_ITEM = new BlockItem(BENCH, new Item.Settings());
     public static final BlockItem PLATFORM_BARRIER_ITEM = new BlockItem(PLATFORM_BARRIER, new Item.Settings());
-    public static final BlockItem SUBWAY_STAIRS_ITEM = new BlockItem(SUBWAY_STAIRS, new Item.Settings());
+    public static final BlockItem SUBWAY_STAIRS_ITEM =
+            new com.stationannouncer.item.SubwayStairItem(SUBWAY_STAIRS, new Item.Settings());
     public static final BlockItem SUBWAY_STAIRS_OLD_ITEM = new BlockItem(SUBWAY_STAIRS_OLD, new Item.Settings());
     public static final BlockItem SUBWAY_STAIR_DIVIDER_ITEM = new BlockItem(SUBWAY_STAIR_DIVIDER, new Item.Settings());
     public static final BlockItem SUBWAY_HANDRAIL_WALL_ITEM =

@@ -119,7 +119,9 @@ public class SubwayStairBlock extends Block {
     @Override
     public BlockState getPlacementState(ItemPlacementContext context) {
         return computed(context.getWorld(), context.getBlockPos(),
-                context.getHorizontalPlayerFacing());
+                context.getHorizontalPlayerFacing())
+                .with(SOLID, solidToggle
+                        && com.stationannouncer.item.SubwayStairItem.selectedSolid(context.getStack()));
     }
 
     @Override
