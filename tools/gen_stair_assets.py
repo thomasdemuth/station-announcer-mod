@@ -278,8 +278,12 @@ def thin_stair_elements(yellow_bottom, yellow_top, x0=0, x1=16):
         "south": f("side", [0.25, 8.25, wu, 9.25]),
         "east": edge, "west": edge,
     }))
-    # mid riser mesh between the steps (top buried under the upper pan)
-    els.append(elem([x0, 8, 7.5], [x1, 15, 8.5], {
+    # mid riser mesh directly under the upper pan's leading edge: top fully
+    # buried under the pan (z0..8 covers z7..8) and the south face at z8 is
+    # coplanar-continuous with the lower pan's north face — a straddled riser
+    # (z7.5..8.5) left a 0.5px strip of omitted top face EXPOSED past the pan,
+    # which read as a see-through slit under every tread
+    els.append(elem([x0, 8, 7], [x1, 15, 8], {
         "north": f("riser_t" if yellow_top else "riser", [0.25, 8.5, wu, 15.5]),
         "south": f("riser_t" if yellow_top else "riser", [0.25, 8.5, wu, 15.5]),
         "down": f("side", [0.25, 8.25, wu, 9.25]),
