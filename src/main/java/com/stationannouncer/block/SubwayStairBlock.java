@@ -4,12 +4,18 @@ import net.minecraft.block.Block;
 import net.minecraft.block.BlockState;
 import net.minecraft.block.ShapeContext;
 import net.minecraft.entity.LivingEntity;
+import net.minecraft.entity.player.PlayerEntity;
 import net.minecraft.item.ItemPlacementContext;
 import net.minecraft.item.ItemStack;
+import net.minecraft.sound.SoundCategory;
+import net.minecraft.sound.SoundEvents;
 import net.minecraft.state.StateManager;
 import net.minecraft.state.property.BooleanProperty;
 import net.minecraft.state.property.DirectionProperty;
 import net.minecraft.state.property.Properties;
+import net.minecraft.util.ActionResult;
+import net.minecraft.util.Hand;
+import net.minecraft.util.hit.BlockHitResult;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.util.math.Direction;
 import net.minecraft.util.shape.VoxelShape;
@@ -36,13 +42,20 @@ public class SubwayStairBlock extends Block {
     public static final BooleanProperty BOTTOM = BooleanProperty.of("bottom");
     /** No same-stair continues uphill: paint the upper step's nosing yellow. */
     public static final BooleanProperty TOP = BooleanProperty.of("top");
+    /** Modern only: closed steel construction instead of the floating one.
+     *  Declared on both blocks (appendProperties runs from the super
+     *  constructor, before instance fields exist) but only the modern
+     *  block's blockstate maps it and only it toggles. */
+    public static final BooleanProperty SOLID = BooleanProperty.of("solid");
 
     private final VoxelShape[] shapes;
+    private final boolean solidToggle;
 
-    public SubwayStairBlock(Settings settings) {
+    public SubwayStairBlock(Settings settings, boolean solidToggle) {
         super(settings);
+        this.solidToggle = solidToggle;
         setDefaultState(getDefaultState().with(FACING, Direction.NORTH)
-                .with(BOTTOM, true).with(TOP, true));
+                .with(BOTTOM, true).with(TOP, true).with(SOLID, false));
         // Ascending toward NORTH: lower half full, upper half on the north side.
         VoxelShape north = VoxelShapes.union(
                 createCuboidShape(0, 0, 0, 16, 8, 16),
@@ -52,7 +65,28 @@ public class SubwayStairBlock extends Block {
 
     @Override
     protected void appendProperties(StateManager.Builder<Block, BlockState> builder) {
-        builder.add(FACING, BOTTOM, TOP);
+        builder.add(FACING, BOTTOM, TOP, SOLID);
+    }
+
+    /** Empty-hand right-click on the modern stair toggles the closed
+     *  construction; holding anything PASSes so building against a stair
+     *  still works. */
+    @Override
+    public ActionResult onUse(BlockState state, World world, BlockPos pos, PlayerEntity player,
+                              Hand hand, BlockHitResult hit) {
+        if (!solidToggle || !player.getStackInHand(hand).isEmpty()) {
+            return ActionResult.PASS;
+        }
+        if (world.isClient) {
+            return ActionResult.SUCCESS;
+        }
+        boolean solid = !state.get(SOLID);
+        world.setBlockState(pos, state.with(SOLID, solid), Block.NOTIFY_LISTENERS);
+        world.playSound(null, pos, solid
+                        ? SoundEvents.BLOCK_IRON_TRAPDOOR_CLOSE
+                        : SoundEvents.BLOCK_IRON_TRAPDOOR_OPEN,
+                SoundCategory.BLOCKS, 0.6f, 1.4f);
+        return ActionResult.CONSUME;
     }
 
     @Override
@@ -112,7 +146,8 @@ public class SubwayStairBlock extends Block {
         for (BlockPos cell : new BlockPos[]{downhill(pos, facing), uphill(pos, facing)}) {
             BlockState neighbor = world.getBlockState(cell);
             if (neighbor.isOf(this)) {
-                BlockState fresh = computed(world, cell, neighbor.get(FACING));
+                BlockState fresh = computed(world, cell, neighbor.get(FACING))
+                        .with(SOLID, neighbor.get(SOLID));
                 if (fresh != neighbor) {
                     world.setBlockState(cell, fresh, Block.NOTIFY_LISTENERS);
                 }

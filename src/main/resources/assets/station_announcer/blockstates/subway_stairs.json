@@ -1,63 +1,123 @@
 {
   "variants": {
-    "facing=north,bottom=true,top=true": {
+    "facing=north,bottom=true,top=true,solid=false": {
       "model": "station_announcer:block/subway_stairs_both"
     },
-    "facing=north,bottom=true,top=false": {
+    "facing=north,bottom=true,top=true,solid=true": {
+      "model": "station_announcer:block/subway_stairs_solid_both"
+    },
+    "facing=north,bottom=true,top=false,solid=false": {
       "model": "station_announcer:block/subway_stairs_bottom"
     },
-    "facing=north,bottom=false,top=true": {
+    "facing=north,bottom=true,top=false,solid=true": {
+      "model": "station_announcer:block/subway_stairs_solid_bottom"
+    },
+    "facing=north,bottom=false,top=true,solid=false": {
       "model": "station_announcer:block/subway_stairs_top"
     },
-    "facing=north,bottom=false,top=false": {
+    "facing=north,bottom=false,top=true,solid=true": {
+      "model": "station_announcer:block/subway_stairs_solid_top"
+    },
+    "facing=north,bottom=false,top=false,solid=false": {
       "model": "station_announcer:block/subway_stairs_plain"
     },
-    "facing=east,bottom=true,top=true": {
+    "facing=north,bottom=false,top=false,solid=true": {
+      "model": "station_announcer:block/subway_stairs_solid_plain"
+    },
+    "facing=east,bottom=true,top=true,solid=false": {
       "model": "station_announcer:block/subway_stairs_both",
       "y": 90
     },
-    "facing=east,bottom=true,top=false": {
+    "facing=east,bottom=true,top=true,solid=true": {
+      "model": "station_announcer:block/subway_stairs_solid_both",
+      "y": 90
+    },
+    "facing=east,bottom=true,top=false,solid=false": {
       "model": "station_announcer:block/subway_stairs_bottom",
       "y": 90
     },
-    "facing=east,bottom=false,top=true": {
+    "facing=east,bottom=true,top=false,solid=true": {
+      "model": "station_announcer:block/subway_stairs_solid_bottom",
+      "y": 90
+    },
+    "facing=east,bottom=false,top=true,solid=false": {
       "model": "station_announcer:block/subway_stairs_top",
       "y": 90
     },
-    "facing=east,bottom=false,top=false": {
+    "facing=east,bottom=false,top=true,solid=true": {
+      "model": "station_announcer:block/subway_stairs_solid_top",
+      "y": 90
+    },
+    "facing=east,bottom=false,top=false,solid=false": {
       "model": "station_announcer:block/subway_stairs_plain",
       "y": 90
     },
-    "facing=south,bottom=true,top=true": {
+    "facing=east,bottom=false,top=false,solid=true": {
+      "model": "station_announcer:block/subway_stairs_solid_plain",
+      "y": 90
+    },
+    "facing=south,bottom=true,top=true,solid=false": {
       "model": "station_announcer:block/subway_stairs_both",
       "y": 180
     },
-    "facing=south,bottom=true,top=false": {
+    "facing=south,bottom=true,top=true,solid=true": {
+      "model": "station_announcer:block/subway_stairs_solid_both",
+      "y": 180
+    },
+    "facing=south,bottom=true,top=false,solid=false": {
       "model": "station_announcer:block/subway_stairs_bottom",
       "y": 180
     },
-    "facing=south,bottom=false,top=true": {
+    "facing=south,bottom=true,top=false,solid=true": {
+      "model": "station_announcer:block/subway_stairs_solid_bottom",
+      "y": 180
+    },
+    "facing=south,bottom=false,top=true,solid=false": {
       "model": "station_announcer:block/subway_stairs_top",
       "y": 180
     },
-    "facing=south,bottom=false,top=false": {
+    "facing=south,bottom=false,top=true,solid=true": {
+      "model": "station_announcer:block/subway_stairs_solid_top",
+      "y": 180
+    },
+    "facing=south,bottom=false,top=false,solid=false": {
       "model": "station_announcer:block/subway_stairs_plain",
       "y": 180
     },
-    "facing=west,bottom=true,top=true": {
+    "facing=south,bottom=false,top=false,solid=true": {
+      "model": "station_announcer:block/subway_stairs_solid_plain",
+      "y": 180
+    },
+    "facing=west,bottom=true,top=true,solid=false": {
       "model": "station_announcer:block/subway_stairs_both",
       "y": 270
     },
-    "facing=west,bottom=true,top=false": {
+    "facing=west,bottom=true,top=true,solid=true": {
+      "model": "station_announcer:block/subway_stairs_solid_both",
+      "y": 270
+    },
+    "facing=west,bottom=true,top=false,solid=false": {
       "model": "station_announcer:block/subway_stairs_bottom",
       "y": 270
     },
-    "facing=west,bottom=false,top=true": {
+    "facing=west,bottom=true,top=false,solid=true": {
+      "model": "station_announcer:block/subway_stairs_solid_bottom",
+      "y": 270
+    },
+    "facing=west,bottom=false,top=true,solid=false": {
       "model": "station_announcer:block/subway_stairs_top",
       "y": 270
     },
-    "facing=west,bottom=false,top=false": {
+    "facing=west,bottom=false,top=true,solid=true": {
+      "model": "station_announcer:block/subway_stairs_solid_top",
+      "y": 270
+    },
+    "facing=west,bottom=false,top=false,solid=false": {
       "model": "station_announcer:block/subway_stairs_plain",
+      "y": 270
+    },
+    "facing=west,bottom=false,top=false,solid=true": {
+      "model": "station_announcer:block/subway_stairs_solid_plain",
       "y": 270
     }
   }

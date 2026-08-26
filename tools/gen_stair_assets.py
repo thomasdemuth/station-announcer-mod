@@ -107,10 +107,12 @@ def tex_tread(yellow, old):
 
 
 def tex_riser(kind):
-    """32x32 riser texture. kind: mesh (cutout), mesh_yellow (painted solid),
-    old (solid dirty), old_yellow."""
-    if kind == "mesh":
-        rows = pk.canvas(32, 32, HOLE)
+    """32x32 riser texture. kind: mesh (cutout), mesh_solid (same weave over
+    a dark steel backing — the closed variant must not show cutout holes into
+    a culled interior), mesh_yellow (painted solid), old (solid dirty),
+    old_yellow."""
+    if kind in ("mesh", "mesh_solid"):
+        rows = pk.canvas(32, 32, HOLE if kind == "mesh" else BLACK_STEEL)
         # galvanized frame border + woven mesh with 2px holes on a 4px grid
         for y in range(32):
             for x in range(32):
@@ -293,11 +295,13 @@ def thin_stair_elements(yellow_bottom, yellow_top, x0=0, x1=16):
 
 
 def write_stairs(prefix, old):
-    """Four baked variants: plain / bottom / top / both."""
-    def textures(yellow_bottom, yellow_top):
+    """Four baked variants: plain / bottom / top / both — and for the modern
+    stair a second, right-click-toggled SOLID set built with the closed
+    construction (solid_stair_elements) and the opaque-backed mesh riser."""
+    def textures(yellow_bottom, yellow_top, solid=False):
         base = {
             "tread": f"{MOD}:block/{prefix}_tread",
-            "riser": f"{MOD}:block/{prefix}_riser",
+            "riser": f"{MOD}:block/{prefix}_riser" + ("_solid" if solid else ""),
             "side": f"{MOD}:block/{prefix}_side",
             "particle": f"{MOD}:block/{prefix}_side",
         }
@@ -310,6 +314,9 @@ def write_stairs(prefix, old):
     for suffix, yb, yt in (("plain", False, False), ("bottom", True, False),
                            ("top", False, True), ("both", True, True)):
         model(f"{prefix}_{suffix}", textures(yb, yt), builder(yb, yt))
+        if not old:
+            model(f"{prefix}_solid_{suffix}", textures(yb, yt, solid=True),
+                  solid_stair_elements(yb, yt))
 
 
 DIV_TEX = {"steel": f"{MOD}:block/stair_divider_steel",
@@ -613,7 +620,10 @@ def ap(mdl, rot):
     return entry
 
 
-def stairs_blockstate(prefix):
+def stairs_blockstate(prefix, solid_toggle=False):
+    """solid_toggle: the Java block carries SOLID on both stairs (the
+    super-constructor gotcha), but only the modern blockstate maps it —
+    the old blockstate omits the key, which vanilla treats as a wildcard."""
     variants = {}
     for facing, rot in ROTS:
         for bottom in ("true", "false"):
@@ -621,8 +631,12 @@ def stairs_blockstate(prefix):
                 suffix = ("both" if bottom == "true" and top == "true"
                           else "bottom" if bottom == "true"
                           else "top" if top == "true" else "plain")
-                variants[f"facing={facing},bottom={bottom},top={top}"] = \
-                    ap(f"{prefix}_{suffix}", rot)
+                key = f"facing={facing},bottom={bottom},top={top}"
+                if solid_toggle:
+                    variants[key + ",solid=false"] = ap(f"{prefix}_{suffix}", rot)
+                    variants[key + ",solid=true"] = ap(f"{prefix}_solid_{suffix}", rot)
+                else:
+                    variants[key] = ap(f"{prefix}_{suffix}", rot)
     return {"variants": variants}
 
 
@@ -716,7 +730,8 @@ RECIPES = {
 # ------------------------------------------------------------------- verify --
 PROPS = {
     "subway_stairs": {"facing": {"north", "south", "east", "west"},
-                      "bottom": {"true", "false"}, "top": {"true", "false"}},
+                      "bottom": {"true", "false"}, "top": {"true", "false"},
+                      "solid": {"true", "false"}},
     "subway_stair_divider": {"facing": {"north", "south", "east", "west"},
                              "bottom": {"true", "false"}, "top": {"true", "false"},
                              "left": {"none", "modern", "old"},
@@ -765,6 +780,7 @@ def main():
         "subway_stairs_tread": tex_tread(False, False),
         "subway_stairs_tread_yellow": tex_tread(True, False),
         "subway_stairs_riser": tex_riser("mesh"),
+        "subway_stairs_riser_solid": tex_riser("mesh_solid"),
         "subway_stairs_riser_yellow": tex_riser("mesh_yellow"),
         "subway_stairs_side": tex_side(False),
         "subway_stairs_old_tread": tex_tread(False, True),
@@ -783,7 +799,8 @@ def main():
     write_divider()
     write_handrails()
 
-    wj(os.path.join(ASSETS, "blockstates/subway_stairs.json"), stairs_blockstate("subway_stairs"))
+    wj(os.path.join(ASSETS, "blockstates/subway_stairs.json"),
+       stairs_blockstate("subway_stairs", solid_toggle=True))
     wj(os.path.join(ASSETS, "blockstates/subway_stairs_old.json"), stairs_blockstate("subway_stairs_old"))
     wj(os.path.join(ASSETS, "blockstates/subway_stair_divider.json"), divider_blockstate())
     for style in ("wall", "standing", "double", "floating"):

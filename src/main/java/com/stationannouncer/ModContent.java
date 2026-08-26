@@ -94,10 +94,10 @@ public final class ModContent {
     /** NYC subway staircases: two 8 px steps per block, yellow safety ends. */
     public static final com.stationannouncer.block.SubwayStairBlock SUBWAY_STAIRS =
             new com.stationannouncer.block.SubwayStairBlock(
-                    AbstractBlock.Settings.create().strength(2.0f).sounds(BlockSoundGroup.METAL).nonOpaque());
+                    AbstractBlock.Settings.create().strength(2.0f).sounds(BlockSoundGroup.METAL).nonOpaque(), true);
     public static final com.stationannouncer.block.SubwayStairBlock SUBWAY_STAIRS_OLD =
             new com.stationannouncer.block.SubwayStairBlock(
-                    AbstractBlock.Settings.create().strength(2.0f).sounds(BlockSoundGroup.STONE).nonOpaque());
+                    AbstractBlock.Settings.create().strength(2.0f).sounds(BlockSoundGroup.STONE).nonOpaque(), false);
 
     /** Black stringer beam dividing a wide staircase into lanes. */
     public static final com.stationannouncer.block.StairDividerBlock SUBWAY_STAIR_DIVIDER =
