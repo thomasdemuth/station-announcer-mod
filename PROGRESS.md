@@ -2706,3 +2706,34 @@ Verified by probe in ?demo=1: with history [r1,r2,r3] and the head 5 blocks
 into r3, a point 30 back lands at (166,19) ON r2's curve (old code: (180,15),
 the r3 tangent — the reported snap), and 70 back resolves across TWO
 boundaries to (132,3). Chain orientation r3+/r2+/r1+ all correct.
+
+## Dispatch web UI round 12 — performance headroom pass (2026-08-28)
+
+Thomas: performance seems fine in testing — anything needed? Answer: fine at
+current scale by design (delta SSE, zero-clients-zero-work, cached stringline
+geometry, demand-driven polling), but three scaling cliffs would surface as the
+network grows. All frontend; server side reviewed and left alone (its hot paths
+are already O(vehicles)/cached).
+
+1. **Pan/zoom no longer re-renders the network per frame.** The static layer
+   (grid, rails, stations, labels) was fully re-stroked on EVERY dragged pixel.
+   Now: full renders are capped at ~10/s during interaction; between them the
+   cached bitmap is blitted with an offset/scale transform (derivation: dest =
+   f·(src−C)+C+Δ·k·dpr), so dragging stays 60 fps regardless of network size.
+   The static layer renders a 25% margin so blits don't show blank edges; a
+   canvas resize nulls staticRenderedView (the bitmap clears) so a stale blit
+   can never paint blank.
+2. **Viewport culling.** Rails carry a precomputed world bbox (applyNetwork) and
+   the static layer skips rails/station areas/labels/platform labels outside the
+   viewport+margin; the dynamic layer skips painting trains >80 px off-canvas
+   (their smoothing state still advances so they enter smoothly and stay
+   clickable).
+3. **Detail panel DOM churn.** updateDetail runs at stream rate (~3 Hz);
+   both the vehicle and station panels now skip the innerHTML write when the
+   rendered content is unchanged (shared lastDetailHtml signature).
+
+Verified in ?demo=1: 30-step scripted pan at 16 ms intervals — no console
+errors, map intact at the new position, staticDirty settles false with the
+rendered view matching the live view once interaction stops (the transient
+true mid-pan is the fast path working). Note: the demo is too small to SHOW
+the wins — they are headroom for Baker City scale, not a change in look.

@@ -204,16 +204,20 @@ function applyNetwork(net) {
 	let minX = 1e18, minZ = 1e18, maxX = -1e18, maxZ = -1e18;
 	(net.rails || []).forEach((r) => {
 		const cum = [0];
+		let bMinX = Infinity, bMinZ = Infinity, bMaxX = -Infinity, bMaxZ = -Infinity;
 		for (let i = 1; i < r.points.length; i++) {
 			const dx = r.points[i][0] - r.points[i - 1][0];
 			const dz = r.points[i][2] - r.points[i - 1][2];
 			cum.push(cum[i - 1] + Math.hypot(dx, dz));
 		}
-		state.rails.set(r.id, { ...r, cum });
 		r.points.forEach(([x, , z]) => {
+			bMinX = Math.min(bMinX, x); bMaxX = Math.max(bMaxX, x);
+			bMinZ = Math.min(bMinZ, z); bMaxZ = Math.max(bMaxZ, z);
 			minX = Math.min(minX, x); maxX = Math.max(maxX, x);
 			minZ = Math.min(minZ, z); maxZ = Math.max(maxZ, z);
 		});
+		// world-space bbox per rail: the static layer culls with this
+		state.rails.set(r.id, { ...r, cum, bbox: [bMinX, bMinZ, bMaxX, bMaxZ] });
 	});
 	state.networkBox = maxX < minX ? null : { minX, minZ, maxX, maxZ };
 	buildSignalGroups();
@@ -524,10 +528,14 @@ function resize() {
 	if (canvas.width !== w * dpr || canvas.height !== h * dpr) {
 		canvas.width = w * dpr; canvas.height = h * dpr;
 		staticCanvas.width = w * dpr; staticCanvas.height = h * dpr;
+		staticRenderedView = null; // resizing clears the bitmap — never stale-blit it
 		invalidateStatic();
 	}
 	return dpr;
 }
+
+/** The view the static layer was last fully rendered at (null = unusable). */
+let staticRenderedView = null;
 
 function worldToScreen(x, z) {
 	const v = state.view;
@@ -553,6 +561,15 @@ function drawStatic(dpr) {
 	g.clearRect(0, 0, canvas.clientWidth, canvas.clientHeight);
 	const v = state.view;
 	const zoomedIn = v.scale > 1.2;
+	// World-space viewport with a 25% margin — everything below culls against it.
+	// The margin is what keeps the pan fast-path's offset blits from showing blank
+	// edges before the next full render (≤100 ms later).
+	const marginX = canvas.clientWidth / v.scale * 0.25 + 8;
+	const marginZ = canvas.clientHeight / v.scale * 0.25 + 8;
+	const wLeft = v.x - canvas.clientWidth / 2 / v.scale - marginX;
+	const wTop = v.z - canvas.clientHeight / 2 / v.scale - marginZ;
+	const wRight = v.x + canvas.clientWidth / 2 / v.scale + marginX;
+	const wBottom = v.z + canvas.clientHeight / 2 / v.scale + marginZ;
 
 	// faint world-aligned grid — depth + a sense of scale, like a radar backdrop.
 	// Power-of-two spacing chosen so lines sit 64–128 px apart at any zoom.
@@ -560,10 +577,6 @@ function drawStatic(dpr) {
 		let step = 1;
 		while (step * v.scale < 64) step *= 2;
 		while (step * v.scale > 128 && step > 1) step /= 2;
-		const wLeft = v.x - canvas.clientWidth / 2 / v.scale;
-		const wTop = v.z - canvas.clientHeight / 2 / v.scale;
-		const wRight = v.x + canvas.clientWidth / 2 / v.scale;
-		const wBottom = v.z + canvas.clientHeight / 2 / v.scale;
 		g.strokeStyle = "#161d2c";
 		g.lineWidth = 1;
 		g.beginPath();
@@ -581,6 +594,8 @@ function drawStatic(dpr) {
 	// station areas — tinted by the station's own colour, or by the selected heat metric
 	const heat = state.analytics.heat;
 	for (const st of state.stations) {
+		const b = st.bounds;
+		if (b[3] < wLeft || b[0] > wRight || b[5] < wTop || b[2] > wBottom) continue;
 		const [x1, y1] = worldToScreen(st.bounds[0], st.bounds[2]);
 		const [x2, y2] = worldToScreen(st.bounds[3] + 1, st.bounds[5] + 1);
 		const hot = heat !== "off" ? heatColor(heat, state.analytics.stationById.get(st.id)) : null;
@@ -596,9 +611,11 @@ function drawStatic(dpr) {
 		g.beginPath(); g.roundRect(x1, y1, x2 - x1, y2 - y1, 4); g.fill(); g.stroke();
 	}
 
-	// rails
+	// rails (bbox-culled: only what intersects the viewport is stroked)
 	for (const r of state.rails.values()) {
 		if (!modeEnabled(r.mode)) continue;
+		const bb = r.bbox;
+		if (bb && (bb[2] < wLeft || bb[0] > wRight || bb[3] < wTop || bb[1] > wBottom)) continue;
 		const kmh = Math.max(r.speedA, r.speedB);
 		g.strokeStyle = r.platform ? "#8fa3c4" : r.siding ? "#3a4358" : state.layers.speed ? speedColor(kmh) : "#5b6981";
 		g.lineWidth = r.platform ? 4 : 2;
@@ -620,6 +637,7 @@ function drawStatic(dpr) {
 		g.fillStyle = "#8fa3c4";
 		g.textAlign = "center";
 		for (const p of state.platforms.values()) {
+			if (p.mid[0] < wLeft || p.mid[0] > wRight || p.mid[2] < wTop || p.mid[2] > wBottom) continue;
 			const [sx, sy] = worldToScreen(p.mid[0], p.mid[2]);
 			g.fillText(firstLang(p.name), sx, sy - 6);
 		}
@@ -630,6 +648,8 @@ function drawStatic(dpr) {
 		g.font = "600 " + Math.round(12 * s) + "px system-ui";
 		g.textAlign = "center";
 		for (const st of state.stations) {
+			const b = st.bounds;
+			if (b[3] < wLeft || b[0] > wRight || b[5] < wTop || b[2] > wBottom) continue;
 			const [sx] = worldToScreen((st.bounds[0] + st.bounds[3]) / 2, 0);
 			const [, sy] = worldToScreen(0, st.bounds[2]);
 			const label = firstLang(st.name);
@@ -650,10 +670,34 @@ function frame() {
 	// buffers then makes drawImage throw, which would kill this rAF loop for good.
 	if (!canvas.clientWidth || !canvas.clientHeight) { requestAnimationFrame(frame); return; }
 	const dpr = resize();
-	if (staticDirty) { drawStatic(dpr); staticDirty = false; }
+	// Interaction fast path: while panning/zooming, reuse the cached static layer
+	// with an offset/scale blit and cap FULL network redraws at ~10/s — dragging a
+	// big network no longer re-strokes every rail on every frame.
+	let blitStale = false;
+	if (staticDirty) {
+		if (staticRenderedView && performance.now() - staticRenderedView.at < 100) {
+			blitStale = true;
+		} else {
+			drawStatic(dpr);
+			staticRenderedView = { x: state.view.x, z: state.view.z, scale: state.view.scale, at: performance.now() };
+			staticDirty = false;
+		}
+	}
 	ctx.setTransform(1, 0, 0, 1, 0, 0);
 	ctx.clearRect(0, 0, canvas.width, canvas.height);
-	ctx.drawImage(staticCanvas, 0, 0);
+	if (blitStale) {
+		const sv = staticRenderedView;
+		const f = state.view.scale / sv.scale;
+		const cx = canvas.width / 2, cy = canvas.height / 2;
+		ctx.save();
+		ctx.translate(cx + (sv.x - state.view.x) * state.view.scale * dpr,
+			cy + (sv.z - state.view.z) * state.view.scale * dpr);
+		ctx.scale(f, f);
+		ctx.drawImage(staticCanvas, -cx, -cy);
+		ctx.restore();
+	} else {
+		ctx.drawImage(staticCanvas, 0, 0);
+	}
 	ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
 
 	// interpolation delay from the measured stream cadence (fallback: configured rate)
@@ -733,6 +777,10 @@ function frame() {
 		const len = Math.max(10 * uiScale(), Math.min(26, 6 * state.view.scale * uiScale()));
 
 		if (state.follow && selected) { state.view.x = rec.disp.x; state.view.z = rec.disp.z; invalidateStatic(); }
+
+		// viewport culling: off-screen trains keep their smoothing state advanced
+		// (and stay clickable the moment they enter) but are not painted
+		if (sx < -80 || sy < -80 || sx > canvas.clientWidth + 80 || sy > canvas.clientHeight + 80) continue;
 
 		// Zoomed in with a known consist and rail: draw the individual cars along the
 		// curve (radar.mta.info style); otherwise the single capsule marker.
@@ -1304,6 +1352,9 @@ function centerOn(id) {
 
 /* ---------- detail panel ---------- */
 
+/* The panel re-renders at stream rate (~3 Hz); skip the DOM write when nothing changed. */
+let lastDetailHtml = "";
+
 function updateDetail() {
 	const el = $("detail");
 	const rec = state.selected ? state.vehicles.get(state.selected) : null;
@@ -1334,7 +1385,7 @@ function updateDetail() {
 		html += `<div class="consist">${rec.consist.cars.length} car(s): ${rec.consist.cars.join(" + ")}</div>`;
 	}
 	$("followBtn").style.display = "";
-	$("detailBody").innerHTML = html;
+	if (html !== lastDetailHtml) { lastDetailHtml = html; $("detailBody").innerHTML = html; }
 }
 
 /* ---------- station panel ---------- */
@@ -1400,6 +1451,8 @@ function renderStationPanel(el) {
 		html += rows.map(([k, v]) => `<div class="row"><span class="k">${k}</span><span class="v">${v}</span></div>`).join("");
 	}
 
+	if (html === lastDetailHtml) return;
+	lastDetailHtml = html;
 	$("detailBody").innerHTML = html;
 	$("detailBody").querySelectorAll("[data-veh]").forEach((row) => {
 		row.onclick = () => {
