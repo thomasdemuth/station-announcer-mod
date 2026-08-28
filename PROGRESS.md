@@ -2666,3 +2666,21 @@ Verified in ?demo=1: three-row head reads cleanly (screenshot); modal shows the
 big chart + explained tiles for Demo Express; sorting by headway irregularity
 orders Baker City (0.62) before Harbor North (0.11) then flips; sorted th
 highlighted; modal Escape/backdrop close.
+
+## Dispatch web UI round 10 — scheduled-vs-actual hover ghost (2026-08-28)
+
+Thomas: show scheduled vs actual times on the stringlines without adding clutter
+to the graph or the options row. Frontend-only.
+
+Every departure already carries its schedule deviation, so scheduled time =
+actual − dev. On HOVER (and only on hover), the hovered run's schedule is
+re-plotted as a dashed ghost in the run's own colour at 55% alpha — each trace
+point shifted left by its stop's deviation (pts now carry [t, dist, dev]) — so
+the horizontal gap between dashed and solid IS the lateness, stop by stop.
+The tooltip's deviation line became "vs schedule: +Ns · dashed = scheduled".
+No new toggle, no standing marks on the chart; live-tip-only entries (no
+history) simply show no ghost.
+
+Verified in ?demo=1: hovering a +20s Northbound run draws the dashed schedule
+hugging the actual with the offset visible, tooltip labels it; non-hovered
+state unchanged.

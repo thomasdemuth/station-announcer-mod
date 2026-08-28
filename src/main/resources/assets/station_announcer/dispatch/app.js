@@ -2276,8 +2276,10 @@ function buildGeometry() {
 				};
 				traces.push(current);
 			}
-			current.pts.push([t - (dwell || 0), dist]);
-			current.pts.push([t, dist]);
+			// Third element = deviation at this stop: scheduled time is t − dev,
+			// which is what the hover's dashed schedule ghost re-plots.
+			current.pts.push([t - (dwell || 0), dist, dev || 0]);
+			current.pts.push([t, dist, dev || 0]);
 			current.lastDev = dev;
 			current.lastT = t;
 			lastStop = stop;
@@ -2441,6 +2443,27 @@ function drawStringline() {
 		}
 	}
 
+	// Scheduled-vs-actual, clutter-free: ONLY the hovered run gets its schedule
+	// re-plotted as a dashed ghost (each point shifted left by its deviation —
+	// scheduled = actual − dev). The gap between ghost and solid IS the lateness.
+	if (sl.hover && sl.hover.entry.tr.pts) {
+		const entry = sl.hover.entry;
+		g.strokeStyle = entry.tr.color;
+		g.globalAlpha = 0.55;
+		g.lineWidth = 1.5;
+		g.setLineDash([5, 4]);
+		g.beginPath();
+		let started = false;
+		for (const [t, dist, dev] of entry.tr.pts) {
+			const x = X(t - (dev || 0)), y = Y(dist);
+			started ? g.lineTo(x, y) : g.moveTo(x, y);
+			started = true;
+		}
+		g.stroke();
+		g.setLineDash([]);
+		g.globalAlpha = 1;
+	}
+
 	for (const entry of drawn) {
 		const hovered = sl.hover && sl.hover.entry === entry;
 		const stroke = sl.grey && !hovered ? "#6f7c96" : entry.tr.color;
@@ -2557,7 +2580,8 @@ function drawStringline() {
 		tip.innerHTML = `<div class="t"><span class="chip" style="background:${tr.color}">${escapeHtml(tr.number)}</span> ` +
 			`${escapeHtml(tr.routeName)}${tr.variant ? " · " + escapeHtml(tr.variant) : ""}</div>` +
 			`<div>${entry.live ? "Live — click to follow on the map" : "Completed run"}</div>` +
-			`<div>Last dev: <span class="${devCls}">${devTxt}</span></div>`;
+			`<div>vs schedule: <span class="${devCls}">${devTxt}</span>` +
+			`${tr.pts ? ' <span style="color:var(--dim)">· dashed = scheduled</span>' : ""}</div>`;
 	} else {
 		tip.classList.add("hidden");
 	}
