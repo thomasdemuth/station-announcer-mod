@@ -780,7 +780,8 @@ BLOCKS3 = ["el_stair_side", "el_stair_canopy", "el_portal_post", "el_portal_head
            "el_house_wall_green", "el_house_wall_green_window",
            "el_house_wall_cream", "el_house_wall_cream_window",
            "el_wood_platform", "el_platform_edge", "el_soffit",
-           "el_exit_sign", "el_lamp_gooseneck", "el_lamp_post", "el_lamp_head"]
+           "el_exit_sign", "el_lamp_gooseneck", "el_lamp_post", "el_lamp_head",
+           "el_lamp_gooseneck_silver", "el_lamp_post_silver", "el_lamp_head_silver"]
 
 FACINGS4 = {"north", "south", "east", "west"}
 PROPS3 = {
@@ -795,6 +796,8 @@ PROPS3 = {
                      "arrow": {"none", "right", "left", "down"}},
     "el_lamp_gooseneck": {"facing": FACINGS4},
     "el_lamp_post": {"facing": FACINGS4}, "el_lamp_head": {"facing": FACINGS4},
+    "el_lamp_gooseneck_silver": {"facing": FACINGS4},
+    "el_lamp_post_silver": {"facing": FACINGS4}, "el_lamp_head_silver": {"facing": FACINGS4},
 }
 
 RECIPES3 = {
@@ -863,6 +866,12 @@ RECIPES3 = {
                                      {"item": "minecraft:glowstone_dust"},
                                      {"item": "minecraft:green_dye"}],
                      "result": {"item": f"{MOD}:el_lamp_head"}},
+    **{f"el_lamp_{kind}_silver": {
+        "type": "minecraft:crafting_shapeless", "category": "building",
+        "ingredients": [{"item": f"{MOD}:el_lamp_{kind}"},
+                        {"item": "minecraft:iron_nugget"}],
+        "result": {"item": f"{MOD}:el_lamp_{kind}_silver"}}
+       for kind in ("gooseneck", "post", "head")},
 }
 
 
@@ -925,7 +934,10 @@ def build_final(g, assets_root, data_root, loot):
                        ("el_platform_edge", "el_platform_edge_model"),
                        ("el_lamp_gooseneck", "el_lamp_gooseneck_model"),
                        ("el_lamp_post", "el_lamp_post_pole"),
-                       ("el_lamp_head", "el_lamp_post_head")):
+                       ("el_lamp_head", "el_lamp_post_head"),
+                       ("el_lamp_gooseneck_silver", "el_lamp_gooseneck_model_silver"),
+                       ("el_lamp_post_silver", "el_lamp_post_pole_silver"),
+                       ("el_lamp_head_silver", "el_lamp_post_head_silver")):
         g.wj(os.path.join(assets_root, "blockstates", block + ".json"), facing_variants(mdl))
     for block, mdl in (("el_house_wall_green", "el_house_wall_green"),
                        ("el_house_wall_green_window", "el_house_wall_green_window"),
@@ -966,7 +978,10 @@ def build_final(g, assets_root, data_root, loot):
              "el_platform_edge": "el_platform_edge_model", "el_soffit": "el_soffit_model",
              "el_exit_sign": "el_exit_sign_hang_none",
              "el_lamp_gooseneck": "el_lamp_gooseneck_model",
-             "el_lamp_post": "el_lamp_post_item", "el_lamp_head": "el_lamp_post_head"}
+             "el_lamp_post": "el_lamp_post_item", "el_lamp_head": "el_lamp_post_head",
+             "el_lamp_gooseneck_silver": "el_lamp_gooseneck_model_silver",
+             "el_lamp_post_silver": "el_lamp_post_item_silver",
+             "el_lamp_head_silver": "el_lamp_post_head_silver"}
     for block, mdl in items.items():
         g.wj(os.path.join(assets_root, "models/item", block + ".json"),
              {"parent": f"{MOD}:block/{mdl}"})

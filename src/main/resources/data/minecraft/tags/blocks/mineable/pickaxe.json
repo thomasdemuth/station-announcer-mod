@@ -231,6 +231,9 @@
     "station_announcer:el_exit_sign",
     "station_announcer:el_lamp_gooseneck",
     "station_announcer:el_lamp_post",
-    "station_announcer:el_lamp_head"
+    "station_announcer:el_lamp_head",
+    "station_announcer:el_lamp_gooseneck_silver",
+    "station_announcer:el_lamp_post_silver",
+    "station_announcer:el_lamp_head_silver"
   ]
 }

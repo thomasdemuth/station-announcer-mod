@@ -196,6 +196,10 @@ public final class MtrStationDecor {
     public static final FacingDecorBlock EL_LAMP_POST = new FacingDecorBlock(settings(),
             Block.createCuboidShape(5.6, 0.0, 5.6, 10.4, 16.0, 10.4));
     public static final FacingDecorBlock EL_LAMP_HEAD = new FacingDecorBlock(lampSettings(), EL_LAMP_HEAD_SHAPE);
+    public static final FacingDecorBlock EL_LAMP_GOOSENECK_SILVER = new FacingDecorBlock(lampSettings(), EL_GOOSENECK_SHAPE);
+    public static final FacingDecorBlock EL_LAMP_POST_SILVER = new FacingDecorBlock(settings(),
+            Block.createCuboidShape(5.6, 0.0, 5.6, 10.4, 16.0, 10.4));
+    public static final FacingDecorBlock EL_LAMP_HEAD_SILVER = new FacingDecorBlock(lampSettings(), EL_LAMP_HEAD_SHAPE);
 
     public static final BlockEntityType<StopMarkerBlockEntity> STOP_MARKER_BLOCK_ENTITY =
             BlockEntityType.Builder.create(StopMarkerBlockEntity::new, STOP_MARKER).build(null);
@@ -378,6 +382,9 @@ public final class MtrStationDecor {
         registerBlock("el_lamp_gooseneck", EL_LAMP_GOOSENECK, ModContent.DECORATION_ENTRIES);
         registerBlock("el_lamp_post", EL_LAMP_POST, ModContent.DECORATION_ENTRIES);
         registerBlock("el_lamp_head", EL_LAMP_HEAD, ModContent.DECORATION_ENTRIES);
+        registerBlock("el_lamp_gooseneck_silver", EL_LAMP_GOOSENECK_SILVER, ModContent.DECORATION_ENTRIES);
+        registerBlock("el_lamp_post_silver", EL_LAMP_POST_SILVER, ModContent.DECORATION_ENTRIES);
+        registerBlock("el_lamp_head_silver", EL_LAMP_HEAD_SILVER, ModContent.DECORATION_ENTRIES);
         registerBlock("entrance_railing_sign", ENTRANCE_RAILING_SIGN, ModContent.DECORATION_ENTRIES);
         registerBlock("emergency_exit_door", EMERGENCY_EXIT_DOOR, ModContent.DECORATION_ENTRIES);
         registerBlock("employee_door_mesh", EMPLOYEE_DOOR_MESH, ModContent.DECORATION_ENTRIES);

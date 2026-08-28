@@ -601,5 +601,8 @@
   "gui.station_announcer.accessibility.station_off": "Station is step-free accessible: NO",
   "gui.station_announcer.accessibility.hint_all": "No platforms ticked = every platform counts as step-free",
   "gui.station_announcer.accessibility.hint_some": "%s platform(s) marked step-free — the rest are not",
-  "gui.station_announcer.accessibility.no_platforms": "This station has no platforms yet"
+  "gui.station_announcer.accessibility.no_platforms": "This station has no platforms yet",
+  "block.station_announcer.el_lamp_gooseneck_silver": "Goose-Neck Platform Lamp (Galvanized)",
+  "block.station_announcer.el_lamp_post_silver": "Platform Lamppost (Galvanized)",
+  "block.station_announcer.el_lamp_head_silver": "Platform Lamppost Head (Galvanized)"
 }

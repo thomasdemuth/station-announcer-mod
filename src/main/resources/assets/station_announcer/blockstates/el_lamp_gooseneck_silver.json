@@ -1,0 +1,19 @@
+{
+  "variants": {
+    "facing=north": {
+      "model": "station_announcer:block/el_lamp_gooseneck_model_silver"
+    },
+    "facing=east": {
+      "model": "station_announcer:block/el_lamp_gooseneck_model_silver",
+      "y": 90
+    },
+    "facing=south": {
+      "model": "station_announcer:block/el_lamp_gooseneck_model_silver",
+      "y": 180
+    },
+    "facing=west": {
+      "model": "station_announcer:block/el_lamp_gooseneck_model_silver",
+      "y": 270
+    }
+  }
+}

@@ -297,6 +297,30 @@ Four fixes/features from Thomas's feedback round (his answers, do not re-ask):
 
 ### NYC ELEVATED STATION KIT (2026-08-28) — 28 new blocks, both phases; NOT in-game tested
 
+**FIVE-AGENT QUALITY PASS MERGED (2026-08-28 late): all five el item sets
+reworked in parallel opus worktrees, merged in order (structure/roofs/walls/
+street/signage), one generator conflict (stair_canopy owned by two briefs —
+set 4's version won), compile green first try. Read EL_SET{1..5}_REPORT.md
+for per-block placement rules + proposals. Highlights: girder got real
+flange/web/stiffener anatomy + knee-brace bug fixed (was buried inside the
+column); BRACED instanceof bug grew gussets on canopy/portal posts — now an
+explicit list; ElDeckBlock outline + cross-type culling fixed; GABLE is now
+multi-width (slope/wing/crown profiles by crosswise neighbors — 3 rows = one
+Marcy roof; flat-vs-gable no longer merge across families); flat fascia hangs
+under the eave; post brackets actually reach the roof; glass windscreen WAS
+INVISIBLE (all alpha < cutout threshold) — rebuilt; classic screen is
+course-aware (solid below, glazing on the top course via UP); stack-boundary
+sliver fixed; railings read round; house window is a real double-hung;
+stair side screen re-registered to the actual stair profile (rail was 3px
+above treads); stair canopy has a flashing tongue for the platform-canopy
+joint; portal post 3.6px with symmetric brackets (post+header orientations
+now agree); name board got MOUNT standing/wall/hanging with renderer plane
+math updated; EXIT sheet 64px readable arrows; tactile edge = staggered
+domes + overhang lip; SILVER LAMPS registered (3 new ids, 46 el blocks).
+Renderer in tools/render_blockmodel.py now has a depth buffer. NOTHING
+in-game tested — placement conventions are documented per block in the five
+reports and need Thomas's play pass.**
+
 **Read EL_STATION_PLAN.md** — photo research (image sweeps: 125 St viaduct,
 Jamaica Ave, Marcy Av, W 8th St, Bay Pkwy, Astoria rebuild), Thomas's decisions
 (hand-placed blocks only, no creator tool; green + galvanized + station-tint +
