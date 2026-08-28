@@ -130,6 +130,7 @@ public final class AddonInit {
             AddonNetworking.syncHoldStateTo(sender, lastHoldState);
             AddonNetworking.syncDoorObstructionsTo(sender, lastDoorObstructions);
             AddonNetworking.syncDwellOverridesTo(sender);
+            AddonNetworking.syncAnnouncementTemplatesTo(sender);
             AddonNetworking.syncLiftDoorsTo(sender);
             AddonNetworking.syncPlatformGroupsTo(sender);
             AddonNetworking.syncDispatchInfoTo(sender);

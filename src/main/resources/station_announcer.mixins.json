@@ -18,7 +18,8 @@
     "VehicleSchemaAccessor"
   ],
   "client": [
-    "RenderLiftsMixin"
+    "RenderLiftsMixin",
+    "VehicleExtensionAnnounceMixin"
   ],
   "server": [],
   "injectors": {

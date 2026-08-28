@@ -569,5 +569,16 @@
   "block.station_announcer.el_exit_sign": "Exit Sign",
   "block.station_announcer.el_lamp_gooseneck": "Goose-Neck Platform Lamp",
   "block.station_announcer.el_lamp_post": "Platform Lamppost",
-  "block.station_announcer.el_lamp_head": "Platform Lamppost Head"
+  "block.station_announcer.el_lamp_head": "Platform Lamppost Head",
+  "gui.station_announcer.route_announcement.button": "Announcement…",
+  "gui.station_announcer.route_announcement.title": "Announcement Template",
+  "gui.station_announcer.route_announcement.heading": "Announcement template — %s",
+  "gui.station_announcer.route_announcement.hint": "e.g. This is a {route} train to {dest}. Next stop: {next}. [interchange]Transfer here for {interchanges}.[/interchange]",
+  "gui.station_announcer.route_announcement.help1": "Blocks: {next} {station} {dest} {route} {number} {interchanges}",
+  "gui.station_announcer.route_announcement.help2": "[interchange]…[/interchange] — kept only when the next stop has connections",
+  "gui.station_announcer.route_announcement.help3": "[terminus]…[/terminus] / [enroute]…[/enroute] — last stop vs on the way",
+  "gui.station_announcer.route_announcement.help4": "Leave empty to use MTR's standard announcement for this route",
+  "gui.station_announcer.route_announcement.clear": "Use MTR Default",
+  "gui.station_announcer.route_announcement.preview": "Preview (sample stops):",
+  "gui.station_announcer.route_announcement.preview_default": "MTR's standard announcement (no template set)"
 }

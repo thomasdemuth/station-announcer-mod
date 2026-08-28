@@ -61,6 +61,9 @@ public final class AddonStore {
 
     private static Path dataPath;
     private static final Map<Long, AddonSnapshots.HoldRule> holdRules = new LinkedHashMap<>();
+    /** Announcement templates: route id → template string (client presentation). */
+    private static final Map<Long, String> announcementTemplates = new LinkedHashMap<>();
+
     /** Feature 2: platform id → (route id → dwell millis). */
     private static final Map<Long, LinkedHashMap<Long, Long>> dwellOverrides = new LinkedHashMap<>();
     /** Feature 3: lift id → configured door sides. */
@@ -100,6 +103,7 @@ public final class AddonStore {
             dataPath = path;
             holdRules.clear();
             dwellOverrides.clear();
+            announcementTemplates.clear();
             liftDoors.clear();
             platformGroups.clear();
             disabledStops.clear();
@@ -117,6 +121,7 @@ public final class AddonStore {
                     JsonObject root = JsonParser.parseString(Files.readString(path)).getAsJsonObject();
                     readHoldRules(root.getAsJsonObject("holdRules"));
                     readDwellOverrides(root.getAsJsonObject("dwellOverrides"));
+                    readAnnouncementTemplates(root.getAsJsonObject("announcementTemplates"));
                     readLiftDoors(root.getAsJsonObject("liftDoors"));
                     readPlatformGroups(root.getAsJsonObject("platformGroups"));
                     // Seed the engine's persisted runtime BEFORE publishGroups prunes
@@ -217,6 +222,34 @@ public final class AddonStore {
             }
         }
         publishDwell();
+        markDirty();
+    }
+
+    // ------------------------------------------ announcement templates
+
+    /** Server thread: an immutable snapshot safe to iterate while building sync packets. */
+    public static Map<Long, String> announcementTemplatesView() {
+        synchronized (LOCK) {
+            return new LinkedHashMap<>(announcementTemplates);
+        }
+    }
+
+    /**
+     * Server thread: set or clear one route's announcement template, then save.
+     * Null/blank removes the entry (the route falls back to MTR's stock
+     * next-station announcement). Pure client presentation — nothing server-side
+     * reads it; callers rebroadcast the S2C sync.
+     */
+    public static void setAnnouncementTemplate(long routeId, String template) {
+        synchronized (LOCK) {
+            if (template == null || template.isBlank()) {
+                if (announcementTemplates.remove(routeId) == null) {
+                    return;
+                }
+            } else {
+                announcementTemplates.put(routeId, template);
+            }
+        }
         markDirty();
     }
 
@@ -644,6 +677,22 @@ public final class AddonStore {
         }
     }
 
+    private static void readAnnouncementTemplates(JsonObject templatesJson) {
+        if (templatesJson == null) {
+            return;
+        }
+        for (Map.Entry<String, JsonElement> entry : templatesJson.entrySet()) {
+            try {
+                String template = entry.getValue().getAsString();
+                if (!template.isBlank()) {
+                    announcementTemplates.put(Long.parseLong(entry.getKey()), template);
+                }
+            } catch (Exception e) {
+                StationAnnouncer.LOGGER.warn("Skipping malformed announcement template '{}'", entry.getKey(), e);
+            }
+        }
+    }
+
     private static void readDwellOverrides(JsonObject overridesJson) {
         if (overridesJson == null) {
             return;
@@ -909,6 +958,10 @@ public final class AddonStore {
                 overridesJson.add(Long.toString(platformId), byRouteJson);
             });
             root.add("dwellOverrides", overridesJson);
+            JsonObject templatesJson = new JsonObject();
+            announcementTemplates.forEach((routeId, template) ->
+                    templatesJson.addProperty(Long.toString(routeId), template));
+            root.add("announcementTemplates", templatesJson);
             JsonObject liftDoorsJson = new JsonObject();
             liftDoors.forEach((liftId, sides) -> {
                 JsonObject sidesJson = new JsonObject();

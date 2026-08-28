@@ -117,6 +117,7 @@ public final class AddonClientInit {
             ClientHoldState.clear();
             ClientDoorObstructions.clear();
             ClientDwellOverrides.clear();
+            ClientAnnouncementTemplates.clear();
             ClientLiftDoors.clear();
             ClientPlatformGroups.clear();
             ClientDispatchInfo.clear();
@@ -134,6 +135,8 @@ public final class AddonClientInit {
 
         registerDwellOverrideSync();
         registerRouteDwellButton();
+        registerAnnouncementTemplateSync();
+        registerRouteAnnouncementButton();
         registerLiftDoorSync();
         registerLiftDoorSidesButton();
         registerPlatformGroupSync();
@@ -378,6 +381,75 @@ public final class AddonClientInit {
                             buttonWidth, hostButton.getHeight())
                     .build());
         });
+    }
+
+    // ---------------------------------------- per-route announcement templates
+
+    /** Server → client template sync (join + after each edit). */
+    private static void registerAnnouncementTemplateSync() {
+        ClientPlayNetworking.registerGlobalReceiver(AddonNetworking.ANNOUNCEMENT_TEMPLATES_S2C,
+                (client, handler, buf, responseSender) -> {
+                    int count = buf.readVarInt();
+                    if (count < 0 || count > 10_000) {
+                        return;
+                    }
+                    Map<Long, String> templates = new HashMap<>(Math.max(1, count));
+                    for (int i = 0; i < count; i++) {
+                        long routeId = buf.readLong();
+                        templates.put(routeId, buf.readString(AddonNetworking.MAX_TEMPLATE_LENGTH));
+                    }
+                    client.execute(() -> ClientAnnouncementTemplates.replace(templates));
+                });
+    }
+
+    /**
+     * "Announcement…" button on MTR's Edit Route screen — right where the stock
+     * "Disable Next Station Announcements" checkbox lives, since the template
+     * feature generalises it. The Route rides the screen's protected
+     * {@code EditNameColorScreenBase.data} field, read reflectively like
+     * {@link #readPlatform}.
+     */
+    private static void registerRouteAnnouncementButton() {
+        ScreenEvents.AFTER_INIT.register((client, screen, scaledWidth, scaledHeight) -> {
+            if (!(screen instanceof org.mtr.mod.screen.EditRouteScreen)) {
+                return;
+            }
+            if (!MinecraftClientData.hasPermission()) {
+                return;
+            }
+            org.mtr.core.data.Route route = readRoute(screen);
+            if (route == null) {
+                return;
+            }
+            long routeId = route.getId();
+            String display = route.getName().split("\\|")[0];
+            Screens.getButtons(screen).add(ButtonWidget.builder(
+                            Text.translatable("gui.station_announcer.route_announcement.button"),
+                            button -> client.setScreen(new RouteAnnouncementScreen(routeId, display, screen)))
+                    .dimensions(screen.width - 124, screen.height - 24, 120, 20)
+                    .build());
+        });
+    }
+
+    private static Field editScreenDataField;
+    private static boolean editScreenDataLookupFailed;
+
+    private static org.mtr.core.data.Route readRoute(Screen screen) {
+        try {
+            if (editScreenDataField == null) {
+                if (editScreenDataLookupFailed) {
+                    return null;
+                }
+                editScreenDataField = org.mtr.mod.screen.EditNameColorScreenBase.class.getDeclaredField("data");
+                editScreenDataField.setAccessible(true);
+            }
+            Object value = editScreenDataField.get(screen);
+            return value instanceof org.mtr.core.data.Route ? (org.mtr.core.data.Route) value : null;
+        } catch (Exception e) {
+            editScreenDataLookupFailed = true;
+            StationAnnouncer.LOGGER.warn("Could not read the route from EditRouteScreen", e);
+            return null;
+        }
     }
 
     // -------------------------------------------- Feature 2: per-route dwell

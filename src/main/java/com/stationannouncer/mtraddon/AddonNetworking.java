@@ -66,6 +66,8 @@ public final class AddonNetworking {
     public static final Identifier DOOR_OBSTRUCTIONS_S2C = StationAnnouncer.id("addon_door_obstructions");
     public static final Identifier UPDATE_HOLD_RULE_C2S = StationAnnouncer.id("addon_update_hold_rule");
     public static final Identifier DWELL_OVERRIDES_S2C = StationAnnouncer.id("addon_dwell_overrides");
+    public static final Identifier ANNOUNCEMENT_TEMPLATES_S2C = StationAnnouncer.id("addon_announcement_templates");
+    public static final Identifier UPDATE_ANNOUNCEMENT_TEMPLATE_C2S = StationAnnouncer.id("addon_update_announcement_template");
     public static final Identifier UPDATE_DWELL_OVERRIDES_C2S = StationAnnouncer.id("addon_update_dwell_overrides");
     public static final Identifier LIFT_DOORS_S2C = StationAnnouncer.id("addon_lift_doors");
     public static final Identifier UPDATE_LIFT_DOORS_C2S = StationAnnouncer.id("addon_update_lift_doors");
@@ -89,6 +91,9 @@ public final class AddonNetworking {
      * sliders allow 0.5 s – 600 s (MAX_DWELL_TIME = 1200 half-seconds); we floor
      * at a full second per the addon spec.
      */
+    /** Announcement templates are short spoken lines, not documents. */
+    public static final int MAX_TEMPLATE_LENGTH = 500;
+
     public static final int MIN_DWELL_MILLIS = 1_000;
     public static final int MAX_DWELL_MILLIS = 600_000;
 
@@ -155,6 +160,19 @@ public final class AddonNetworking {
                 }
                 AddonStore.setDwellOverrides(platformId, byRoute);
                 broadcastDwellOverrides(server);
+            });
+        });
+
+        ServerPlayNetworking.registerGlobalReceiver(UPDATE_ANNOUNCEMENT_TEMPLATE_C2S, (server, player, handler, buf, responseSender) -> {
+            long routeId = buf.readLong();
+            String template = buf.readString(MAX_TEMPLATE_LENGTH);
+
+            server.execute(() -> {
+                if (!player.hasPermissionLevel(AddonServerConfig.get().editPermissionLevel)) {
+                    return;
+                }
+                AddonStore.setAnnouncementTemplate(routeId, template.trim());
+                broadcastAnnouncementTemplates(server);
             });
         });
 
@@ -345,6 +363,18 @@ public final class AddonNetworking {
     }
 
     /** On join, through the connection event's sender. */
+    public static void syncAnnouncementTemplatesTo(PacketSender sender) {
+        sender.sendPacket(ANNOUNCEMENT_TEMPLATES_S2C, buildAnnouncementTemplatesBuf());
+    }
+
+    /** After a change, to everyone (a long + short string per configured route). */
+    public static void broadcastAnnouncementTemplates(MinecraftServer server) {
+        for (ServerPlayerEntity player : server.getPlayerManager().getPlayerList()) {
+            ServerPlayNetworking.send(player, ANNOUNCEMENT_TEMPLATES_S2C, buildAnnouncementTemplatesBuf());
+        }
+    }
+
+    /** On join, through the connection event's sender. */
     public static void syncLiftDoorsTo(PacketSender sender) {
         sender.sendPacket(LIFT_DOORS_S2C, buildLiftDoorsBuf());
     }
@@ -411,6 +441,17 @@ public final class AddonNetworking {
             for (long member : members) {
                 buf.writeLong(member);
             }
+        });
+        return buf;
+    }
+
+    private static PacketByteBuf buildAnnouncementTemplatesBuf() {
+        Map<Long, String> templates = AddonStore.announcementTemplatesView();
+        PacketByteBuf buf = PacketByteBufs.create();
+        buf.writeVarInt(templates.size());
+        templates.forEach((routeId, template) -> {
+            buf.writeLong(routeId);
+            buf.writeString(template, MAX_TEMPLATE_LENGTH);
         });
         return buf;
     }

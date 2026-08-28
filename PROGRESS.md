@@ -2737,3 +2737,41 @@ errors, map intact at the new position, staticDirty settles false with the
 rendered view matching the live view once interaction stops (the transient
 true mid-pan is the fast path working). Note: the demo is too small to SHOW
 the wins — they are headroom for Baker City scale, not a change in look.
+
+## Per-route announcement templates (2026-08-28)
+
+Thomas: replace "just the checkbox to disable announcements on the route" with
+text & code BLOCKS that change how the train announces the next station, per
+route. The checkbox is MTR's own per-route "Disable Next Station Announcements"
+(EditRouteScreen); the on-board announcement is composed client-side in
+`VehicleExtension.lambda$simulate$3` — the consumer of MTR's
+PacketCheckRouteIdHasDisabledAnnouncements reply — and emitted through
+`IDrawing.narrateOrAnnounce(tts, chatLines)` (all javap-verified on 4.0.1).
+
+**Template language** (AnnouncementComposer, client): text blocks + code blocks
+{next} {station} {dest} {route} {number} {interchanges} and conditional sections
+[interchange]…[/interchange] (next stop has connections), [terminus]…[/terminus]
+/ [enroute]…[/enroute]. Names are firstLang of MTR's "Eng|Other"; interchanges
+join "A, B and C" for natural speech; whitespace collapsed; unclosed tags left
+alone. Substitution core (renderWithValues) is pure and desk-tested standalone
+(4 cases incl. unclosed-tag safety).
+
+**Wiring** (dwell-override pattern throughout): AddonStore.announcementTemplates
+(route id → string, persisted in data.json), S2C `addon_announcement_templates`
+full-map sync (join + change) into ClientAnnouncementTemplates (cleared on
+disconnect), C2S `addon_update_announcement_template` (op-gated, 500-char cap).
+NEW CLIENT MIXIN `VehicleExtensionAnnounceMixin` targets the synthetic lambda BY
+NAME with the javap'd descriptor (pinned to MTR 4.0.1 — re-verify on any MTR
+bump): template present → render + narrateOrAnnounce + cancel MTR's stock
+wording; disabled checkbox still silences everything; no template → untouched.
+
+**GUI**: "Announcement…" button injected into MTR's Edit Route screen (ScreenEvents
+AFTER_INIT + reflective read of EditNameColorScreenBase.data, the readPlatform
+pattern), opening RouteAnnouncementScreen: multi-line template field, token
+reference, Use-MTR-Default / Done / Cancel, and a LIVE PREVIEW rendered with
+sample stops as you type.
+
+Announcements only change for riders running this mod (client-side presentation;
+templates are synced server-wide). Compile green; engine desk-tested; NOT
+in-game tested — needs riding a train past an announcement point: check the
+button on Edit Route, save/sync, spoken+chat output, and the terminus case.
