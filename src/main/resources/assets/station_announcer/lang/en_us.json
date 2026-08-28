@@ -580,5 +580,18 @@
   "gui.station_announcer.route_announcement.help4": "Leave empty to use MTR's standard announcement for this route",
   "gui.station_announcer.route_announcement.clear": "Use MTR Default",
   "gui.station_announcer.route_announcement.preview": "Preview (sample stops):",
-  "gui.station_announcer.route_announcement.preview_default": "MTR's standard announcement (no template set)"
+  "gui.station_announcer.route_announcement.preview_default": "MTR's standard announcement (no template set)",
+  "gui.station_announcer.route_announcement.next": "+ Next stop",
+  "gui.station_announcer.route_announcement.station": "+ This station",
+  "gui.station_announcer.route_announcement.dest": "+ Destination",
+  "gui.station_announcer.route_announcement.route": "+ Line name",
+  "gui.station_announcer.route_announcement.number": "+ Route number",
+  "gui.station_announcer.route_announcement.interchanges": "+ Transfers",
+  "gui.station_announcer.route_announcement.if_interchange": "If transfers…",
+  "gui.station_announcer.route_announcement.if_terminus": "If last stop…",
+  "gui.station_announcer.route_announcement.if_enroute": "If en route…",
+  "gui.station_announcer.route_announcement.preset_nyc": "Preset: NYC",
+  "gui.station_announcer.route_announcement.preset_simple": "Preset: Simple",
+  "gui.station_announcer.route_announcement.preset_transfer": "Preset: UK",
+  "gui.station_announcer.route_announcement.play": "▶ Hear it"
 }

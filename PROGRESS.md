@@ -2775,3 +2775,27 @@ Announcements only change for riders running this mod (client-side presentation;
 templates are synced server-wide). Compile green; engine desk-tested; NOT
 in-game tested — needs riding a train past an announcement point: check the
 button on Edit Route, save/sync, spoken+chat output, and the terminus case.
+
+## Announcement template editor round 2 — buttons, presets, spoken preview (2026-08-28)
+
+Thomas: blocks should be addable via buttons, as user-friendly as possible; and
+add a see-AND-HEAR preview. RouteAnnouncementScreen rebuilt:
+
+- **Every code block is a button** (two rows of six: + Next stop / + This station /
+  + Destination / + Line name / + Route number / + Transfers), inserted AT THE
+  CARET by feeding the widget's own charTyped (yarn 1.20.4 EditBoxWidget has no
+  insert API; charTyped is the only public path that respects cursor+selection).
+  The three conditional-section buttons (If transfers… / If last stop… / If en
+  route…) insert the open+close pair, then walk the caret back INSIDE with
+  synthetic left-arrow keyPressed calls so typing continues between the tags.
+- **Three one-click presets** fill a whole template: NYC ("This is a {dest}-bound
+  {route} train…" with closing-doors line), Simple ("Next stop: {next}."), UK
+  ("…change for {interchanges} / all change, please").
+- **▶ Hear it**: renders the live preview against the sample stops and speaks it
+  through the mod's own TtsManager (stop() first so replays don't overlap;
+  close() stops any preview speech). The visual preview re-renders every frame
+  as before.
+- init() preserves the in-progress text across window resizes (keep variable).
+
+Compile green. NOT in-game tested — the button-insert caret behaviour and the
+spoken preview both need a real GUI session.
