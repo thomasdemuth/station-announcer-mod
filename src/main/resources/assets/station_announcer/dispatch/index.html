@@ -13,28 +13,35 @@
 	<div class="brand">DISPATCH</div>
 	<select id="dimSelect" title="Dimension"></select>
 	<div id="connStatus" class="status connecting">CONNECTING</div>
+	<span id="topClock" title="Local time"></span>
 	<div class="spacer"></div>
-	<div class="toggles">
-		<label><input type="checkbox" id="lySpeed" checked> Speed limits</label>
-		<label><input type="checkbox" id="lySignals" checked> Signals</label>
-		<label><input type="checkbox" id="lyStations" checked> Station labels</label>
-		<label><input type="checkbox" id="lyTrainLabels" checked> Train labels</label>
+	<div id="layersWrap">
+		<button id="layersBtn" class="btn" title="Map layers, transport modes and station heat">Layers ▾</button>
+		<div id="layersPanel" class="hidden">
+			<div class="lp-section">LAYERS</div>
+			<label><input type="checkbox" id="lySpeed" checked> Speed limits</label>
+			<label><input type="checkbox" id="lySignals" checked> Signals</label>
+			<label><input type="checkbox" id="lyStations" checked> Station labels</label>
+			<label><input type="checkbox" id="lyTrainLabels" checked> Train labels</label>
+			<div class="toggles" id="modeToggles"></div>
+			<div class="lp-section">STATION HEAT</div>
+			<select id="heatSelect" title="Colour station areas by a performance metric">
+				<option value="off">Heat: off</option>
+				<option value="dwell">Heat: dwell overrun</option>
+				<option value="headway">Heat: headway irregularity</option>
+			</select>
+		</div>
 	</div>
-	<div class="toggles" id="modeToggles"></div>
-	<select id="heatSelect" title="Colour station areas by a performance metric">
-		<option value="off">Heat: off</option>
-		<option value="dwell">Heat: dwell overrun</option>
-		<option value="headway">Heat: headway irregularity</option>
-	</select>
-	<button id="stringBtn" class="btn" title="Time–distance stringlines per line">Stringlines</button>
-	<button id="analyticsBtn" class="btn" title="Timetable &amp; headway analytics">Analytics</button>
-	<button id="alertsBtn" class="btn" title="Operational alerts">Alerts<span id="alertsBadge" class="alerts-badge hidden">0</span></button>
-	<button id="boardBtn" class="btn" title="Toggle the dispatch board">Board</button>
-	<button id="fitBtn" class="btn" title="Fit network in view">Fit</button>
+	<button id="stringBtn" class="btn" title="Time–distance stringlines per line [S]">Stringlines</button>
+	<button id="analyticsBtn" class="btn" title="Timetable &amp; headway analytics [N]">Analytics</button>
+	<button id="alertsBtn" class="btn" title="Operational alerts [A]">Alerts<span id="alertsBadge" class="alerts-badge hidden">0</span></button>
+	<button id="boardBtn" class="btn" title="Toggle the dispatch board [B]">Board</button>
+	<button id="fitBtn" class="btn" title="Fit network in view [F]">Fit</button>
 </header>
 
 <main id="stage">
 	<canvas id="map"></canvas>
+	<div id="mapTip" class="hidden"></div>
 
 	<div id="legend">
 		<div class="legend-title">SPEED LIMIT (km/h)</div>
@@ -100,7 +107,9 @@
 				<label title="Running time between stations"><input type="checkbox" id="slRun"> Run</label>
 				<label title="Gap to the previous train of the same service at each stop"><input type="checkbox" id="slHeadway"> Headway</label>
 				<label title="Total time over the visible run"><input type="checkbox" id="slTravel"> Travel</label>
+				<label title="Draw all runs in grey (colour on hover) — useful when one line colour dominates"><input type="checkbox" id="slGrey"> Grey</label>
 			</div>
+			<button id="slCsvBtn" class="btn small" title="Download the visible departure history as CSV">CSV</button>
 			<label class="an-meta" id="stringEndWrap" title="Scrub the end of the window back through the recorded history">End
 				<input type="range" id="stringEnd" min="0" max="1000" value="1000">
 			</label>

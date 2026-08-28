@@ -490,6 +490,30 @@ function drawStatic(dpr) {
 	const v = state.view;
 	const zoomedIn = v.scale > 1.2;
 
+	// faint world-aligned grid — depth + a sense of scale, like a radar backdrop.
+	// Power-of-two spacing chosen so lines sit 64–128 px apart at any zoom.
+	{
+		let step = 1;
+		while (step * v.scale < 64) step *= 2;
+		while (step * v.scale > 128 && step > 1) step /= 2;
+		const wLeft = v.x - canvas.clientWidth / 2 / v.scale;
+		const wTop = v.z - canvas.clientHeight / 2 / v.scale;
+		const wRight = v.x + canvas.clientWidth / 2 / v.scale;
+		const wBottom = v.z + canvas.clientHeight / 2 / v.scale;
+		g.strokeStyle = "#161d2c";
+		g.lineWidth = 1;
+		g.beginPath();
+		for (let gx = Math.floor(wLeft / step) * step; gx <= wRight; gx += step) {
+			const [sx] = worldToScreen(gx, 0);
+			g.moveTo(sx, 0); g.lineTo(sx, canvas.clientHeight);
+		}
+		for (let gz = Math.floor(wTop / step) * step; gz <= wBottom; gz += step) {
+			const [, sy] = worldToScreen(0, gz);
+			g.moveTo(0, sy); g.lineTo(canvas.clientWidth, sy);
+		}
+		g.stroke();
+	}
+
 	// station areas — tinted by the station's own colour, or by the selected heat metric
 	const heat = state.analytics.heat;
 	for (const st of state.stations) {
@@ -764,7 +788,7 @@ function initUi() {
 
 	// layer toggles
 	const bind = (id, key) => {
-		$(id).onchange = (e) => { state.layers[key] = e.target.checked; invalidateStatic(); };
+		$(id).onchange = (e) => { state.layers[key] = e.target.checked; invalidateStatic(); savePrefs(); };
 	};
 	bind("lySpeed", "speed"); bind("lySignals", "signals");
 	bind("lyStations", "stations"); bind("lyTrainLabels", "trainLabels");
@@ -773,12 +797,50 @@ function initUi() {
 	$("boardBtn").onclick = () => { $("board").classList.toggle("hidden"); $("boardBtn").classList.toggle("active"); };
 	$("analyticsBtn").onclick = () => setAnalyticsView(!state.analytics.view);
 	$("analyticsClose").onclick = () => setAnalyticsView(false);
-	$("heatSelect").onchange = (e) => setHeatMode(e.target.value);
+	$("heatSelect").onchange = (e) => { setHeatMode(e.target.value); savePrefs(); };
 	renderHeatLegend();
 	$("closeDetail").onclick = () => { state.selected = null; state.selectedStation = null; state.follow = false; updateDetail(); };
+
+	// layers dropdown
+	$("layersBtn").onclick = (e) => {
+		e.stopPropagation();
+		$("layersPanel").classList.toggle("hidden");
+		$("layersBtn").classList.toggle("active", !$("layersPanel").classList.contains("hidden"));
+	};
+	document.addEventListener("click", (e) => {
+		if (!$("layersWrap").contains(e.target)) {
+			$("layersPanel").classList.add("hidden");
+			$("layersBtn").classList.remove("active");
+		}
+	});
+
+	// dispatcher clock
+	const tickClock = () => { $("topClock").textContent = new Date().toLocaleTimeString([], { hour12: false }); };
+	tickClock();
+	setInterval(tickClock, 1000);
+
+	// keyboard shortcuts (skip while typing in a field)
+	document.addEventListener("keydown", (e) => {
+		if (e.metaKey || e.ctrlKey || e.altKey) return;
+		const tag = (e.target.tagName || "").toLowerCase();
+		if (tag === "input" || tag === "select" || tag === "textarea") return;
+		const key = e.key.toLowerCase();
+		if (key === "escape") {
+			if (state.stringline.view) setStringlineView(false);
+			else if (state.analytics.view) setAnalyticsView(false);
+			else if (state.alertsOpen) setAlertsOpen(false);
+			else { state.selected = null; state.selectedStation = null; state.follow = false; updateDetail(); }
+		} else if (key === "b") { $("boardBtn").click(); }
+		else if (key === "s") { setStringlineView(!state.stringline.view); }
+		else if (key === "n") { setAnalyticsView(!state.analytics.view); }
+		else if (key === "a") { setAlertsOpen(!state.alertsOpen); }
+		else if (key === "f") { fitView(); }
+	});
+
+	loadPrefs();
 	$("stringBtn").onclick = () => setStringlineView(!state.stringline.view);
 	$("stringClose").onclick = () => setStringlineView(false);
-	$("stringWindow").onchange = (e) => { state.stringline.windowMin = parseInt(e.target.value, 10); };
+	$("stringWindow").onchange = (e) => { state.stringline.windowMin = parseInt(e.target.value, 10); savePrefs(); };
 	$("stringSegBtn").onclick = () => {
 		const sl = state.stringline;
 		sl.mode = sl.mode === "segment" ? "line" : "segment";
@@ -788,8 +850,10 @@ function initUi() {
 		fetchStringline();
 	};
 	for (const [id, key] of [["slDwell", "dwell"], ["slRun", "run"], ["slHeadway", "headway"], ["slTravel", "travel"]]) {
-		$(id).onchange = (e) => { state.stringline.show[key] = e.target.checked; };
+		$(id).onchange = (e) => { state.stringline.show[key] = e.target.checked; savePrefs(); };
 	}
+	$("slGrey").onchange = (e) => { state.stringline.grey = e.target.checked; savePrefs(); };
+	$("slCsvBtn").onclick = exportStringlineCsv;
 	$("stringEnd").oninput = (e) => {
 		const sl = state.stringline;
 		const v = parseInt(e.target.value, 10);
@@ -820,7 +884,12 @@ function initUi() {
 		canvas.classList.add("dragging");
 	});
 	canvas.addEventListener("pointermove", (e) => {
-		if (!drag) return;
+		if (!drag) {
+			const rect = canvas.getBoundingClientRect();
+			updateMapTip(e.clientX - rect.left, e.clientY - rect.top);
+			return;
+		}
+		$("mapTip").classList.add("hidden");
 		const dx = e.clientX - drag.x, dy = e.clientY - drag.y;
 		if (Math.abs(dx) + Math.abs(dy) > 3) drag.moved = true;
 		state.view.x -= dx / state.view.scale;
@@ -887,6 +956,97 @@ function clickAt(cx, cy) {
 	}
 	updateDetail();
 	renderBoard();
+}
+
+/** Hover tooltip over the map: nearest train, else the station area under the cursor. */
+let lastMapTip = "";
+function updateMapTip(x, y) {
+	const tip = $("mapTip");
+	let html = "";
+	let best = null, bestD = 14;
+	for (const [id, rec] of state.vehicles) {
+		if (!rec.screen) continue;
+		const d = Math.hypot(rec.screen[0] - x, rec.screen[1] - y);
+		if (d < bestD) { best = { id, rec }; bestD = d; }
+	}
+	if (best) {
+		const r = best.rec.route || {};
+		const d = best.rec.data;
+		const [devTxt, devCls] = fmtDev(d.devMs);
+		html = `<div class="t"><span class="chip" style="background:${r.color !== undefined ? colorHex(r.color) : "#5b6981"}">` +
+			`${escapeHtml(r.number || "•")}</span> ${escapeHtml(firstLang(r.dest)) || "Train"}</div>` +
+			`<div class="sub">${(d.kmh ?? 0).toFixed(0)} km/h · <span class="${devCls}">${devTxt}</span>` +
+			`${vehicleHeld(best.rec) ? " · HELD" : ""}${state.obstructed.has(best.id) ? " · DOORS" : ""}</div>`;
+	} else {
+		const v = state.view;
+		const wx = v.x + (x - canvas.clientWidth / 2) / v.scale;
+		const wz = v.z + (y - canvas.clientHeight / 2) / v.scale;
+		for (const st of state.stations) {
+			const b = st.bounds;
+			if (wx >= b[0] && wx <= b[3] + 1 && wz >= b[2] && wz <= b[5] + 1) {
+				const plats = [...state.platforms.values()].filter((p) => p.stationId === st.id).length;
+				html = `<div class="t">${escapeHtml(firstLang(st.name))}</div>` +
+					`<div class="sub">${plats} platform(s) · click for details</div>`;
+				break;
+			}
+		}
+	}
+	if (!html) {
+		tip.classList.add("hidden");
+		lastMapTip = "";
+		return;
+	}
+	if (html !== lastMapTip) { tip.innerHTML = html; lastMapTip = html; }
+	tip.classList.remove("hidden");
+	tip.style.left = Math.min(canvas.clientWidth - 270, x + 14) + "px";
+	tip.style.top = Math.min(canvas.clientHeight - 60, y + 12) + "px";
+}
+
+/* ---------- preference persistence ---------- */
+
+const PREFS_KEY = "sa_dispatch_prefs";
+
+function savePrefs() {
+	try {
+		localStorage.setItem(PREFS_KEY, JSON.stringify({
+			layers: state.layers,
+			heat: state.analytics.heat,
+			slWindow: state.stringline.windowMin,
+			slShow: state.stringline.show,
+			slGrey: !!state.stringline.grey,
+		}));
+	} catch (e) { /* storage unavailable — prefs just don't persist */ }
+}
+
+function loadPrefs() {
+	let p = null;
+	try { p = JSON.parse(localStorage.getItem(PREFS_KEY)); } catch (e) { /* ignore */ }
+	if (!p) return;
+	if (p.layers) {
+		Object.assign(state.layers, p.layers);
+		$("lySpeed").checked = state.layers.speed;
+		$("lySignals").checked = state.layers.signals;
+		$("lyStations").checked = state.layers.stations;
+		$("lyTrainLabels").checked = state.layers.trainLabels;
+	}
+	if (p.heat === "off" || HEAT_SCALES[p.heat]) {
+		$("heatSelect").value = p.heat;
+		setHeatMode(p.heat);
+	}
+	if (p.slWindow) {
+		state.stringline.windowMin = p.slWindow;
+		$("stringWindow").value = String(p.slWindow);
+	}
+	if (p.slShow) {
+		Object.assign(state.stringline.show, p.slShow);
+		$("slDwell").checked = state.stringline.show.dwell;
+		$("slRun").checked = state.stringline.show.run;
+		$("slHeadway").checked = state.stringline.show.headway;
+		$("slTravel").checked = state.stringline.show.travel;
+	}
+	state.stringline.grey = !!p.slGrey;
+	$("slGrey").checked = state.stringline.grey;
+	invalidateStatic();
 }
 
 /** True when this vehicle is sitting at a platform that is actively holding it. */
@@ -1057,9 +1217,16 @@ function renderBoard() {
 		th.classList.toggle("sorted", th.dataset.k === k));
 	const body = $("boardBody");
 	body.innerHTML = "";
+	if (!rows.length) {
+		const tr = document.createElement("tr");
+		tr.innerHTML = `<td colspan="10" class="board-empty">${state.boardFilter ? "No trains on this line right now" : "No trains on route"}</td>`;
+		body.appendChild(tr);
+		return;
+	}
 	for (const row of rows) {
 		const tr = document.createElement("tr");
 		if (row.id === state.selected) tr.classList.add("selected");
+		if (row.held) tr.classList.add("held-row");
 		const [devTxt, devCls] = fmtDev(row.dev);
 		tr.innerHTML =
 			`<td><span class="chip" style="background:${row.color}">${row.route}</span></td>` +
@@ -1092,24 +1259,31 @@ function renderBoardFilter() {
 		}
 	}
 	if (state.boardFilter && !lines.has(state.boardFilter)) state.boardFilter = null;
-	const sig = JSON.stringify([...lines.keys()]) + "|" + state.boardFilter;
+	const shown = [...state.vehicles.values()].filter((rec) => modeEnabled(vehicleMode(rec))
+		&& (!state.boardFilter || (rec.route && lineKey(rec.route.name) === state.boardFilter))).length;
+	const sig = JSON.stringify([...lines.keys()]) + "|" + state.boardFilter + "|" + shown;
 	if (sig === lastFilterSig) return;
 	lastFilterSig = sig;
 	const wrap = $("boardFilterRow");
 	wrap.innerHTML = "";
-	wrap.style.display = lines.size > 1 ? "" : "none";
-	const all = document.createElement("button");
-	all.className = "board-chip" + (state.boardFilter === null ? " active" : "");
-	all.textContent = "All lines";
-	all.onclick = () => { state.boardFilter = null; renderBoard(); };
-	wrap.appendChild(all);
-	for (const [key, l] of lines) {
-		const chip = document.createElement("button");
-		chip.className = "board-chip" + (state.boardFilter === key ? " active" : "");
-		chip.innerHTML = `<span class="bullet" style="background:${colorHex(l.color)}">${escapeHtml(l.number)}</span>${escapeHtml(l.display)}`;
-		chip.onclick = () => { state.boardFilter = state.boardFilter === key ? null : key; renderBoard(); };
-		wrap.appendChild(chip);
+	if (lines.size > 1) {
+		const all = document.createElement("button");
+		all.className = "board-chip" + (state.boardFilter === null ? " active" : "");
+		all.textContent = "All lines";
+		all.onclick = () => { state.boardFilter = null; renderBoard(); };
+		wrap.appendChild(all);
+		for (const [key, l] of lines) {
+			const chip = document.createElement("button");
+			chip.className = "board-chip" + (state.boardFilter === key ? " active" : "");
+			chip.innerHTML = `<span class="bullet" style="background:${colorHex(l.color)}">${escapeHtml(l.number)}</span>${escapeHtml(l.display)}`;
+			chip.onclick = () => { state.boardFilter = state.boardFilter === key ? null : key; renderBoard(); };
+			wrap.appendChild(chip);
+		}
 	}
+	const count = document.createElement("span");
+	count.id = "boardCount";
+	count.textContent = shown + " train" + (shown === 1 ? "" : "s");
+	wrap.appendChild(count);
 }
 
 /* ---------- analytics ---------- */
@@ -1939,7 +2113,8 @@ function drawStringline() {
 
 	for (const entry of drawn) {
 		const hovered = sl.hover && sl.hover.entry === entry;
-		g.strokeStyle = entry.tr.color;
+		const stroke = sl.grey && !hovered ? "#6f7c96" : entry.tr.color;
+		g.strokeStyle = stroke;
 		g.lineWidth = hovered ? 3.5 : Math.max(1.8, 1.6 * us);
 		g.globalAlpha = sl.hover && !hovered ? 0.35 : 1;
 		g.beginPath();
@@ -1947,11 +2122,34 @@ function drawStringline() {
 			i === 0 ? g.moveTo(entry.px[i][0], entry.px[i][1]) : g.lineTo(entry.px[i][0], entry.px[i][1]);
 		}
 		g.stroke();
+		// one direction chevron per run, on its longest visible segment
+		let ai = -1, aLen = 14;
+		for (let i = 1; i < entry.px.length; i++) {
+			const len = Math.hypot(entry.px[i][0] - entry.px[i - 1][0], entry.px[i][1] - entry.px[i - 1][1]);
+			if (len > aLen && entry.px[i][1] !== entry.px[i - 1][1]) { ai = i; aLen = len; }
+		}
+		if (ai > 0) {
+			const a = entry.px[ai - 1], b = entry.px[ai];
+			const mx = (a[0] + b[0]) / 2, my = (a[1] + b[1]) / 2;
+			const ang = Math.atan2(b[1] - a[1], b[0] - a[0]);
+			const size = hovered ? 6 : 4.5;
+			g.save();
+			g.translate(mx, my);
+			g.rotate(ang);
+			g.beginPath();
+			g.moveTo(size, 0);
+			g.lineTo(-size * 0.6, -size * 0.7);
+			g.lineTo(-size * 0.6, size * 0.7);
+			g.closePath();
+			g.fillStyle = stroke;
+			g.fill();
+			g.restore();
+		}
 		if (entry.live) {
 			const tip = entry.px[entry.px.length - 1];
 			g.beginPath();
 			g.arc(tip[0], tip[1], hovered ? 5 : 3.5, 0, Math.PI * 2);
-			g.fillStyle = entry.tr.color;
+			g.fillStyle = stroke;
 			g.fill();
 			g.strokeStyle = "#0b0e14";
 			g.lineWidth = 1;
@@ -2008,7 +2206,9 @@ function drawStringline() {
 			const prev = lastAt.get(hw.dist);
 			if (prev !== undefined && x - prev < annFont * 3.6) continue;
 			lastAt.set(hw.dist, x);
-			g.fillText(fmtDur(hw.gap), x, y + annFont + 3);
+			// keep the bottom row's labels inside the plot, above the time axis
+			const ly = Math.min(y + annFont + 3, pad.t + plotH - 3);
+			g.fillText(fmtDur(hw.gap), x, ly);
 		}
 	}
 
@@ -2032,6 +2232,35 @@ function drawStringline() {
 		tip.classList.add("hidden");
 	}
 	renderStringMeta(B.segment ? `segment: ${B.stations.length} stations, ${B.lineCount} line(s)` : null);
+}
+
+/** Download the current stringline departure window as CSV (pvibien's export). */
+function exportStringlineCsv() {
+	const sl = state.stringline;
+	if (!sl.deps.length) return;
+	const esc = (v) => {
+		const s = String(v ?? "");
+		return /[",\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s;
+	};
+	const platName = new Map();
+	const routeLabel = new Map();
+	for (const r of (sl.axis?.routes || [])) {
+		routeLabel.set(r.id, (firstLang(lineKey(r.name)) + " " + firstLang((r.name || "").split("||")[1] || "")).trim());
+		for (const s of r.stations) {
+			if (!platName.has(s.plat)) platName.set(s.plat, firstLang(s.staName) || firstLang(s.platName));
+		}
+	}
+	const lines = ["vehicle,route,station,departure,dwell_s,deviation_s,stop_index"];
+	for (const [veh, plat, t, dwell, dev, stop, routeId] of sl.deps) {
+		lines.push([esc(veh), esc(routeLabel.get(routeId) || routeId), esc(platName.get(plat) || plat),
+			new Date(t).toISOString(), Math.round((dwell || 0) / 1000), Math.round((dev || 0) / 1000), stop].join(","));
+	}
+	const blob = new Blob([lines.join("\n")], { type: "text/csv" });
+	const a = document.createElement("a");
+	a.href = URL.createObjectURL(blob);
+	a.download = "stringline-departures.csv";
+	a.click();
+	URL.revokeObjectURL(a.href);
 }
 
 function segDist(p, a, b) {

@@ -516,3 +516,115 @@ body {
 	#boardTable, #stationTable { font-size: 14px; }
 	.legend-row, .an-meta { font-size: 13px; }
 }
+
+/* ---------- UI polish round (layers dropdown, clock, tooltips, board) ---------- */
+
+#topClock {
+	font: 700 13px var(--mono);
+	color: var(--dim);
+	letter-spacing: 1px;
+	min-width: 72px;
+}
+
+#layersWrap { position: relative; }
+#layersPanel {
+	position: absolute;
+	right: 0;
+	top: calc(100% + 6px);
+	z-index: 30;
+	display: flex;
+	flex-direction: column;
+	gap: 7px;
+	min-width: 190px;
+	padding: 10px 12px;
+	background: var(--panel);
+	border: 1px solid var(--border);
+	border-radius: 8px;
+	box-shadow: 0 8px 24px #0009;
+}
+#layersPanel label { display: flex; gap: 6px; align-items: center; cursor: pointer; }
+#layersPanel #modeToggles { display: flex; flex-direction: column; gap: 7px; }
+.lp-section {
+	color: var(--dim);
+	font: 700 10px var(--mono);
+	letter-spacing: 2px;
+	margin-top: 2px;
+}
+#layersBtn.active { border-color: var(--accent); }
+
+#mapTip {
+	position: absolute;
+	pointer-events: none;
+	background: color-mix(in srgb, var(--panel) 95%, transparent);
+	border: 1px solid var(--border);
+	border-radius: 6px;
+	padding: 5px 9px;
+	font-size: 12px;
+	max-width: 260px;
+	z-index: 4;
+}
+#mapTip .t { font-weight: 700; }
+#mapTip .sub { color: var(--dim); font-family: var(--mono); font-size: 11px; }
+
+/* board polish: sticky header, zebra rows, held tint, count */
+#boardTable thead th { position: sticky; top: 0; background: var(--panel-2); z-index: 2; }
+#boardTable tbody tr:nth-child(even):not(.selected) { background: color-mix(in srgb, var(--panel-2) 45%, transparent); }
+#boardTable tbody tr.held-row:not(.selected) { background: color-mix(in srgb, var(--amber) 12%, transparent); }
+#boardCount { margin-left: auto; color: var(--dim); font: 11px var(--mono); }
+.board-empty { color: var(--dim); text-align: center; padding: 14px; }
+
+/* ---------- design pass: glass panels, refined chrome ---------- */
+
+:root { --glass: color-mix(in srgb, var(--panel) 86%, transparent); }
+
+#topbar { background: linear-gradient(180deg, #151b2a, #10151f); }
+
+.btn {
+	border-radius: 6px;
+	padding: 4px 12px;
+	transition: border-color .12s ease, background .12s ease, box-shadow .12s ease;
+}
+.btn:hover { background: #1b2334; }
+.btn.small { padding: 2px 8px; }
+.btn.active { box-shadow: 0 0 10px color-mix(in srgb, var(--accent) 40%, transparent); }
+#stringLive.active, #stringSegBtn.active { box-shadow: none; }
+
+.status { display: inline-flex; align-items: center; gap: 5px; }
+.status.live::before {
+	content: "";
+	width: 6px; height: 6px; border-radius: 50%;
+	background: var(--green);
+	animation: livepulse 2.2s ease-in-out infinite;
+}
+@keyframes livepulse { 0%, 100% { opacity: 1; } 50% { opacity: .3; } }
+
+#legend, #detail, #alertsFeed, #layersPanel, #mapTip, #slTip {
+	background: var(--glass);
+	backdrop-filter: blur(12px) saturate(1.2);
+	-webkit-backdrop-filter: blur(12px) saturate(1.2);
+	box-shadow: 0 10px 30px rgba(0, 0, 0, .5);
+}
+#legend, #detail, #alertsFeed, #layersPanel { border-radius: 10px; }
+
+#board {
+	background: var(--glass);
+	backdrop-filter: blur(12px) saturate(1.2);
+	-webkit-backdrop-filter: blur(12px) saturate(1.2);
+	border-radius: 12px 12px 0 0;
+	box-shadow: 0 -8px 30px rgba(0, 0, 0, .45);
+}
+#boardTable thead th { background: color-mix(in srgb, var(--panel-2) 92%, transparent); }
+
+/* thin scrollbars on the floating panels */
+#alertsBody::-webkit-scrollbar, #board::-webkit-scrollbar,
+#analyticsBody::-webkit-scrollbar, #stringBadges::-webkit-scrollbar { width: 8px; height: 8px; }
+#alertsBody::-webkit-scrollbar-thumb, #board::-webkit-scrollbar-thumb,
+#analyticsBody::-webkit-scrollbar-thumb, #stringBadges::-webkit-scrollbar-thumb {
+	background: #2a3550; border-radius: 4px;
+}
+#alertsBody::-webkit-scrollbar-track, #board::-webkit-scrollbar-track,
+#analyticsBody::-webkit-scrollbar-track, #stringBadges::-webkit-scrollbar-track { background: transparent; }
+#layersPanel input, #stringToggles input { accent-color: var(--accent); }
+/* pin the stringline close button so header wrapping can't strand it */
+#stringHead { position: relative; padding-right: 40px; }
+#stringClose { position: absolute; top: 6px; right: 10px; }

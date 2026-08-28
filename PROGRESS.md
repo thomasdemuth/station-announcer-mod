@@ -2527,3 +2527,47 @@ Verified in ?demo=1 with the pane visible: 4-car consists render with gaps, glid
 smoothly, articulate past a bend, boat renders as a single 12-block car. The
 orientation fix itself cannot be reproduced in demo (demo railT is generated from
 the polylines) — watch a real reversed-rail stretch in game.
+
+## Dispatch web UI round 5 — the polish round (2026-08-27)
+
+Thomas: "dig deep… we need to create something beautiful." Frontend-only.
+
+**Chrome redesign:** decluttered topbar (layer checkboxes, transport-mode toggles and
+station heat moved into a "Layers ▾" glass dropdown; outside-click closes), a
+dispatcher clock, pulsing LIVE dot; every floating panel (legend, detail, alerts,
+layers, both tooltips, the board sheet) unified on glass — translucent panel colour +
+backdrop blur + one shadow/radius language; thin custom scrollbars; button hover/
+active transitions with an accent glow; a faint world-aligned power-of-two grid
+behind the map (64–128 px spacing at any zoom) for depth and scale.
+
+**New interactions:** map hover tooltips (nearest train: chip, destination, speed,
+deviation, HELD/DOORS flags; else station area: name + platform count + "click for
+details"; DOM writes only on content change); keyboard shortcuts B/S/N/A/F + Escape
+(closes the topmost overlay, then clears selection; skipped while typing);
+localStorage preference persistence (layers, heat, stringline window/annotations/
+grey) via savePrefs/loadPrefs, try/caught.
+
+**Stringline additions:** grey mode (all runs neutral grey, colour on hover — for
+colour-dominant lines), one direction chevron per run on its longest visible
+segment, CSV export of the departure window (vehicle, route+variant, station, ISO
+departure, dwell, deviation, stop index).
+
+**Board polish:** sticky header, zebra rows, amber tint on held rows, live train
+count beside the filter chips, empty-state message.
+
+**QA found + fixed during the pass:** relocated checkboxes lost the .toggles
+accent-color scope and rendered magenta; bottom-row headway labels collided with the
+time axis (clamped into the plot); header wrapping stranded the stringline close
+button (now pinned absolute); a loadPrefs operator-precedence wart. The recurring
+"drawImage width 0" console entry was proven STALE (line number matches the pre-fix
+build; document.hidden=true pauses ALL rAF in the pane — a fresh probe rAF doesn't
+fire either, so the loop is paused, not dead).
+
+**Verified end-to-end in ?demo=1:** layers dropdown, filter chips + count + variant
+column + zebra board on glass, train/station/empty hover tooltip states, segment
+mode via real gutter clicks (corridor Canal–Grand, green Express + magenta 7 Local
+crossing, accent-highlighted bounds, correct meta), headway labels with density
+guard, keyboard handler (synthetic KeyboardEvent — the CDP key path doesn't deliver
+while the pane is hidden), prefs full round-trip across reload (including the
+checkbox DOM), CSV generation, 2240×1260 viewport (media queries + uiScale, prefs
+visibly honoured). Not screenshotted: held-row tint and grey mode (state-verified).
