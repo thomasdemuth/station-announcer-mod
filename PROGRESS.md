@@ -2617,3 +2617,24 @@ Verified in ?demo=1: Northbound/Southbound chips appear for Demo Express;
 toggling Southbound off leaves only the parallel Northbound diagonals
 (screenshot), chip shows the off state, toggling back restores the crossing
 pattern.
+
+## Dispatch web UI round 8 — multi-select everywhere (2026-08-28)
+
+Thomas: make sure multiple chips can be selected at the same time. The variant
+chips were already independent toggles; the LINE badges (stringline) and the
+board's line-filter chips were single-select — both are Sets now. Frontend-only.
+
+- **Stringline line badges**: click toggles a line in/out of the chart (at least
+  one always stays; double-click narrows to just that line). All selected lines
+  overlay on one chart — the axis comes from the longest route across the
+  selection, other lines map on by station id (the segment-mode mechanism), and
+  the variant chips list every route of the union with route-number prefixes.
+  `groupKey` → `groupKeys: Set`; union helper `selectedGroupRouteIds()` feeds
+  activeRouteIds/axis/buildGeometry/fetch.
+- **Board filter chips**: `boardFilter` → Set of line keys (empty = all). Chips
+  toggle membership; "All lines" clears; map dimming, row filter, train count,
+  empty-state and the search rows all honour the set.
+
+Verified in ?demo=1: both line badges active at once → magenta 7 Local overlaid
+on the green Express with combined variant chips (screenshot); board filter with
+two lines in the set matches all three demo trains, cleared cleanly.

@@ -45,11 +45,11 @@ const state = {
 	alerts: [],              // newest last; capped at 200
 	alertsOpen: false,
 	alertsUnread: 0,
-	boardFilter: null,       // line key (route name before "||"), null = all lines
+	boardFilter: new Set(),  // line keys (route name before "||") to show; empty = all lines
 	stringline: {
 		view: false,
 		groups: [],          // [{key, display, number, color, routeIds:[]}]
-		groupKey: null,
+		groupKeys: new Set(), // selected line groups (multi-select)
 		axis: null,          // stringline endpoint axis payload (all routes)
 		deps: [],            // departure rows for the selected group
 		windowMin: 60,
@@ -168,7 +168,7 @@ async function loadDimension(n) {
 	state.stringline.axis = null;
 	state.stringline.deps = [];
 	state.stringline.groups = [];
-	state.stringline.groupKey = null;
+	state.stringline.groupKeys = new Set();
 	if (state.stringline.view) fetchStringline();
 	setAnalyticsData(null);
 	if (state.analytics.timer) fetchAnalytics();   // different dimension → refetch now
@@ -645,7 +645,7 @@ function frame() {
 	for (const [id, rec] of state.vehicles) {
 		if (!modeEnabled(vehicleMode(rec))) { rec.screen = null; continue; }
 		// the board's line filter dims (never hides) non-matching trains on the map
-		const filteredOut = state.boardFilter && (!rec.route || lineKey(rec.route.name) !== state.boardFilter);
+		const filteredOut = state.boardFilter.size > 0 && (!rec.route || !state.boardFilter.has(lineKey(rec.route.name)));
 		const p = vehiclePos(rec, renderTime);
 		if (!p) { rec.screen = null; continue; }
 		const targetAngle = Math.atan2(p.hz || 0, p.hx || 1);
@@ -1034,8 +1034,12 @@ function searchResults(q) {
 	for (const l of lineMap.values()) {
 		const sc = Math.max(score(l.display), score(l.number));
 		if (sc) lines.push({ sc, label: l.display, chip: l.number || "•", chipColor: colorHex(l.color),
-			sub: state.boardFilter === l.key ? "clear filter" : "filter",
-			action: () => { state.boardFilter = state.boardFilter === l.key ? null : l.key; renderBoard(); } });
+			sub: state.boardFilter.has(l.key) ? "unfilter" : "filter",
+			action: () => {
+				if (state.boardFilter.has(l.key)) state.boardFilter.delete(l.key);
+				else state.boardFilter.add(l.key);
+				renderBoard();
+			} });
 	}
 	const trains = [];
 	for (const [id, rec] of state.vehicles) {
@@ -1360,7 +1364,7 @@ function renderBoard() {
 	const rows = [...state.vehicles.entries()]
 		.filter(([, rec]) => modeEnabled(vehicleMode(rec)))
 		.map(([id, rec]) => boardRow(id, rec))
-		.filter((row) => !state.boardFilter || row.lineKeyVal === state.boardFilter);
+		.filter((row) => !state.boardFilter.size || state.boardFilter.has(row.lineKeyVal));
 	const { k, asc } = state.sort;
 	rows.sort((a, b) => {
 		const va = a[k], vb = b[k];
@@ -1373,7 +1377,7 @@ function renderBoard() {
 	body.innerHTML = "";
 	if (!rows.length) {
 		const tr = document.createElement("tr");
-		tr.innerHTML = `<td colspan="10" class="board-empty">${state.boardFilter ? "No trains on this line right now" : "No trains on route"}</td>`;
+		tr.innerHTML = `<td colspan="10" class="board-empty">${state.boardFilter.size ? "No trains on the filtered line(s) right now" : "No trains on route"}</td>`;
 		body.appendChild(tr);
 		return;
 	}
@@ -1412,25 +1416,29 @@ function renderBoardFilter() {
 			lines.set(key, { display: firstLang(key) || "Line", number: r.number || "", color: r.color });
 		}
 	}
-	if (state.boardFilter && !lines.has(state.boardFilter)) state.boardFilter = null;
+	for (const k of [...state.boardFilter]) if (!lines.has(k)) state.boardFilter.delete(k);
 	const shown = [...state.vehicles.values()].filter((rec) => modeEnabled(vehicleMode(rec))
-		&& (!state.boardFilter || (rec.route && lineKey(rec.route.name) === state.boardFilter))).length;
-	const sig = JSON.stringify([...lines.keys()]) + "|" + state.boardFilter + "|" + shown;
+		&& (!state.boardFilter.size || (rec.route && state.boardFilter.has(lineKey(rec.route.name))))).length;
+	const sig = JSON.stringify([...lines.keys()]) + "|" + [...state.boardFilter].sort().join(",") + "|" + shown;
 	if (sig === lastFilterSig) return;
 	lastFilterSig = sig;
 	const wrap = $("boardFilterRow");
 	wrap.innerHTML = "";
 	if (lines.size > 1) {
 		const all = document.createElement("button");
-		all.className = "board-chip" + (state.boardFilter === null ? " active" : "");
+		all.className = "board-chip" + (state.boardFilter.size === 0 ? " active" : "");
 		all.textContent = "All lines";
-		all.onclick = () => { state.boardFilter = null; renderBoard(); };
+		all.onclick = () => { state.boardFilter.clear(); renderBoard(); };
 		wrap.appendChild(all);
 		for (const [key, l] of lines) {
 			const chip = document.createElement("button");
-			chip.className = "board-chip" + (state.boardFilter === key ? " active" : "");
+			chip.className = "board-chip" + (state.boardFilter.has(key) ? " active" : "");
 			chip.innerHTML = `<span class="bullet" style="background:${colorHex(l.color)}">${escapeHtml(l.number)}</span>${escapeHtml(l.display)}`;
-			chip.onclick = () => { state.boardFilter = state.boardFilter === key ? null : key; renderBoard(); };
+			chip.onclick = () => {
+				if (state.boardFilter.has(key)) state.boardFilter.delete(key);
+				else state.boardFilter.add(key);
+				renderBoard();
+			};
 			wrap.appendChild(chip);
 		}
 	}
@@ -1883,9 +1891,12 @@ function applyStringline(data) {
 	groups.sort((a, b) => String(a.number || a.display).localeCompare(String(b.number || b.display), undefined, { numeric: true }));
 	const changed = JSON.stringify(groups.map((g) => g.key)) !== JSON.stringify(sl.groups.map((g) => g.key));
 	sl.groups = groups;
-	if (!sl.groupKey || !groups.some((g) => g.key === sl.groupKey)) {
-		sl.groupKey = groups.length ? groups[0].key : null;
-		if (sl.groupKey && !DEMO) fetchStringline(); // queued via refetchWanted if busy
+	for (const k of [...sl.groupKeys]) {
+		if (!groups.some((g) => g.key === k)) sl.groupKeys.delete(k);
+	}
+	if (!sl.groupKeys.size && groups.length) {
+		sl.groupKeys.add(groups[0].key);
+		if (!DEMO) fetchStringline(); // queued via refetchWanted if busy
 	}
 	if (changed) renderStringBadges();
 }
@@ -1906,16 +1917,30 @@ function renderStringBadges() {
 	}
 	for (const g of groups) {
 		const b = document.createElement("button");
-		b.className = "sl-badge" + (g.key === state.stringline.groupKey ? " active" : "");
+		b.className = "sl-badge" + (state.stringline.groupKeys.has(g.key) ? " active" : "");
 		b.innerHTML = `<span class="bullet" style="background:${colorHex(g.color)}">${escapeHtml(g.number || "")}</span>${escapeHtml(g.display)}`;
-		b.onclick = () => {
-			state.stringline.groupKey = g.key;
+		// click TOGGLES the line in/out (multi-select; at least one stays on);
+		// double-click narrows to just that line
+		const afterChange = () => {
 			state.stringline.segStations = [];
-			state.stringline.routeOff.clear();
 			state.stringline.built = null;
 			renderStringBadges();
 			renderSegUi();
 			fetchStringline();
+		};
+		b.onclick = () => {
+			const ks = state.stringline.groupKeys;
+			if (ks.has(g.key)) {
+				if (ks.size > 1) ks.delete(g.key);
+			} else {
+				ks.add(g.key);
+			}
+			afterChange();
+		};
+		b.ondblclick = () => {
+			state.stringline.groupKeys = new Set([g.key]);
+			state.stringline.routeOff.clear();
+			afterChange();
 		};
 		wrap.appendChild(b);
 	}
@@ -1979,18 +2004,27 @@ function segmentInfo() {
 
 /** The longest route of the selected line group (the y-axis donor). */
 function axisRouteOfGroup() {
-	const ids = new Set((state.stringline.groups.find((g) => g.key === state.stringline.groupKey) || {}).routeIds || []);
+	const ids = new Set(selectedGroupRouteIds());
 	const routes = (state.stringline.axis?.routes || []).filter((r) => ids.has(r.id));
 	if (!routes.length) return null;
 	return routes.reduce((a, b) => (b.stations.length > a.stations.length ? b : a));
+}
+
+/** Union of route ids across the SELECTED line groups (badge multi-select). */
+function selectedGroupRouteIds() {
+	const sl = state.stringline;
+	const ids = [];
+	for (const g of sl.groups) {
+		if (sl.groupKeys.has(g.key)) ids.push(...g.routeIds);
+	}
+	return ids;
 }
 
 /** Route ids the chart is currently about: the line group, or the segment's set. */
 function activeRouteIds() {
 	const seg = segmentInfo();
 	if (seg) return seg.routes.map((r) => r.id);
-	const g = state.stringline.groups.find((x) => x.key === state.stringline.groupKey);
-	return g ? g.routeIds : [];
+	return selectedGroupRouteIds();
 }
 
 function liveGroupVehicles() {
@@ -2108,7 +2142,7 @@ function buildGeometry() {
 		routesUsed = seg.routes;
 	} else {
 		stations = base.stations;
-		const ids = new Set((sl.groups.find((g) => g.key === sl.groupKey) || {}).routeIds || []);
+		const ids = new Set(selectedGroupRouteIds());
 		routesUsed = (sl.axis.routes || []).filter((r) => ids.has(r.id));
 	}
 	// variant chips: routes toggled off contribute neither platforms nor traces
