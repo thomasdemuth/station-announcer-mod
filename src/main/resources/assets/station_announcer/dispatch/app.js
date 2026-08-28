@@ -45,6 +45,7 @@ const state = {
 	alerts: [],              // newest last; capped at 200
 	alertsOpen: false,
 	alertsUnread: 0,
+	boardFilter: null,       // line key (route name before "||"), null = all lines
 	stringline: {
 		view: false,
 		groups: [],          // [{key, display, number, color, routeIds:[]}]
@@ -57,6 +58,11 @@ const state = {
 		hover: null,         // {trace, segIndex} under the cursor
 		mouse: null,         // [x, y] canvas-local
 		traces: [],          // rebuilt each draw; hit-testing reads it
+		mode: "line",        // "line" | "segment" (interlined-trunk view)
+		segStations: [],      // station ids picked on the axis in segment mode
+		built: null,          // cached time-space trace geometry {sig, stations, platY, traces}
+		layout: null,         // last draw's axis layout (label hit-testing)
+		refetchWanted: false,
 	},
 	lastEventAt: 0,
 	view: { x: 0, z: 0, scale: 1 },  // world center + px per block
@@ -559,6 +565,8 @@ function frame() {
 	const smoothing = 1 - Math.exp(-dtSec / 0.12); // critically-damped ease toward target
 	for (const [id, rec] of state.vehicles) {
 		if (!modeEnabled(vehicleMode(rec))) { rec.screen = null; continue; }
+		// the board's line filter dims (never hides) non-matching trains on the map
+		const filteredOut = state.boardFilter && (!rec.route || lineKey(rec.route.name) !== state.boardFilter);
 		const p = vehiclePos(rec, renderTime);
 		if (!p) { rec.screen = null; continue; }
 		const targetAngle = Math.atan2(p.hz || 0, p.hx || 1);
@@ -585,6 +593,7 @@ function frame() {
 		if (state.follow && selected) { state.view.x = rec.disp.x; state.view.z = rec.disp.z; invalidateStatic(); }
 
 		ctx.save();
+		if (filteredOut) ctx.globalAlpha = 0.25;
 		ctx.translate(sx, sy);
 		ctx.rotate(angle);
 		ctx.beginPath();
@@ -597,7 +606,7 @@ function frame() {
 		if (rec.data.doors) { ctx.fillStyle = "#fff"; ctx.fillRect(-1.5, -4, 3, 8); }
 		ctx.restore();
 
-		if (state.layers.trainLabels && state.view.scale > 0.5 && rec.route) {
+		if (state.layers.trainLabels && state.view.scale > 0.5 && rec.route && !filteredOut) {
 			ctx.font = "700 10px " + getComputedStyle(document.body).getPropertyValue("--mono");
 			ctx.textAlign = "center";
 			const label = rec.route.number || firstLang(rec.route.name);
@@ -646,6 +655,14 @@ function initUi() {
 	$("stringBtn").onclick = () => setStringlineView(!state.stringline.view);
 	$("stringClose").onclick = () => setStringlineView(false);
 	$("stringWindow").onchange = (e) => { state.stringline.windowMin = parseInt(e.target.value, 10); };
+	$("stringSegBtn").onclick = () => {
+		const sl = state.stringline;
+		sl.mode = sl.mode === "segment" ? "line" : "segment";
+		sl.segStations = [];
+		sl.built = null;
+		renderSegUi();
+		fetchStringline();
+	};
 	$("alertsBtn").onclick = () => setAlertsOpen(!state.alertsOpen);
 	$("alertsClose").onclick = () => setAlertsOpen(false);
 	$("alertsClear").onclick = () => { state.alerts = []; renderAlerts(); };
@@ -860,9 +877,13 @@ function renderStationPanel(el) {
 function boardRow(id, rec) {
 	const r = rec.route || {};
 	const d = rec.data;
+	const variant = firstLang((r.name || "").split("||")[1] || "");
 	return {
 		id,
 		route: r.number || firstLang(r.name) || "?",
+		lineKeyVal: lineKey(r.name),
+		line: firstLang(lineKey(r.name)) || "—",
+		variant,
 		color: r.color !== undefined ? colorHex(r.color) : "#5b6981",
 		dest: firstLang(r.dest) || "—",
 		next: firstLang(r.nextStation) || "—",
@@ -878,9 +899,11 @@ function boardRow(id, rec) {
 
 function renderBoard() {
 	if ($("board").classList.contains("hidden")) return;
+	renderBoardFilter();
 	const rows = [...state.vehicles.entries()]
 		.filter(([, rec]) => modeEnabled(vehicleMode(rec)))
-		.map(([id, rec]) => boardRow(id, rec));
+		.map(([id, rec]) => boardRow(id, rec))
+		.filter((row) => !state.boardFilter || row.lineKeyVal === state.boardFilter);
 	const { k, asc } = state.sort;
 	rows.sort((a, b) => {
 		const va = a[k], vb = b[k];
@@ -897,6 +920,7 @@ function renderBoard() {
 		const [devTxt, devCls] = fmtDev(row.dev);
 		tr.innerHTML =
 			`<td><span class="chip" style="background:${row.color}">${row.route}</span></td>` +
+			`<td>${escapeHtml(row.line)}${row.variant ? ` <span class="board-variant">· ${escapeHtml(row.variant)}</span>` : ""}</td>` +
 			`<td>${row.dest}</td><td>${row.next}</td>` +
 			`<td class="num">${row.kmh.toFixed(0)}</td>` +
 			`<td class="num ${devCls}">${devTxt}</td>` +
@@ -905,6 +929,43 @@ function renderBoard() {
 			`<td>${row.mode}</td>`;
 		tr.onclick = () => { state.selected = row.id; centerOn(row.id); updateDetail(); renderBoard(); };
 		body.appendChild(tr);
+	}
+}
+
+/**
+ * Line filter chips over the board: one per line seen among live trains, colored by
+ * that line's route color. Rebuilt with the board (1 Hz) but only when the chip set
+ * or selection changed, so there's no hover flicker.
+ */
+let lastFilterSig = "";
+function renderBoardFilter() {
+	const lines = new Map(); // key -> {display, number, color}
+	for (const [, rec] of state.vehicles) {
+		const r = rec.route;
+		if (!r || !modeEnabled(vehicleMode(rec))) continue;
+		const key = lineKey(r.name);
+		if (!lines.has(key)) {
+			lines.set(key, { display: firstLang(key) || "Line", number: r.number || "", color: r.color });
+		}
+	}
+	if (state.boardFilter && !lines.has(state.boardFilter)) state.boardFilter = null;
+	const sig = JSON.stringify([...lines.keys()]) + "|" + state.boardFilter;
+	if (sig === lastFilterSig) return;
+	lastFilterSig = sig;
+	const wrap = $("boardFilterRow");
+	wrap.innerHTML = "";
+	wrap.style.display = lines.size > 1 ? "" : "none";
+	const all = document.createElement("button");
+	all.className = "board-chip" + (state.boardFilter === null ? " active" : "");
+	all.textContent = "All lines";
+	all.onclick = () => { state.boardFilter = null; renderBoard(); };
+	wrap.appendChild(all);
+	for (const [key, l] of lines) {
+		const chip = document.createElement("button");
+		chip.className = "board-chip" + (state.boardFilter === key ? " active" : "");
+		chip.innerHTML = `<span class="bullet" style="background:${colorHex(l.color)}">${escapeHtml(l.number)}</span>${escapeHtml(l.display)}`;
+		chip.onclick = () => { state.boardFilter = state.boardFilter === key ? null : key; renderBoard(); };
+		wrap.appendChild(chip);
 	}
 }
 
@@ -1309,18 +1370,20 @@ function setStringlineView(on) {
 async function fetchStringline() {
 	const sl = state.stringline;
 	if (DEMO) { applyStringline(demoStringline()); return; }
-	if (sl.fetching || document.hidden) return;
+	if (sl.fetching || document.hidden) { sl.refetchWanted = true; return; }
 	sl.fetching = true;
+	sl.refetchWanted = false;
 	try {
-		const routesParam = sl.groupKey
-			? sl.groups.find((g) => g.key === sl.groupKey)?.routeIds.join(",") || ""
-			: "";
-		const body = await (await fetch(`${API}/stringline?dimension=${state.dim}&routes=${encodeURIComponent(routesParam)}`)).json();
+		const body = await (await fetch(`${API}/stringline?dimension=${state.dim}&routes=${encodeURIComponent(activeRouteIds().join(","))}`)).json();
 		applyStringline(body.data || body);
 	} catch (e) {
 		/* transient */
 	} finally {
 		sl.fetching = false;
+		// A selection change (or the first group pick inside applyStringline) that
+		// landed while this request was in flight would otherwise be silently
+		// dropped until the next poll.
+		if (sl.refetchWanted) setTimeout(fetchStringline, 0);
 	}
 }
 
@@ -1330,6 +1393,7 @@ function applyStringline(data) {
 	sl.deps = data.deps || [];
 	sl.windowServerMin = data.windowMinutes || 60;
 	sl.analyticsEnabled = data.analyticsEnabled !== false;
+	sl.built = null; // geometry cache is stale whenever new data lands
 
 	// Group routes into lines by the "||" key; badges rebuild only when changed.
 	const groups = [];
@@ -1350,10 +1414,9 @@ function applyStringline(data) {
 	sl.groups = groups;
 	if (!sl.groupKey || !groups.some((g) => g.key === sl.groupKey)) {
 		sl.groupKey = groups.length ? groups[0].key : null;
-		if (sl.groupKey && !DEMO) fetchStringline(); // first pick: fetch its deps
+		if (sl.groupKey && !DEMO) fetchStringline(); // queued via refetchWanted if busy
 	}
 	if (changed) renderStringBadges();
-	renderStringMeta();
 }
 
 function renderStringBadges() {
@@ -1365,29 +1428,90 @@ function renderStringBadges() {
 		b.innerHTML = `<span class="bullet" style="background:${colorHex(g.color)}">${escapeHtml(g.number || "")}</span>${escapeHtml(g.display)}`;
 		b.onclick = () => {
 			state.stringline.groupKey = g.key;
+			state.stringline.segStations = [];
+			state.stringline.built = null;
 			renderStringBadges();
+			renderSegUi();
 			fetchStringline();
 		};
 		wrap.appendChild(b);
 	}
 }
 
-function renderStringMeta() {
+/** Meta + hint lines; DOM writes only when the text actually changed (runs per frame). */
+let lastStringMeta = "";
+function renderStringMeta(extra) {
 	const sl = state.stringline;
 	const live = liveGroupVehicles().length;
-	$("stringMeta").textContent = sl.analyticsEnabled
-		? `${sl.deps.length} departures in the last ${sl.windowServerMin} min · ${live} live`
-		: "analytics.enabled is off on the server — no departure history";
+	const text = !sl.analyticsEnabled
+		? "analytics.enabled is off on the server — no departure history"
+		: `${sl.deps.length} departures in the last ${sl.windowServerMin} min · ${live} live${extra ? " · " + extra : ""}`;
+	if (text !== lastStringMeta) {
+		lastStringMeta = text;
+		$("stringMeta").textContent = text;
+	}
 }
 
-/** The selected group's routes as a Set of route ids. */
-function groupRouteIds() {
+function renderSegUi() {
+	const sl = state.stringline;
+	$("stringSegBtn").classList.toggle("active", sl.mode === "segment");
+	const hint = $("stringHint");
+	if (sl.mode !== "segment") {
+		hint.classList.add("hidden");
+	} else {
+		hint.classList.remove("hidden");
+		hint.textContent = sl.segStations.length < 2
+			? "Click two stations on the left axis to bound the segment"
+			: "Every line over this span is shown — click stations to adjust, Segment to exit";
+	}
+}
+
+/**
+ * The segment (interlined-trunk) selection, resolved against the current group's
+ * axis route: the corridor is the axis span between the outermost selected
+ * stations, and every non-hidden route serving ≥2 of the corridor's stations
+ * qualifies — that is exactly the set of services interlining over the trunk.
+ * Null when not in segment mode or fewer than 2 stations are picked.
+ */
+function segmentInfo() {
+	const sl = state.stringline;
+	if (sl.mode !== "segment" || sl.segStations.length < 2 || !sl.axis) return null;
+	const base = axisRouteOfGroup();
+	if (!base) return null;
+	const indices = sl.segStations
+		.map((sta) => base.stations.findIndex((s) => s.sta === sta))
+		.filter((i) => i >= 0);
+	if (indices.length < 2) return null;
+	const from = Math.min(...indices), to = Math.max(...indices);
+	const corridor = base.stations.slice(from, to + 1);
+	const corridorIds = new Set(corridor.map((s) => s.sta).filter((id) => id !== "0"));
+	const routes = (sl.axis.routes || []).filter((r) => {
+		if (r.hidden) return false;
+		let hits = 0;
+		for (const s of r.stations) if (corridorIds.has(s.sta)) hits++;
+		return hits >= 2;
+	});
+	return { corridor, corridorIds, routes };
+}
+
+/** The longest route of the selected line group (the y-axis donor). */
+function axisRouteOfGroup() {
+	const ids = new Set((state.stringline.groups.find((g) => g.key === state.stringline.groupKey) || {}).routeIds || []);
+	const routes = (state.stringline.axis?.routes || []).filter((r) => ids.has(r.id));
+	if (!routes.length) return null;
+	return routes.reduce((a, b) => (b.stations.length > a.stations.length ? b : a));
+}
+
+/** Route ids the chart is currently about: the line group, or the segment's set. */
+function activeRouteIds() {
+	const seg = segmentInfo();
+	if (seg) return seg.routes.map((r) => r.id);
 	const g = state.stringline.groups.find((x) => x.key === state.stringline.groupKey);
-	return new Set(g ? g.routeIds : []);
+	return g ? g.routeIds : [];
 }
 
 function liveGroupVehicles() {
-	const ids = groupRouteIds();
+	const ids = new Set(activeRouteIds());
 	const out = [];
 	for (const [id, rec] of state.vehicles) {
 		if (rec.route && ids.has(rec.route.id)) out.push({ id, rec });
@@ -1398,281 +1522,7 @@ function liveGroupVehicles() {
 const slCanvas = $("slCanvas");
 const slCtx = slCanvas.getContext("2d");
 
-function initStringlineCanvas() {
-	slCanvas.addEventListener("mousemove", (e) => {
-		const rect = slCanvas.getBoundingClientRect();
-		state.stringline.mouse = [e.clientX - rect.left, e.clientY - rect.top];
-	});
-	slCanvas.addEventListener("mouseleave", () => {
-		state.stringline.mouse = null;
-		state.stringline.hover = null;
-		$("slTip").classList.add("hidden");
-	});
-	slCanvas.addEventListener("click", () => {
-		const hover = state.stringline.hover;
-		if (hover && hover.trace.veh && state.vehicles.has(hover.trace.veh)) {
-			state.selected = hover.trace.veh;
-			state.selectedStation = null;
-			setStringlineView(false);
-			centerOn(hover.trace.veh);
-			updateDetail();
-			renderBoard();
-		}
-	});
-}
 
-/**
- * Rebuilds the y axis and traces, then draws — called from the shared rAF loop while
- * the view is open, so the right edge tracks "now" and the live tips glide.
- *
- * Axis: the group's route with the most stations provides the station rows, spaced by
- * real distance; every OTHER route of the group (usually the opposite direction) maps
- * its platforms onto those rows by station id, so both directions cross on one chart —
- * the pvibien look. Traces: analytics departures (arrival = t − dwell, giving the flat
- * dwell segment) chained per vehicle, split when a gap exceeds 20 min or the stop
- * index restarts (next round trip); the newest trace gets a live tip from the SSE
- * stream's prev/next-platform fraction.
- */
-function drawStringline() {
-	const sl = state.stringline;
-	const dpr = window.devicePixelRatio || 1;
-	const w = slCanvas.clientWidth, h = slCanvas.clientHeight;
-	if (!w || !h) return;
-	if (slCanvas.width !== w * dpr || slCanvas.height !== h * dpr) {
-		slCanvas.width = w * dpr;
-		slCanvas.height = h * dpr;
-	}
-	const g = slCtx;
-	g.setTransform(dpr, 0, 0, dpr, 0, 0);
-	g.clearRect(0, 0, w, h);
-
-	const css = getComputedStyle(document.body);
-	const mono = css.getPropertyValue("--mono");
-	const dim = css.getPropertyValue("--dim").trim() || "#7d8aa5";
-	const border = css.getPropertyValue("--border").trim() || "#232c3f";
-
-	const ids = groupRouteIds();
-	const routes = (sl.axis?.routes || []).filter((r) => ids.has(r.id));
-	if (!routes.length) {
-		g.fillStyle = dim;
-		g.font = "13px system-ui";
-		g.textAlign = "center";
-		g.fillText(sl.axis ? "No line selected" : "Loading…", w / 2, h / 2);
-		return;
-	}
-
-	// --- y axis from the longest route of the group
-	const axisRoute = routes.reduce((a, b) => (b.stations.length > a.stations.length ? b : a));
-	const stations = axisRoute.stations;
-	const total = Math.max(1, stations[stations.length - 1].dist);
-	const pad = { l: 150, r: 14, t: 16, b: 26 };
-	const plotH = h - pad.t - pad.b, plotW = w - pad.l - pad.r;
-	const Y = (dist) => pad.t + (dist / total) * plotH;
-
-	// platform id → y, and station id → y for cross-direction mapping
-	const platY = new Map(), staY = new Map();
-	for (const s of stations) {
-		platY.set(s.plat, Y(s.dist));
-		if (s.sta !== "0") staY.set(s.sta, Y(s.dist));
-	}
-	for (const r of routes) {
-		if (r === axisRoute) continue;
-		for (const s of r.stations) {
-			if (!platY.has(s.plat) && staY.has(s.sta)) platY.set(s.plat, staY.get(s.sta));
-		}
-	}
-
-	// --- time window, right edge = now
-	const tNow = now();
-	const t0 = tNow - sl.windowMin * 60000;
-	const X = (t) => pad.l + ((t - t0) / (tNow - t0)) * plotW;
-
-	// --- grid: station rows + time ticks
-	g.font = "11px system-ui";
-	g.textAlign = "right";
-	let lastLabelY = -99;
-	for (const s of stations) {
-		const y = Y(s.dist);
-		g.strokeStyle = border;
-		g.lineWidth = 1;
-		g.beginPath(); g.moveTo(pad.l, y); g.lineTo(w - pad.r, y); g.stroke();
-		if (y - lastLabelY >= 13) {
-			g.fillStyle = dim;
-			let label = firstLang(s.staName) || firstLang(s.platName) || "?";
-			if (label.length > 22) label = label.slice(0, 21) + "…";
-			g.fillText(label, pad.l - 8, y + 3.5);
-			lastLabelY = y;
-		}
-	}
-	const tickMin = sl.windowMin <= 15 ? 2 : sl.windowMin <= 30 ? 5 : sl.windowMin <= 60 ? 10 : 15;
-	g.textAlign = "center";
-	g.font = "10px " + mono;
-	const firstTick = Math.ceil(t0 / (tickMin * 60000)) * tickMin * 60000;
-	for (let t = firstTick; t <= tNow; t += tickMin * 60000) {
-		const x = X(t);
-		g.strokeStyle = "color-mix(in srgb, " + border + " 55%, transparent)";
-		g.strokeStyle = border + "";
-		g.globalAlpha = 0.45;
-		g.beginPath(); g.moveTo(x, pad.t); g.lineTo(x, pad.t + plotH); g.stroke();
-		g.globalAlpha = 1;
-		g.fillStyle = dim;
-		g.fillText(fmtClock(t), x, h - 8);
-	}
-
-	// --- traces from the departure history
-	const traces = buildTraces(platY, t0, tNow);
-	sl.traces = traces;
-
-	// hover hit-test (against last frame's geometry is fine at 60 fps)
-	sl.hover = null;
-	if (sl.mouse) {
-		let bestD = 7;
-		for (const tr of traces) {
-			for (let i = 1; i < tr.pts.length; i++) {
-				const d = segDist(sl.mouse, tr.pts[i - 1], tr.pts[i]);
-				if (d < bestD) { bestD = d; sl.hover = { trace: tr, seg: i }; }
-			}
-		}
-	}
-
-	for (const tr of traces) {
-		const hovered = sl.hover && sl.hover.trace === tr;
-		g.strokeStyle = tr.color;
-		g.lineWidth = hovered ? 3 : 1.6;
-		g.globalAlpha = sl.hover && !hovered ? 0.35 : 1;
-		g.beginPath();
-		for (let i = 0; i < tr.pts.length; i++) {
-			i === 0 ? g.moveTo(tr.pts[i][0], tr.pts[i][1]) : g.lineTo(tr.pts[i][0], tr.pts[i][1]);
-		}
-		g.stroke();
-		if (tr.live) {
-			const tip = tr.pts[tr.pts.length - 1];
-			g.beginPath();
-			g.arc(tip[0], tip[1], hovered ? 5 : 3.5, 0, Math.PI * 2);
-			g.fillStyle = tr.color;
-			g.fill();
-			g.strokeStyle = "#0b0e14";
-			g.lineWidth = 1;
-			g.stroke();
-		}
-	}
-	g.globalAlpha = 1;
-
-	// axis frame on top of the gutter
-	g.strokeStyle = border;
-	g.lineWidth = 1;
-	g.beginPath(); g.moveTo(pad.l, pad.t); g.lineTo(pad.l, pad.t + plotH); g.stroke();
-
-	// tooltip
-	const tip = $("slTip");
-	if (sl.hover && sl.mouse) {
-		const tr = sl.hover.trace;
-		tip.classList.remove("hidden");
-		tip.style.left = Math.min(w - 270, sl.mouse[0] + 14) + "px";
-		tip.style.top = Math.min(h - 80, sl.mouse[1] + 12) + "px";
-		const [devTxt, devCls] = fmtDev(tr.lastDev);
-		tip.innerHTML = `<div class="t"><span class="chip" style="background:${tr.color}">${escapeHtml(tr.number)}</span> ` +
-			`${escapeHtml(tr.routeName)}</div>` +
-			`<div>${tr.live ? "Live — click to follow on the map" : "Completed run"}</div>` +
-			`<div>Last dev: <span class="${devCls}">${devTxt}</span></div>`;
-	} else {
-		tip.classList.add("hidden");
-	}
-	renderStringMeta();
-}
-
-/**
- * Chains the departure rows [veh, plat, t, dwell, dev, stop, routeId] into per-run
- * polylines in screen space, then appends the live tips.
- */
-function buildTraces(platY, t0, tNow) {
-	const sl = state.stringline;
-	const X = (t) => {
-		const w = slCanvas.clientWidth;
-		const pad = { l: 150, r: 14 };
-		return pad.l + ((t - t0) / (tNow - t0)) * (w - pad.l - pad.r);
-	};
-	const routeById = new Map((sl.axis?.routes || []).map((r) => [r.id, r]));
-	const byVeh = new Map();
-	for (const row of sl.deps) {
-		const [veh, plat, t, dwell, dev, stop, routeId] = row;
-		if (t < t0 - 20 * 60000) continue; // keep a little pre-window so lines enter from the left
-		if (!byVeh.has(veh)) byVeh.set(veh, []);
-		byVeh.get(veh).push({ plat, t, dwell, dev, stop, routeId });
-	}
-
-	const traces = [];
-	for (const [veh, events] of byVeh) {
-		events.sort((a, b) => a.t - b.t);
-		let current = null;
-		let lastStop = -1, lastT = 0;
-		for (const ev of events) {
-			const y = platY.get(ev.plat);
-			if (y === undefined) continue; // platform not on this group's axis (branch/depot leg)
-			const newRun = !current || ev.stop < lastStop || ev.t - lastT > 20 * 60000;
-			if (newRun) {
-				const route = routeById.get(ev.routeId);
-				current = {
-					veh,
-					color: route ? colorHex(route.color) : "#9aa7bf",
-					number: route ? (route.number || "") : "",
-					routeName: route ? firstLang(lineKey(route.name)) : "",
-					pts: [],
-					lastDev: ev.dev,
-					lastPlat: ev.plat,
-					lastT: ev.t,
-					live: false,
-				};
-				traces.push(current);
-			}
-			// arrival (t − dwell) then departure (t): the flat dwell segment
-			const arrivalT = ev.t - (ev.dwell || 0);
-			current.pts.push([X(arrivalT), y]);
-			current.pts.push([X(ev.t), y]);
-			current.lastDev = ev.dev;
-			current.lastPlat = ev.plat;
-			current.lastT = ev.t;
-			lastStop = ev.stop;
-			lastT = ev.t;
-		}
-	}
-
-	// live tips: attach to the vehicle's newest trace, or start a fresh dot
-	for (const { id, rec } of liveGroupVehicles()) {
-		const d = rec.data;
-		const yPrev = d.pPlat && d.pPlat !== "0" ? platY.get(d.pPlat) : undefined;
-		const yNext = d.nPlat && d.nPlat !== "0" ? platY.get(d.nPlat) : undefined;
-		let y;
-		if (yPrev !== undefined && yNext !== undefined) y = yPrev + (yNext - yPrev) * (d.pFrac || 0);
-		else if (yPrev !== undefined) y = yPrev;
-		else if (yNext !== undefined) y = yNext;
-		else continue;
-		let trace = null;
-		for (const tr of traces) {
-			if (tr.veh === id && (!trace || tr.lastT > trace.lastT)) trace = tr;
-		}
-		if (trace && tNow - trace.lastT <= 20 * 60000) {
-			trace.pts.push([X(tNow), y]);
-			trace.live = true;
-			trace.lastDev = d.devMs ?? trace.lastDev;
-		} else {
-			const r = rec.route;
-			traces.push({
-				veh: id,
-				color: r ? colorHex(r.color) : "#9aa7bf",
-				number: r ? (r.number || "") : "",
-				routeName: r ? firstLang(lineKey(r.name)) : "",
-				pts: [[X(tNow), y]],
-				lastDev: d.devMs ?? 0,
-				lastT: tNow,
-				live: true,
-			});
-		}
-	}
-	return traces;
-}
-
-/** Distance from point p to segment ab, in px. */
 function segDist(p, a, b) {
 	const dx = b[0] - a[0], dy = b[1] - a[1];
 	const len2 = dx * dx + dy * dy || 1;

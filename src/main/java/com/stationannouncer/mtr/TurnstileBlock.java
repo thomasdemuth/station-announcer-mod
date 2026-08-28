@@ -49,7 +49,7 @@ public class TurnstileBlock extends TurnstileBaseBlock {
     public static final EnumProperty<Indicator> INDICATOR = EnumProperty.of("indicator", Indicator.class);
 
     public enum Indicator implements StringIdentifiable {
-        OFF, GO, STOP;
+        OFF, GO, STOP, WAIT;
 
         @Override
         public String asString() {
@@ -138,6 +138,22 @@ public class TurnstileBlock extends TurnstileBaseBlock {
                 new org.mtr.mapping.holder.World(world),
                 new org.mtr.mapping.holder.PlayerEntity(player));
 
+        // MTR's only entry gate is balance >= 0 (bytecode-verified), so a
+        // would-be entry that cannot succeed gets its red light and fail beep
+        // NOW instead of after the async station lookup.
+        if (allowEntry && !wasInside && balanceBefore < 0) {
+            setIndicator(world, pos, Indicator.STOP, INDICATOR_TICKS);
+            world.playSound(null, pos, org.mtr.mod.SoundEvents.TICKET_PROCESSOR_FAIL.get().data,
+                    net.minecraft.sound.SoundCategory.BLOCKS, 1.0f, 1.0f);
+            player.sendMessage(Text.translatable("gui.mtr.insufficient_balance", balanceBefore), true);
+            return;
+        }
+
+        // Amber WAIT while MTR's async station lookup is in flight; the fare
+        // callback replaces it with GO/STOP. The long clear tick only mops up
+        // a WAIT orphaned by a server stop mid-lookup.
+        setIndicator(world, pos, Indicator.WAIT, 100);
+
         // MTR handles the fare, the travel record and all feedback sounds;
         // exit-only lanes remind (not fine) walk-ups with no entry record.
         org.mtr.mod.data.TicketSystem.passThrough(
@@ -145,28 +161,84 @@ public class TurnstileBlock extends TurnstileBaseBlock {
                 new org.mtr.mapping.holder.BlockPos(pos),
                 new org.mtr.mapping.holder.PlayerEntity(player),
                 allowEntry, true,
-                org.mtr.mod.SoundEvents.TICKET_BARRIER.get(),
-                org.mtr.mod.SoundEvents.TICKET_BARRIER_CONCESSIONARY.get(),
-                org.mtr.mod.SoundEvents.TICKET_BARRIER.get(),
-                org.mtr.mod.SoundEvents.TICKET_BARRIER_CONCESSIONARY.get(),
+                entrySound(), entrySoundConcessionary(),
+                exitSound(), exitSoundConcessionary(),
                 allowEntry ? null : org.mtr.mod.SoundEvents.TICKET_PROCESSOR_FAIL.get(),
                 !allowEntry,
                 open -> onFareResult(world, pos, player, open, wasInside, balanceBefore));
     }
 
-    /** True while MTR's scoreboard carries an entry-zone record for this rider. */
+    /**
+     * The low turnstile beeps like MTR's ticket processors — distinct entry
+     * and exit tones for free (the sound set ships in MTR, unused by us until
+     * now). The HEET overrides these back to the barrier clunk: a full-height
+     * rotor really does clunk.
+     */
+    protected org.mtr.mapping.holder.SoundEvent entrySound() {
+        return org.mtr.mod.SoundEvents.TICKET_PROCESSOR_ENTRY.get();
+    }
+
+    protected org.mtr.mapping.holder.SoundEvent entrySoundConcessionary() {
+        return org.mtr.mod.SoundEvents.TICKET_PROCESSOR_ENTRY_CONCESSIONARY.get();
+    }
+
+    protected org.mtr.mapping.holder.SoundEvent exitSound() {
+        return org.mtr.mod.SoundEvents.TICKET_PROCESSOR_EXIT.get();
+    }
+
+    protected org.mtr.mapping.holder.SoundEvent exitSoundConcessionary() {
+        return org.mtr.mod.SoundEvents.TICKET_PROCESSOR_EXIT_CONCESSIONARY.get();
+    }
+
+    /** Lights the reader-pillar lamp on the upper half and schedules its reset. */
+    private void setIndicator(World world, BlockPos lowerPos, Indicator indicator, int clearTicks) {
+        BlockPos upperPos = lowerPos.up();
+        BlockState upper = world.getBlockState(upperPos);
+        if (upper.isOf(this) && upper.get(HALF) == DoubleBlockHalf.UPPER) {
+            world.setBlockState(upperPos, upper.with(INDICATOR, indicator));
+            world.scheduleBlockTick(upperPos, this, clearTicks);
+        }
+    }
+
+    /** Empty-hand right-click on the unit = balance enquiry, like MTR's enquiry processor. */
+    @Override
+    public net.minecraft.util.ActionResult onUse(BlockState state, World world, BlockPos pos,
+                                                 PlayerEntity player, net.minecraft.util.Hand hand,
+                                                 net.minecraft.util.hit.BlockHitResult hit) {
+        if (!player.getStackInHand(hand).isEmpty()) {
+            return net.minecraft.util.ActionResult.PASS;
+        }
+        if (world.isClient) {
+            return net.minecraft.util.ActionResult.SUCCESS;
+        }
+        int balance = org.mtr.mod.data.TicketSystem.getBalance(
+                new org.mtr.mapping.holder.World(world),
+                new org.mtr.mapping.holder.PlayerEntity(player));
+        world.playSound(null, pos, org.mtr.mod.SoundEvents.TICKET_PROCESSOR_ENTRY.get().data,
+                net.minecraft.sound.SoundCategory.BLOCKS, 0.6f, 1.0f);
+        player.sendMessage(Text.translatable("msg.station_announcer.fare.balance", balance), true);
+        return net.minecraft.util.ActionResult.CONSUME;
+    }
+
+    /**
+     * True while MTR's scoreboard carries an entry-zone record for this rider.
+     * MTR's own {@code entered()} requires ALL THREE zone scores nonzero (its
+     * zone encoding guarantees every real entry sets all three), so this
+     * matches that exactly rather than accepting any single nonzero score.
+     */
     private static boolean hasEntryRecord(World world, PlayerEntity player) {
         net.minecraft.scoreboard.Scoreboard scoreboard = world.getScoreboard();
         for (String objectiveName : new String[]{"mtr_entry_zone_1", "mtr_entry_zone_2", "mtr_entry_zone_3"}) {
             net.minecraft.scoreboard.ScoreboardObjective objective = scoreboard.getNullableObjective(objectiveName);
-            if (objective != null) {
-                net.minecraft.scoreboard.ReadableScoreboardScore score = scoreboard.getScore(player, objective);
-                if (score != null && score.getScore() != 0) {
-                    return true;
-                }
+            if (objective == null) {
+                return false;
+            }
+            net.minecraft.scoreboard.ReadableScoreboardScore score = scoreboard.getScore(player, objective);
+            if (score == null || score.getScore() == 0) {
+                return false;
             }
         }
-        return false;
+        return true;
     }
 
     /**
@@ -183,13 +255,8 @@ public class TurnstileBlock extends TurnstileBaseBlock {
                               boolean wasInside, int balanceBefore) {
         boolean go = open == org.mtr.mod.data.TicketSystem.EnumTicketBarrierOpen.OPEN
                 || open == org.mtr.mod.data.TicketSystem.EnumTicketBarrierOpen.OPEN_CONCESSIONARY;
-        // Re-fetch: the callback is asynchronous and the block may be gone.
-        BlockPos upperPos = lowerPos.up();
-        BlockState upper = world.getBlockState(upperPos);
-        if (upper.isOf(this) && upper.get(HALF) == DoubleBlockHalf.UPPER) {
-            world.setBlockState(upperPos, upper.with(INDICATOR, go ? Indicator.GO : Indicator.STOP));
-            world.scheduleBlockTick(upperPos, this, INDICATOR_TICKS);
-        }
+        // Re-fetches inside: the callback is asynchronous and the block may be gone.
+        setIndicator(world, lowerPos, go ? Indicator.GO : Indicator.STOP, INDICATOR_TICKS);
         if (!go || player.isRemoved()) {
             return;
         }

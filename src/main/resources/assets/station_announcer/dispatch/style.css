@@ -453,3 +453,41 @@ body {
 	letter-spacing: 2px;
 }
 .sta-inbound { display: flex; align-items: baseline; gap: 6px; padding: 3px 0; font-size: 12px; }
+
+/* ---------- board line filter + variant column ---------- */
+
+#boardFilterRow {
+	display: flex;
+	gap: 6px;
+	padding: 6px 10px 2px;
+	flex-wrap: wrap;
+	align-items: center;
+}
+.board-chip {
+	display: inline-flex;
+	align-items: center;
+	gap: 6px;
+	padding: 2px 9px;
+	border-radius: 11px;
+	border: 1px solid var(--border);
+	background: var(--panel-2);
+	color: var(--text);
+	font: 600 11px system-ui;
+	cursor: pointer;
+	white-space: nowrap;
+}
+.board-chip .bullet {
+	display: inline-block;
+	width: 12px;
+	height: 12px;
+	border-radius: 50%;
+	color: #fff;
+	font: 700 8px/12px var(--mono);
+	text-align: center;
+}
+.board-chip.active { border-color: var(--accent); background: #10233c; }
+.board-variant { color: var(--dim); }
+
+/* ---------- stringline segment mode ---------- */
+
+#stringSegBtn.active { border-color: var(--amber); color: var(--amber); }

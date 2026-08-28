@@ -40,6 +40,28 @@ public class TurnstileHeetBlock extends TurnstileBlock {
         return false;
     }
 
+    // The full-height rotor keeps the heavy barrier clunk in both directions —
+    // the processor beeps belong on the low turnstile's card reader.
+    @Override
+    protected org.mtr.mapping.holder.SoundEvent entrySound() {
+        return org.mtr.mod.SoundEvents.TICKET_BARRIER.get();
+    }
+
+    @Override
+    protected org.mtr.mapping.holder.SoundEvent entrySoundConcessionary() {
+        return org.mtr.mod.SoundEvents.TICKET_BARRIER_CONCESSIONARY.get();
+    }
+
+    @Override
+    protected org.mtr.mapping.holder.SoundEvent exitSound() {
+        return org.mtr.mod.SoundEvents.TICKET_BARRIER.get();
+    }
+
+    @Override
+    protected org.mtr.mapping.holder.SoundEvent exitSoundConcessionary() {
+        return org.mtr.mod.SoundEvents.TICKET_BARRIER_CONCESSIONARY.get();
+    }
+
     @Override
     public VoxelShape getOutlineShape(BlockState state, BlockView world, BlockPos pos, ShapeContext context) {
         return rotated(outline, state);

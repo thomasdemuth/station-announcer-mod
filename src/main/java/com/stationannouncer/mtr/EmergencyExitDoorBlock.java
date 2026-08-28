@@ -67,8 +67,9 @@ public class EmergencyExitDoorBlock extends Block implements com.stationannounce
     /** The loop is 2 s, so re-issue it a little under that to avoid a gap. */
     private static final int ALARM_LOOP_TICKS = 38;
 
-    /** MTR's rate is 1 emerald = $10; a real NYC evasion fine is $100. */
-    public static final int EVASION_FINE = 100;
+    /** Matches MTR's own evasion charge ($500, bytecode-verified) so sneaking
+     * in through the emergency exit never beats jumping a turnstile. */
+    public static final int EVASION_FINE = 500;
 
     private static final double HALF_THICKNESS = 3.0;
     /** One crossing per player per lane per two seconds. */

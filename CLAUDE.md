@@ -212,9 +212,28 @@ Four fixes/features from Thomas's feedback round (his answers, do not re-ask):
   40-tick re-close — complete recipe for an optional blocking mode. P1–P12
   prioritized proposals at the end; P10 (BER rotor spin) + P11 (fine → $500) are
   flagged [ask Thomas]. Nothing implemented from it yet.
+- SECOND BATCH same session (Thomas picked from the P-list: small wins + P8 + P11;
+  declined the visual pass, blocking gates, rotor spin):
+  - `hasEntryRecord` now requires ALL THREE zone scores nonzero (MTR's entered()).
+  - Entry pre-check: would-be entry (allowEntry && !wasInside) with balance < 0 →
+    instant STOP lamp + TICKET_PROCESSOR_FAIL + MTR's own `gui.mtr.insufficient_balance`
+    key, passThrough skipped.
+  - `Indicator.WAIT` (amber) set before passThrough, replaced by GO/STOP in the
+    callback; 100-tick safety clear. Lamp sprite re-zoned to FOUR 4-row bands
+    (off/go/stop/wait) + `*_lamp_wait` models; blockstate loops + PROPS updated.
+  - Sounds: low turnstile now uses TICKET_PROCESSOR_ENTRY/EXIT(_CONCESSIONARY)
+    via overridable entrySound()/etc; TurnstileHeetBlock overrides back to the
+    TICKET_BARRIER clunk.
+  - Empty-hand right-click on turnstile/HEET = balance enquiry (entry beep +
+    msg.station_announcer.fare.balance).
+  - Fare machine empty-hand now OPENS MTR's ticket-machine screen
+    (`Init.REGISTRY.sendPacketToClient(new ServerPlayerEntity(player), new
+    PacketOpenTicketMachineScreen(balance))`); emerald quick top-up kept.
+  - Exit-door EVASION_FINE 100 → 500 (matches MTR's own evasion charge).
 - Build green at 2.4.17; deploy_jar.sh REFUSED (game open) — deploy + in-game test
   still pending: door placement feel, open/close + label swing, handrail thirds
-  clicking, wall-detection placement.
+  clicking, wall-detection placement, WAIT/STOP lamp flow, processor beeps,
+  ticket-machine screen from the fare machine.
 
 ### TURNSTILE ROUND 2 (2026-08-19 evening) — fare feedback + photo-grade tubing; NOT yet deployed
 

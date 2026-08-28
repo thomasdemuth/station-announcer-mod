@@ -61,6 +61,16 @@
       "when": {
         "facing": "north",
         "half": "upper",
+        "indicator": "wait"
+      },
+      "apply": {
+        "model": "station_announcer:block/turnstile_lamp_wait"
+      }
+    },
+    {
+      "when": {
+        "facing": "north",
+        "half": "upper",
         "right": "true"
       },
       "apply": {
@@ -144,6 +154,17 @@
       "when": {
         "facing": "east",
         "half": "upper",
+        "indicator": "wait"
+      },
+      "apply": {
+        "model": "station_announcer:block/turnstile_lamp_wait",
+        "y": 90
+      }
+    },
+    {
+      "when": {
+        "facing": "east",
+        "half": "upper",
         "right": "true"
       },
       "apply": {
@@ -229,6 +250,17 @@
       "when": {
         "facing": "south",
         "half": "upper",
+        "indicator": "wait"
+      },
+      "apply": {
+        "model": "station_announcer:block/turnstile_lamp_wait",
+        "y": 180
+      }
+    },
+    {
+      "when": {
+        "facing": "south",
+        "half": "upper",
         "right": "true"
       },
       "apply": {
@@ -307,6 +339,17 @@
       },
       "apply": {
         "model": "station_announcer:block/turnstile_lamp_stop",
+        "y": 270
+      }
+    },
+    {
+      "when": {
+        "facing": "west",
+        "half": "upper",
+        "indicator": "wait"
+      },
+      "apply": {
+        "model": "station_announcer:block/turnstile_lamp_wait",
         "y": 270
       }
     },

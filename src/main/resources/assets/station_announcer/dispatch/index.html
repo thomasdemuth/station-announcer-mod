@@ -61,9 +61,11 @@
 	</aside>
 
 	<section id="board" class="hidden">
+		<div id="boardFilterRow"></div>
 		<table id="boardTable">
 			<thead><tr>
 				<th data-k="route">Route</th>
+				<th data-k="line">Line / Variant</th>
 				<th data-k="dest">Destination</th>
 				<th data-k="next">Next station</th>
 				<th data-k="kmh" class="num">km/h</th>
@@ -90,6 +92,8 @@
 		<div id="stringHead">
 			<span class="an-title">STRINGLINES</span>
 			<div id="stringBadges"></div>
+			<button id="stringSegBtn" class="btn small" title="Show every train over a chosen span of stations, across all lines (interlined trunks)">Segment</button>
+			<span id="stringHint" class="an-meta hidden"></span>
 			<span class="spacer"></span>
 			<select id="stringWindow" title="Time window">
 				<option value="15">15 min</option>

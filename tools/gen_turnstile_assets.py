@@ -17,8 +17,8 @@ Design rules honoured here (learned elsewhere in this repo the hard way):
 - Every when-key in a blockstate is checked against the block's declared
   properties (the purple-box lesson) by verify() at the end of main().
 
-The INDICATOR lamp is three separate models (off/go/stop) selected by the
-blockstate — the upper model carries no lens at all, so the lamp never
+The INDICATOR lamp is four separate models (off/go/stop/wait) selected by
+the blockstate — the upper model carries no lens at all, so the lamp never
 z-fights itself.
 """
 
@@ -59,6 +59,8 @@ GO = (44, 168, 74, 255)
 GO_CORE = (140, 245, 160, 255)
 STOP = (186, 30, 32, 255)
 STOP_CORE = (255, 128, 118, 255)
+WAIT = (214, 150, 24, 255)
+WAIT_CORE = (255, 214, 120, 255)
 
 
 def brushed(rows, x0, y0, x1, y1, base=STEEL, seed=0):
@@ -183,18 +185,23 @@ def tex_sign(exit_variant):
 
 
 def tex_lamp():
-    """Lens sprite, 16px, three zones: rows 0..5 off, 5..10 go, 10..16 stop.
-    Bright flat colour with a hot core — lenses, not lit geometry."""
+    """Lens sprite, 16px, four 4-row zones: off / go / stop / wait (amber,
+    shown while the async fare lookup is in flight). Bright flat colour with
+    a hot core — lenses, not lit geometry."""
     rows = pk.canvas(16, 16, LAMP_OFF)
-    pk.rect(rows, 0, 5, 16, 10, GO)
-    pk.rect(rows, 5, 6, 11, 9, GO_CORE)
-    pk.rect(rows, 0, 10, 16, 16, STOP)
-    pk.rect(rows, 5, 12, 11, 15, STOP_CORE)
+    pk.rect(rows, 0, 4, 16, 8, GO)
+    pk.rect(rows, 5, 5, 11, 7, GO_CORE)
+    pk.rect(rows, 0, 8, 16, 12, STOP)
+    pk.rect(rows, 5, 9, 11, 11, STOP_CORE)
+    pk.rect(rows, 0, 12, 16, 16, WAIT)
+    pk.rect(rows, 5, 13, 11, 15, WAIT_CORE)
     return rows
 
 
-# lens uv windows (16-unit space), interior slices only
-UV_LAMP = {"off": [5, 1, 11, 4], "go": [5, 6, 11, 9], "stop": [5, 11.5, 11, 14.5]}
+# lens uv windows (16-unit space), interior slices only — each stays a half
+# texel clear of its 4-row zone's edges so mips never bleed a neighbour zone
+UV_LAMP = {"off": [5, 0.75, 11, 3.25], "go": [5, 4.75, 11, 7.25],
+           "stop": [5, 8.75, 11, 11.25], "wait": [5, 12.75, 11, 15.25]}
 
 
 def icon(kind):
@@ -537,7 +544,7 @@ def turnstile_blockstate(upper_model, bridge_model="turnstile_tube_bridge"):
         parts.append({"when": {"facing": facing, "half": "lower"}, "apply": ap("turnstile_cabinet", rot)})
         parts.append({"when": {"facing": facing, "half": "lower"}, "apply": ap("turnstile_arm", rot)})
         parts.append({"when": {"facing": facing, "half": "upper"}, "apply": ap(upper_model, rot)})
-        for state in ("off", "go", "stop"):
+        for state in ("off", "go", "stop", "wait"):
             parts.append({"when": {"facing": facing, "half": "upper", "indicator": state},
                           "apply": ap(f"turnstile_lamp_{state}", rot)})
         parts.append({"when": {"facing": facing, "half": "upper", "right": "true"},
@@ -564,7 +571,7 @@ def heet_blockstate():
     for facing, rot in ROTS:
         parts.append({"when": {"facing": facing, "half": "lower"}, "apply": ap("turnstile_heet_lower", rot)})
         parts.append({"when": {"facing": facing, "half": "upper"}, "apply": ap("turnstile_heet_upper", rot)})
-        for state in ("off", "go", "stop"):
+        for state in ("off", "go", "stop", "wait"):
             parts.append({"when": {"facing": facing, "half": "upper", "indicator": state},
                           "apply": ap(f"turnstile_heet_lamp_{state}", rot)})
     return {"multipart": parts}
@@ -611,7 +618,7 @@ def recipes():
 PROPS = {
     "turnstile": {"facing": {"north", "south", "east", "west"},
                   "half": {"lower", "upper"}, "right": {"true", "false"},
-                  "indicator": {"off", "go", "stop"}},
+                  "indicator": {"off", "go", "stop", "wait"}},
     "turnstile_cap": {"facing": {"north", "south", "east", "west"},
                       "half": {"lower", "upper"}, "right": {"true", "false"}},
 }

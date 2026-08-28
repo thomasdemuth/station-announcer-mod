@@ -118,9 +118,10 @@ public final class MtrStationDecor {
                     EmergencyExitDoorBlock.clearCrossings();
                 });
 
-        // Fare machines convert emeralds into MTR ticket balance at MTR's own
-        // rate (1 emerald = $10, same as the MTR ticket machine); an empty
-        // hand reads the balance back.
+        // Fare machines: an emerald in hand is the quick single top-up at
+        // MTR's own rate (1 emerald = $10); anything else opens MTR's real
+        // ticket-machine screen — bulk purchases with MTR's bonus curve, and
+        // it shows the balance, all with zero GUI code of ours.
         com.stationannouncer.block.FareMachineBlock.FARE_HANDLER = (world, pos, player, heldStack) -> {
             org.mtr.mapping.holder.World holderWorld = new org.mtr.mapping.holder.World(world);
             org.mtr.mapping.holder.PlayerEntity holderPlayer = new org.mtr.mapping.holder.PlayerEntity(player);
@@ -132,8 +133,10 @@ public final class MtrStationDecor {
                 player.sendMessage(net.minecraft.text.Text.translatable("msg.station_announcer.fare.paid",
                         10, org.mtr.mod.data.TicketSystem.getBalance(holderWorld, holderPlayer)), true);
             } else {
-                player.sendMessage(net.minecraft.text.Text.translatable("msg.station_announcer.fare.balance",
-                        org.mtr.mod.data.TicketSystem.getBalance(holderWorld, holderPlayer)), true);
+                org.mtr.mod.Init.REGISTRY.sendPacketToClient(
+                        new org.mtr.mapping.holder.ServerPlayerEntity(player),
+                        new org.mtr.mod.packet.PacketOpenTicketMachineScreen(
+                                org.mtr.mod.data.TicketSystem.getBalance(holderWorld, holderPlayer)));
             }
         };
 
