@@ -2447,3 +2447,55 @@ hover/tooltip/dim, badges, alerts feed, HOLD pulse, station panel with all three
 sections). NOT verified against a live simulator: the stringline axis/deps payload
 shapes, `parameters.get("routes")` content (bytecode says getParameterMap feeds it),
 pPlat/nPlat scan cost on very long paths, and detector noise levels on a busy network.
+
+## Dispatch web UI round 3 — variants/filtering, segment stringlines, pvibien controls, audit (2026-08-27)
+
+All frontend (no server/API changes; jar carries the new static files).
+
+**Line variants across the board.** New "Line / Variant" column (line name + the
+part after MTR's `"||"` separator, e.g. "Northbound"), and a line-filter chip row
+over the board (one chip per line among live trains, colored bullet; signature-
+guarded so the 1 Hz board rebuild never flickers it). The active filter also DIMS
+non-matching trains on the map to 25% (never hides them).
+
+**Segment (interlined-trunk) stringlines.** "Segment" button in the stringline
+head: click two (or more) stations on the axis gutter to bound a corridor — the
+chart re-bases to that span and shows EVERY non-hidden route serving ≥2 corridor
+stations (matched by station id), i.e. all services interlining over the trunk,
+each in its own line colour. Selected station labels highlight; the fetch asks the
+server for exactly the qualifying route ids.
+
+**pvibien parity controls** (Thomas's screenshots): Dwell / Run / Headway / Travel
+annotation toggles (dwell seconds over the flat segments, run time on the
+diagonals, headway = gap to the previous same-route departure per stop from a
+precomputed per-geometry list, Σ travel time at each run's end; density-guarded,
+and narrowed to the hovered run while hovering) and an END-time scrub slider +
+LIVE pin (right edge follows now, or a fixed instant back through the analytics
+window; live tips only drawn on the live edge).
+
+**Audit fixes:**
+1. Zero-size-canvas race: the first rAF before layout sized both map canvases 0×0
+   and drawImage's InvalidStateError killed the loop permanently (reproduced live).
+   frame() now skips until the stage has size.
+2. Stringline geometry was rebuilt from every departure row at 60 fps; now built
+   once into TIME-space ([t, dist] points, headway list included) in sl.built,
+   nulled at each invalidation point — per frame only t→x/dist→y mapping remains.
+3. A stringline selection change during an in-flight fetch was dropped until the
+   next 15 s poll (fetching guard) — refetchWanted queues it.
+4. renderStringMeta wrote the DOM every frame; now only on text change.
+5. Axis padding constants were duplicated between draw + trace builder; unified.
+6. Big-screen readability: canvas fonts/markers scale with uiScale() (min(1.45,
+   width/1600)) on the map AND the stringline; CSS media queries at 1600/2200 px
+   raise DOM font sizes; station labels brighter; traces thicker.
+
+Verified in ?demo=1 (now with an interlined "7 Local" over Canal–Grand for the
+segment demo): map + HOLD pulse render, both line badges, segment corridor
+resolves [Canal St, Union Sq, Grand Ave] with routes {rt1n, rt1s, rt7n} and 43
+traces over 2 lines, all four annotation draws + a 30-min scrub run exception-free,
+scrubbed windows drop live tips, board filter chips built. The browser pane was
+hidden for part of the pass, so the segment/annotation views were verified through
+state inspection rather than screenshots — worth one visual look in game.
+
+Backlog (not built): direction arrowheads, grayscale mode, CSV export, trip-id
+labels, schedule-extrapolated live tips, per-dimension alert filtering,
+keyboard/narration accessibility for the hand-drawn chips.

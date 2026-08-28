@@ -63,6 +63,8 @@ const state = {
 		built: null,          // cached time-space trace geometry {sig, stations, platY, traces}
 		layout: null,         // last draw's axis layout (label hit-testing)
 		refetchWanted: false,
+		show: { dwell: false, run: false, headway: false, travel: false },
+		endT: null,           // scrubbed end-of-window instant; null = follow "now"
 	},
 	lastEventAt: 0,
 	view: { x: 0, z: 0, scale: 1 },  // world center + px per block
@@ -94,6 +96,8 @@ function speedColor(kmh) {
 
 const $ = (id) => document.getElementById(id);
 const firstLang = (s) => (s || "").split("|")[0];
+/** Canvas text/marker scale for big screens — CSS media queries handle the DOM side. */
+const uiScale = () => Math.min(1.45, Math.max(1, window.innerWidth / 1600));
 const colorHex = (c) => "#" + (c & 0xFFFFFF).toString(16).padStart(6, "0");
 const now = () => Date.now();
 
@@ -475,9 +479,11 @@ function drawStatic(dpr) {
 	}
 	g.setLineDash([]);
 
+	const s = uiScale();
+
 	// platform labels
 	if (zoomedIn) {
-		g.font = "10px " + getComputedStyle(document.body).getPropertyValue("--mono");
+		g.font = Math.round(10 * s) + "px " + getComputedStyle(document.body).getPropertyValue("--mono");
 		g.fillStyle = "#8fa3c4";
 		g.textAlign = "center";
 		for (const p of state.platforms.values()) {
@@ -488,7 +494,7 @@ function drawStatic(dpr) {
 
 	// station labels
 	if (state.layers.stations) {
-		g.font = "600 12px system-ui";
+		g.font = "600 " + Math.round(12 * s) + "px system-ui";
 		g.textAlign = "center";
 		for (const st of state.stations) {
 			const [sx] = worldToScreen((st.bounds[0] + st.bounds[3]) / 2, 0);
@@ -496,7 +502,7 @@ function drawStatic(dpr) {
 			const label = firstLang(st.name);
 			g.fillStyle = "#0b0e14cc";
 			const tw = g.measureText(label).width;
-			g.fillRect(sx - tw / 2 - 4, sy - 24, tw + 8, 16);
+			g.fillRect(sx - tw / 2 - 4, sy - 12 - 12 * s, tw + 8, 4 + 12 * s);
 			g.fillStyle = "#e7ecf7";
 			g.fillText(label, sx, sy - 12);
 		}
@@ -507,6 +513,9 @@ function frame() {
 	// A full-stage overlay covers the map — don't burn frames drawing under it.
 	if (state.stringline.view) { drawStringline(); requestAnimationFrame(frame); return; }
 	if (state.analytics.view) { requestAnimationFrame(frame); return; }
+	// Before first layout (or with the stage collapsed) the canvas is 0×0; sizing the
+	// buffers then makes drawImage throw, which would kill this rAF loop for good.
+	if (!canvas.clientWidth || !canvas.clientHeight) { requestAnimationFrame(frame); return; }
 	const dpr = resize();
 	if (staticDirty) { drawStatic(dpr); staticDirty = false; }
 	ctx.setTransform(1, 0, 0, 1, 0, 0);
@@ -588,7 +597,7 @@ function frame() {
 		const angle = rec.disp.angle;
 		const color = rec.route ? colorHex(rec.route.color) : "#9aa7bf";
 		const selected = id === state.selected;
-		const len = Math.max(10, Math.min(22, 6 * state.view.scale));
+		const len = Math.max(10 * uiScale(), Math.min(26, 6 * state.view.scale * uiScale()));
 
 		if (state.follow && selected) { state.view.x = rec.disp.x; state.view.z = rec.disp.z; invalidateStatic(); }
 
@@ -607,12 +616,13 @@ function frame() {
 		ctx.restore();
 
 		if (state.layers.trainLabels && state.view.scale > 0.5 && rec.route && !filteredOut) {
-			ctx.font = "700 10px " + getComputedStyle(document.body).getPropertyValue("--mono");
+			const ls = uiScale();
+			ctx.font = "700 " + Math.round(10 * ls) + "px " + getComputedStyle(document.body).getPropertyValue("--mono");
 			ctx.textAlign = "center";
 			const label = rec.route.number || firstLang(rec.route.name);
 			ctx.fillStyle = "#0b0e14cc";
 			const tw = ctx.measureText(label).width;
-			ctx.fillRect(sx - tw / 2 - 3, sy - 20, tw + 6, 12);
+			ctx.fillRect(sx - tw / 2 - 3, sy - 9 - 12 * ls, tw + 6, 12 * ls);
 			ctx.fillStyle = color;
 			ctx.fillText(label, sx, sy - 11);
 		}
@@ -662,6 +672,25 @@ function initUi() {
 		sl.built = null;
 		renderSegUi();
 		fetchStringline();
+	};
+	for (const [id, key] of [["slDwell", "dwell"], ["slRun", "run"], ["slHeadway", "headway"], ["slTravel", "travel"]]) {
+		$(id).onchange = (e) => { state.stringline.show[key] = e.target.checked; };
+	}
+	$("stringEnd").oninput = (e) => {
+		const sl = state.stringline;
+		const v = parseInt(e.target.value, 10);
+		if (v >= 1000) { sl.endT = null; }
+		else {
+			const newest = now();
+			const oldest = newest - (sl.windowServerMin || 60) * 60000 + sl.windowMin * 60000 / 4;
+			sl.endT = oldest + (newest - oldest) * (v / 1000);
+		}
+		$("stringLive").classList.toggle("active", sl.endT === null);
+	};
+	$("stringLive").onclick = () => {
+		state.stringline.endT = null;
+		$("stringEnd").value = 1000;
+		$("stringLive").classList.add("active");
 	};
 	$("alertsBtn").onclick = () => setAlertsOpen(!state.alertsOpen);
 	$("alertsClose").onclick = () => setAlertsOpen(false);
@@ -1522,6 +1551,374 @@ function liveGroupVehicles() {
 const slCanvas = $("slCanvas");
 const slCtx = slCanvas.getContext("2d");
 
+function initStringlineCanvas() {
+	slCanvas.addEventListener("mousemove", (e) => {
+		const rect = slCanvas.getBoundingClientRect();
+		state.stringline.mouse = [e.clientX - rect.left, e.clientY - rect.top];
+	});
+	slCanvas.addEventListener("mouseleave", () => {
+		state.stringline.mouse = null;
+		state.stringline.hover = null;
+		$("slTip").classList.add("hidden");
+	});
+	slCanvas.addEventListener("click", (e) => {
+		const sl = state.stringline;
+		const rect = slCanvas.getBoundingClientRect();
+		const x = e.clientX - rect.left, y = e.clientY - rect.top;
+		// Segment mode: clicks in the station gutter toggle the corridor bounds.
+		if (sl.mode === "segment" && sl.layout && x < sl.layout.padL) {
+			let best = null, bestD = 10;
+			for (const s of sl.layout.stations) {
+				const d = Math.abs(s.y - y);
+				if (d < bestD && s.sta !== "0") { best = s; bestD = d; }
+			}
+			if (best) {
+				const i = sl.segStations.indexOf(best.sta);
+				if (i >= 0) sl.segStations.splice(i, 1);
+				else sl.segStations.push(best.sta);
+				sl.built = null;
+				renderSegUi();
+				fetchStringline();
+			}
+			return;
+		}
+		const hover = sl.hover;
+		if (hover && hover.trace.veh && state.vehicles.has(hover.trace.veh)) {
+			state.selected = hover.trace.veh;
+			state.selectedStation = null;
+			setStringlineView(false);
+			centerOn(hover.trace.veh);
+			updateDetail();
+			renderBoard();
+		}
+	});
+}
+
+/**
+ * Trace geometry in TIME-space ([t, dist] points), rebuilt only when the data or the
+ * selection changes (sl.built is nulled at every invalidation point) — per frame the
+ * draw loop just maps t→x / dist→y, instead of re-chaining every departure row at
+ * 60 fps like the first cut did.
+ *
+ * Line mode: the group's longest route donates the axis; the other direction maps on
+ * by station id. Segment mode: the corridor slice donates the axis (re-based to 0)
+ * and EVERY route serving ≥2 corridor stations maps on — the interlined-trunk view.
+ */
+function buildGeometry() {
+	const sl = state.stringline;
+	const base = axisRouteOfGroup();
+	if (!base || !sl.axis) return null;
+	const seg = segmentInfo();
+	let stations, routesUsed;
+	if (seg) {
+		const d0 = seg.corridor[0].dist;
+		stations = seg.corridor.map((s) => ({ ...s, dist: s.dist - d0 }));
+		routesUsed = seg.routes;
+	} else {
+		stations = base.stations;
+		const ids = new Set((sl.groups.find((g) => g.key === sl.groupKey) || {}).routeIds || []);
+		routesUsed = (sl.axis.routes || []).filter((r) => ids.has(r.id));
+	}
+	const platDist = new Map(), staDist = new Map();
+	for (const s of stations) {
+		platDist.set(s.plat, s.dist);
+		if (s.sta !== "0" && !staDist.has(s.sta)) staDist.set(s.sta, s.dist);
+	}
+	for (const r of routesUsed) {
+		for (const s of r.stations) {
+			if (!platDist.has(s.plat) && staDist.has(s.sta)) platDist.set(s.plat, staDist.get(s.sta));
+		}
+	}
+
+	const routeById = new Map((sl.axis.routes || []).map((r) => [r.id, r]));
+	const byVeh = new Map();
+	for (const row of sl.deps) {
+		const veh = row[0];
+		if (!byVeh.has(veh)) byVeh.set(veh, []);
+		byVeh.get(veh).push(row);
+	}
+	const traces = [];
+	for (const [veh, rows] of byVeh) {
+		rows.sort((a, b) => a[2] - b[2]);
+		let current = null;
+		let lastStop = -1, lastT = 0;
+		for (const [, plat, t, dwell, dev, stop, routeId] of rows) {
+			const dist = platDist.get(plat);
+			if (dist === undefined) continue; // off this axis (branch / outside the segment)
+			if (!current || stop < lastStop || t - lastT > 20 * 60000) {
+				const route = routeById.get(routeId);
+				current = {
+					veh,
+					color: route ? colorHex(route.color) : "#9aa7bf",
+					number: route ? (route.number || "") : "",
+					routeName: route ? firstLang(lineKey(route.name)) : "",
+					variant: route ? firstLang((route.name || "").split("||")[1] || "") : "",
+					pts: [],
+					lastDev: dev,
+					lastT: t,
+					live: false,
+				};
+				traces.push(current);
+			}
+			current.pts.push([t - (dwell || 0), dist]);
+			current.pts.push([t, dist]);
+			current.lastDev = dev;
+			current.lastT = t;
+			lastStop = stop;
+			lastT = t;
+		}
+	}
+	// Headways: gap between consecutive departures of the SAME route at the same
+	// platform (deps are server-sorted oldest-first). Resolved to axis distance here
+	// so the draw loop only maps.
+	const headways = [];
+	const lastDep = new Map();
+	for (const [, plat, t, , , , routeId] of sl.deps) {
+		const dist = platDist.get(plat);
+		if (dist === undefined) continue;
+		const key = routeId + "|" + plat;
+		const prev = lastDep.get(key);
+		if (prev !== undefined && t - prev > 0 && t - prev < 3 * 60 * 60000) {
+			headways.push({ t, dist, gap: t - prev });
+		}
+		lastDep.set(key, t);
+	}
+
+	return {
+		stations, platDist, traces, headways,
+		total: Math.max(1, stations[stations.length - 1].dist),
+		lineCount: new Set(routesUsed.map((r) => lineKey(r.name))).size,
+		segment: !!seg,
+	};
+}
+
+function drawStringline() {
+	const sl = state.stringline;
+	const dpr = window.devicePixelRatio || 1;
+	const w = slCanvas.clientWidth, h = slCanvas.clientHeight;
+	if (!w || !h) return;
+	if (slCanvas.width !== w * dpr || slCanvas.height !== h * dpr) {
+		slCanvas.width = w * dpr;
+		slCanvas.height = h * dpr;
+	}
+	const g = slCtx;
+	g.setTransform(dpr, 0, 0, dpr, 0, 0);
+	g.clearRect(0, 0, w, h);
+
+	const css = getComputedStyle(document.body);
+	const mono = css.getPropertyValue("--mono");
+	const dim = css.getPropertyValue("--dim").trim() || "#7d8aa5";
+	const border = css.getPropertyValue("--border").trim() || "#232c3f";
+	const accent = css.getPropertyValue("--accent").trim() || "#4da3ff";
+
+	if (!sl.built) sl.built = buildGeometry();
+	const B = sl.built;
+	if (!B || B.stations.length < 2) {
+		sl.layout = null;
+		g.fillStyle = dim;
+		g.font = "13px system-ui";
+		g.textAlign = "center";
+		g.fillText(sl.axis ? "No line selected" : "Loading…", w / 2, h / 2);
+		return;
+	}
+
+	const us = uiScale();
+	const pad = { l: Math.round(160 * us), r: 14, t: 18, b: Math.round(20 + 10 * us) };
+	const plotH = h - pad.t - pad.b, plotW = w - pad.l - pad.r;
+	const Y = (dist) => pad.t + (dist / B.total) * plotH;
+	const tNow = now();
+	const tEnd = sl.endT ?? tNow;      // scrubbed end, or live "now"
+	const liveEdge = sl.endT === null;
+	const t0 = tEnd - sl.windowMin * 60000;
+	const X = (t) => pad.l + ((t - t0) / (tEnd - t0)) * plotW;
+	sl.layout = { padL: pad.l, stations: B.stations.map((s) => ({ sta: s.sta, y: Y(s.dist) })) };
+
+	// grid: station rows (selected corridor bounds highlighted) + time ticks
+	const stationFont = Math.round(12 * us);
+	g.font = stationFont + "px system-ui";
+	g.textAlign = "right";
+	let lastLabelY = -99;
+	for (const s of B.stations) {
+		const y = Y(s.dist);
+		const picked = sl.mode === "segment" && sl.segStations.includes(s.sta);
+		g.strokeStyle = border;
+		g.lineWidth = 1;
+		g.beginPath(); g.moveTo(pad.l, y); g.lineTo(w - pad.r, y); g.stroke();
+		if (y - lastLabelY >= stationFont + 2) {
+			g.fillStyle = picked ? accent : "#aab6cf";
+			g.font = (picked ? "700 " : "") + stationFont + "px system-ui";
+			let label = firstLang(s.staName) || firstLang(s.platName) || "?";
+			if (label.length > 22) label = label.slice(0, 21) + "…";
+			g.fillText(label, pad.l - 8, y + stationFont / 3);
+			lastLabelY = y;
+		}
+	}
+	const tickMin = sl.windowMin <= 15 ? 2 : sl.windowMin <= 30 ? 5 : sl.windowMin <= 60 ? 10 : 15;
+	g.textAlign = "center";
+	g.font = Math.round(11 * us) + "px " + mono;
+	const firstTick = Math.ceil(t0 / (tickMin * 60000)) * tickMin * 60000;
+	for (let t = firstTick; t <= tEnd; t += tickMin * 60000) {
+		const x = X(t);
+		g.strokeStyle = border;
+		g.globalAlpha = 0.45;
+		g.beginPath(); g.moveTo(x, pad.t); g.lineTo(x, pad.t + plotH); g.stroke();
+		g.globalAlpha = 1;
+		g.fillStyle = dim;
+		g.fillText(fmtClock(t), x, h - 8);
+	}
+
+	// map cached time-space traces to px; attach live tips (live edge only)
+	const drawn = [];
+	const newestByVeh = new Map();
+	for (const tr of B.traces) {
+		if (tr.lastT < t0 && tNow - tr.lastT > 20 * 60000) continue; // fully left of window
+		if (tr.pts.length && tr.pts[0][0] > tEnd) continue;          // fully right of a scrubbed window
+		const px = tr.pts.map(([t, dist]) => [X(t), Y(dist)]);
+		drawn.push({ tr, px, live: false, lastDev: tr.lastDev });
+		const prev = newestByVeh.get(tr.veh);
+		if (!prev || tr.lastT > prev.tr.lastT) newestByVeh.set(tr.veh, drawn[drawn.length - 1]);
+	}
+	for (const { id, rec } of liveEdge ? liveGroupVehicles() : []) {
+		const d = rec.data;
+		const distPrev = d.pPlat && d.pPlat !== "0" ? B.platDist.get(d.pPlat) : undefined;
+		const distNext = d.nPlat && d.nPlat !== "0" ? B.platDist.get(d.nPlat) : undefined;
+		let dist;
+		if (distPrev !== undefined && distNext !== undefined) dist = distPrev + (distNext - distPrev) * (d.pFrac || 0);
+		else if (distPrev !== undefined) dist = distPrev;
+		else if (distNext !== undefined) dist = distNext;
+		else continue;
+		const entry = newestByVeh.get(id);
+		if (entry && tNow - entry.tr.lastT <= 20 * 60000) {
+			entry.px.push([X(tNow), Y(dist)]);
+			entry.live = true;
+			entry.lastDev = d.devMs ?? entry.lastDev;
+		} else {
+			const r = rec.route;
+			drawn.push({
+				tr: {
+					veh: id,
+					color: r ? colorHex(r.color) : "#9aa7bf",
+					number: r ? (r.number || "") : "",
+					routeName: r ? firstLang(lineKey(r.name)) : "",
+					variant: r ? firstLang((r.name || "").split("||")[1] || "") : "",
+					lastT: tNow,
+				},
+				px: [[X(tNow), Y(dist)]],
+				live: true,
+				lastDev: d.devMs ?? 0,
+			});
+		}
+	}
+	sl.traces = drawn;
+
+	// hover hit-test
+	sl.hover = null;
+	if (sl.mouse && sl.mouse[0] >= pad.l) {
+		let bestD = 7;
+		for (const entry of drawn) {
+			for (let i = 1; i < entry.px.length; i++) {
+				const d = segDist(sl.mouse, entry.px[i - 1], entry.px[i]);
+				if (d < bestD) { bestD = d; sl.hover = { trace: entry.tr, entry }; }
+			}
+		}
+	}
+
+	for (const entry of drawn) {
+		const hovered = sl.hover && sl.hover.entry === entry;
+		g.strokeStyle = entry.tr.color;
+		g.lineWidth = hovered ? 3.5 : Math.max(1.8, 1.6 * us);
+		g.globalAlpha = sl.hover && !hovered ? 0.35 : 1;
+		g.beginPath();
+		for (let i = 0; i < entry.px.length; i++) {
+			i === 0 ? g.moveTo(entry.px[i][0], entry.px[i][1]) : g.lineTo(entry.px[i][0], entry.px[i][1]);
+		}
+		g.stroke();
+		if (entry.live) {
+			const tip = entry.px[entry.px.length - 1];
+			g.beginPath();
+			g.arc(tip[0], tip[1], hovered ? 5 : 3.5, 0, Math.PI * 2);
+			g.fillStyle = entry.tr.color;
+			g.fill();
+			g.strokeStyle = "#0b0e14";
+			g.lineWidth = 1;
+			g.stroke();
+		}
+	}
+	g.globalAlpha = 1;
+
+	// annotation overlays (pvibien's Show Dwell / Run time / Headways / Travel time).
+	// While hovering, annotations narrow to the hovered run so the numbers stay legible.
+	const annFont = Math.round(10 * us);
+	if (sl.show.dwell || sl.show.run || sl.show.travel) {
+		g.font = annFont + "px " + mono;
+		for (const entry of drawn) {
+			if (!entry.tr.pts) continue; // standalone live dot
+			if (sl.hover && sl.hover.entry !== entry) continue;
+			const px = entry.px, pts = entry.tr.pts;
+			if (sl.show.dwell) {
+				g.fillStyle = "#f5b942";
+				g.textAlign = "center";
+				for (let i = 0; i + 1 < pts.length; i += 2) {
+					const dt = pts[i + 1][0] - pts[i][0];
+					if (dt <= 0 || px[i + 1][0] - px[i][0] < annFont * 2.2) continue;
+					g.fillText(Math.round(dt / 1000) + "s", (px[i][0] + px[i + 1][0]) / 2, px[i][1] - 4);
+				}
+			}
+			if (sl.show.run) {
+				g.fillStyle = "#8fa3c4";
+				g.textAlign = "center";
+				for (let i = 1; i + 1 < pts.length; i += 2) {
+					const dt = pts[i + 1][0] - pts[i][0];
+					const dx = px[i + 1][0] - px[i][0], dy = px[i + 1][1] - px[i][1];
+					if (dt <= 0 || Math.hypot(dx, dy) < annFont * 4) continue;
+					g.fillText(fmtDur(dt), (px[i][0] + px[i + 1][0]) / 2 + 4, (px[i][1] + px[i + 1][1]) / 2 - 5);
+				}
+			}
+			if (sl.show.travel && pts.length >= 4) {
+				g.fillStyle = "#46c46e";
+				g.textAlign = "left";
+				const total = entry.tr.lastT - pts[0][0];
+				const end = px[px.length - 1];
+				g.fillText("Σ " + fmtDur(total), end[0] + 6, end[1] - 6);
+			}
+		}
+	}
+	if (sl.show.headway && B.headways) {
+		g.font = annFont + "px " + mono;
+		g.fillStyle = "#3fc1c9";
+		g.textAlign = "center";
+		const lastAt = new Map(); // dist row → last labeled x, to keep density sane
+		for (const hw of B.headways) {
+			if (hw.t < t0 || hw.t > tEnd) continue;
+			const x = X(hw.t), y = Y(hw.dist);
+			const prev = lastAt.get(hw.dist);
+			if (prev !== undefined && x - prev < annFont * 3.6) continue;
+			lastAt.set(hw.dist, x);
+			g.fillText(fmtDur(hw.gap), x, y + annFont + 3);
+		}
+	}
+
+	g.strokeStyle = border;
+	g.lineWidth = 1;
+	g.beginPath(); g.moveTo(pad.l, pad.t); g.lineTo(pad.l, pad.t + plotH); g.stroke();
+
+	const tip = $("slTip");
+	if (sl.hover && sl.mouse) {
+		const tr = sl.hover.trace;
+		const entry = sl.hover.entry;
+		tip.classList.remove("hidden");
+		tip.style.left = Math.min(w - 270, sl.mouse[0] + 14) + "px";
+		tip.style.top = Math.min(h - 90, sl.mouse[1] + 12) + "px";
+		const [devTxt, devCls] = fmtDev(entry.lastDev);
+		tip.innerHTML = `<div class="t"><span class="chip" style="background:${tr.color}">${escapeHtml(tr.number)}</span> ` +
+			`${escapeHtml(tr.routeName)}${tr.variant ? " · " + escapeHtml(tr.variant) : ""}</div>` +
+			`<div>${entry.live ? "Live — click to follow on the map" : "Completed run"}</div>` +
+			`<div>Last dev: <span class="${devCls}">${devTxt}</span></div>`;
+	} else {
+		tip.classList.add("hidden");
+	}
+	renderStringMeta(B.segment ? `segment: ${B.stations.length} stations, ${B.lineCount} line(s)` : null);
+}
 
 function segDist(p, a, b) {
 	const dx = b[0] - a[0], dy = b[1] - a[1];
@@ -1608,6 +2005,12 @@ function demoStringline() {
 		routes: [
 			{ id: "rt1n", name: "Demo Express|演示||Northbound", number: "4", color: 0x00933c, hidden: false, stations: mkStations("pn", false) },
 			{ id: "rt1s", name: "Demo Express|演示||Southbound", number: "4", color: 0x00933c, hidden: false, stations: mkStations("ps", true) },
+			// interlined local sharing the Canal St–Grand Ave trunk (segment-mode demo)
+			{ id: "rt7n", name: "7 Local||Northbound", number: "7", color: 0xb933ad, hidden: false, stations: [
+				{ plat: "pq1", platName: "1", sta: "st2d", staName: "Canal St", dist: 0 },
+				{ plat: "pq2", platName: "1", sta: "st3d", staName: "Union Sq", dist: 520 },
+				{ plat: "pq3", platName: "1", sta: "st4d", staName: "Grand Ave", dist: 1030 },
+			] },
 		],
 	};
 	const deps = [];
@@ -1624,6 +2027,14 @@ function demoStringline() {
 				if (depT > t) break;
 				deps.push([veh, prefix + (i + 1), depT, dwellMs + slow, (n % 5 - 1) * 20000 + slow, i, routeId]);
 			}
+		}
+	}
+	for (let n = 0; n < 12; n++) {
+		const start = t - 92 * 60000 + n * 8 * 60000;
+		for (let i = 0; i < 3; i++) {
+			const depT = start + i * (80 * 1000 + 15 * 1000);
+			if (depT > t) break;
+			deps.push(["d7_" + n, "pq" + (i + 1), depT, 15 * 1000, (n % 3) * 15000, i, "rt7n"]);
 		}
 	}
 	deps.sort((a, b) => a[2] - b[2]);

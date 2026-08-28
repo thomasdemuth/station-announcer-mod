@@ -95,6 +95,16 @@
 			<button id="stringSegBtn" class="btn small" title="Show every train over a chosen span of stations, across all lines (interlined trunks)">Segment</button>
 			<span id="stringHint" class="an-meta hidden"></span>
 			<span class="spacer"></span>
+			<div class="toggles" id="stringToggles">
+				<label title="Seconds spent at each stop"><input type="checkbox" id="slDwell"> Dwell</label>
+				<label title="Running time between stations"><input type="checkbox" id="slRun"> Run</label>
+				<label title="Gap to the previous train of the same service at each stop"><input type="checkbox" id="slHeadway"> Headway</label>
+				<label title="Total time over the visible run"><input type="checkbox" id="slTravel"> Travel</label>
+			</div>
+			<label class="an-meta" id="stringEndWrap" title="Scrub the end of the window back through the recorded history">End
+				<input type="range" id="stringEnd" min="0" max="1000" value="1000">
+			</label>
+			<button id="stringLive" class="btn small active" title="Pin the right edge to now">LIVE</button>
 			<select id="stringWindow" title="Time window">
 				<option value="15">15 min</option>
 				<option value="30">30 min</option>

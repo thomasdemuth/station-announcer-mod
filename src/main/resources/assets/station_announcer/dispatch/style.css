@@ -491,3 +491,28 @@ body {
 /* ---------- stringline segment mode ---------- */
 
 #stringSegBtn.active { border-color: var(--amber); color: var(--amber); }
+
+/* ---------- stringline annotations / scrub ---------- */
+
+#stringToggles { display: flex; gap: 10px; align-items: center; color: var(--dim); }
+#stringToggles label { display: flex; gap: 4px; align-items: center; cursor: pointer; }
+#stringEndWrap { display: flex; gap: 6px; align-items: center; }
+#stringEnd { width: 130px; accent-color: var(--accent); }
+#stringLive.active { border-color: var(--green); color: var(--green); }
+
+/* ---------- big-screen readability ---------- */
+
+@media (min-width: 1600px) {
+	body { font-size: 14px; }
+	#boardTable, #stationTable { font-size: 13px; }
+	#boardTable td, #stationTable td { padding: 5px 12px; }
+	.sl-badge, .board-chip { font-size: 13px; }
+	.alert-row .msg { font-size: 13px; }
+	#detail { width: 320px; }
+	#slTip { font-size: 13px; }
+}
+@media (min-width: 2200px) {
+	body { font-size: 15px; }
+	#boardTable, #stationTable { font-size: 14px; }
+	.legend-row, .an-meta { font-size: 13px; }
+}
