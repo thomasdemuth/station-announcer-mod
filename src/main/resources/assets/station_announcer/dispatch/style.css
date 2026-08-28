@@ -628,3 +628,57 @@ body {
 /* pin the stringline close button so header wrapping can't strand it */
 #stringHead { position: relative; padding-right: 40px; }
 #stringClose { position: absolute; top: 6px; right: 10px; }
+
+/* ---------- search ---------- */
+
+#searchWrap { position: relative; }
+#searchBox, #stringFilter {
+	background: var(--panel-2);
+	color: var(--text);
+	border: 1px solid var(--border);
+	border-radius: 6px;
+	padding: 4px 10px;
+	font: inherit;
+	width: 210px;
+	transition: width .15s ease, border-color .12s ease;
+}
+#searchBox:focus, #stringFilter:focus { outline: none; border-color: var(--accent); }
+#searchBox:focus { width: 280px; }
+#stringFilter { width: 110px; }
+#stringFilter:focus { width: 160px; }
+#searchBox::placeholder, #stringFilter::placeholder { color: var(--dim); }
+
+#searchResults {
+	position: absolute;
+	left: 0;
+	top: calc(100% + 6px);
+	min-width: 300px;
+	max-height: 60vh;
+	overflow: auto;
+	z-index: 40;
+	background: var(--glass);
+	backdrop-filter: blur(12px) saturate(1.2);
+	-webkit-backdrop-filter: blur(12px) saturate(1.2);
+	border: 1px solid var(--border);
+	border-radius: 10px;
+	box-shadow: 0 10px 30px rgba(0, 0, 0, .5);
+	padding: 4px;
+}
+.sr-section {
+	color: var(--dim);
+	font: 700 10px var(--mono);
+	letter-spacing: 2px;
+	padding: 6px 8px 2px;
+}
+.sr-row {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	padding: 5px 8px;
+	border-radius: 6px;
+	cursor: pointer;
+}
+.sr-row:hover, .sr-row.active { background: #1b2740; }
+.sr-row .sr-label { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.sr-row .sr-sub { color: var(--dim); font: 11px var(--mono); flex: none; }
+.sr-empty { color: var(--dim); padding: 10px; text-align: center; font-size: 12px; }

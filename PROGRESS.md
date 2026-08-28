@@ -2571,3 +2571,27 @@ guard, keyboard handler (synthetic KeyboardEvent — the CDP key path doesn't de
 while the pane is hidden), prefs full round-trip across reload (including the
 checkbox DOM), CSV generation, 2240×1260 viewport (media queries + uiScale, prefs
 visibly honoured). Not screenshotted: held-row tint and grey mode (state-verified).
+
+## Dispatch web UI round 6 — search (2026-08-27)
+
+Thomas: search fields for stations and line selection. Frontend-only.
+
+**Global search** in the topbar ("/" focuses it): type-ahead dropdown over three
+sections — STATIONS (colour dot; jump-to: centres + zooms the map, opens the
+station panel, closes any overlay), LINES (route chip; toggles the board's line
+filter, which also dims the map), TRAINS (route chip + live speed; selects,
+centres and opens the detail panel). Prefix matches rank above substring;
+capped 5/4/4 per section. Full keyboard flow: arrows cycle (wrapping), Enter
+runs the highlighted row, Escape clears + blurs; mouse hover moves the
+highlight; outside click closes. Glass panel matching the design language.
+
+**Stringline line filter:** a "Filter lines…" input before the badge row narrows
+badges by name or route number as you type ("no line matches" placeholder when
+empty) — for networks with more lines than the badge strip can show.
+
+Verified in ?demo=1: typing "har" lists Harbor North (station) + three matching
+trains with chips and live speeds; Enter jumps to the station, zooms, opens its
+panel and clears the box (Enter verified via synthetic KeyboardEvent — the CDP
+key path drops keys while the browser pane is hidden; the type path delivered).
+LINES rows can't appear in the demo because the demo network payload only lists
+the Express routes — real servers list every route.

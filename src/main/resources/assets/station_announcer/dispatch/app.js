@@ -835,8 +835,11 @@ function initUi() {
 		else if (key === "n") { setAnalyticsView(!state.analytics.view); }
 		else if (key === "a") { setAlertsOpen(!state.alertsOpen); }
 		else if (key === "f") { fitView(); }
+		else if (key === "/") { e.preventDefault(); $("searchBox").focus(); }
 	});
 
+	initSearch();
+	$("stringFilter").oninput = renderStringBadges;
 	loadPrefs();
 	$("stringBtn").onclick = () => setStringlineView(!state.stringline.view);
 	$("stringClose").onclick = () => setStringlineView(false);
@@ -1000,6 +1003,155 @@ function updateMapTip(x, y) {
 	tip.classList.remove("hidden");
 	tip.style.left = Math.min(canvas.clientWidth - 270, x + 14) + "px";
 	tip.style.top = Math.min(canvas.clientHeight - 60, y + 12) + "px";
+}
+
+/* ---------- search ---------- */
+
+const searchState = { flat: [], active: -1 };
+
+/** Type-ahead over stations (jump + panel), lines (board filter) and live trains (follow). */
+function searchResults(q) {
+	const ql = q.toLowerCase();
+	const score = (s) => {
+		const l = (s || "").toLowerCase();
+		return l.startsWith(ql) ? 2 : l.includes(ql) ? 1 : 0;
+	};
+	const stations = [];
+	for (const st of state.stations) {
+		const name = firstLang(st.name);
+		const sc = score(name);
+		if (sc) stations.push({ sc, label: name, dotColor: colorHex(st.color), sub: "jump to", action: () => gotoStation(st) });
+	}
+	const lineMap = new Map();
+	for (const r of state.routes.values()) {
+		if (r.hidden) continue;
+		const key = lineKey(r.name);
+		if (!lineMap.has(key)) lineMap.set(key, { key, display: firstLang(key) || "Line", number: r.number || "", color: r.color });
+	}
+	const lines = [];
+	for (const l of lineMap.values()) {
+		const sc = Math.max(score(l.display), score(l.number));
+		if (sc) lines.push({ sc, label: l.display, chip: l.number || "•", chipColor: colorHex(l.color),
+			sub: state.boardFilter === l.key ? "clear filter" : "filter",
+			action: () => { state.boardFilter = state.boardFilter === l.key ? null : l.key; renderBoard(); } });
+	}
+	const trains = [];
+	for (const [id, rec] of state.vehicles) {
+		const r = rec.route || {};
+		const sc = Math.max(score(r.number || ""), score(firstLang(r.dest) || ""), score(firstLang(r.nextStation) || ""));
+		if (sc) trains.push({ sc, label: firstLang(r.dest) || "Train", chip: r.number || "•",
+			chipColor: r.color !== undefined ? colorHex(r.color) : "#5b6981",
+			sub: (rec.data.kmh ?? 0).toFixed(0) + " km/h", action: () => gotoTrain(id) });
+	}
+	for (const arr of [stations, lines, trains]) arr.sort((a, b) => b.sc - a.sc);
+	return { STATIONS: stations.slice(0, 5), LINES: lines.slice(0, 4), TRAINS: trains.slice(0, 4) };
+}
+
+function gotoStation(st) {
+	setStringlineView(false);
+	setAnalyticsView(false);
+	state.view.x = (st.bounds[0] + st.bounds[3]) / 2;
+	state.view.z = (st.bounds[2] + st.bounds[5]) / 2;
+	if (state.view.scale < 1.2) state.view.scale = 1.6;
+	state.selectedStation = st.id;
+	state.selected = null;
+	state.follow = false;
+	if (!state.analytics.data) fetchAnalytics();
+	invalidateStatic();
+	updateDetail();
+}
+
+function gotoTrain(id) {
+	setStringlineView(false);
+	setAnalyticsView(false);
+	state.selected = id;
+	state.selectedStation = null;
+	centerOn(id);
+	updateDetail();
+	renderBoard();
+}
+
+function renderSearch() {
+	const q = $("searchBox").value.trim();
+	const panel = $("searchResults");
+	if (q.length < 1) {
+		panel.classList.add("hidden");
+		searchState.flat = [];
+		searchState.active = -1;
+		return;
+	}
+	const groups = searchResults(q);
+	panel.innerHTML = "";
+	searchState.flat = [];
+	for (const [title, rows] of Object.entries(groups)) {
+		if (!rows.length) continue;
+		const head = document.createElement("div");
+		head.className = "sr-section";
+		head.textContent = title;
+		panel.appendChild(head);
+		for (const row of rows) {
+			const el = document.createElement("div");
+			el.className = "sr-row";
+			const marker = row.chip !== undefined
+				? `<span class="chip" style="background:${row.chipColor}">${escapeHtml(row.chip)}</span>`
+				: `<span class="sig-dot" style="background:${row.dotColor}"></span>`;
+			el.innerHTML = `${marker}<span class="sr-label">${escapeHtml(row.label)}</span><span class="sr-sub">${escapeHtml(row.sub)}</span>`;
+			const index = searchState.flat.length;
+			el.onmouseenter = () => setSearchActive(index);
+			el.onclick = () => runSearchRow(row);
+			searchState.flat.push({ row, el });
+			panel.appendChild(el);
+		}
+	}
+	if (!searchState.flat.length) {
+		panel.innerHTML = '<div class="sr-empty">No matches</div>';
+	}
+	searchState.active = searchState.flat.length ? 0 : -1;
+	applySearchActive();
+	panel.classList.remove("hidden");
+}
+
+function setSearchActive(i) {
+	searchState.active = i;
+	applySearchActive();
+}
+
+function applySearchActive() {
+	searchState.flat.forEach(({ el }, i) => el.classList.toggle("active", i === searchState.active));
+	const current = searchState.flat[searchState.active];
+	if (current) current.el.scrollIntoView({ block: "nearest" });
+}
+
+function runSearchRow(row) {
+	row.action();
+	$("searchBox").value = "";
+	$("searchResults").classList.add("hidden");
+	$("searchBox").blur();
+}
+
+function initSearch() {
+	const box = $("searchBox");
+	box.addEventListener("input", renderSearch);
+	box.addEventListener("focus", renderSearch);
+	box.addEventListener("keydown", (e) => {
+		if (e.key === "ArrowDown" || e.key === "ArrowUp") {
+			e.preventDefault();
+			if (!searchState.flat.length) return;
+			const n = searchState.flat.length;
+			setSearchActive(((searchState.active + (e.key === "ArrowDown" ? 1 : -1)) % n + n) % n);
+		} else if (e.key === "Enter") {
+			const current = searchState.flat[searchState.active];
+			if (current) runSearchRow(current.row);
+		} else if (e.key === "Escape") {
+			box.value = "";
+			$("searchResults").classList.add("hidden");
+			box.blur();
+			e.stopPropagation();
+		}
+	});
+	document.addEventListener("click", (e) => {
+		if (!$("searchWrap").contains(e.target)) $("searchResults").classList.add("hidden");
+	});
 }
 
 /* ---------- preference persistence ---------- */
@@ -1739,7 +1891,18 @@ function applyStringline(data) {
 function renderStringBadges() {
 	const wrap = $("stringBadges");
 	wrap.innerHTML = "";
-	for (const g of state.stringline.groups) {
+	const q = ($("stringFilter").value || "").trim().toLowerCase();
+	const groups = q
+		? state.stringline.groups.filter((g) =>
+			g.display.toLowerCase().includes(q) || String(g.number || "").toLowerCase().includes(q))
+		: state.stringline.groups;
+	if (q && !groups.length) {
+		const none = document.createElement("span");
+		none.className = "an-meta";
+		none.textContent = "no line matches";
+		wrap.appendChild(none);
+	}
+	for (const g of groups) {
 		const b = document.createElement("button");
 		b.className = "sl-badge" + (g.key === state.stringline.groupKey ? " active" : "");
 		b.innerHTML = `<span class="bullet" style="background:${colorHex(g.color)}">${escapeHtml(g.number || "")}</span>${escapeHtml(g.display)}`;
