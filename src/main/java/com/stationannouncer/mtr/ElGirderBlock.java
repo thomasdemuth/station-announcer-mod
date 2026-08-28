@@ -33,8 +33,9 @@ public class ElGirderBlock extends Block {
     public ElGirderBlock(Settings settings) {
         super(settings);
         setDefaultState(getDefaultState().with(AXIS, Direction.Axis.X).with(BRACED, false));
-        this.shapeX = createCuboidShape(0.0, 0.0, 5.0, 16.0, 16.0, 11.0);
-        this.shapeZ = createCuboidShape(5.0, 0.0, 0.0, 11.0, 16.0, 16.0);
+        // matches the model's flange width (gen_el_assets FLANGE_Z0/FLANGE_Z1)
+        this.shapeX = createCuboidShape(0.0, 0.0, 4.6, 16.0, 16.0, 11.4);
+        this.shapeZ = createCuboidShape(4.6, 0.0, 0.0, 11.4, 16.0, 16.0);
     }
 
     @Override
@@ -62,6 +63,25 @@ public class ElGirderBlock extends Block {
     }
 
     private BlockState withBrace(BlockState state, WorldAccess world, BlockPos pos) {
-        return state.with(BRACED, world.getBlockState(pos.down()).getBlock() instanceof ColumnBlock);
+        return state.with(BRACED, isElColumn(world.getBlockState(pos.down()).getBlock()));
+    }
+
+    /**
+     * The knee-brace gussets are cut for the el column's own 6.6 px shaft:
+     * they hang in the air at x 0..4.7 and 11.3..16 of the block below and
+     * die into its sides. Every other {@link ColumnBlock} in the mod (the
+     * iron platform column, the slim canopy and entrance-portal posts) has a
+     * different footprint, so an {@code instanceof} test grew braces that
+     * reached past the post they were supposed to brace.
+     */
+    private static boolean isElColumn(Block block) {
+        return block == MtrStationDecor.EL_COLUMN
+                || block == MtrStationDecor.EL_COLUMN_SILVER
+                || block == MtrStationDecor.EL_COLUMN_STATION
+                || block == MtrStationDecor.EL_COLUMN_NAMED
+                || block == MtrStationDecor.EL_COLUMN_NAMED_STATION
+                || block == MtrStationDecor.EL_LATTICE_COLUMN
+                || block == MtrStationDecor.EL_LATTICE_COLUMN_SILVER
+                || block == MtrStationDecor.EL_LATTICE_COLUMN_STATION;
     }
 }

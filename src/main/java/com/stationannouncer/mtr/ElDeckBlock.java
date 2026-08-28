@@ -24,6 +24,8 @@ public class ElDeckBlock extends Block {
     public static final EnumProperty<Direction.Axis> AXIS = Properties.HORIZONTAL_AXIS;
 
     private static final VoxelShape TOP_SLAB = createCuboidShape(0.0, 8.0, 0.0, 16.0, 16.0, 16.0);
+    /** The stringers run the whole height of the block — so does the outline. */
+    private static final VoxelShape FULL = createCuboidShape(0.0, 0.0, 0.0, 16.0, 16.0, 16.0);
 
     public ElDeckBlock(Settings settings) {
         super(settings);
@@ -37,7 +39,7 @@ public class ElDeckBlock extends Block {
 
     @Override
     public VoxelShape getOutlineShape(BlockState state, BlockView world, BlockPos pos, ShapeContext context) {
-        return TOP_SLAB;
+        return FULL;
     }
 
     @Override
@@ -55,10 +57,13 @@ public class ElDeckBlock extends Block {
      * Decks tile in both directions and are not opaque cubes, so their
      * boundary faces would coplanar-fight a neighbouring deck's — the glass
      * pattern: faces carry cullface and vanish against another deck.
+     * The neighbour must be the SAME deck block: the plate deck's slab faces
+     * were being culled against an open TIE deck too, which left a hole in
+     * the plate wherever the two met.
      */
     @Override
     public boolean isSideInvisible(BlockState state, BlockState stateFrom, Direction direction) {
-        return stateFrom.getBlock() instanceof ElDeckBlock
+        return stateFrom.getBlock() == state.getBlock()
                 || super.isSideInvisible(state, stateFrom, direction);
     }
 }

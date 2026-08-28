@@ -95,16 +95,21 @@ def tex_steel(p):
 
 
 def tex_lattice(p):
-    """X-laced lattice web, 16px CUTOUT: 2px straps on both 45° diagonals,
-    period 8 (divides 16 — tiles seamlessly along runs and up stacks)."""
-    rows = pk.canvas(16, 16, (0, 0, 0, 0))
-    for off in range(-16, 32, 8):
-        for i in range(16):
+    """X-laced lattice web, 32px CUTOUT: 2-texel straps on both 45° diagonals,
+    period 8 texels (divides 32 — tiles seamlessly along runs and up stacks).
+
+    The sheet is sampled 1 uv unit per model pixel like el_steel, so a strap
+    is ONE model pixel (~6 cm, a real lacing bar) on a 4 px (~25 cm) pitch.
+    The old 16 px sheet drew 2 px straps on an 8 px pitch — half as many
+    diamonds, twice as fat, which is what made lattice columns and the truss
+    read as a solid dark panel instead of open lacing."""
+    rows = pk.canvas(32, 32, (0, 0, 0, 0))
+    for off in range(-32, 64, 8):
+        for i in range(32):
             for w in range(2):
-                for xx, yy in (((off + i + w) % 16, i), ((off - i + w) % 16, i)):
-                    if 0 <= xx < 16:
-                        tone = p["base"] if (i + w) % 4 else p["dark"]
-                        rows[yy][xx] = tone
+                for xx, yy in (((off + i + w) % 32, i), ((off - i + w) % 32, i)):
+                    if 0 <= xx < 32:
+                        rows[yy][xx] = p["base"] if w else p["dark"]
     return rows
 
 
@@ -230,132 +235,247 @@ def column_lattice(tinted):
     return els
 
 
+def _plate(y0, y1, half, tinted, up=None, down=None, riveted=False):
+    """One square plate of a stepped base/cap, centred on the column axis.
+    `half` is the half-width in model px; the four side faces take a slice
+    the plate's own height so the sheet is never stretched, and `riveted`
+    picks the sheet's horizontal rivet seam (texel rows 6..8 = uv v 3..4)
+    so a base/cap plate shows its anchor bolts."""
+    w = half * 2
+    v0 = (4.0 - (y1 - y0) / 2) if riveted else 6.0
+    side = f("body", [0.5, v0, 0.5 + w, v0 + (y1 - y0)], tinted)
+    faces = {n: side for n in ("north", "south", "east", "west")}
+    lid_uv = [0.5, 1.2, 0.5 + w, 1.2 + w]      # crosses both rivet seams
+    if up is not None:
+        faces["up"] = f("body", lid_uv, tinted, cull=up or None)
+    if down is not None:
+        faces["down"] = f("body", lid_uv, tinted, cull=down or None)
+    return elem([8 - half, y0, 8 - half], [8 + half, y1, 8 + half], faces)
+
+
 def column_foot(tinted):
+    """The street base: a wide bolted BASE PLATE, a bolster above it and a
+    shoe collar hugging the shaft. Three squared steps read as a bolted-down
+    street column; the old two-step taper read as a table-leg flare."""
     return [
-        elem([3.6, 0, 3.6], [12.4, 1.3, 12.4], {
-            "north": f("body", [1, 5, 5.4, 5.65], tinted),
-            "south": f("body", [1, 5, 5.4, 5.65], tinted),
-            "east": f("body", [1, 5, 5.4, 5.65], tinted),
-            "west": f("body", [1, 5, 5.4, 5.65], tinted),
-            "up": f("body", [1, 5, 5.4, 9.4], tinted),
-            "down": f("body", [1, 5, 5.4, 9.4], tinted, cull="down"),
-        }),
-        elem([4.4, 1.3, 4.4], [11.6, 2.5, 11.6], {
-            "north": f("body", [1, 6, 4.6, 6.6], tinted),
-            "south": f("body", [1, 6, 4.6, 6.6], tinted),
-            "east": f("body", [1, 6, 4.6, 6.6], tinted),
-            "west": f("body", [1, 6, 4.6, 6.6], tinted),
-            "up": f("body", [1, 5.5, 4.6, 9.1], tinted),
-        }),
+        _plate(0.0, 1.1, 5.8, tinted, up="", down="down", riveted=True),
+        _plate(1.1, 2.4, 5.0, tinted, up="", riveted=True),
+        _plate(2.4, 3.4, 4.2, tinted, up=""),
     ]
 
 
 def column_cap(tinted):
+    """The gusset cap: a collar, a bolster and a wide bearing plate the cross
+    girder sits on. Flatter and wider than the foot (a cap spreads the load
+    sideways, a base spreads it down) so the two never read as the same
+    tapered flare stood on its head. The plate stops 0.1 px short of y16 —
+    the girder's bottom flange face lives exactly on that plane."""
     return [
-        elem([4.4, 13.5, 4.4], [11.6, 14.7, 11.6], {
-            "north": f("body", [1, 6, 4.6, 6.6], tinted),
-            "south": f("body", [1, 6, 4.6, 6.6], tinted),
-            "east": f("body", [1, 6, 4.6, 6.6], tinted),
-            "west": f("body", [1, 6, 4.6, 6.6], tinted),
-            "down": f("body", [1, 5.5, 4.6, 9.1], tinted),
-        }),
-        elem([3.6, 14.7, 3.6], [12.4, 16, 12.4], {
-            "north": f("body", [1, 5, 5.4, 5.65], tinted),
-            "south": f("body", [1, 5, 5.4, 5.65], tinted),
-            "east": f("body", [1, 5, 5.4, 5.65], tinted),
-            "west": f("body", [1, 5, 5.4, 5.65], tinted),
-            "up": f("body", [1, 5, 5.4, 9.4], tinted, cull="up"),
-            "down": f("body", [1, 5, 5.4, 9.4], tinted),
-        }),
+        _plate(12.6, 13.6, 4.2, tinted, down=""),
+        _plate(13.6, 14.7, 5.0, tinted, down="", riveted=True),
+        _plate(14.7, 15.9, 5.9, tinted, up="up", down="", riveted=True),
     ]
 
 
+# --- the plate-girder / truss section (axis x, a run spans x 0..16) --------
+# One block deep = 1 m: a real el longitudinal plate girder is ~1 m deep with
+# a ~0.43 m flange, which is FLANGE_Z1-FLANGE_Z0 below.  The web is recessed
+# 2.2 px behind the flange edges on both sides so the flange throws a shadow
+# line the whole length of a run — without that the run is one flat apron and
+# the whole el reads as a table (Thomas's complaint).
+FLANGE_Z0, FLANGE_Z1 = 4.6, 11.4      # 6.8 px = 0.43 m flange width
+WEB_Z0, WEB_Z1 = 7.0, 9.0             # 2.0 px = 0.125 m riveted web plate
+RIB_Z0, RIB_Z1 = 5.8, 10.2            # stiffener angles, 1.2 proud of the web
+BRACE_Z0, BRACE_Z1 = 6.1, 9.9         # gusset plate thickness (0.24 m)
+FLANGE_H = 2.0
+# stiffener stations: one at each block end (they pair up across a joint into
+# the splice rib a real girder has there) plus two intermediate.  A 32 cm
+# pitch is denser than the prototype's ~1 m, and deliberately so: at one
+# model pixel = 6 cm, a single rib per metre leaves a 90 cm blank panel that
+# reads as sheet metal.  Three panels per block is what makes a run read as
+# a riveted girder instead of an apron.
+RIB_X = (0.05, 5.15, 9.65, 14.75)
+RIB_W = 1.2
+# uv windows on el_steel (1 uv unit = 1 model px = 2 texels):
+#   v 3..4 and v 12..13  horizontal rivet seams
+#   u 13.5..14.5         the vertical rivet ladder
+#   v 5..11              the clean band
+RIVET_BAND = lambda h: [0.25, 3.5 - h / 2, 15.75, 3.5 + h / 2]
+LADDER = lambda h: [13.35, 1.5, 14.55, 1.5 + h]
+
+
 def girder_elements(tinted):
-    """Riveted plate girder, axis x: full-height web with its two rivet seams
-    (the sheet's full-height window), flanges, panel stiffeners inset 0.05."""
-    web = f("body", [0.25, 0.25, 15.75, 15.75], tinted)
-    els = [elem([0, 1.2, 6.7], [16, 14.8, 9.3], {"north": web, "south": web})]
-    for y0, y1 in ((0, 1.2), (14.8, 16)):
-        cull = "down" if y0 == 0 else "up"
-        els.append(elem([0, y0, 5.5], [16, y1, 10.5], {
-            "north": f("body", [1, 5, 9, 5.6], tinted),
-            "south": f("body", [1, 5, 9, 5.6], tinted),
-            "up": f("body", [1, 5, 9, 7.5], tinted, cull=cull if cull == "up" else None),
-            "down": f("body", [1, 5, 9, 7.5], tinted, cull=cull if cull == "down" else None),
+    """Riveted plate girder, axis x. Proud top and bottom flanges with a
+    rivet row along each, a recessed web carrying the sheet's two horizontal
+    rivet seams, and vertical stiffener angles standing off the web."""
+    web = f("body", [0.25, 1.5, 15.75, 13.5], tinted)
+    els = [elem([0, FLANGE_H, WEB_Z0], [16, 16 - FLANGE_H, WEB_Z1],
+                {"north": web, "south": web})]
+    for y0 in (0, 16 - FLANGE_H):
+        lid = f("body", [0.25, 5, 15.75, 5 + (FLANGE_Z1 - FLANGE_Z0)], tinted)
+        edge = f("body", RIVET_BAND(FLANGE_H), tinted)
+        els.append(elem([0, y0, FLANGE_Z0], [16, y0 + FLANGE_H, FLANGE_Z1], {
+            "north": edge, "south": edge,
+            "up": f("body", lid["uv"], tinted, cull="up" if y0 else None),
+            "down": f("body", lid["uv"], tinted, cull=None if y0 else "down"),
         }))
-    for x0 in (0.05, 14.9):
-        els.append(elem([x0, 1.2, 6.3], [x0 + 1.05, 14.8, 9.7], {
-            "north": f("body", [13.6, 1, 14.4, 7.8], tinted),
-            "south": f("body", [13.6, 1, 14.4, 7.8], tinted),
-            "east": f("body", [1, 5, 2.7, 11.8], tinted),
-            "west": f("body", [1, 5, 2.7, 11.8], tinted),
+    h = 16 - 2 * FLANGE_H
+    for x0 in RIB_X:
+        side = f("body", [1, 1.5, 1 + (RIB_Z1 - RIB_Z0), 1.5 + h], tinted)
+        els.append(elem([x0, FLANGE_H, RIB_Z0], [x0 + RIB_W, 16 - FLANGE_H, RIB_Z1], {
+            "north": f("body", LADDER(h), tinted),
+            "south": f("body", LADDER(h), tinted),
+            "east": side, "west": side,
         }))
     return els
+
+
+TRUSS_CH_H = 2.2                       # chord depth
+TRUSS_Z0, TRUSS_Z1 = 5.4, 10.6         # chord (angle-pair) width
+TRUSS_POST_X = (0.05, 7.4, 14.75)      # end posts + one at the panel point
 
 
 def truss_elements(tinted):
-    """Open lattice truss, axis x: chords + see-through diamond web."""
+    """Open lattice truss, axis x: chord angles top and bottom, vertical
+    posts at the panel points and a see-through X-laced web between them.
+    The chords are shallower than the plate girder's flanges and the web is
+    11.6 px of lacing, so the section reads OPEN rather than as a dark panel
+    with a picture frame around it."""
     els = []
-    for y0, y1 in ((0.5, 3.1), (12.9, 15.5)):
-        els.append(elem([0, y0, 6.3], [16, y1, 9.7], {
-            "north": f("body", [1, 5, 9, 6.3], tinted),
-            "south": f("body", [1, 5, 9, 6.3], tinted),
-            "up": f("body", [1, 5, 9, 6.7], tinted),
-            "down": f("body", [1, 5, 9, 6.7], tinted),
+    for y0 in (0, 16 - TRUSS_CH_H):
+        lid = f("body", [0.25, 5, 15.75, 5 + (TRUSS_Z1 - TRUSS_Z0)], tinted)
+        edge = f("body", RIVET_BAND(TRUSS_CH_H), tinted)
+        els.append(elem([0, y0, TRUSS_Z0], [16, y0 + TRUSS_CH_H, TRUSS_Z1], {
+            "north": edge, "south": edge,
+            "up": f("body", lid["uv"], tinted, cull="up" if y0 else None),
+            "down": f("body", lid["uv"], tinted, cull=None if y0 else "down"),
         }))
-    lattice = f("lattice", [0, 3, 16, 13], tinted)
-    els.append(elem([0, 2.9, 7.75], [16, 13.1, 8.25], {"north": lattice, "south": lattice}))
-    for x0 in (0.05, 14.65):
-        els.append(elem([x0, 0.5, 6.5], [x0 + 1.3, 15.5, 9.5], {
-            "north": f("body", [13.6, 1, 14.4, 8.5], tinted),
-            "south": f("body", [13.6, 1, 14.4, 8.5], tinted),
-            "east": f("body", [1, 5, 2.5, 12.5], tinted),
-            "west": f("body", [1, 5, 2.5, 12.5], tinted),
+    h = 16 - 2 * TRUSS_CH_H
+    lattice = f("lattice", [0, TRUSS_CH_H, 16, 16 - TRUSS_CH_H], tinted)
+    els.append(elem([0, TRUSS_CH_H, 7.6], [16, 16 - TRUSS_CH_H, 8.4],
+                    {"north": lattice, "south": lattice}))
+    for x0 in TRUSS_POST_X:
+        side = f("body", [1, 1.5, 4.2, 1.5 + h], tinted)
+        els.append(elem([x0, TRUSS_CH_H, 6.6], [x0 + RIB_W, 16 - TRUSS_CH_H, 9.4], {
+            "north": f("body", LADDER(h), tinted),
+            "south": f("body", LADDER(h), tinted),
+            "east": side, "west": side,
         }))
     return els
 
 
+# --- knee braces ----------------------------------------------------------
+# The old braces were 45°-rotated struts aimed INTO the column: everything
+# with 4.7 <= x <= 11.3 was buried inside the column body, so only ~4 px of
+# each one was ever visible — that is why they read as stubs.  They are now
+# stepped GUSSET PLATES that live in the air BESIDE the column (the column
+# occupies x 4.7..11.3 of the block below; x 0..4.7 and 11.3..16 are empty),
+# deepest where they meet the column shaft and tapering out to nothing under
+# the girder.  Axis-aligned boxes only, so the run's rotation is exact.
+BRACE_STEPS = 6
+BRACE_DROP = 9.0          # how far down the column shaft the gusset reaches
+BRACE_TOP = 1.2           # buried inside the girder's bottom flange
+BRACE_OUT = 0.1           # the gusset's outer tip, at the girder's block end
+BRACE_IN = 5.3            # 0.6 past the column face at 4.7: it dies into it
+
+
 def brace_elements(tinted):
-    """The knee braces: a pair of big 45° gusset struts from the girder's
-    underside down the column's sides (elements below y0 are legal), each
-    doubled with a shorter inner strut so the pair reads as the photos'
-    curved gusset rather than a stick."""
+    """A stepped gusset plate down each side of the column below, in the
+    plane of the girder — the signature el knee brace. Six steps read as the
+    photos' curved bracket at any sane render distance.
+
+    Steps ABUT exactly rather than overlapping, and each one omits the face
+    on its deeper side (that face is entirely buried in the next step), so
+    no two faces of the plate are coplanar with overlapping footprints."""
     els = []
-    for outer, angle in ((True, 45), (False, -45)):
-        # three stepped struts per side — the stepped pair reads as the
-        # photos' big CURVED gusset, not a stick (Thomas: beefier)
-        # steps overlap 0.2 so no two strut faces share a rotated plane
-        for length, x_off, width in ((11.0, 0.0, 3.0), (8.0, 2.8, 3.0), (5.0, 5.6, 3.0)):
-            x0 = (0.4 + x_off) if outer else (16 - 0.4 - x_off - width)
-            ox = x0 + width / 2
-            strut = f("body", [1, 4.25, 4, 12.25], tinted)
-            els.append(elem([x0, 1.6 - length, 6.7], [x0 + width, 1.6, 9.3], {
-                "north": strut, "south": strut,
-                "east": f("body", [1, 4.25, 4.2, 12.25], tinted),
-                "west": f("body", [1, 4.25, 4.2, 12.25], tinted),
-            }, rotation={"origin": [ox, 1.6, 8], "axis": "z", "angle": angle}))
+    w = (BRACE_IN - BRACE_OUT) / BRACE_STEPS
+    for left in (True, False):
+        for k in range(BRACE_STEPS):        # k = 0 at the tip, 5 at the column
+            bottom = -1.0 - k * (BRACE_DROP - 1.0) / (BRACE_STEPS - 1)
+            h = BRACE_TOP - bottom
+            a, b = BRACE_OUT + k * w, BRACE_OUT + (k + 1) * w
+            x0, x1 = (a, b) if left else (16 - b, 16 - a)
+            outer, inner = ("west", "east") if left else ("east", "west")
+            faces = {
+                "north": f("body", [13.0, 0.4, 14.8, 0.4 + h], tinted),
+                "south": f("body", [13.0, 0.4, 14.8, 0.4 + h], tinted),
+                "down": f("body", [1, 5, 1 + w, 8.2], tinted),
+                outer: f("body", [1, 0.4, 4.2, 0.4 + h], tinted),
+            }
+            if k == BRACE_STEPS - 1:        # the end that meets the column
+                faces[inner] = f("body", [1, 0.4, 4.2, 0.4 + h], tinted)
+            els.append(elem([x0, bottom, BRACE_Z0], [x1, BRACE_TOP, BRACE_Z1], faces))
+    return els
+
+
+# --- decks ----------------------------------------------------------------
+# The stringers still reach the bottom of the block (the deck SITS on the
+# girder below, it must not float), but they are now real riveted I-beams:
+# proud top and bottom flanges with a recessed web and stiffener ribs on the
+# same 0.05/5.15/9.65/14.75 rhythm as the girder.  A run therefore reads as
+# two stacked beams, each with its own shadow lines, instead of one 2 m apron.
+# The stringer flanges are inset 0.3 px INSIDE the girder's 4.6..11.4 flange
+# below, so the girder's flange edge stays the proud line of the whole
+# assembly and the deck course sits in its shadow instead of standing flush
+# with it (flush is what fused the two into one two-metre apron).
+STRINGER_Z = (4.9, 8.7)     # flange near edge; flange 2.4 wide, web 1.2
+STRINGER_D = 8.0            # 0.5 m — a real stringer, not a second girder
+FLANGE_T = 1.4
+BEARING_X = ((0.05, 1.6), (14.4, 15.95))
+DECK_LOW = 0.1              # never 0: the girder's top-flange face is at y16
+
+
+def stringer_elements(top_y, ref="body"):
+    """A pair of longitudinal I-beam stringers hung under the deck surface,
+    landing on the girder below through a bearing block at each block end.
+
+    The stringers used to be 12.8 px deep slabs running the block's whole
+    height: stacked on a girder that made a 2 m unbroken green apron, which
+    is the single biggest reason the el read as a table. They are now 8 px
+    deep with proud flanges, and the 4.8 px below them is OPEN except for
+    the bearing blocks — which pair up across a joint into the transverse
+    floor beam a real el has at every panel point."""
+    els = []
+    y_low = top_y - STRINGER_D
+    web_h = STRINGER_D - 2 * FLANGE_T
+    for z0 in STRINGER_Z:
+        for y0 in (y_low, top_y - FLANGE_T):
+            edge = f(ref, [0.25, 3.5 - FLANGE_T / 2, 15.75, 3.5 + FLANGE_T / 2])
+            lid = f(ref, [0.25, 5, 15.75, 7.4])
+            els.append(elem([0, y0, z0], [16, y0 + FLANGE_T, z0 + 2.4],
+                            {"north": edge, "south": edge, "up": lid, "down": lid}))
+        web = f(ref, [0.25, 1.5, 15.75, 1.5 + web_h])
+        els.append(elem([0, y_low + FLANGE_T, z0 + 0.6],
+                        [16, top_y - FLANGE_T, z0 + 1.8],
+                        {"north": web, "south": web}))
+    # bearing blocks: the deck's feet on the girder's top flange
+    seat = f(ref, [1, 1.5, 7.0, 1.5 + (y_low - DECK_LOW)])
+    for x0, x1 in BEARING_X:
+        els.append(elem([x0, DECK_LOW, STRINGER_Z[0] + 0.1],
+                        [x1, y_low + 0.4, STRINGER_Z[1] + 2.3], {
+            "north": f(ref, LADDER(y_low - DECK_LOW)),
+            "south": f(ref, LADDER(y_low - DECK_LOW)),
+            "east": seat, "west": seat,
+            "down": f(ref, [1, 5, 1 + (x1 - x0), 11.0], cull="down"),
+        }))
     return els
 
 
 def deck_ties_elements():
+    """Open tie deck. Ties on a 4 px (25 cm) pitch, 2.0 px wide, so half the
+    deck is daylight from the street below; they overhang the stringers by
+    ~3 px each side exactly as the real cantilevered ties do."""
     els = []
-    tie_face = f("wood", [0.5, 1, 15.5, 4.2])
-    tie_side = f("wood", [1, 5, 4.2, 8.2])
+    tie_face = f("wood", [0.4, 12.8, 15.6, 16])
+    tie_end = f("wood", [1, 12.8, 3, 16])
     for x0 in (0.6, 4.6, 8.6, 12.6):
-        els.append(elem([x0, 12.8, 0.5], [x0 + 2.4, 16, 15.5], {
-            "up": f("wood", [0.5, 1, 15.5, 3.4]), "down": f("wood", [0.5, 4, 15.5, 6.4]),
+        els.append(elem([x0, 12.8, 0.4], [x0 + 2.0, 16, 15.6], {
+            "up": f("wood", [x0, 0.4, x0 + 2.0, 15.6]),
+            "down": f("wood", [x0, 0.4, x0 + 2.0, 15.6]),
             "east": tie_face, "west": tie_face,
-            "north": tie_side, "south": tie_side,
+            "north": tie_end, "south": tie_end,
         }))
-    # deep longitudinal stringer girders reaching the bottom of the block,
-    # so the deck SITS on the cross girder below instead of floating
-    for z0 in (3.4, 10.6):
-        stringer = f("body", [0.25, 0.25, 15.75, 12.5])
-        els.append(elem([0, 0, z0], [16, 12.8, z0 + 2.0], {
-            "north": stringer, "south": stringer,
-            "down": f("body", [0.25, 5, 15.75, 7], cull="down"),
-        }))
-    return els
+    return els + stringer_elements(12.7)
 
 
 def deck_plate_elements():
@@ -366,12 +486,7 @@ def deck_plate_elements():
         "north": dict(edge, cullface="north"), "south": dict(edge, cullface="south"),
         "east": dict(edge, cullface="east"), "west": dict(edge, cullface="west"),
     })]
-    for z0 in (3.4, 10.6):
-        stringer = f("body", [0.25, 0.25, 15.75, 12.2])
-        els.append(elem([0, 0, z0], [16, 12.4, z0 + 2.0],
-                        {"north": stringer, "south": stringer,
-                         "down": f("body", [0.25, 5, 15.75, 7], cull="down")}))
-    return els
+    return els + stringer_elements(12.3)
 
 
 # ---------------------------------------------------- platform (phase 2) ----
