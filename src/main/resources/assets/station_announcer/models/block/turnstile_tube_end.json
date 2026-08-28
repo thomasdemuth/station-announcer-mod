@@ -6,6 +6,7 @@
     "tube": "station_announcer:block/turnstile_tube",
     "arm": "station_announcer:block/turnstile_arm",
     "lamp": "station_announcer:block/turnstile_lamp",
+    "picto": "station_announcer:block/turnstile_picto",
     "sign": "station_announcer:block/turnstile_sign",
     "sign_exit": "station_announcer:block/turnstile_sign_exit",
     "particle": "station_announcer:block/turnstile_steel"

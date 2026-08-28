@@ -85,7 +85,9 @@ public class TurnstileBlock extends TurnstileBaseBlock {
         this.allowEntry = allowEntry;
         setDefaultState(getDefaultState().with(INDICATOR, Indicator.OFF));
         VoxelShape cabinet = createCuboidShape(0.0, 0.0, 1.0, 5.0, 16.0, 15.0);
-        VoxelShape arm = createCuboidShape(4.0, 9.0, 6.0, 14.0, 13.0, 10.0);
+        // Covers the rebuilt tripod: horizontal blocking arm plus the 45°
+        // through-bar whose ends reach down-forward and up-back.
+        VoxelShape arm = createCuboidShape(3.0, 7.0, 3.0, 15.0, 16.0, 13.5);
         this.lowerCollision = rotations(cabinet);
         this.lowerOutline = rotations(net.minecraft.util.shape.VoxelShapes.union(cabinet, arm).simplify());
         this.upperShape = rotations(createCuboidShape(0.0, 0.0, 4.0, 5.0, 10.0, 12.0));

@@ -6,6 +6,7 @@
     "tube": "station_announcer:block/turnstile_tube",
     "arm": "station_announcer:block/turnstile_arm",
     "lamp": "station_announcer:block/turnstile_lamp",
+    "picto": "station_announcer:block/turnstile_picto",
     "sign": "station_announcer:block/turnstile_sign",
     "sign_exit": "station_announcer:block/turnstile_sign_exit",
     "particle": "station_announcer:block/turnstile_steel"
@@ -68,7 +69,8 @@
             3.25
           ]
         }
-      }
+      },
+      "shade": false
     },
     {
       "from": [
@@ -127,7 +129,8 @@
             3.25
           ]
         }
-      }
+      },
+      "shade": false
     },
     {
       "from": [
@@ -186,7 +189,8 @@
             3.25
           ]
         }
-      }
+      },
+      "shade": false
     },
     {
       "from": [
@@ -245,7 +249,146 @@
             3.25
           ]
         }
-      }
+      },
+      "shade": false
+    },
+    {
+      "from": [
+        5,
+        13.2,
+        0.2
+      ],
+      "to": [
+        11,
+        14.8,
+        0.8
+      ],
+      "faces": {
+        "north": {
+          "texture": "#picto",
+          "uv": [
+            5,
+            1,
+            27,
+            7
+          ]
+        },
+        "south": {
+          "texture": "#picto",
+          "uv": [
+            0.25,
+            0.25,
+            1.75,
+            1.75
+          ]
+        },
+        "east": {
+          "texture": "#picto",
+          "uv": [
+            0.25,
+            0.25,
+            1.75,
+            1.75
+          ]
+        },
+        "west": {
+          "texture": "#picto",
+          "uv": [
+            0.25,
+            0.25,
+            1.75,
+            1.75
+          ]
+        },
+        "up": {
+          "texture": "#picto",
+          "uv": [
+            0.25,
+            0.25,
+            1.75,
+            1.75
+          ]
+        },
+        "down": {
+          "texture": "#picto",
+          "uv": [
+            0.25,
+            0.25,
+            1.75,
+            1.75
+          ]
+        }
+      },
+      "shade": false
+    },
+    {
+      "from": [
+        5,
+        13.2,
+        15.2
+      ],
+      "to": [
+        11,
+        14.8,
+        15.8
+      ],
+      "faces": {
+        "north": {
+          "texture": "#picto",
+          "uv": [
+            0.25,
+            0.25,
+            1.75,
+            1.75
+          ]
+        },
+        "south": {
+          "texture": "#picto",
+          "uv": [
+            5,
+            1,
+            27,
+            7
+          ]
+        },
+        "east": {
+          "texture": "#picto",
+          "uv": [
+            0.25,
+            0.25,
+            1.75,
+            1.75
+          ]
+        },
+        "west": {
+          "texture": "#picto",
+          "uv": [
+            0.25,
+            0.25,
+            1.75,
+            1.75
+          ]
+        },
+        "up": {
+          "texture": "#picto",
+          "uv": [
+            0.25,
+            0.25,
+            1.75,
+            1.75
+          ]
+        },
+        "down": {
+          "texture": "#picto",
+          "uv": [
+            0.25,
+            0.25,
+            1.75,
+            1.75
+          ]
+        }
+      },
+      "shade": false
     }
   ]
 }

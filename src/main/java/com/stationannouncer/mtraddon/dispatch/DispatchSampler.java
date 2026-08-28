@@ -100,6 +100,7 @@ public final class DispatchSampler {
         public final String sidingName;
         public final String depotName;
         public final String[] cars;
+        public final double[] carLengths; // blocks, same order as cars (consist rendering)
 
         VehicleSnapshot(long id, double x, double y, double z, double speedKmh, boolean reversed,
                         String railId, double railT, boolean doorsOpen, long dwellRemainingMs,
@@ -107,7 +108,8 @@ public final class DispatchSampler {
                         long prevPlatformId, long nextPlatformId, double platformFraction,
                         long routeId, String routeName, String routeNumber, int routeColor,
                         String destination, String nextStation,
-                        long sidingId, String sidingName, String depotName, String[] cars) {
+                        long sidingId, String sidingName, String depotName,
+                        String[] cars, double[] carLengths) {
             this.id = id;
             this.x = x;
             this.y = y;
@@ -134,6 +136,7 @@ public final class DispatchSampler {
             this.sidingName = sidingName;
             this.depotName = depotName;
             this.cars = cars;
+            this.carLengths = carLengths;
         }
 
         boolean dynamicEquals(VehicleSnapshot other) {
@@ -157,7 +160,8 @@ public final class DispatchSampler {
                     && safeEquals(nextStation, other.nextStation)
                     && safeEquals(sidingName, other.sidingName)
                     && safeEquals(depotName, other.depotName)
-                    && Arrays.equals(cars, other.cars);
+                    && Arrays.equals(cars, other.cars)
+                    && Arrays.equals(carLengths, other.carLengths);
         }
 
         private static boolean safeEquals(String a, String b) {
@@ -287,8 +291,10 @@ public final class DispatchSampler {
         Depot depot = siding.area;
         ObjectImmutableList<VehicleCar> vehicleCars = extra.immutableVehicleCars;
         String[] cars = new String[vehicleCars.size()];
+        double[] carLengths = new double[vehicleCars.size()];
         for (int i = 0; i < cars.length; i++) {
             cars[i] = vehicleCars.get(i).getVehicleId();
+            carLengths[i] = DispatchNetwork.round2(vehicleCars.get(i).getLength());
         }
 
         return new VehicleSnapshot(
@@ -312,7 +318,7 @@ public final class DispatchSampler {
                 siding.getId(),
                 siding.getName(),
                 depot == null ? "" : depot.getName(),
-                cars);
+                cars, carLengths);
     }
 
     private static Rail[] signalRails(Simulator simulator, long now) {

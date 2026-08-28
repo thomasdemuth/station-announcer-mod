@@ -545,6 +545,11 @@ public final class DispatchStreamer {
                 cars.add(car);
             }
             consist.add("cars", cars);
+            JsonArray carLengths = new JsonArray();
+            for (double length : vehicle.carLengths) {
+                carLengths.add(length);
+            }
+            consist.add("carLengths", carLengths);
             json.add("consist", consist);
         }
         return json;

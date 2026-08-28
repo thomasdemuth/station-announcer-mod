@@ -55,10 +55,21 @@ public final class MtrStationDecor {
     public static final EmployeeDoorBlock EMPLOYEE_DOOR_BLACK = new EmployeeDoorBlock(settings());
     public static final EmployeeDoorBlock EMPLOYEE_DOOR_WHITE = new EmployeeDoorBlock(settings());
 
+    /**
+     * Fare-gate settings: the unit emits light while an indicator is showing,
+     * so the GO/STOP pictograms and lenses read at night (MTR's own barriers
+     * carry a flat luminance for the same reason).
+     */
+    private static AbstractBlock.Settings fareGateSettings() {
+        return settings().luminance(state ->
+                state.contains(TurnstileBlock.INDICATOR)
+                        && state.get(TurnstileBlock.INDICATOR) != TurnstileBlock.Indicator.OFF ? 7 : 0);
+    }
+
     /** Fare-control turnstiles: MTR-charging lane + solid end cap. */
-    public static final TurnstileBlock TURNSTILE = new TurnstileBlock(settings());
-    public static final TurnstileBlock TURNSTILE_EXIT = new TurnstileBlock(settings(), false);
-    public static final TurnstileHeetBlock TURNSTILE_HEET = new TurnstileHeetBlock(settings());
+    public static final TurnstileBlock TURNSTILE = new TurnstileBlock(fareGateSettings());
+    public static final TurnstileBlock TURNSTILE_EXIT = new TurnstileBlock(fareGateSettings(), false);
+    public static final TurnstileHeetBlock TURNSTILE_HEET = new TurnstileHeetBlock(fareGateSettings());
     public static final TurnstileCapBlock TURNSTILE_CAP = new TurnstileCapBlock(settings());
 
     /** Holding lights (timed off MTR arrivals) and their hanging hardware. */

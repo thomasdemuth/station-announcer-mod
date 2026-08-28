@@ -6,6 +6,7 @@
     "tube": "station_announcer:block/turnstile_tube",
     "arm": "station_announcer:block/turnstile_arm",
     "lamp": "station_announcer:block/turnstile_lamp",
+    "picto": "station_announcer:block/turnstile_picto",
     "sign": "station_announcer:block/turnstile_sign",
     "sign_exit": "station_announcer:block/turnstile_sign_exit",
     "particle": "station_announcer:block/turnstile_steel"
@@ -122,14 +123,14 @@
     },
     {
       "from": [
-        6,
-        19.8,
-        7.7
+        5.5,
+        19.2,
+        7.65
       ],
       "to": [
-        14,
-        22.1,
-        8.3
+        15.5,
+        21.8,
+        8.35
       ],
       "faces": {
         "north": {
@@ -168,6 +169,15 @@
             7.5
           ]
         },
+        "up": {
+          "texture": "#sign",
+          "uv": [
+            2,
+            4.5,
+            15,
+            5.1
+          ]
+        },
         "down": {
           "texture": "#sign",
           "uv": [
@@ -175,6 +185,106 @@
             4.5,
             15,
             5.1
+          ]
+        }
+      }
+    },
+    {
+      "from": [
+        6.8,
+        21.7,
+        7.8
+      ],
+      "to": [
+        7.5,
+        23.2,
+        8.2
+      ],
+      "faces": {
+        "north": {
+          "texture": "#sign",
+          "uv": [
+            2,
+            4.75,
+            2.7,
+            6.25
+          ]
+        },
+        "south": {
+          "texture": "#sign",
+          "uv": [
+            2,
+            4.75,
+            2.7,
+            6.25
+          ]
+        },
+        "east": {
+          "texture": "#sign",
+          "uv": [
+            2.2,
+            4.75,
+            2.6,
+            6.25
+          ]
+        },
+        "west": {
+          "texture": "#sign",
+          "uv": [
+            2.2,
+            4.75,
+            2.6,
+            6.25
+          ]
+        }
+      }
+    },
+    {
+      "from": [
+        13.5,
+        21.7,
+        7.8
+      ],
+      "to": [
+        14.2,
+        23.2,
+        8.2
+      ],
+      "faces": {
+        "north": {
+          "texture": "#sign",
+          "uv": [
+            2,
+            4.75,
+            2.7,
+            6.25
+          ]
+        },
+        "south": {
+          "texture": "#sign",
+          "uv": [
+            2,
+            4.75,
+            2.7,
+            6.25
+          ]
+        },
+        "east": {
+          "texture": "#sign",
+          "uv": [
+            2.2,
+            4.75,
+            2.6,
+            6.25
+          ]
+        },
+        "west": {
+          "texture": "#sign",
+          "uv": [
+            2.2,
+            4.75,
+            2.6,
+            6.25
           ]
         }
       }

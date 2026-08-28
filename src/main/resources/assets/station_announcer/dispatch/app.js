@@ -339,7 +339,23 @@ function handleFrame(f, isFull) {
 		if (v.route) rec.route = v.route;
 		if (v.consist) rec.consist = v.consist;
 		rec.data = { ...rec.data, ...v };
-		rec.samples.push({ t: f.serverTime, x: v.x, z: v.z, rail: v.rail, railT: v.railT });
+		// Orientation-correct railT before storing: railT measures progress along the
+		// PATH segment, but the rail's polyline has its own canonical direction — a
+		// train traversing the rail against it would interpolate BACKWARDS along the
+		// curve and then snap at the rail boundary ("glides the wrong way then
+		// jumps"). If the mirrored parameter lands closer to the sample's true world
+		// position, the polyline runs opposite to the path here: flip it.
+		let railT = v.railT;
+		if (v.rail && railT !== undefined && railT >= 0) {
+			const straight = railPoint(v.rail, railT);
+			const mirrored = railPoint(v.rail, 1 - railT);
+			if (straight && mirrored) {
+				const dS = Math.hypot(straight[0] - v.x, straight[1] - v.z);
+				const dM = Math.hypot(mirrored[0] - v.x, mirrored[1] - v.z);
+				if (dM + 0.5 < dS) railT = 1 - railT;
+			}
+		}
+		rec.samples.push({ t: f.serverTime, x: v.x, z: v.z, rail: v.rail, railT });
 		if (rec.samples.length > 4) rec.samples.shift();
 		state.vehicles.set(v.id, rec);
 	});
@@ -393,12 +409,41 @@ function vehiclePos(rec, renderTime) {
 	}
 	const span = b.t - a.t || 1;
 	const f = Math.max(0, Math.min(1, (renderTime - a.t) / span));
-	// same rail on both samples → slide along the real curve
+	// same rail on both samples → slide along the real curve (railT is already
+	// orientation-corrected at ingestion); expose rail+param so the consist
+	// renderer can lay cars along the same curve
 	if (a.rail && a.rail === b.rail && a.railT !== undefined && b.railT !== undefined) {
-		const p = railPoint(a.rail, a.railT + (b.railT - a.railT) * f);
-		if (p) return { x: p[0], z: p[1], hx: b.x - a.x, hz: b.z - a.z };
+		const t = a.railT + (b.railT - a.railT) * f;
+		const p = railPoint(a.rail, t);
+		if (p) {
+			return { x: p[0], z: p[1], hx: b.x - a.x, hz: b.z - a.z,
+				rail: a.rail, railT: t, paramDir: Math.sign(b.railT - a.railT) };
+		}
 	}
-	return { x: a.x + (b.x - a.x) * f, z: a.z + (b.z - a.z) * f, hx: b.x - a.x, hz: b.z - a.z };
+	return { x: a.x + (b.x - a.x) * f, z: a.z + (b.z - a.z) * f, hx: b.x - a.x, hz: b.z - a.z,
+		rail: b.rail, railT: b.railT, paramDir: 0 };
+}
+
+/**
+ * Point + tangent at an absolute distance along a rail's polyline. Distances past
+ * either end extend linearly along the end tangent, so a consist can hang off the
+ * rail the head is on without snapping.
+ */
+function railDistPoint(r, dist) {
+	const L = r.cum[r.cum.length - 1] || 1;
+	const pts = r.points;
+	if (pts.length < 2) return null;
+	let i, f;
+	if (dist <= 0) { i = 1; f = dist / (r.cum[1] - r.cum[0] || 1); }
+	else if (dist >= L) { i = pts.length - 1; f = 1 + (dist - L) / (r.cum[i] - r.cum[i - 1] || 1); }
+	else {
+		i = 1;
+		while (i < r.cum.length - 1 && r.cum[i] < dist) i++;
+		f = (dist - r.cum[i - 1]) / (r.cum[i] - r.cum[i - 1] || 1);
+	}
+	const a = pts[i - 1], b = pts[i];
+	const dx = b[0] - a[0], dz = b[2] - a[2];
+	return { x: a[0] + dx * f, z: a[2] + dz * f, tx: dx, tz: dz };
 }
 
 /* ---------- canvas ---------- */
@@ -601,19 +646,25 @@ function frame() {
 
 		if (state.follow && selected) { state.view.x = rec.disp.x; state.view.z = rec.disp.z; invalidateStatic(); }
 
-		ctx.save();
-		if (filteredOut) ctx.globalAlpha = 0.25;
-		ctx.translate(sx, sy);
-		ctx.rotate(angle);
-		ctx.beginPath();
-		ctx.roundRect(-len / 2, -4, len, 8, 4);
-		ctx.fillStyle = color;
-		ctx.fill();
-		ctx.lineWidth = selected ? 2 : 1;
-		ctx.strokeStyle = selected ? "#ffffff" : "#0b0e14";
-		ctx.stroke();
-		if (rec.data.doors) { ctx.fillStyle = "#fff"; ctx.fillRect(-1.5, -4, 3, 8); }
-		ctx.restore();
+		// Zoomed in with a known consist and rail: draw the individual cars along the
+		// curve (radar.mta.info style); otherwise the single capsule marker.
+		const consistDrawn = state.view.scale >= 1.6
+			&& drawConsist(rec, p, color, selected, filteredOut);
+		if (!consistDrawn) {
+			ctx.save();
+			if (filteredOut) ctx.globalAlpha = 0.25;
+			ctx.translate(sx, sy);
+			ctx.rotate(angle);
+			ctx.beginPath();
+			ctx.roundRect(-len / 2, -4, len, 8, 4);
+			ctx.fillStyle = color;
+			ctx.fill();
+			ctx.lineWidth = selected ? 2 : 1;
+			ctx.strokeStyle = selected ? "#ffffff" : "#0b0e14";
+			ctx.stroke();
+			if (rec.data.doors) { ctx.fillStyle = "#fff"; ctx.fillRect(-1.5, -4, 3, 8); }
+			ctx.restore();
+		}
 
 		if (state.layers.trainLabels && state.view.scale > 0.5 && rec.route && !filteredOut) {
 			const ls = uiScale();
@@ -632,6 +683,69 @@ function frame() {
 	if (!DEMO && state.lastEventAt && now() - state.lastEventAt > 5000) setStatus("connecting");
 
 	requestAnimationFrame(frame);
+}
+
+/**
+ * Individual cars laid back along the head's rail curve — we know every car's real
+ * length from the consist. The head sits at the interpolated rail parameter; each
+ * car centre steps backwards (against the travel direction in parameter space,
+ * remembered across stops via rec.lastDir) and takes its angle from the local
+ * tangent, so a train wraps visibly around curves. Cars hanging past the rail's
+ * ends extend along the end tangent instead of snapping. Returns false when the
+ * rail or consist is unknown (caller falls back to the capsule).
+ */
+function drawConsist(rec, p, color, selected, dimmed) {
+	if (!rec.consist || !p.rail || p.railT === undefined || p.railT < 0) return false;
+	const r = state.rails.get(p.rail);
+	if (!r || r.points.length < 2) return false;
+	const lengths = (rec.consist.carLengths && rec.consist.carLengths.length)
+		? rec.consist.carLengths
+		: (rec.consist.cars || []).map(() => 16);
+	if (!lengths.length) return false;
+	if (p.paramDir) rec.lastDir = p.paramDir;
+	const dir = rec.lastDir || 1;
+	const L = r.cum[r.cum.length - 1] || 1;
+	const scale = state.view.scale;
+	const carH = Math.max(4.5, Math.min(11, 3 * scale)) * (uiScale() > 1.2 ? 1.15 : 1);
+	const headDist = p.railT * L;
+	let offset = 0;
+	ctx.save();
+	if (dimmed) ctx.globalAlpha = 0.25;
+	for (let i = 0; i < lengths.length; i++) {
+		const len = lengths[i];
+		const centerDist = headDist - dir * (offset + len / 2);
+		offset += len + 0.8;
+		const c = railDistPoint(r, centerDist);
+		const fwd = railDistPoint(r, centerDist + dir * len * 0.45);
+		const back = railDistPoint(r, centerDist - dir * len * 0.45);
+		if (!c || !fwd || !back) continue;
+		const [cx, cy] = worldToScreen(c.x, c.z);
+		const carAngle = Math.atan2(fwd.z - back.z, fwd.x - back.x);
+		const carW = Math.max(5, len * scale * 0.9);
+		ctx.save();
+		ctx.translate(cx, cy);
+		ctx.rotate(carAngle);
+		ctx.beginPath();
+		ctx.roundRect(-carW / 2, -carH / 2, carW, carH, Math.min(3, carH / 2));
+		ctx.fillStyle = color;
+		ctx.fill();
+		ctx.lineWidth = selected ? 2 : 1;
+		ctx.strokeStyle = selected ? "#ffffff" : "#0b0e14";
+		ctx.stroke();
+		if (i === 0) {
+			// darker nose on the leading end so the direction reads at a glance
+			const nose = Math.min(5, carW * 0.2);
+			ctx.fillStyle = "rgba(11,14,20,.65)";
+			ctx.fillRect(carW / 2 - nose, -carH / 2 + 1, nose, carH - 2);
+		}
+		if (rec.data.doors) {
+			ctx.fillStyle = "#fff";
+			ctx.fillRect(-1.2, -carH / 2, 2.4, carH);
+		}
+		ctx.restore();
+	}
+	ctx.restore();
+	return true;
 }
 
 /* ---------- interaction ---------- */
@@ -2106,7 +2220,7 @@ function bootDemo() {
 			rail: boatLoop[boat.li], railT: boat.t, doors: false, dwellMs: 0,
 			devMs: 0, manual: false, stop: 0,
 			route: { id: "rt2", name: "Harbor Ferry", number: "F", color: 0x3fc1c9, dest: "Harbor North", nextStation: "Harbor North" },
-			consist: { sidingId: "sd2", siding: "Dock", depot: "Ferry Dock", cars: ["boat_1"] },
+			consist: { sidingId: "sd2", siding: "Dock", depot: "Ferry Dock", cars: ["boat_1"], carLengths: [12] },
 		};
 		const vehicles = trains.map((tr, ti) => {
 			tr.t += 0.04 * (tr.kmh / 60);
@@ -2122,7 +2236,7 @@ function bootDemo() {
 				devMs: tr.devMs, manual: tr.id === "v2", stop: tr.li,
 				pPlat: "pn" + (seg + 1), nPlat: "pn" + (seg + 2), pFrac: Math.round((phase - seg) * 1000) / 1000,
 				route: { id: "rt1n", name: "Demo Express|演示||Northbound", number: "4", color: 0x00933c, dest: "Harbor North", nextStation: tr.li < 4 ? "Harbor North" : "Baker City Central|贝克城" },
-				consist: { sidingId: "sd1", siding: "S1", depot: "Demo Depot", cars: ["m7_a", "m7_b", "m7_b", "m7_a"] },
+				consist: { sidingId: "sd1", siding: "S1", depot: "Demo Depot", cars: ["m7_a", "m7_b", "m7_b", "m7_a"], carLengths: [19.2, 19.2, 19.2, 19.2] },
 			};
 		});
 		vehicles.push(boatVehicle);

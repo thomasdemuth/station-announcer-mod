@@ -6,6 +6,7 @@
     "tube": "station_announcer:block/turnstile_tube",
     "arm": "station_announcer:block/turnstile_arm",
     "lamp": "station_announcer:block/turnstile_lamp",
+    "picto": "station_announcer:block/turnstile_picto",
     "sign": "station_announcer:block/turnstile_sign",
     "sign_exit": "station_announcer:block/turnstile_sign_exit",
     "particle": "station_announcer:block/turnstile_steel"
@@ -13,121 +14,141 @@
   "elements": [
     {
       "from": [
-        1.5,
-        7.6,
-        3.55
+        0.9,
+        7.0,
+        3.45
       ],
       "to": [
-        3.5,
-        9.4,
-        4.1
+        4.1,
+        9.6,
+        4.05
       ],
       "faces": {
         "north": {
-          "texture": "#lamp",
+          "texture": "#picto",
           "uv": [
-            5,
-            12.75,
-            11,
-            15.25
+            12,
+            25,
+            20,
+            31
+          ]
+        },
+        "south": {
+          "texture": "#picto",
+          "uv": [
+            0.25,
+            24.25,
+            1.75,
+            25.75
           ]
         },
         "east": {
-          "texture": "#lamp",
+          "texture": "#picto",
           "uv": [
-            5,
-            12.75,
-            11,
-            15.25
+            0.25,
+            24.25,
+            1.75,
+            25.75
           ]
         },
         "west": {
-          "texture": "#lamp",
+          "texture": "#picto",
           "uv": [
-            5,
-            12.75,
-            11,
-            15.25
+            0.25,
+            24.25,
+            1.75,
+            25.75
           ]
         },
         "up": {
-          "texture": "#lamp",
+          "texture": "#picto",
           "uv": [
-            5,
-            12.75,
-            11,
-            15.25
+            0.25,
+            24.25,
+            1.75,
+            25.75
           ]
         },
         "down": {
-          "texture": "#lamp",
+          "texture": "#picto",
           "uv": [
-            5,
-            12.75,
-            11,
-            15.25
+            0.25,
+            24.25,
+            1.75,
+            25.75
           ]
         }
-      }
+      },
+      "shade": false
     },
     {
       "from": [
-        1.5,
-        7.6,
-        11.9
+        0.9,
+        7.0,
+        11.95
       ],
       "to": [
-        3.5,
-        9.4,
-        12.45
+        4.1,
+        9.6,
+        12.55
       ],
       "faces": {
-        "south": {
-          "texture": "#lamp",
+        "north": {
+          "texture": "#picto",
           "uv": [
-            5,
-            12.75,
-            11,
-            15.25
+            0.25,
+            24.25,
+            1.75,
+            25.75
+          ]
+        },
+        "south": {
+          "texture": "#picto",
+          "uv": [
+            12,
+            25,
+            20,
+            31
           ]
         },
         "east": {
-          "texture": "#lamp",
+          "texture": "#picto",
           "uv": [
-            5,
-            12.75,
-            11,
-            15.25
+            0.25,
+            24.25,
+            1.75,
+            25.75
           ]
         },
         "west": {
-          "texture": "#lamp",
+          "texture": "#picto",
           "uv": [
-            5,
-            12.75,
-            11,
-            15.25
+            0.25,
+            24.25,
+            1.75,
+            25.75
           ]
         },
         "up": {
-          "texture": "#lamp",
+          "texture": "#picto",
           "uv": [
-            5,
-            12.75,
-            11,
-            15.25
+            0.25,
+            24.25,
+            1.75,
+            25.75
           ]
         },
         "down": {
-          "texture": "#lamp",
+          "texture": "#picto",
           "uv": [
-            5,
-            12.75,
-            11,
-            15.25
+            0.25,
+            24.25,
+            1.75,
+            25.75
           ]
         }
-      }
+      },
+      "shade": false
     }
   ]
 }

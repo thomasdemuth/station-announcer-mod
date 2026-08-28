@@ -2499,3 +2499,31 @@ state inspection rather than screenshots — worth one visual look in game.
 Backlog (not built): direction arrowheads, grayscale mode, CSV export, trip-id
 labels, schedule-extrapolated live tips, per-dimension alert filtering,
 keyboard/narration accessibility for the hand-drawn chips.
+
+## Dispatch web UI round 4 — consist rendering + wrong-way glide fix (2026-08-27)
+
+**Wrong-way glide (bug, root-caused).** The interpolator slides trains along the
+rail polyline by railT, but railT measures progress along the PATH SEGMENT while
+the polyline has the rail's own canonical direction — a train traversing a rail
+against it interpolated BACKWARDS along the curve, then snapped at the rail
+boundary ("glides the wrong way and then jumps"). Fix at sample ingestion: map
+both railT and 1−railT through the polyline and keep whichever lands nearer the
+sample's true world position (0.5-block hysteresis so near-symmetric midpoints
+don't flap). vehiclePos also now returns {rail, railT, paramDir} so downstream
+consumers share the corrected parameter.
+
+**Car-level rendering (radar.mta.info style).** The sampler snapshots per-car
+lengths (`VehicleCar.getLength()`, static consist block, `carLengths` in the SSE
+consist JSON). At view scale ≥1.6 with a known rail the marker becomes the real
+consist: each car steps back from the head along the rail curve by its actual
+length (+0.8 gap), takes its angle from the local tangent (wraps around curves),
+extends linearly past rail ends via the new railDistPoint() (no snapping while a
+long train straddles rails), keeps a darker nose on the leading car, per-car
+doors-open stripes, selection outline, and the line-filter dimming. Travel
+direction in parameter space persists across stops via rec.lastDir. Fallback to
+the capsule whenever rail/consist is unknown.
+
+Verified in ?demo=1 with the pane visible: 4-car consists render with gaps, glide
+smoothly, articulate past a bend, boat renders as a single 12-block car. The
+orientation fix itself cannot be reproduced in demo (demo railT is generated from
+the polylines) — watch a real reversed-rail stretch in game.

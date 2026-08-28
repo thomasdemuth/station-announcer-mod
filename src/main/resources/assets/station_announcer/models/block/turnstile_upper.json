@@ -6,6 +6,7 @@
     "tube": "station_announcer:block/turnstile_tube",
     "arm": "station_announcer:block/turnstile_arm",
     "lamp": "station_announcer:block/turnstile_lamp",
+    "picto": "station_announcer:block/turnstile_picto",
     "sign": "station_announcer:block/turnstile_sign",
     "sign_exit": "station_announcer:block/turnstile_sign_exit",
     "particle": "station_announcer:block/turnstile_steel"
@@ -136,6 +137,142 @@
             11.0
           ]
         }
+      }
+    },
+    {
+      "from": [
+        0.8,
+        11,
+        3.9
+      ],
+      "to": [
+        4.2,
+        12.6,
+        6.9
+      ],
+      "faces": {
+        "north": {
+          "texture": "#face",
+          "uv": [
+            0.5,
+            0.25,
+            4.5,
+            2.25
+          ]
+        },
+        "south": {
+          "texture": "#face",
+          "uv": [
+            5.5,
+            0.25,
+            9.5,
+            2.25
+          ]
+        },
+        "east": {
+          "texture": "#face",
+          "uv": [
+            20.5,
+            0.5,
+            24,
+            2.5
+          ]
+        },
+        "west": {
+          "texture": "#face",
+          "uv": [
+            20.5,
+            0.5,
+            24,
+            2.5
+          ]
+        },
+        "up": {
+          "texture": "#face",
+          "uv": [
+            1,
+            7.4,
+            9,
+            10.6
+          ]
+        }
+      },
+      "rotation": {
+        "origin": [
+          2.5,
+          11,
+          5.4
+        ],
+        "axis": "x",
+        "angle": -22.5
+      }
+    },
+    {
+      "from": [
+        0.8,
+        11,
+        9.1
+      ],
+      "to": [
+        4.2,
+        12.6,
+        12.1
+      ],
+      "faces": {
+        "north": {
+          "texture": "#face",
+          "uv": [
+            0.5,
+            0.25,
+            4.5,
+            2.25
+          ]
+        },
+        "south": {
+          "texture": "#face",
+          "uv": [
+            5.5,
+            0.25,
+            9.5,
+            2.25
+          ]
+        },
+        "east": {
+          "texture": "#face",
+          "uv": [
+            20.5,
+            0.5,
+            24,
+            2.5
+          ]
+        },
+        "west": {
+          "texture": "#face",
+          "uv": [
+            20.5,
+            0.5,
+            24,
+            2.5
+          ]
+        },
+        "up": {
+          "texture": "#face",
+          "uv": [
+            1,
+            7.4,
+            9,
+            10.6
+          ]
+        }
+      },
+      "rotation": {
+        "origin": [
+          2.5,
+          11,
+          10.6
+        ],
+        "axis": "x",
+        "angle": 22.5
       }
     },
     {

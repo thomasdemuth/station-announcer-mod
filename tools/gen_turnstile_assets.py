@@ -64,10 +64,16 @@ WAIT_CORE = (255, 214, 120, 255)
 
 
 def brushed(rows, x0, y0, x1, y1, base=STEEL, seed=0):
-    """Brushed stainless: fine vertical streaks, deterministic, tileable."""
-    tones = [base, STEEL_LIT, base, STEEL_DARK, base, STEEL_LIT, base, base]
+    """Brushed stainless: fine vertical streaks, deterministic, tileable.
+    Wider tonal range than the first pass (user: "too flat") — bright grain
+    lines and occasional deep seams, still strictly per-column so stacked
+    faces sampling the same window never band at a block seam."""
+    tones = [base, STEEL_LIT, base, STEEL_DARK, base, STEEL_BRIGHT, base,
+             STEEL_LIT, base, base, STEEL_DARK, base]
     for x in range(x0, x1):
         t = tones[(x * 7 + seed * 3) % len(tones)]
+        if (x * 11 + seed) % 13 == 5:
+            t = STEEL_SHADOW                 # deep brushed seam
         for y in range(y0, y1):
             rows[y][x] = t
 
@@ -93,15 +99,23 @@ def tex_face(exit_variant):
         pk.rect(rows, sx, 0, sx + 10, 20, PILLAR)
         pk.rect(rows, sx, 0, sx + 1, 20, PILLAR_LIT)      # lit edge column
         pk.rect(rows, sx + 9, 0, sx + 10, 20, (10, 10, 11, 255))
-        # screen window
+        # screen window: recessed bezel, glowing scanlined panel
+        pk.rect(rows, sx + 1, 1, sx + 9, 7, (8, 8, 9, 255))
         pk.rect(rows, sx + 2, 2, sx + 8, 6, SCREEN)
-        pk.rect(rows, sx + 2, 2, sx + 8, 3, SCREEN_GLOW)
-        # card slot
+        for y in range(2, 6, 2):
+            pk.rect(rows, sx + 2, y, sx + 8, y + 1, SCREEN_GLOW)
+        pk.rect(rows, sx + 2, 2, sx + 3, 6, (40, 62, 88, 255))
+        # card slot: steel throat with a lit lip and insert arrows
         pk.rect(rows, sx + 2, 8, sx + 8, 10, (8, 8, 9, 255))
         pk.rect(rows, sx + 3, 8, sx + 7, 9, SLOT)
-        # yellow tap target
-        pk.rect(rows, sx + 3, 12, sx + 7, 16, TAP_DARK)
-        pk.rect(rows, sx + 4, 13, sx + 6, 15, TAP)
+        rows[9][sx + 4] = SLOT
+        rows[9][sx + 6] = SLOT
+        # yellow tap target: concentric rings around a bright core
+        pk.rect(rows, sx + 2, 11, sx + 8, 17, TAP_DARK)
+        pk.rect(rows, sx + 3, 12, sx + 7, 16, TAP)
+        pk.rect(rows, sx + 4, 13, sx + 6, 15, TAP_DARK)
+        rows[14][sx + 5] = WHITE
+        rows[13][sx + 5] = TAP
     if exit_variant:
         # no-entry roundel-bar over the north strip's screen zone
         pk.rect(rows, 1, 1, 9, 8, RED)
@@ -109,8 +123,10 @@ def tex_face(exit_variant):
         # and the reader details only survive on the exit (south) side
         pk.rect(rows, 1, 8, 9, 20, PILLAR)
         pk.rect(rows, 0, 0, 1, 20, PILLAR_LIT)
-        pk.rect(rows, 3, 12, 7, 16, TAP_DARK)
-        pk.rect(rows, 4, 13, 6, 15, TAP)
+        pk.rect(rows, 2, 11, 8, 17, TAP_DARK)
+        pk.rect(rows, 3, 12, 7, 16, TAP)
+        pk.rect(rows, 4, 13, 6, 15, TAP_DARK)
+        rows[14][5] = WHITE
     # pillar side zone
     pk.rect(rows, 20, 0, 32, 20, PILLAR)
     pk.rect(rows, 20, 0, 21, 20, PILLAR_LIT)
@@ -171,7 +187,10 @@ def tex_sign(exit_variant):
     base = SIGN_RED if exit_variant else SIGN_GREEN
     dark = SIGN_RED_DARK if exit_variant else SIGN_GREEN_DARK
     rows = pk.canvas(32, 32, base)            # square: MC rejects 32x16
+    pk.rect(rows, 0, 0, 32, 1, dark)          # top border of the front zone
     pk.rect(rows, 0, 7, 32, 8, dark)          # bottom shadow line of the front
+    pk.rect(rows, 0, 0, 1, 8, dark)           # side borders
+    pk.rect(rows, 31, 0, 32, 8, dark)
     label = "EXIT" if exit_variant else "ENTRY"
     width = pk.text_width(label)
     total = width + 5                          # label + arrow
@@ -202,6 +221,32 @@ def tex_lamp():
 # texel clear of its 4-row zone's edges so mips never bleed a neighbour zone
 UV_LAMP = {"off": [5, 0.75, 11, 3.25], "go": [5, 4.75, 11, 7.25],
            "stop": [5, 8.75, 11, 11.25], "wait": [5, 12.75, 11, 15.25]}
+
+
+def tex_picto():
+    """State pictogram sprite, 32px, four 8-row zones: off / go / stop /
+    wait. White symbols on saturated fields inside a darker border — the
+    MTR-barrier pattern (state = pictogram swap) scaled to our pillar plate
+    and the HEET lintel. Symbols sit horizontally centred with plain field
+    either side, so windows of different aspect all read cleanly."""
+    rows = pk.canvas(32, 32, (10, 11, 12, 255))
+
+    def zone(y0, field, dark):
+        pk.rect(rows, 0, y0, 32, y0 + 8, dark)
+        pk.rect(rows, 1, y0 + 1, 31, y0 + 7, field)
+
+    zone(0, (24, 26, 28, 255), (10, 11, 12, 255))          # off: dead panel
+    zone(8, SIGN_GREEN, SIGN_GREEN_DARK)                   # go: up arrow
+    pk.rect(rows, 15, 10, 17, 11, WHITE)                   # head tip
+    pk.rect(rows, 14, 11, 18, 12, WHITE)
+    pk.rect(rows, 13, 12, 19, 13, WHITE)
+    pk.rect(rows, 15, 13, 17, 15, WHITE)                   # shaft
+    zone(16, SIGN_RED, SIGN_RED_DARK)                      # stop: no-entry bar
+    pk.rect(rows, 9, 19, 23, 21, WHITE)
+    zone(24, WAIT, TAP_DARK)                               # wait: hold dot
+    pk.rect(rows, 14, 27, 18, 29, WHITE)
+    pk.rect(rows, 15, 26, 17, 30, WHITE)
+    return rows
 
 
 def icon(kind):
@@ -243,14 +288,20 @@ TEXTURES = {
     "tube": f"{MOD}:block/turnstile_tube",
     "arm": f"{MOD}:block/turnstile_arm",
     "lamp": f"{MOD}:block/turnstile_lamp",
+    "picto": f"{MOD}:block/turnstile_picto",
     "sign": f"{MOD}:block/turnstile_sign",
     "sign_exit": f"{MOD}:block/turnstile_sign_exit",
     "particle": f"{MOD}:block/turnstile_steel",
 }
 
 
-def elem(frm, to, faces):
-    return {"from": list(frm), "to": list(to), "faces": faces}
+def elem(frm, to, faces, rotation=None, shade=None):
+    e = {"from": list(frm), "to": list(to), "faces": faces}
+    if rotation:
+        e["rotation"] = rotation
+    if shade is not None:
+        e["shade"] = shade
+    return e
 
 
 def f(tex, uv, cull=None):
@@ -336,36 +387,57 @@ def write_cabinet():
     model("turnstile_cabinet", els)
 
 
+RUBBER_UV = [13.2, 8, 15.4, 9.7]
+
+
+def rubber_faces(sides=("north", "south", "east", "west", "up", "down")):
+    return {s: f("arm", RUBBER_UV) for s in sides}
+
+
 def write_arm():
-    """The tripod arm cluster on the cabinet's lane side. Same pose as ever:
-    pivot housing, horizontal arm with rubber tip, drop arm."""
-    els = []
-    els.append(steel_box([3.5, 9, 6.5], [6, 13, 9.5], seed_v=7.0))
-    # horizontal arm: cylinder gradient rows; tip columns are the rubber grip
+    """The tripod, rebuilt as the real resting pose from the photos: a cast
+    collar on the cabinet side, a 45°-TILTED SPINDLE BOSS (the actual axis of
+    a NYC tripod points up-and-forward at 45°), one horizontal blocking arm
+    across the lane, and one straight bar through the hub rotated 45° the
+    other way — its two ends are the photos' down-forward and up-back arms,
+    and being perpendicular to the spindle it is geometrically exactly where
+    a resting tripod's other two arms sit (collapsed onto one line: vanilla
+    rotations are single-axis, 120° spacing is not available). Every arm end
+    wears a rubber tip. Rotated elements skip the octagonal twin (the slope
+    rule); at 1.4 px nobody can tell."""
+    HUB_Y, HUB_Z = 13.0, 8.0
     arm_side = f("arm", [1, 2, 9.5, 3.5])
-    els.append(elem([6, 10.5, 6.9], [14.5, 12, 9.1], {
+    els = []
+    # cast collar against the cabinet side (west face buried in the body)
+    els.append(steel_box([4.4, HUB_Y - 1.9, HUB_Z - 1.9],
+                         [5.4, HUB_Y + 1.9, HUB_Z + 1.9], omit=("west",), seed_v=7.0))
+    # tilted spindle boss: authored along y, rotated +45 about x → points
+    # up-forward, perpendicular to both arm lines below
+    els.append(elem([5.2, HUB_Y - 2.4, HUB_Z - 1.1], [7.0, HUB_Y + 2.4, HUB_Z + 1.1], {
+        "north": f("arm", [1, 1, 2.8, 5.8]),
+        "south": f("arm", [1, 1, 2.8, 5.8]),
+        "east": f("arm", [3, 1, 5.2, 5.8]),
+        "west": f("arm", [3, 1, 5.2, 5.8]),
+        "up": f("arm", [1, 0.5, 2.8, 2.7]),
+        "down": f("arm", [1, 3.5, 2.8, 5.7]),
+    }, rotation={"origin": [6.1, HUB_Y, HUB_Z], "axis": "x", "angle": 45}))
+    # horizontal blocking arm across the lane (octagonal: core + 45° twin)
+    els += octo_tube([6.2, HUB_Y - 0.7, HUB_Z - 0.7],
+                     [13.6, HUB_Y + 0.7, HUB_Z + 0.7], "x")
+    els.append(elem([13.5, HUB_Y - 0.85, HUB_Z - 0.85],
+                    [15.0, HUB_Y + 0.85, HUB_Z + 0.85], rubber_faces()))
+    # the through-bar: authored vertical, rotated −45 about x at the hub —
+    # top end lands up-back, bottom end down-forward, both in the y-z plane
+    diag_rot = {"origin": [6.1, HUB_Y, HUB_Z], "axis": "x", "angle": -45}
+    els.append(elem([5.4, HUB_Y - 5.8, HUB_Z - 0.7], [6.8, HUB_Y + 5.8, HUB_Z + 0.7], {
         "north": arm_side, "south": arm_side,
-        "east": f("arm", [13.5, 2, 15.5, 3.5]),
-        "up": f("arm", [1, 0.5, 9.5, 2]),
-        "down": f("arm", [1, 3.5, 9.5, 5]),
-    }))
-    els.append(elem([12.4, 10.4, 6.8], [14.6, 12.1, 9.2], {   # rubber tip sleeve
-        "north": f("arm", [13.2, 8, 15.4, 9.7]),
-        "south": f("arm", [13.2, 8, 15.4, 9.7]),
-        "east": f("arm", [13.2, 8, 15.4, 9.7]),
-        "west": f("arm", [13.2, 8, 15.4, 9.7]),
-        "up": f("arm", [13.2, 8, 15.4, 9.7]),
-        "down": f("arm", [13.2, 8, 15.4, 9.7]),
-    }))
-    # drop arm, slightly slimmer, steel
-    els.append(steel_box([6, 6.5, 7.3], [7.8, 10.5, 8.7], seed_v=9.0))
-    els.append(elem([5.9, 5.9, 7.2], [7.9, 6.6, 8.8], {      # rubber tip cap
-        "north": f("arm", [13.2, 8, 15.4, 8.6]),
-        "south": f("arm", [13.2, 8, 15.4, 8.6]),
-        "east": f("arm", [13.2, 8, 15.4, 8.6]),
-        "west": f("arm", [13.2, 8, 15.4, 8.6]),
-        "down": f("arm", [13.2, 8, 15.4, 9.7]),
-    }))
+        "east": f("arm", [1, 0.5, 9.5, 2]),
+        "west": f("arm", [1, 3.5, 9.5, 5]),
+    }, rotation=diag_rot))
+    els.append(elem([5.25, HUB_Y - 7.3, HUB_Z - 0.85],
+                    [6.95, HUB_Y - 5.8, HUB_Z + 0.85], rubber_faces(), rotation=diag_rot))
+    els.append(elem([5.25, HUB_Y + 5.8, HUB_Z - 0.85],
+                    [6.95, HUB_Y + 7.3, HUB_Z + 0.85], rubber_faces(), rotation=diag_rot))
     model("turnstile_arm", els)
 
 
@@ -383,6 +455,17 @@ def pillar_elements(exit_variant):
         "down": f(tex, [10.5, 0.5, 14.5, 4.5]),
     }))
     els.append(steel_box([0, 10, 3.5], [5, 11, 12.5], seed_v=2.0))
+    # angled swipe-reader heads on the cap, one facing each approach — the
+    # iconic MetroCard reader tilt (22.5° is vanilla's nearest step). The
+    # tilted top face carries the card-slot art; they flank the riser foot.
+    for z0, z1, angle, oz in ((3.9, 6.9, -22.5, 5.4), (9.1, 12.1, 22.5, 10.6)):
+        els.append(elem([0.8, 11, z0], [4.2, 12.6, z1], {
+            "north": f("face", [0.5, 0.25, 4.5, 2.25]),
+            "south": f("face", [5.5, 0.25, 9.5, 2.25]),
+            "east": f("face", [10.5, 0.5, 12.5, 1.5]),
+            "west": f("face", [10.5, 0.5, 12.5, 1.5]),
+            "up": f("face", [0.75, 3.6, 4.75, 5.2]),
+        }, rotation={"origin": [2.5, 11, oz], "axis": "x", "angle": angle}))
     # slim octagonal riser pipe up into the corner fitting at the rail plane
     # (photo: thin stanchion with a mounting collar at its foot and a cast
     # elbow where it turns into the rail). Down faces buried on the cap.
@@ -392,39 +475,68 @@ def pillar_elements(exit_variant):
     return els
 
 
-def lamp_models(prefix, boxes):
-    """off/go/stop lens models: same boxes, different uv zone. `boxes` is a
-    list of (frm, to, faces) where faces maps face name -> True; every listed
-    face samples the zone window."""
+UV_PICTO_Y = {"off": 0, "go": 8, "stop": 16, "wait": 24}
+
+
+def picto_plate(frm, to, face_dir, u0, u1, state_y):
+    """A status sign plate: the outward face samples the state's pictogram
+    zone, every other face the zone's dark border corner. shade:false so
+    the sign reads flat-lit from any angle — MTR's own barrier trick."""
+    edge = f("picto", [0.25, state_y + 0.25, 1.75, state_y + 1.75])
+    faces = {s: edge for s in ("north", "south", "east", "west", "up", "down")}
+    faces[face_dir] = f("picto", [u0, state_y + 1, u1, state_y + 7])
+    return elem(frm, to, faces, shade=False)
+
+
+def lamp_models(prefix, boxes, plates=()):
+    """Per-state indicator models. `boxes` are small lens boxes sampling the
+    lamp sprite's zone; `plates` are (frm, to, face_dir, u0, u1) pictogram
+    signs sampling the picto sprite's zone. All shade:false — lenses and lit
+    signs must not go dull on north faces."""
     for state, uv in UV_LAMP.items():
         els = []
         for frm, to, sides in boxes:
             faces = {s: f("lamp", uv) for s in sides}
-            els.append(elem(frm, to, faces))
+            els.append(elem(frm, to, faces, shade=False))
+        for frm, to, face_dir, u0, u1 in plates:
+            els.append(picto_plate(frm, to, face_dir, u0, u1, UV_PICTO_Y[state]))
         model(f"{prefix}_lamp_{state}", els)
 
 
 def write_upper_and_lamps():
     model("turnstile_upper", pillar_elements(False))
     model("turnstile_upper_exit", pillar_elements(True))
-    # lens sits proud of the pillar front and back, near the cap
-    lamp_models("turnstile", [
-        ([1.5, 7.6, 3.55], [3.5, 9.4, 4.1], ("north", "east", "west", "up", "down")),
-        ([1.5, 7.6, 11.9], [3.5, 9.4, 12.45], ("south", "east", "west", "up", "down")),
+    # the pillar's status display is now one pictogram plate per approach
+    # face (replacing the old 2-px lens): green up arrow / red bar / amber
+    # dot, proud over the screen zone
+    lamp_models("turnstile", [], plates=[
+        ([0.9, 7.0, 3.45], [4.1, 9.6, 4.05], "north", 12, 20),
+        ([0.9, 7.0, 11.95], [4.1, 9.6, 12.55], "south", 12, 20),
     ])
 
 
 def sign_plate(exit_variant):
     """The lane signboard hanging under the rail, centred over the walkway —
-    the 86 St photo's green 'Entry' board (red EXIT on exit-only lanes)."""
+    the 86 St photo's green 'Entry' board (red EXIT on exit-only lanes).
+    Bigger than the first pass and hung on two visible straps whose tops
+    bury inside the rail, instead of butting straight against it."""
     tex = "sign_exit" if exit_variant else "sign"
     front = f(tex, [0, 0, 16, 4])
     back = f(tex, [0, 4.25, 16, 7.75])
     edge = f(tex, [2, 4.5, 4, 7.5])
-    return [elem([6, 19.8, 7.7], [14, 22.1, 8.3], {
+    lid = f(tex, [2, 4.5, 15, 5.1])
+    els = [elem([5.5, 19.2, 7.65], [15.5, 21.8, 8.35], {
         "north": front, "south": back,
-        "east": edge, "west": edge, "down": f(tex, [2, 4.5, 15, 5.1]),
+        "east": edge, "west": edge, "up": lid, "down": lid,
     })]
+    for x in (6.8, 13.5):
+        els.append(elem([x, 21.7, 7.8], [x + 0.7, 23.2, 8.2], {
+            "north": f(tex, [2, 4.75, 2.7, 6.25]),
+            "south": f(tex, [2, 4.75, 2.7, 6.25]),
+            "east": f(tex, [2.2, 4.75, 2.6, 6.25]),
+            "west": f(tex, [2.2, 4.75, 2.6, 6.25]),
+        }))
+    return els
 
 
 def write_tubes():
@@ -475,10 +587,12 @@ def write_caps():
     model("turnstile_cap_upper", els)
 
 
-def heet_sides(y0, y1, top_buried=False):
-    """The two full-height side frames: corner posts + vertical bars, inset
-    0.25 from the block edges so nothing sits on a boundary plane. With
-    top_buried the up faces are omitted (the roof plate covers them)."""
+def heet_sides(y0, y1, top_buried=False, waist_rail=False):
+    """The two full-height side frames: corner posts + five slim vertical
+    bars on a 2-px pitch (denser, closer to the photos' cage) + an optional
+    proud waist rail band. Everything inset 0.25 from the block edges so
+    nothing sits on a boundary plane. With top_buried the up faces are
+    omitted (the roof plate covers them)."""
     els = []
     post_omit = ("down",)                 # continues from / into the other half
     if top_buried:
@@ -488,42 +602,60 @@ def heet_sides(y0, y1, top_buried=False):
     for x0, x1 in ((0.25, 1.75), (14.25, 15.75)):
         for z0, z1 in ((1, 2.5), (13.5, 15)):
             els.append(steel_box([x0, y0, z0], [x1, y1, z1], omit=post_omit, seed_v=2.5))
-        for z in (4.4, 7.2, 10.0, 12.4):   # vertical infill bars
-            els.append(steel_box([x0 + 0.15, y0, z], [x1 - 0.15, y1, z + 1.2],
+        for z in (3.5, 5.5, 7.5, 9.5, 11.5):   # vertical infill bars, 1 on 1
+            els.append(steel_box([x0 + 0.2, y0, z], [x1 - 0.2, y1, z + 1.0],
                                  omit=("up", "down"), seed_v=8.0))
+        if waist_rail:
+            # proud horizontal band at hip height; wider than the bars so
+            # they bury inside it (never coplanar), ends buried in the posts
+            els.append(steel_box([x0 + 0.05, 7.4, 2.3], [x1 - 0.05, 8.6, 13.7],
+                                 seed_v=5.0))
     return els
 
 
 def heet_rotor(y_top):
-    """Centre shaft + four comb wings (axis-aligned; the gate reads rotated
-    just fine and voxel models cannot do 120 degrees). The shaft's ends are
-    always buried (other half below, roof plate or the next block above)."""
-    els = [steel_box([6.5, 0, 6.5], [9.5, y_top, 9.5], omit=("up", "down"), seed_v=10.0)]
-    for y in (2.0, 5.2, 8.4, 11.6):
-        if y + 1.2 > y_top:
+    """Centre drum + four comb wings. The drum reads ROUND (core + 45° twin
+    about y, the octagonal-pole trick); each wing is a stack of slim
+    horizontal prongs every 2.4 px whose free end wears a dark rubber cap
+    face — the real HEET's interleaving comb. The drum's ends are always
+    buried (other half below, roof plate or the next block above)."""
+    drum_side = f("steel", [0.75, 2, 3.55, 14.5])
+    drum_faces = {s: drum_side for s in ("north", "south", "east", "west")}
+    els = [elem([6.6, 0, 6.6], [9.4, y_top, 9.4], dict(drum_faces)),
+           elem([6.6, 0, 6.6], [9.4, y_top, 9.4], dict(drum_faces),
+                rotation={"origin": [8, y_top / 2, 8], "axis": "y", "angle": 45})]
+    for y in (1.4, 3.8, 6.2, 8.6, 11.0, 13.4):
+        if y + 1.0 > y_top:
             continue
-        arm_o = ("up", "down")
-        els.append(steel_box([9.5, y, 7.25], [13.9, y + 1.2, 8.75], seed_v=11.0))
-        els.append(steel_box([2.1, y, 7.25], [6.5, y + 1.2, 8.75], seed_v=11.0))
-        els.append(steel_box([7.25, y, 9.5], [8.75, y + 1.2, 13.9], seed_v=11.0))
-        els.append(steel_box([7.25, y, 2.1], [8.75, y + 1.2, 6.5], seed_v=11.0))
+        for frm, to, buried, cap in (
+                ([9.4, y, 7.35], [13.9, y + 1.0, 8.65], "west", "east"),
+                ([2.1, y, 7.35], [6.6, y + 1.0, 8.65], "east", "west"),
+                ([7.35, y, 9.4], [8.65, y + 1.0, 13.9], "north", "south"),
+                ([7.35, y, 2.1], [8.65, y + 1.0, 6.6], "south", "north")):
+            prong = steel_box(frm, to, omit=(buried,), seed_v=11.0)
+            prong["faces"][cap] = f("arm", RUBBER_UV)
+            els.append(prong)
     return els
 
 
 def write_heet():
-    lower = heet_sides(0, 16) + heet_rotor(16)
+    lower = heet_sides(0, 16, waist_rail=True) + heet_rotor(16)
     model("turnstile_heet_lower", lower)
     upper = heet_sides(0, 13, top_buried=True) + heet_rotor(13)
     # roof plate sits directly on the frame; everything under it omits its
     # up face, so nothing z-fights and no daylight band shows above the bars
     upper.append(steel_box([0, 13, 0.75], [16, 15, 15.25], seed_v=3.5))
     model("turnstile_heet_upper", upper)
-    # lenses on both approach faces of both posts (upper half, near the plate)
+    # small lenses on both approach faces of both posts, plus the photos'
+    # lit lintel signs on the roof fascia: green arrow / red bar per state
     lamp_models("turnstile_heet", [
         ([0.4, 10.5, 0.7], [1.6, 12, 1.25], ("north", "east", "west", "up", "down")),
         ([14.4, 10.5, 0.7], [15.6, 12, 1.25], ("north", "east", "west", "up", "down")),
         ([0.4, 10.5, 14.75], [1.6, 12, 15.3], ("south", "east", "west", "up", "down")),
         ([14.4, 10.5, 14.75], [15.6, 12, 15.3], ("south", "east", "west", "up", "down")),
+    ], plates=[
+        ([5, 13.2, 0.2], [11, 14.8, 0.8], "north", 5, 27),
+        ([5, 13.2, 15.2], [11, 14.8, 15.8], "south", 5, 27),
     ])
 
 
@@ -665,6 +797,7 @@ def main():
         "turnstile_arm": tex_arm(),
         "turnstile_tube": tex_tube(),
         "turnstile_lamp": tex_lamp(),
+        "turnstile_picto": tex_picto(),
         "turnstile_sign": tex_sign(False),
         "turnstile_sign_exit": tex_sign(True),
     }
