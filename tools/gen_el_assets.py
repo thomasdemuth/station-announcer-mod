@@ -490,62 +490,50 @@ PLATFORM_TEX = {
 
 
 def windscreen_panel_elements():
-    """Classic: beige panel below, wired-glass band above, green rails."""
-    els = []
-    els.append(elem([0, 0.5, 7.3], [16, 9.5, 8.7], {          # panel
-        "north": f("screen", [0, 0.25, 16, 6.75]),
-        "south": f("screen", [0, 0.25, 16, 6.75]),
-    }))
-    els.append(elem([0, 9.5, 7.5], [16, 13.5, 8.5], {          # glazing band
-        "north": f("screen", [0, 7.1, 16, 11.9]),
-        "south": f("screen", [0, 7.1, 16, 11.9]),
-    }))
-    for y0, y1 in ((0, 0.9), (13.5, 14.6)):                    # rails
-        els.append(elem([0, y0, 7.1], [16, y1, 8.9], {
-            "north": f("screen", [0, 12.2, 16, 12.9]),
-            "south": f("screen", [0, 12.2, 16, 12.9]),
-            "up": f("screen", [0, 12.2, 16, 13.1]),
-            "down": f("screen", [0, 12.2, 16, 13.1]),
-        }))
-    return els
+    """Classic: beige panel below, wired-glass band above. FULL BLOCK HEIGHT
+    now — screens stack into a tall wall (the old 14.6-px screen read as a
+    fence); the separate rail/kick models cap the stack's top and foot."""
+    return [
+        elem([0, 0, 7.3], [16, 10.2, 8.7], {
+            "north": f("screen", [0, 0.25, 16, 6.75]),
+            "south": f("screen", [0, 0.25, 16, 6.75]),
+        }),
+        elem([0, 10.2, 7.5], [16, 16, 8.5], {
+            "north": f("screen", [0, 7.1, 16, 11.9]),
+            "south": f("screen", [0, 7.1, 16, 11.9]),
+        }),
+    ]
 
 
 def windscreen_corrugated_elements():
-    els = []
     sheet = f("corru", [0, 0.25, 16, 13])
-    els.append(elem([0, 0.9, 7.4], [16, 13.5, 8.6], {"north": sheet, "south": sheet}))
-    for y0, y1 in ((0, 0.9), (13.5, 14.6)):
-        els.append(elem([0, y0, 7.1], [16, y1, 8.9], {
-            "north": f("corru", [0, 13.5, 16, 14.2]),
-            "south": f("corru", [0, 13.5, 16, 14.2]),
-            "up": f("corru", [0, 13.5, 16, 14.4]),
-            "down": f("corru", [0, 13.5, 16, 14.4]),
-        }))
-    return els
+    return [elem([0, 0, 7.4], [16, 16, 8.6], {"north": sheet, "south": sheet})]
 
 
 def windscreen_glass_elements():
-    els = []
     pane = f("glass", [0, 0, 16, 16])
-    els.append(elem([0, 1.2, 7.7], [16, 14.2, 8.3], {"north": pane, "south": pane}))
-    for y0, y1 in ((0, 1.2), (14.2, 15.4)):
-        els.append(elem([0, y0, 7.0], [16, y1, 9.0], {
-            "north": f("galv", [1, 5, 9, 5.6]), "south": f("galv", [1, 5, 9, 5.6]),
-            "up": f("galv", [1, 5, 9, 6]), "down": f("galv", [1, 5, 9, 6]),
-        }))
-    return els
+    return [elem([0, 0, 7.7], [16, 16, 8.3], {"north": pane, "south": pane})]
 
 
 def windscreen_mesh_elements():
-    els = []
     pane = f("mesh", [0, 0, 16, 16])
-    els.append(elem([0, 0.9, 7.8], [16, 14.6, 8.2], {"north": pane, "south": pane}))
-    for y0, y1 in ((0, 0.9), (14.6, 15.5)):
-        els.append(elem([0, y0, 7.2], [16, y1, 8.8], {
-            "north": f("galv", [1, 5, 9, 5.5]), "south": f("galv", [1, 5, 9, 5.5]),
-            "up": f("galv", [1, 5, 9, 5.9]), "down": f("galv", [1, 5, 9, 5.9]),
-        }))
-    return els
+    return [elem([0, 0, 7.8], [16, 16, 8.2], {"north": pane, "south": pane})]
+
+
+def screen_top_rail(ref):
+    """Handrail capping a screen stack's top block (up=false)."""
+    rail = f(ref, [0.25, 4.75, 15.75, 6] if ref == "body" else [1, 5, 9, 5.9])
+    return [elem([0, 14.6, 7.0], [16, 16, 9.0],
+                 {"north": rail, "south": rail, "up": rail, "down": rail})]
+
+
+def screen_kick(ref):
+    """Kick plate at a screen stack's foot (down=false)."""
+    kick = f(ref, [0.25, 5, 15.75, 6.2] if ref == "body" else [1, 5, 9, 6])
+    return [elem([0, 0, 7.05], [16, 1.2, 8.95], {
+        "north": kick, "south": kick, "up": kick,
+        "down": dict(kick, cullface="down"),
+    })]
 
 
 def railing_old_elements():
@@ -579,7 +567,7 @@ def railing_modern_elements():
 
 def canopy_post_shaft(ref="body"):
     """Slim square canopy post shaft (stacks; brackets cap the stack top)."""
-    face = f(ref, [13.6, 0.25, 14.4, 15.75])
+    face = f(ref, [12.4, 0.25, 15.4, 15.75])
     return [elem([6.6, 0, 6.6], [9.4, 16, 9.4],
                  {n: face for n in ("north", "south", "east", "west")})]
 
@@ -630,19 +618,26 @@ def canopy_fascia_elements(ref="body"):
 
 
 def canopy_gable_elements():
-    """Peaked standing-seam roof (Marcy style): two 22.5° planes + ridge,
-    authored low like the flat canopy."""
+    """Peaked standing-seam roof, REBUILT at a real 45° pitch (the first cut
+    rose 4.6 px and read as a flat slab with a kink): eave boards at y≈1,
+    two 45° planes climbing to a ridge cap at y≈9.5. Still authored low so
+    it lands on posts, still one continuous gable along a run."""
     els = []
-    for z0, angle, oz in ((0, -22.5, 1.0), (7.4, 22.5, 15.0)):
-        plane = f("roof", [0, 0.25, 16, 8.25])
-        els.append(elem([0, 0.6, z0], [16, 2.4, z0 + 8.6], {
+    plane = f("roof", [0, 0.25, 16, 15.75])
+    edge = f("roof", [0, 8.5, 16, 9.3])
+    for z0, z1, angle, oz in ((0.7, 11.0, -45, 0.7), (5.0, 15.3, 45, 15.3)):
+        els.append(elem([0, 1.0, z0], [16, 2.6, z1], {
             "up": plane, "down": plane,
-            "north": f("roof", [0, 8.5, 16, 9.3]),
-            "south": f("roof", [0, 8.5, 16, 9.3]),
-        }, rotation={"origin": [8, 1.5, oz], "axis": "x", "angle": angle}))
+            "north": edge, "south": edge,
+        }, rotation={"origin": [8, 1.8, oz], "axis": "x", "angle": angle}))
     ridge = f("roof", [0, 8.5, 16, 9.5])
-    els.append(elem([0, 3.4, 6.7], [16, 4.6, 9.3],
+    els.append(elem([0, 8.2, 6.8], [16, 9.9, 9.2],
                     {"north": ridge, "south": ridge, "up": ridge, "down": ridge}))
+    # eave boards closing the roof edges
+    board = f("roof", [0, 8.6, 16, 9.4])
+    for z0 in (0, 14.8):
+        els.append(elem([0, 0.6, z0], [16, 2.2, z0 + 1.2],
+                        {"north": board, "south": board, "down": board, "up": board}))
     # the truss tie chord under the ridge — real gables have one, and it is
     # the steel a hanging PIDS/sign stub lands on
     tie = f("body", [0.25, 5, 15.75, 6.2])
@@ -652,18 +647,19 @@ def canopy_gable_elements():
 
 
 def gable_end_elements():
-    """Open truss triangle closing a gable run's end (authored WEST): bottom
-    chord, two 22.5° sloped chords following the roof pitch, lattice web."""
+    """Open truss triangle closing a gable run's end (authored WEST),
+    following the rebuilt 45° pitch: bottom chord, two 45° rafter chords
+    meeting under the ridge, tall lattice web."""
     els = []
     chord = f("body", [0.25, 5, 15.75, 6.2])
     els.append(elem([0.2, 0.2, 0.8], [1.4, 1.5, 15.2],
                     {n: chord for n in ("north", "south", "east", "west", "up", "down")}))
-    for z0, angle, oz in ((0.8, -22.5, 1.6), (8.0, 22.5, 14.4)):
-        els.append(elem([0.2, 1.3, z0], [1.4, 2.6, z0 + 7.2],
+    for z0, z1, angle, oz in ((0.9, 10.9, -45, 0.9), (5.1, 15.1, 45, 15.1)):
+        els.append(elem([0.2, 1.3, z0], [1.4, 2.6, z1],
                         {n: chord for n in ("north", "south", "east", "west", "up", "down")},
-                        rotation={"origin": [0.8, 1.9, oz], "axis": "x", "angle": angle}))
-    lat = f("lattice", [2, 4, 14, 8])
-    els.append(elem([0.5, 1.4, 3.4], [1.1, 3.2, 12.6], {"east": lat, "west": lat}))
+                        rotation={"origin": [0.8, 1.95, oz], "axis": "x", "angle": angle}))
+    lat = f("lattice", [2, 2, 14, 10])
+    els.append(elem([0.5, 1.4, 3.2], [1.1, 6.4, 12.8], {"east": lat, "west": lat}))
     return els
 
 
@@ -691,9 +687,10 @@ def name_board_elements():
     return els
 
 
-def platform_screen_blockstate(panel, post_left, post_right):
+def platform_screen_blockstate(panel, post_left, post_right, rail, kick):
     """Merging run: panel always, LEFT post always (shared at each joint),
-    RIGHT post only where the run ends — gate-wall rhythm."""
+    RIGHT post only where the run ends — gate-wall rhythm. Screens also
+    stack: the rail caps the top of a stack, the kick sits at its foot."""
     parts = []
     for facing, rot in (("north", 0), ("east", 90), ("south", 180), ("west", 270)):
         def ap(mdl):
@@ -704,6 +701,8 @@ def platform_screen_blockstate(panel, post_left, post_right):
         parts.append({"when": {"facing": facing}, "apply": ap(panel)})
         parts.append({"when": {"facing": facing}, "apply": ap(post_left)})
         parts.append({"when": {"facing": facing, "right": "false"}, "apply": ap(post_right)})
+        parts.append({"when": {"facing": facing, "up": "false"}, "apply": ap(rail)})
+        parts.append({"when": {"facing": facing, "down": "false"}, "apply": ap(kick)})
     return {"multipart": parts}
 
 
@@ -764,8 +763,12 @@ def build_platform(g, assets_root):
         for x0, side in ((0.0, "left"), (14.4, "right")):
             face = f(ref, [1, 4.75, 1.8, 12.75])
             pm(f"el_screen_post_{side}{suffix}",
-               [elem([x0, 0, 6.9], [x0 + 1.6, 15.5, 9.1],
+               [elem([x0, 0, 6.9], [x0 + 1.6, 16, 9.1],
                      {n: face for n in ("north", "south", "east", "west")})])
+    pm("el_screen_rail", screen_top_rail("body"))
+    pm("el_screen_rail_silver", screen_top_rail("galv"))
+    pm("el_screen_kick", screen_kick("body"))
+    pm("el_screen_kick_silver", screen_kick("galv"))
     pm("el_railing_pipe_panel", railing_old_elements())
     pm("el_railing_modern_panel", railing_modern_elements())
     pm("el_canopy_post_shaft", canopy_post_shaft("body"))
@@ -787,10 +790,11 @@ def build_platform(g, assets_root):
                                  ("el_windscreen_corrugated", "el_windscreen_corrugated_panel", False),
                                  ("el_windscreen_glass", "el_windscreen_glass_panel", True),
                                  ("el_windscreen_mesh", "el_windscreen_mesh_panel", True)):
-        s = "_silver" if silver else ""
+        sv = "_silver" if silver else ""
         g.wj(os.path.join(assets_root, "blockstates", block + ".json"),
-             platform_screen_blockstate(panel, f"el_screen_post_left{s}",
-                                        f"el_screen_post_right{s}"))
+             platform_screen_blockstate(panel, f"el_screen_post_left{sv}",
+                                        f"el_screen_post_right{sv}",
+                                        f"el_screen_rail{sv}", f"el_screen_kick{sv}"))
     g.wj(os.path.join(assets_root, "blockstates", "el_railing_pipe.json"),
          platform_simple_blockstate("el_railing_pipe_panel"))
     g.wj(os.path.join(assets_root, "blockstates", "el_railing_modern.json"),
@@ -886,8 +890,12 @@ PROPS = {
     **{b: {"axis": {"x", "z"}, "braced": {"true", "false"}} for b in BLOCKS[8:14]},
     **{b: {"axis": {"x", "z"}} for b in BLOCKS[14:16]},
     **{b: {"facing": {"north", "south", "east", "west"},
+           "left": {"true", "false"}, "right": {"true", "false"},
+           "up": {"true", "false"}, "down": {"true", "false"}}
+       for b in BLOCKS[16:20]},
+    **{b: {"facing": {"north", "south", "east", "west"},
            "left": {"true", "false"}, "right": {"true", "false"}}
-       for b in BLOCKS[16:22]},
+       for b in BLOCKS[20:22]},
     **{b: {"facing": {"north", "south", "east", "west"},
            "up": {"true", "false"}, "down": {"true", "false"}}
        for b in ("el_canopy_post", "el_canopy_post_silver")},

@@ -21,16 +21,21 @@ import org.jetbrains.annotations.Nullable;
 public class ElScreenBlock extends FacingDecorBlock {
     public static final BooleanProperty LEFT = BooleanProperty.of("left");
     public static final BooleanProperty RIGHT = BooleanProperty.of("right");
+    /** Same screen directly above/below: panels stack into one tall wall —
+     * the top rail draws only at the stack top, the kick at its foot. */
+    public static final BooleanProperty UP = BooleanProperty.of("up");
+    public static final BooleanProperty DOWN = BooleanProperty.of("down");
 
     public ElScreenBlock(Settings settings, VoxelShape northShape) {
         super(settings, northShape);
-        setDefaultState(getDefaultState().with(LEFT, false).with(RIGHT, false));
+        setDefaultState(getDefaultState().with(LEFT, false).with(RIGHT, false)
+                .with(UP, false).with(DOWN, false));
     }
 
     @Override
     protected void appendProperties(StateManager.Builder<Block, BlockState> builder) {
         super.appendProperties(builder);
-        builder.add(LEFT, RIGHT);
+        builder.add(LEFT, RIGHT, UP, DOWN);
     }
 
     @Nullable
@@ -56,6 +61,8 @@ public class ElScreenBlock extends FacingDecorBlock {
         Direction facing = state.get(FACING);
         Direction right = facing.rotateYClockwise();
         return state.with(RIGHT, joins(world, pos.offset(right), facing))
-                .with(LEFT, joins(world, pos.offset(right.getOpposite()), facing));
+                .with(LEFT, joins(world, pos.offset(right.getOpposite()), facing))
+                .with(UP, joins(world, pos.up(), facing))
+                .with(DOWN, joins(world, pos.down(), facing));
     }
 }

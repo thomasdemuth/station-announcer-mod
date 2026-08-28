@@ -204,7 +204,7 @@ def stair_canopy():
 
 
 def portal_post_shaft():
-    face = f("body", [13.6, 0.25, 14.4, 15.75])
+    face = f("body", [12.4, 0.25, 15.4, 15.75])
     return [elem([6.6, 0, 6.6], [9.4, 16, 9.4],
                  {n: face for n in ("north", "south", "east", "west")})]
 

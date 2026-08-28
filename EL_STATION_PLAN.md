@@ -113,6 +113,27 @@ globe lamp post), station cutaway, Jefferson St headhouse sign.
   chord + 22.5° chords + lattice web); el_canopy_gable is cutout now, as
   are portal post/header.
 
+## Quality pass (2026-08-28, Thomas: "half-baked / wrong sizes / not modular")
+
+- Agent booth REMOVED (block+class+assets). House WINDOW blocks rebuilt as
+  REAL windows: wall sill/lintel/jambs + recessed see-through wired-glass
+  pane (el_glazing, cutout, vanilla-glass style); blocks now nonOpaque.
+- WINDSCREENS were 14.6px fences → panels now FULL block height and STACK:
+  ElScreenBlock gained UP/DOWN (same block+facing above/below); multipart
+  adds el_screen_rail{,_silver} at up=false and el_screen_kick{,_silver} at
+  down=false; posts extended to y16. Two-high = real windscreen.
+- GABLE roof was a 4.6px-high kink → rebuilt at 45° pitch (eave boards y~1,
+  planes to ridge cap y~9.9); gable_end truss re-derived at 45° with a tall
+  lattice web. ROTATION SIGN RULE (this bit twice): rotating +45 about x
+  DESCENDS toward +z from the origin (stair-slope convention) — an eave-
+  origin plane rising toward +z needs −45.
+- Post shafts sample a wider brushed window (u 12.4..15.4) so they stop
+  reading flat. Stale models deleted (4 gate_scroll stacking-era + 2
+  pre-split canopy post); full asset audit script now part of the workflow:
+  every blockstate model exists, every face ref resolves, every PNG valid
+  by IDAT length (RGB and RGBA both legal; non-square is legal too — the
+  door signs prove it in production).
+
 Still unbuilt ideas: glass stair enclosures/elevator towers (modern rebuild
 kit), X-brace panels between columns, 125 St arch braces, cable troughs,
 track bumpers, catwalks.

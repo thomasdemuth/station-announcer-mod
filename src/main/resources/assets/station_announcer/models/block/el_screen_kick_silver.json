@@ -16,51 +16,52 @@
   "elements": [
     {
       "from": [
-        0.0,
         0,
-        6.9
+        0,
+        7.05
       ],
       "to": [
-        1.6,
         16,
-        9.1
+        1.2,
+        8.95
       ],
       "faces": {
         "north": {
-          "texture": "#body",
+          "texture": "#galv",
           "uv": [
             1,
-            4.75,
-            1.8,
-            12.75
+            5,
+            9,
+            6
           ]
         },
         "south": {
-          "texture": "#body",
+          "texture": "#galv",
           "uv": [
             1,
-            4.75,
-            1.8,
-            12.75
+            5,
+            9,
+            6
           ]
         },
-        "east": {
-          "texture": "#body",
+        "up": {
+          "texture": "#galv",
           "uv": [
             1,
-            4.75,
-            1.8,
-            12.75
+            5,
+            9,
+            6
           ]
         },
-        "west": {
-          "texture": "#body",
+        "down": {
+          "texture": "#galv",
           "uv": [
             1,
-            4.75,
-            1.8,
-            12.75
-          ]
+            5,
+            9,
+            6
+          ],
+          "cullface": "down"
         }
       }
     }
