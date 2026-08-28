@@ -2397,3 +2397,53 @@ per-row vanilla buttons stay on top), and the route list now labels rows
 `client/mtraddon/RoutePickerScreen.java`; lightly restyled:
 `client/mtraddon/{StopChangeRoutesScreen,RouteStopChangesScreen}.java`;
 `assets/station_announcer/lang/en_us.json` (+14 keys).
+
+## Dispatch web UI round 2 — stringlines, holds/alerts, station panel (2026-08-27)
+
+Three features on the existing dispatch stack (no schema-version bump — all additive):
+
+**Stringlines** (pvibien.com/stringline.htm style). New endpoint
+`GET /dispatch/api/stringline?dimension=N&routes=id1,id2` (simulator hop):
+- `axis.routes[]` — every route with `{id,name,number,color,hidden, stations:[{plat,
+  platName, sta, staName, dist}]}`; `dist` = cumulative straight-line metres between
+  platform midpoints (`Route.getRoutePlatforms()` order). Cached 30 s per dimension
+  like `network`.
+- `deps[]` — the analytics window's departure rows for the requested routes only:
+  `[veh, plat, t, dwellMs, devMs, stopIndex, routeId]` (ids as strings). Source:
+  `AnalyticsAggregator.Aggregate.events`, a NEW immutable time-sorted copy of the raw
+  window published with each aggregate (arrival instant = `t − dwellMs`, so departures
+  alone carry both the diagonals and the flat dwell segments). Requires
+  `analytics.enabled`; `analyticsEnabled`/`windowMinutes`/`now` ride along.
+- Frontend: full-stage view, one badge per LINE (routes grouped on the `"||"` name
+  key), both directions on one chart (other routes' platforms mapped onto the longest
+  route's axis by station id), 15 min–2 h window with the right edge pinned to now,
+  hover highlight + tooltip, click-through to the map, live tips driven by new SSE
+  vehicle fields `pPlat`/`nPlat`/`pFrac` (platform dwell segments bracketing the
+  vehicle + fraction between them, computed in DispatchSampler from the path; always
+  present, "0" = none).
+
+**Holds / obstructions / alerts on the stream.** Frames now carry `holds` (platform
+ids currently holding, from `HoldRuleEngine.heldPlatforms()`) and `obstructed`
+(vehicle ids, `DoorObstructionEngine.obstructedVehicleIds()`) — always on `full`,
+delta only when changed (absent = unchanged). New `dispatch/DispatchEvents` ring
+(cap 200, monitor-guarded, cleared on SERVER_STOPPING) feeds `alerts[]` on frames +
+`GET /dispatch/api/alerts` backlog. Producers: hold deadlock-cap release (only when
+the cap fired before the transfer window, i.e. the connection never came),
+door-obstruction backstop force-release, and two streamer-thread detectors —
+`late` (deviation crosses 3 min, edge-triggered per vehicle) and `stalled` (stopped
+90 s with no dwell, hold, obstruction or manual mode — the "walked to the platform to
+find a wedged train" class). UI: pulsing amber HOLD rings on the map, HELD/BLK badges
+on board rows + detail panel, an alerts feed panel with unread badge; alert rows
+click through to the vehicle/platform.
+
+**Station panel.** Clicking a station area (when no train is hit) fills the detail
+aside: platforms with calling-route chips, dwell and HELD state; live inbound trains
+(next-station match) with deviation, click-to-select; the station's analytics
+scorecard when the aggregate is loaded (one-shot fetch, no polling).
+
+Verified: `compileJava` green; full frontend exercised in the browser in `?demo=1`
+mode (stringline chart with crossing directions + dwell steps + a long-dwell outlier,
+hover/tooltip/dim, badges, alerts feed, HOLD pulse, station panel with all three
+sections). NOT verified against a live simulator: the stringline axis/deps payload
+shapes, `parameters.get("routes")` content (bytecode says getParameterMap feeds it),
+pPlat/nPlat scan cost on very long paths, and detector noise levels on a busy network.
