@@ -2,10 +2,20 @@
   "multipart": [
     {
       "when": {
-        "facing": "north"
+        "facing": "north",
+        "up": "false"
       },
       "apply": {
         "model": "station_announcer:block/el_windscreen_panel"
+      }
+    },
+    {
+      "when": {
+        "facing": "north",
+        "up": "true"
+      },
+      "apply": {
+        "model": "station_announcer:block/el_windscreen_panel_base"
       }
     },
     {
@@ -45,10 +55,21 @@
     },
     {
       "when": {
-        "facing": "east"
+        "facing": "east",
+        "up": "false"
       },
       "apply": {
         "model": "station_announcer:block/el_windscreen_panel",
+        "y": 90
+      }
+    },
+    {
+      "when": {
+        "facing": "east",
+        "up": "true"
+      },
+      "apply": {
+        "model": "station_announcer:block/el_windscreen_panel_base",
         "y": 90
       }
     },
@@ -93,10 +114,21 @@
     },
     {
       "when": {
-        "facing": "south"
+        "facing": "south",
+        "up": "false"
       },
       "apply": {
         "model": "station_announcer:block/el_windscreen_panel",
+        "y": 180
+      }
+    },
+    {
+      "when": {
+        "facing": "south",
+        "up": "true"
+      },
+      "apply": {
+        "model": "station_announcer:block/el_windscreen_panel_base",
         "y": 180
       }
     },
@@ -141,10 +173,21 @@
     },
     {
       "when": {
-        "facing": "west"
+        "facing": "west",
+        "up": "false"
       },
       "apply": {
         "model": "station_announcer:block/el_windscreen_panel",
+        "y": 270
+      }
+    },
+    {
+      "when": {
+        "facing": "west",
+        "up": "true"
+      },
+      "apply": {
+        "model": "station_announcer:block/el_windscreen_panel_base",
         "y": 270
       }
     },
