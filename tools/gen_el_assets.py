@@ -573,22 +573,49 @@ def canopy_post_shaft(ref="body"):
 
 
 def canopy_post_brackets(ref="body"):
-    """The curved top brackets, drawn only on a stack's top block."""
+    """The curved top brackets, drawn only on a stack's top block.
+
+    Three STEPPED 45° struts per side (the girder knee-brace recipe) whose
+    feet all land on the post shaft and whose heads fan out to x≈1.7/3.9/5.9:
+    the staircase of heads reads as the photos' curved gusset, where the old
+    single 2.4 px stick read as a nub. Every strut tops out at y16.0 exactly,
+    so the bracket touches the canopy block above (its underside chord's down
+    face is at that plane, facing the other way — back to back, never
+    coplanar-same-facing). The z spans are NESTED (6.7/6.8/6.9) so the three
+    struts' side faces never share a plane where they overlap."""
     els = []
-    for x0, angle in ((9.0, -45), (4.6, 45)):
-        b = f(ref, [1, 4.75, 2.3, 9.5])
-        els.append(elem([x0, 10.4, 6.9], [x0 + 2.4, 15.8, 9.1], {
-            "north": b, "south": b,
-            "east": f(ref, [1, 4.75, 2.4, 9.5]),
-            "west": f(ref, [1, 4.75, 2.4, 9.5]),
-        }, rotation={"origin": [x0 + 1.2, 15.8, 8], "axis": "z", "angle": angle}))
+    # (head x of the WEST strut, strut length, z inset) — outermost first
+    steps = ((0.4, 7.6, 0.0), (2.6, 5.4, 0.1), (4.6, 3.2, 0.2))
+    for x0, length, inset in steps:
+        for west in (True, False):
+            xa = x0 if west else 16 - x0 - 2.6
+            angle = 45 if west else -45
+            b = f(ref, [1, 4.75, 3.6, 10.5])
+            els.append(elem([xa, 16.0 - length, 6.7 + inset],
+                            [xa + 2.6, 16.0, 9.3 - inset], {
+                "north": b, "south": b,
+                "east": f(ref, [1, 4.75, 3.7, 10.5]),
+                "west": f(ref, [1, 4.75, 3.7, 10.5]),
+                "down": f(ref, [1, 5, 3.7, 6.3]),
+            }, rotation={"origin": [xa + 1.3, 16.0, 8], "axis": "z", "angle": angle}))
     return els
 
 
 def canopy_flat_elements(sheet="corru", ref="body"):
-    """Flat corrugated canopy slab with under-ribs (W 8th St style). Authored
+    """Flat corrugated canopy slab on its rafters (W 8th St style). Authored
     LOW in the block so a canopy placed directly above its posts touches
-    them — the roof plane is the cell's floor, not its ceiling."""
+    them — the roof plane is the cell's floor, not its ceiling.
+
+    The deck spans the whole cell and its four side faces sit exactly on the
+    block boundary with cullface, so a FIELD of canopies is one unbroken
+    sheet: neighbouring cells meet back to back (opposite normals never
+    z-fight) and no interior seam is drawn twice.
+
+    Underside: two CROSSWISE rafters on a pitch of 8 (which divides 16, so
+    the rhythm is identical inside a cell and across a joint — the zebra
+    lesson), plus the longitudinal centre purlin at x/z 7..9 that hanging
+    blocks (the NYC PIDS' 2 px ceiling stub) land on. Members that span the
+    cell omit their run-continuation end faces."""
     els = []
     els.append(elem([0, 1.4, 0], [16, 3.4, 16], {
         "up": f(sheet, [0, 0.25, 16, 15.75]),
@@ -598,69 +625,200 @@ def canopy_flat_elements(sheet="corru", ref="body"):
         "east": f(ref, [1, 5, 9, 6], cull="east"),
         "west": f(ref, [1, 5, 9, 6], cull="west"),
     }))
-    # ribs at the eaves plus a centre purlin: hanging blocks (the NYC PIDS'
-    # 2 px ceiling stub at x/z 7..9) land exactly on the purlin's underside
-    for z0 in (2.5, 7.2, 13.5):
-        rib = f(ref, [0.25, 5, 15.75, 6.2])
-        els.append(elem([0, 0, z0], [16, 1.4, z0 + 1.6],
-                        {"north": rib, "south": rib, "down": rib}))
+    rafter = f(ref, [0.25, 5, 15.75, 6.2])
+    for x0 in (3.2, 11.2):                     # crosswise rafters, pitch 8
+        els.append(elem([x0, 0.3, 0], [x0 + 1.6, 1.4, 16],
+                        {"east": rafter, "west": rafter, "down": rafter}))
+    purlin = f(ref, [0.25, 5, 15.75, 6.4])     # centre purlin (hanging steel)
+    els.append(elem([0, 0.0, 7.0], [16, 1.4, 9.0],
+                    {"north": purlin, "south": purlin, "down": purlin}))
     return els
 
 
 def canopy_fascia_elements(ref="body"):
-    """Riveted edge girder hanging at the canopy's platform edge (separate
-    model — the real block places it on unconnected edges automatically)."""
+    """Riveted edge girder at the canopy's open edge (separate model — the
+    block applies it to every unconnected side automatically).
+
+    It HANGS 1.4 px below the deck instead of standing proud of it: the old
+    box ran y0..5.6 against a deck of y1.4..3.4, i.e. a 2.2 px parapet above
+    the roof, which read as a tray. Inset 0.3 off the boundary so its outer
+    face is never coplanar with the deck's own edge face, and its top face
+    is omitted (buried inside the deck)."""
     face = f(ref, [0.25, 0.25, 15.75, 4.25])
-    return [elem([0, 0, 0.4], [16, 5.6, 2.0],
+    return [elem([0, 0.0, 0.3], [16, 3.2, 2.1],
                  {"north": face, "south": face,
-                  "up": f(ref, [0.25, 5, 15.75, 5.8]),
-                  "down": f(ref, [0.25, 5, 15.75, 5.8])})]
+                  "down": f(ref, [0.25, 5, 15.75, 6.8])})]
+
+
+# ---- the gable family: ONE roof over any platform width ---------------------
+# Authored frame: the RUN (ridge/axis) is x, so the crosswise direction — the
+# platform's width — is z, and a cell's crosswise neighbours are north/south.
+#
+# The whole family is one continuous 22.5° pitch, and each cell draws the
+# stretch of that profile its own connections imply:
+#   0 crosswise neighbours  a single-row canopy: the classic steep 45° gable,
+#                           eave (mid y 1.8) at each block edge, ridge 9.8.
+#   1 crosswise neighbour   a WING: 22.5° from the eave at its open edge
+#                           (mid 3.17, overhanging 1.6 px past the block) up
+#                           to the shared boundary at 9.8.
+#   2 crosswise neighbours  the CROWN: 22.5° from 9.8 at both boundaries to a
+#                           ridge at 13.11 over the cell's centre line.
+# So 2 rows meet in a ridge ON their shared boundary, and 3 rows are ONE roof
+# whose ridge sits over the middle row with the eaves overhanging the platform
+# edges — the Marcy Av read. (Wider than 3 repeats the crown bay, which is
+# what a multi-bay train shed does; nothing ever gaps or z-fights, because
+# every profile hands the next cell the same 9.8 boundary height.)
+EAVE45 = 1.8            # 45° gable: sheet centre line where it crosses z=0/16
+RIDGE45 = 9.8           # ... and over the centre line
+EDGE22 = 9.8            # 22.5° family: sheet centre at a shared boundary
+EAVE22 = 3.173          # ... at a wing's open edge  (9.8 − 16·tan22.5)
+CROWN22 = 13.114        # ... over a crown cell's centre line (9.8 + 8·tan22.5)
+OVERHANG = 1.6          # eaves reach this far past the block edge
+
+
+def _roof_tie():
+    """Bottom chord of the roof truss: the steel a hanging PIDS/sign stub
+    (x/z 7..9) lands on, at the same height in every profile so a mixed run
+    keeps one continuous chord line."""
+    tie = f("body", [0.25, 5, 15.75, 6.2])
+    return [elem([0, 0, 6.9], [16, 1.2, 9.1],
+                 {"north": tie, "south": tie, "down": tie, "up": tie})]
+
+
+def _sheet_faces():
+    plane = f("roof", [0, 0.25, 16, 15.75])
+    edge = f("roof", [0, 8.5, 16, 9.3])
+    end = f("roof", [0, 8.5, 16, 9.4])
+    return plane, edge, end
 
 
 def canopy_gable_elements():
-    """Peaked standing-seam roof, REBUILT at a real 45° pitch (the first cut
-    rose 4.6 px and read as a flat slab with a kink): eave boards at y≈1,
-    two 45° planes climbing to a ridge cap at y≈9.5. Still authored low so
-    it lands on posts, still one continuous gable along a run."""
+    """The single-row canopy: a real 45° gable, eaves on the block edges and
+    a 1.6 px overhang with an eave board beyond them."""
+    plane, edge, end = _sheet_faces()
     els = []
-    plane = f("roof", [0, 0.25, 16, 15.75])
-    edge = f("roof", [0, 8.5, 16, 9.3])
-    for z0, z1, angle, oz in ((0.7, 11.0, -45, 0.7), (5.0, 15.3, 45, 15.3)):
-        els.append(elem([0, 1.0, z0], [16, 2.6, z1], {
+    for oz, angle in ((0.0, -45), (16.0, 45)):
+        # the plane runs from the overhang tip (mid y 0.2) up to the ridge
+        lo, hi = -OVERHANG * 1.41421, 8.0 * 1.41421
+        z0, z1 = (oz + lo, oz + hi) if angle < 0 else (oz - hi, oz - lo)
+        els.append(elem([0, EAVE45 - 0.8, z0], [16, EAVE45 + 0.8, z1], {
             "up": plane, "down": plane,
             "north": edge, "south": edge,
-        }, rotation={"origin": [8, 1.8, oz], "axis": "x", "angle": angle}))
+            "east": dict(end, cullface="east"), "west": dict(end, cullface="west"),
+        }, rotation={"origin": [8, EAVE45, oz], "axis": "x", "angle": angle}))
+        # eave board under the overhang tip (rotated with its plane; inset
+        # 0.05 off the tip and kept under the sheet's top plane, so it shares
+        # no face plane with the sheet it hangs from)
+        b0, b1 = ((oz + lo + 0.05, oz + lo + 1.65) if angle < 0
+                  else (oz - lo - 1.65, oz - lo - 0.05))
+        els.append(elem([0, EAVE45 - 2.0, b0], [16, EAVE45 + 0.6, b1], {
+            "down": edge, "north": edge, "south": edge,
+        }, rotation={"origin": [8, EAVE45, oz], "axis": "x", "angle": angle}))
     ridge = f("roof", [0, 8.5, 16, 9.5])
-    els.append(elem([0, 8.2, 6.8], [16, 9.9, 9.2],
+    els.append(elem([0, RIDGE45 - 0.8, 6.8], [16, RIDGE45 + 0.8, 9.2],
                     {"north": ridge, "south": ridge, "up": ridge, "down": ridge}))
-    # eave boards closing the roof edges
-    board = f("roof", [0, 8.6, 16, 9.4])
-    for z0 in (0, 14.8):
-        els.append(elem([0, 0.6, z0], [16, 2.2, z0 + 1.2],
-                        {"north": board, "south": board, "down": board, "up": board}))
-    # the truss tie chord under the ridge — real gables have one, and it is
-    # the steel a hanging PIDS/sign stub lands on
-    tie = f("body", [0.25, 5, 15.75, 6.2])
-    els.append(elem([0, 0, 6.9], [16, 1.2, 9.1],
-                    {"north": tie, "south": tie, "down": tie, "up": tie}))
-    return els
+    return els + _roof_tie()
 
 
-def gable_end_elements():
-    """Open truss triangle closing a gable run's end (authored WEST),
-    following the rebuilt 45° pitch: bottom chord, two 45° rafter chords
-    meeting under the ridge, tall lattice web."""
+def canopy_gable_slope_elements():
+    """A WING: the 22.5° stretch of the roof that rises from its open eave
+    (authored SOUTH, overhanging past z=16) to the shared boundary at the
+    connected side (authored NORTH). rescale keeps the sloped sheet's
+    footprint exactly one block, so it tiles along the run."""
+    plane, edge, end = _sheet_faces()
+    mid = (EDGE22 + EAVE22) / 2.0            # sheet centre over z=8
+    rot = {"origin": [8, mid, 8], "axis": "x", "angle": 22.5, "rescale": True}
+    els = [elem([0, mid - 0.85, 0], [16, mid + 0.85, 16 + OVERHANG], {
+        "up": plane, "down": plane,
+        "north": edge, "south": edge,
+        "east": dict(end, cullface="east"), "west": dict(end, cullface="west"),
+    }, rotation=dict(rot))]
+    els.append(elem([0, mid - 2.0, 16 + OVERHANG - 1.65],
+                    [16, mid + 0.6, 16 + OVERHANG - 0.05],
+                    {"down": edge, "north": edge, "south": edge},
+                    rotation=dict(rot)))
+    return els + _roof_tie() + _boundary_purlin(north=True)
+
+
+def canopy_gable_crown_elements():
+    """The CROWN: both crosswise sides connected, so the cell carries the
+    apex — 22.5° up from 9.8 at each boundary to the ridge over its centre."""
+    plane, edge, end = _sheet_faces()
     els = []
+    for z0, z1, angle in ((0.0, 8.0, -22.5), (8.0, 16.0, 22.5)):
+        els.append(elem([0, CROWN22 - 0.85, z0], [16, CROWN22 + 0.85, z1], {
+            "up": plane, "down": plane,
+            "north": edge, "south": edge,
+            "east": dict(end, cullface="east"), "west": dict(end, cullface="west"),
+        }, rotation={"origin": [8, CROWN22, 8], "axis": "x",
+                     "angle": angle, "rescale": True}))
+    ridge = f("roof", [0, 8.5, 16, 9.5])
+    # ±1.0 (not ±0.85): the cap must swallow the two sheets' apex end faces,
+    # which lie in one plane with the end truss's chord ends
+    els.append(elem([0, CROWN22 - 1.0, 6.8], [16, CROWN22 + 1.0, 9.2],
+                    {"north": ridge, "south": ridge, "up": ridge, "down": ridge}))
+    return els + _roof_tie() + _boundary_purlin(north=True) + _boundary_purlin(north=False)
+
+
+def _boundary_purlin(north):
+    """Half of the purlin under a shared crosswise boundary (the ridge purlin
+    where two wings meet, the slope-break purlin everywhere else). Each cell
+    draws its own half and omits the face on the boundary plane, so the two
+    halves butt without a coplanar pair."""
+    p = f("body", [0.25, 5, 15.75, 6.4])
+    z0, z1 = (0.0, 1.8) if north else (14.2, 16.0)
+    faces = {"up": p, "down": p, "south" if north else "north": p}
+    return [elem([0, EDGE22 - 2.5, z0], [16, EDGE22 - 0.9, z1], faces)]
+
+
+def _truss(x0, chords, webs):
+    """Open truss end plate: bottom chord + the given rafter chords + lattice
+    web panels, all in a 1.2 px slice at x0 (the run end)."""
     chord = f("body", [0.25, 5, 15.75, 6.2])
-    els.append(elem([0.2, 0.2, 0.8], [1.4, 1.5, 15.2],
-                    {n: chord for n in ("north", "south", "east", "west", "up", "down")}))
-    for z0, z1, angle, oz in ((0.9, 10.9, -45, 0.9), (5.1, 15.1, 45, 15.1)):
-        els.append(elem([0.2, 1.3, z0], [1.4, 2.6, z1],
-                        {n: chord for n in ("north", "south", "east", "west", "up", "down")},
-                        rotation={"origin": [0.8, 1.95, oz], "axis": "x", "angle": angle}))
+    sides = ("north", "south", "east", "west", "up", "down")
+    els = [elem([x0, 0.2, 0.4], [x0 + 1.2, 1.5, 15.6],
+                {n: chord for n in sides})]
+    for y0, y1, z0, z1, rot in chords:
+        els.append(elem([x0, y0, z0], [x0 + 1.2, y1, z1],
+                        {n: chord for n in sides}, rotation=rot))
     lat = f("lattice", [2, 2, 14, 10])
-    els.append(elem([0.5, 1.4, 3.2], [1.1, 6.4, 12.8], {"east": lat, "west": lat}))
+    for y0, y1, z0, z1 in webs:
+        els.append(elem([x0 + 0.3, y0, z0], [x0 + 0.9, y1, z1],
+                        {"east": lat, "west": lat}))
     return els
+
+
+def gable_end_elements(x0=0.2):
+    """Run end of a SINGLE-ROW canopy: the 45° open truss triangle."""
+    chords = []
+    for oz, angle in ((0.0, -45), (16.0, 45)):
+        hi = 8.0 * 1.41421
+        z0, z1 = (oz + 0.3, oz + hi) if angle < 0 else (oz - hi, oz - 0.3)
+        chords.append((EAVE45 - 0.65, EAVE45 + 0.65, z0, z1,
+                       {"origin": [x0 + 0.6, EAVE45, oz], "axis": "x", "angle": angle}))
+    webs = [(1.4, 4.2, 2.2, 13.8), (4.2, 7.4, 5.0, 11.0)]
+    return _truss(x0, chords, webs)
+
+
+def gable_end_slope_elements(x0=0.2):
+    """Run end of a WING: bottom chord + the 22.5° rafter chord, web stepped
+    up under it (authored with the crown side to the NORTH, like the wing)."""
+    mid = (EDGE22 + EAVE22) / 2.0
+    rot = {"origin": [x0 + 0.6, mid, 8], "axis": "x", "angle": 22.5, "rescale": True}
+    chords = [(mid - 0.65, mid + 0.65, 0.3, 15.7, rot)]
+    webs = [(1.4, 6.2, 1.6, 7.6), (1.4, 3.6, 8.2, 14.2)]
+    return _truss(x0, chords, webs)
+
+
+def gable_end_crown_elements(x0=0.2):
+    """Run end of a CROWN cell: the shallow 22.5° truss carrying the apex."""
+    chords = []
+    for z0, z1, angle in ((0.3, 8.0, -22.5), (8.0, 15.7, 22.5)):
+        chords.append((CROWN22 - 0.65, CROWN22 + 0.65, z0, z1,
+                       {"origin": [x0 + 0.6, CROWN22, 8], "axis": "x",
+                        "angle": angle, "rescale": True}))
+    webs = [(1.4, 8.0, 1.6, 14.4), (8.0, 11.4, 4.4, 11.6)]
+    return _truss(x0, chords, webs)
 
 
 def tex_board():
@@ -728,16 +886,63 @@ def canopy_flat_blockstate(slab, fascia):
     return {"multipart": parts}
 
 
-def canopy_gable_blockstate(roof, end):
-    parts = [{"when": {"axis": "x"}, "apply": {"model": f"{MOD}:block/{roof}"}},
-             {"when": {"axis": "z"}, "apply": {"model": f"{MOD}:block/{roof}", "y": 90}}]
-    # the end plate closes open RUN ends only (along the ridge axis)
-    for axis, side, rot in (("x", "west", 0), ("x", "east", 180),
-                            ("z", "north", 90), ("z", "south", 270)):
-        entry = {"model": f"{MOD}:block/el_canopy_gable_end"}
-        if rot:
-            entry["y"] = rot
-        parts.append({"when": {"axis": axis, side: "false"}, "apply": entry})
+SIDES = ["north", "east", "south", "west"]
+
+
+def turned(side, rot):
+    """The world side an AUTHORED side lands on after a blockstate y rotation
+    (y turns the model clockwise seen from above: north→east→south→west)."""
+    return SIDES[(SIDES.index(side) + rot // 90) % 4]
+
+
+def canopy_gable_blockstate():
+    """One roof over any platform. Authored frame: run along x (crosswise =
+    north/south, run ends = west/east); axis=z is the same thing turned 90°.
+
+    Per cell, the crosswise connection COUNT picks the profile — none = the
+    single-row 45° gable, one = a 22.5° wing rising to the shared boundary,
+    two = the crown carrying the apex — and the matching open truss closes
+    each open run end. Every profile hands the neighbour the same boundary
+    height, so wings/crowns/gables always meet flush."""
+    parts = []
+    for axis, base in (("x", 0), ("z", 90)):
+        def mdl(name, rot):
+            entry = {"model": f"{MOD}:block/{name}"}
+            if rot % 360:
+                entry["y"] = rot % 360
+            return entry
+
+        cw_a, cw_b = turned("north", base), turned("south", base)
+        ends = ((turned("west", base), base), (turned("east", base), base + 180))
+        # --- roof profiles
+        parts.append({"when": {"axis": axis, cw_a: "false", cw_b: "false"},
+                      "apply": mdl("el_canopy_gable_roof", base)})
+        parts.append({"when": {"axis": axis, cw_a: "true", cw_b: "false"},
+                      "apply": mdl("el_canopy_gable_slope", base)})
+        parts.append({"when": {"axis": axis, cw_a: "false", cw_b: "true"},
+                      "apply": mdl("el_canopy_gable_slope", base + 180)})
+        parts.append({"when": {"axis": axis, cw_a: "true", cw_b: "true"},
+                      "apply": mdl("el_canopy_gable_crown", base)})
+        # --- open run ends: the truss that matches this cell's profile
+        for end, erot in ends:
+            parts.append({"when": {"axis": axis, end: "false",
+                                   cw_a: "false", cw_b: "false"},
+                          "apply": mdl("el_canopy_gable_end", erot)})
+            parts.append({"when": {"axis": axis, end: "false",
+                                   cw_a: "true", cw_b: "true"},
+                          "apply": mdl("el_canopy_gable_end_crown", erot)})
+        # a wing's truss is not z-symmetric, so the two run ends need the two
+        # authored x slices; the 180° turn then covers the mirrored wing.
+        w_end, e_end = ends[0][0], ends[1][0]
+        for end, cw, name, rot in (
+                (w_end, cw_a, "el_canopy_gable_end_slope", base),
+                (e_end, cw_b, "el_canopy_gable_end_slope", base + 180),
+                (e_end, cw_a, "el_canopy_gable_end_slope_east", base),
+                (w_end, cw_b, "el_canopy_gable_end_slope_east", base + 180)):
+            other = cw_b if cw == cw_a else cw_a
+            parts.append({"when": {"axis": axis, end: "false",
+                                   cw: "true", other: "false"},
+                          "apply": mdl(name, rot)})
     return {"multipart": parts}
 
 
@@ -782,7 +987,12 @@ def build_platform(g, assets_root):
     pm("el_canopy_fascia", canopy_fascia_elements("body"))
     pm("el_canopy_fascia_silver", canopy_fascia_elements("galv"))
     pm("el_canopy_gable_roof", canopy_gable_elements())
+    pm("el_canopy_gable_slope", canopy_gable_slope_elements())
+    pm("el_canopy_gable_crown", canopy_gable_crown_elements())
     pm("el_canopy_gable_end", gable_end_elements())
+    pm("el_canopy_gable_end_crown", gable_end_crown_elements())
+    pm("el_canopy_gable_end_slope", gable_end_slope_elements())
+    pm("el_canopy_gable_end_slope_east", gable_end_slope_elements(14.6))
     pm("el_name_board_model", name_board_elements())
 
     # blockstates
@@ -816,7 +1026,7 @@ def build_platform(g, assets_root):
     g.wj(os.path.join(assets_root, "blockstates", "el_canopy_flat_silver.json"),
          canopy_flat_blockstate("el_canopy_flat_slab_silver", "el_canopy_fascia_silver"))
     g.wj(os.path.join(assets_root, "blockstates", "el_canopy_gable.json"),
-         canopy_gable_blockstate("el_canopy_gable_roof", "el_canopy_gable_end"))
+         canopy_gable_blockstate())
     g.wj(os.path.join(assets_root, "blockstates", "el_name_board.json"),
          platform_simple_blockstate("el_name_board_model"))
 
