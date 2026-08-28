@@ -216,6 +216,22 @@
     "station_announcer:el_canopy_flat",
     "station_announcer:el_canopy_flat_silver",
     "station_announcer:el_canopy_gable",
-    "station_announcer:el_name_board"
+    "station_announcer:el_name_board",
+    "station_announcer:el_stair_side",
+    "station_announcer:el_stair_canopy",
+    "station_announcer:el_portal_post",
+    "station_announcer:el_portal_header",
+    "station_announcer:el_house_wall_green",
+    "station_announcer:el_house_wall_green_window",
+    "station_announcer:el_house_wall_cream",
+    "station_announcer:el_house_wall_cream_window",
+    "station_announcer:el_wood_platform",
+    "station_announcer:el_platform_edge",
+    "station_announcer:el_soffit",
+    "station_announcer:el_booth",
+    "station_announcer:el_exit_sign",
+    "station_announcer:el_lamp_gooseneck",
+    "station_announcer:el_lamp_post",
+    "station_announcer:el_lamp_head"
   ]
 }

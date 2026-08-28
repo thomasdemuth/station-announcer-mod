@@ -1,0 +1,19 @@
+{
+  "variants": {
+    "facing=north": {
+      "model": "station_announcer:block/el_portal_header_model"
+    },
+    "facing=east": {
+      "model": "station_announcer:block/el_portal_header_model",
+      "y": 90
+    },
+    "facing=south": {
+      "model": "station_announcer:block/el_portal_header_model",
+      "y": 180
+    },
+    "facing=west": {
+      "model": "station_announcer:block/el_portal_header_model",
+      "y": 270
+    }
+  }
+}

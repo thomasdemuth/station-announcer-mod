@@ -82,5 +82,37 @@ mechanism). 16 blocks, DECORATION tab:
   white name painted by StationDecorRenderer.paintElNameBoard on both faces,
   auto MTR station name, right-click = custom name screen.
 
-Still unbuilt ideas: EXIT signs, platform lamps, truss gable-end infill,
-glass stair enclosures/elevator towers (modern rebuild kit).
+## Phase 3 (BUILT 2026-08-28, previews approved): mezzanine + street — 16 blocks
+
+Generator: `tools/gen_el_phase3.py` (module invoked from gen_el_assets.build();
+its --out mode still writes a standalone preview tree). Photo refs added:
+Prospect Av street stairs (red canopy over teal flight, ornamental portal,
+globe lamp post), station cutaway, Jefferson St headhouse sign.
+
+- `el_stair_side` / `el_stair_canopy` — 45° pieces on the handrail-slope
+  rescale math (ElSlopeBlock: FACING = ascent from player look; centre
+  y = 16 − z chains block-per-block to ANY stair length). Side = corrugated
+  screen + sloped rail + kick; canopy = red seam roof, green underside,
+  edge fascias.
+- `el_portal_post` (ColumnBlock stack, lattice scroll bracket at stack top)
+  + `el_portal_header` (frieze beam + cutout lattice band, ends omitted so
+  runs merge; posts cap run ends) — spans any opening; hang el_name_board
+  under it for the sign.
+- Station house: `el_house_wall_{green,cream}[_window]` — full OPAQUE cubes
+  (vanilla culling; opaqueSettings without nonOpaque), board-and-batten +
+  wired-glass window band; `el_soffit` (top-slab beadboard ceiling);
+  `el_booth` (ElBoothBlock 2-tall multiblock, loot gated half=lower).
+- `el_wood_platform` (opaque plank cube), `el_platform_edge` (opaque cube:
+  tactile-dome strip top + riveted fascia toward FACING).
+- `el_exit_sign` (ElExitSignBlock: MOUNT ceiling/wall from clicked face,
+  right-click cycles ARROW none/right/left/down — 8 models, back faces flip
+  u so lettering reads both sides).
+- Lamps: `el_lamp_gooseneck` (ceiling-hung, luminance 14, shade:false bulb),
+  `el_lamp_post` + `el_lamp_head` (stack the head on the pole; head lum 14).
+- Gable canopy's end plate UPGRADED to the open truss triangle (bottom
+  chord + 22.5° chords + lattice web); el_canopy_gable is cutout now, as
+  are portal post/header.
+
+Still unbuilt ideas: glass stair enclosures/elevator towers (modern rebuild
+kit), X-brace panels between columns, 125 St arch braces, cable troughs,
+track bumpers, catwalks.

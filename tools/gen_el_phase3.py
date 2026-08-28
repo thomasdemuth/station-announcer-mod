@@ -1,11 +1,7 @@
 #!/usr/bin/env python3
-"""PREVIEW-ONLY generator for el phase 3 (mezzanine + street + platform
-details) — writes textures/models to a scratch tree for offline renders and
-Thomas's approval; nothing here ships until it is folded into
-gen_el_assets.py. See EL_STATION_PLAN.md.
-
-Run:  python3 tools/gen_el_phase3.py --out DIR
-"""
+"""El phase 3 (mezzanine + street + platform details) — the real generator
+module, invoked from gen_el_assets.build(); `--out DIR` still writes a
+standalone preview tree for offline renders. See EL_STATION_PLAN.md."""
 
 import argparse
 import os
@@ -393,16 +389,138 @@ def gable_truss_end():
     return els
 
 
-# -------------------------------------------------------------------- main --
-def main():
-    parser = argparse.ArgumentParser()
-    parser.add_argument("--out", required=True)
-    args = parser.parse_args()
-    assets = os.path.join(args.out, "assets", MOD)
-    g = Gen(assets, os.path.join(args.out, "data"))
-    texdir = os.path.join(assets, "textures/block")
-    os.makedirs(texdir, exist_ok=True)
+# ----------------------------------------------------------------- final ----
+ROTS = (("north", 0), ("east", 90), ("south", 180), ("west", 270))
 
+
+def facing_variants(mdl):
+    return {"variants": {f"facing={facing}": ({"model": f"{MOD}:block/{mdl}", "y": rot}
+                                              if rot else {"model": f"{MOD}:block/{mdl}"})
+                         for facing, rot in ROTS}}
+
+
+def exit_sign_models(g):
+    """Eight models: (ceiling|wall) x four arrow zones. The plate's back face
+    flips u so the lettering reads correctly from both sides."""
+    zones = {"none": 0, "right": 4, "left": 8, "down": 12}
+    for arrow, v0 in zones.items():
+        front = f("exit", [0, v0 + 0.25, 16, v0 + 3.75])
+        back = f("exit", [16, v0 + 0.25, 0, v0 + 3.75])
+        edge = f("exit", [0, v0 + 0.5, 1, v0 + 3.5])
+        stub = {n: f("body", [13.6, 2, 14.4, 5])
+                for n in ("north", "south", "east", "west")}
+        g.model(f"el_exit_sign_hang_{arrow}", TEX, [
+            elem([7.3, 12.5, 7.6], [8.7, 16, 8.4], dict(stub)),
+            elem([2, 5.5, 7.5], [14, 12.5, 8.5], {
+                "north": front, "south": back,
+                "east": edge, "west": edge, "up": edge, "down": edge,
+            }),
+        ])
+        g.model(f"el_exit_sign_wall_{arrow}", TEX, [
+            elem([2, 4.5, 14.4], [14, 12, 15.4], {
+                "north": front,
+                "east": edge, "west": edge, "up": edge, "down": edge,
+            }),
+        ])
+
+
+BLOCKS3 = ["el_stair_side", "el_stair_canopy", "el_portal_post", "el_portal_header",
+           "el_house_wall_green", "el_house_wall_green_window",
+           "el_house_wall_cream", "el_house_wall_cream_window",
+           "el_wood_platform", "el_platform_edge", "el_soffit", "el_booth",
+           "el_exit_sign", "el_lamp_gooseneck", "el_lamp_post", "el_lamp_head"]
+
+FACINGS4 = {"north", "south", "east", "west"}
+PROPS3 = {
+    "el_stair_side": {"facing": FACINGS4}, "el_stair_canopy": {"facing": FACINGS4},
+    "el_portal_post": {"facing": FACINGS4, "up": {"true", "false"}, "down": {"true", "false"}},
+    "el_portal_header": {"facing": FACINGS4},
+    "el_house_wall_green": {}, "el_house_wall_green_window": {},
+    "el_house_wall_cream": {}, "el_house_wall_cream_window": {},
+    "el_wood_platform": {}, "el_soffit": {},
+    "el_platform_edge": {"facing": FACINGS4},
+    "el_booth": {"facing": FACINGS4, "half": {"lower", "upper"}},
+    "el_exit_sign": {"facing": FACINGS4, "mount": {"ceiling", "wall"},
+                     "arrow": {"none", "right", "left", "down"}},
+    "el_lamp_gooseneck": {"facing": FACINGS4},
+    "el_lamp_post": {"facing": FACINGS4}, "el_lamp_head": {"facing": FACINGS4},
+}
+
+RECIPES3 = {
+    "el_stair_side": {"type": "minecraft:crafting_shapeless", "category": "building",
+                      "ingredients": [{"item": f"{MOD}:el_windscreen_corrugated"},
+                                      {"item": "minecraft:iron_ingot"}],
+                      "result": {"item": f"{MOD}:el_stair_side", "count": 2}},
+    "el_stair_canopy": {"type": "minecraft:crafting_shapeless", "category": "building",
+                        "ingredients": [{"item": f"{MOD}:el_canopy_flat"},
+                                        {"item": "minecraft:red_dye"}],
+                        "result": {"item": f"{MOD}:el_stair_canopy", "count": 2}},
+    "el_portal_post": {"type": "minecraft:crafting_shapeless", "category": "building",
+                       "ingredients": [{"item": f"{MOD}:el_canopy_post"},
+                                       {"item": "minecraft:iron_bars"}],
+                       "result": {"item": f"{MOD}:el_portal_post"}},
+    "el_portal_header": {"type": "minecraft:crafting_shapeless", "category": "building",
+                         "ingredients": [{"item": f"{MOD}:el_girder"},
+                                         {"item": "minecraft:iron_bars"}],
+                         "result": {"item": f"{MOD}:el_portal_header", "count": 2}},
+    "el_house_wall_green": {"type": "minecraft:crafting_shapeless", "category": "building",
+                            "ingredients": [{"item": "minecraft:oak_planks"}] * 4
+                                           + [{"item": "minecraft:green_dye"}],
+                            "result": {"item": f"{MOD}:el_house_wall_green", "count": 4}},
+    "el_house_wall_cream": {"type": "minecraft:crafting_shapeless", "category": "building",
+                            "ingredients": [{"item": "minecraft:oak_planks"}] * 4
+                                           + [{"item": "minecraft:white_dye"}],
+                            "result": {"item": f"{MOD}:el_house_wall_cream", "count": 4}},
+    "el_house_wall_green_window": {"type": "minecraft:crafting_shapeless", "category": "building",
+                                   "ingredients": [{"item": f"{MOD}:el_house_wall_green"},
+                                                   {"item": "minecraft:glass_pane"}],
+                                   "result": {"item": f"{MOD}:el_house_wall_green_window"}},
+    "el_house_wall_cream_window": {"type": "minecraft:crafting_shapeless", "category": "building",
+                                   "ingredients": [{"item": f"{MOD}:el_house_wall_cream"},
+                                                   {"item": "minecraft:glass_pane"}],
+                                   "result": {"item": f"{MOD}:el_house_wall_cream_window"}},
+    "el_wood_platform": {"type": "minecraft:crafting_shapeless", "category": "building",
+                         "ingredients": [{"item": "minecraft:spruce_planks"}] * 3
+                                        + [{"item": "minecraft:iron_nugget"}],
+                         "result": {"item": f"{MOD}:el_wood_platform", "count": 4}},
+    "el_platform_edge": {"type": "minecraft:crafting_shapeless", "category": "building",
+                         "ingredients": [{"item": "minecraft:stone"},
+                                         {"item": "minecraft:yellow_dye"},
+                                         {"item": "minecraft:iron_ingot"}],
+                         "result": {"item": f"{MOD}:el_platform_edge", "count": 2}},
+    "el_soffit": {"type": "minecraft:crafting_shapeless", "category": "building",
+                  "ingredients": [{"item": "minecraft:oak_planks"},
+                                  {"item": "minecraft:oak_planks"},
+                                  {"item": "minecraft:white_dye"}],
+                  "result": {"item": f"{MOD}:el_soffit", "count": 4}},
+    "el_booth": {"type": "minecraft:crafting_shapeless", "category": "building",
+                 "ingredients": [{"item": f"{MOD}:el_house_wall_green"},
+                                 {"item": "minecraft:glass_pane"},
+                                 {"item": "minecraft:iron_ingot"}],
+                 "result": {"item": f"{MOD}:el_booth"}},
+    "el_exit_sign": {"type": "minecraft:crafting_shapeless", "category": "building",
+                     "ingredients": [{"item": "minecraft:iron_ingot"},
+                                     {"item": "minecraft:black_dye"}],
+                     "result": {"item": f"{MOD}:el_exit_sign", "count": 2}},
+    "el_lamp_gooseneck": {"type": "minecraft:crafting_shapeless", "category": "building",
+                          "ingredients": [{"item": "minecraft:iron_ingot"},
+                                          {"item": "minecraft:iron_nugget"},
+                                          {"item": "minecraft:glowstone_dust"}],
+                          "result": {"item": f"{MOD}:el_lamp_gooseneck", "count": 2}},
+    "el_lamp_post": {"type": "minecraft:crafting_shaped", "category": "building",
+                     "key": {"N": {"item": "minecraft:iron_nugget"},
+                             "I": {"item": "minecraft:iron_ingot"}},
+                     "pattern": ["N", "I", "I"],
+                     "result": {"item": f"{MOD}:el_lamp_post", "count": 2}},
+    "el_lamp_head": {"type": "minecraft:crafting_shapeless", "category": "building",
+                     "ingredients": [{"item": "minecraft:iron_ingot"},
+                                     {"item": "minecraft:glowstone_dust"},
+                                     {"item": "minecraft:green_dye"}],
+                     "result": {"item": f"{MOD}:el_lamp_head"}},
+}
+
+
+def write_textures(texdir):
     green_wall = tex_house(HOUSE_GREEN, HOUSE_GREEN_LIT, HOUSE_GREEN_DARK, HOUSE_GREEN_SHADOW)
     cream_wall = tex_house(HOUSE_CREAM, HOUSE_CREAM_LIT, HOUSE_CREAM_DARK, HOUSE_CREAM_SHADOW)
     wpng(os.path.join(texdir, "el_house_green.png"), green_wall)
@@ -414,6 +532,8 @@ def main():
     wpng(os.path.join(texdir, "el_soffit.png"), tex_soffit())
     wpng(os.path.join(texdir, "el_exit_sign.png"), tex_exit())
 
+
+def write_models(g):
     for name, els in (
             ("el_stair_side_model", stair_side()),
             ("el_stair_canopy_model", stair_canopy()),
@@ -429,12 +549,106 @@ def main():
             ("el_soffit_model", soffit()),
             ("el_booth_lower", booth_lower()),
             ("el_booth_upper", booth_upper()),
-            ("el_exit_sign_model", exit_sign()),
             ("el_lamp_gooseneck_model", lamp_gooseneck()),
             ("el_lamp_post_pole", lamp_post_pole()),
             ("el_lamp_post_head", lamp_post_head()),
-            ("el_gable_truss_end", gable_truss_end())):
+            ("el_portal_post_item", portal_post_shaft() + portal_post_bracket()),
+            ("el_lamp_post_item", lamp_post_pole())):
         g.model(name, TEX, els)
+    exit_sign_models(g)
+
+
+def build_final(g, assets_root, data_root, loot):
+    write_textures(os.path.join(assets_root, "textures/block"))
+    write_models(g)
+
+    # blockstates
+    for block, mdl in (("el_stair_side", "el_stair_side_model"),
+                       ("el_stair_canopy", "el_stair_canopy_model"),
+                       ("el_portal_header", "el_portal_header_model"),
+                       ("el_platform_edge", "el_platform_edge_model"),
+                       ("el_lamp_gooseneck", "el_lamp_gooseneck_model"),
+                       ("el_lamp_post", "el_lamp_post_pole"),
+                       ("el_lamp_head", "el_lamp_post_head")):
+        g.wj(os.path.join(assets_root, "blockstates", block + ".json"), facing_variants(mdl))
+    for block, mdl in (("el_house_wall_green", "el_house_wall_green"),
+                       ("el_house_wall_green_window", "el_house_wall_green_window"),
+                       ("el_house_wall_cream", "el_house_wall_cream"),
+                       ("el_house_wall_cream_window", "el_house_wall_cream_window"),
+                       ("el_wood_platform", "el_wood_platform_model"),
+                       ("el_soffit", "el_soffit_model")):
+        g.wj(os.path.join(assets_root, "blockstates", block + ".json"),
+             {"variants": {"": {"model": f"{MOD}:block/{mdl}"}}})
+    parts = [{"apply": {"model": f"{MOD}:block/el_portal_post_shaft"}}]
+    for facing, rot in ROTS:
+        entry = {"model": f"{MOD}:block/el_portal_post_bracket"}
+        if rot:
+            entry["y"] = rot
+        parts.append({"when": {"facing": facing, "up": "false"}, "apply": entry})
+    g.wj(os.path.join(assets_root, "blockstates", "el_portal_post.json"), {"multipart": parts})
+    booth = {}
+    for facing, rot in ROTS:
+        for half in ("lower", "upper"):
+            entry = {"model": f"{MOD}:block/el_booth_{half}"}
+            if rot:
+                entry["y"] = rot
+            booth[f"facing={facing},half={half}"] = entry
+    g.wj(os.path.join(assets_root, "blockstates", "el_booth.json"), {"variants": booth})
+    exit_bs = {}
+    for facing, rot in ROTS:
+        for mount in ("ceiling", "wall"):
+            for arrow in ("none", "right", "left", "down"):
+                kind = "hang" if mount == "ceiling" else "wall"
+                entry = {"model": f"{MOD}:block/el_exit_sign_{kind}_{arrow}"}
+                if rot:
+                    entry["y"] = rot
+                exit_bs[f"facing={facing},mount={mount},arrow={arrow}"] = entry
+    g.wj(os.path.join(assets_root, "blockstates", "el_exit_sign.json"), {"variants": exit_bs})
+
+    # item models
+    items = {"el_stair_side": "el_stair_side_model", "el_stair_canopy": "el_stair_canopy_model",
+             "el_portal_post": "el_portal_post_item", "el_portal_header": "el_portal_header_model",
+             "el_house_wall_green": "el_house_wall_green",
+             "el_house_wall_green_window": "el_house_wall_green_window",
+             "el_house_wall_cream": "el_house_wall_cream",
+             "el_house_wall_cream_window": "el_house_wall_cream_window",
+             "el_wood_platform": "el_wood_platform_model",
+             "el_platform_edge": "el_platform_edge_model", "el_soffit": "el_soffit_model",
+             "el_booth": "el_booth_upper", "el_exit_sign": "el_exit_sign_hang_none",
+             "el_lamp_gooseneck": "el_lamp_gooseneck_model",
+             "el_lamp_post": "el_lamp_post_item", "el_lamp_head": "el_lamp_post_head"}
+    for block, mdl in items.items():
+        g.wj(os.path.join(assets_root, "models/item", block + ".json"),
+             {"parent": f"{MOD}:block/{mdl}"})
+
+    # loot: the booth drops from its lower half only, everything else plain
+    for block in BLOCKS3:
+        if block == "el_booth":
+            g.wj(os.path.join(data_root, MOD, "loot_tables/blocks", block + ".json"), {
+                "type": "minecraft:block",
+                "pools": [{"rolls": 1,
+                           "entries": [{"type": "minecraft:item", "name": f"{MOD}:{block}"}],
+                           "conditions": [
+                               {"condition": "minecraft:block_state_property",
+                                "block": f"{MOD}:{block}",
+                                "properties": {"half": "lower"}},
+                               {"condition": "minecraft:survives_explosion"}]}]})
+        else:
+            g.wj(os.path.join(data_root, MOD, "loot_tables/blocks", block + ".json"), loot(block))
+    for name, recipe in RECIPES3.items():
+        g.wj(os.path.join(data_root, MOD, "recipes", name + ".json"), recipe)
+
+
+# ---------------------------------------------------------------- preview ---
+def main():
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--out", required=True)
+    args = parser.parse_args()
+    assets = os.path.join(args.out, "assets", MOD)
+    g = Gen(assets, os.path.join(args.out, "data"))
+    os.makedirs(os.path.join(assets, "textures/block"), exist_ok=True)
+    write_textures(os.path.join(assets, "textures/block"))
+    write_models(g)
     print("phase-3 preview tree written")
 
 

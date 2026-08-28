@@ -1,0 +1,124 @@
+{
+  "variants": {
+    "facing=north,mount=ceiling,arrow=none": {
+      "model": "station_announcer:block/el_exit_sign_hang_none"
+    },
+    "facing=north,mount=ceiling,arrow=right": {
+      "model": "station_announcer:block/el_exit_sign_hang_right"
+    },
+    "facing=north,mount=ceiling,arrow=left": {
+      "model": "station_announcer:block/el_exit_sign_hang_left"
+    },
+    "facing=north,mount=ceiling,arrow=down": {
+      "model": "station_announcer:block/el_exit_sign_hang_down"
+    },
+    "facing=north,mount=wall,arrow=none": {
+      "model": "station_announcer:block/el_exit_sign_wall_none"
+    },
+    "facing=north,mount=wall,arrow=right": {
+      "model": "station_announcer:block/el_exit_sign_wall_right"
+    },
+    "facing=north,mount=wall,arrow=left": {
+      "model": "station_announcer:block/el_exit_sign_wall_left"
+    },
+    "facing=north,mount=wall,arrow=down": {
+      "model": "station_announcer:block/el_exit_sign_wall_down"
+    },
+    "facing=east,mount=ceiling,arrow=none": {
+      "model": "station_announcer:block/el_exit_sign_hang_none",
+      "y": 90
+    },
+    "facing=east,mount=ceiling,arrow=right": {
+      "model": "station_announcer:block/el_exit_sign_hang_right",
+      "y": 90
+    },
+    "facing=east,mount=ceiling,arrow=left": {
+      "model": "station_announcer:block/el_exit_sign_hang_left",
+      "y": 90
+    },
+    "facing=east,mount=ceiling,arrow=down": {
+      "model": "station_announcer:block/el_exit_sign_hang_down",
+      "y": 90
+    },
+    "facing=east,mount=wall,arrow=none": {
+      "model": "station_announcer:block/el_exit_sign_wall_none",
+      "y": 90
+    },
+    "facing=east,mount=wall,arrow=right": {
+      "model": "station_announcer:block/el_exit_sign_wall_right",
+      "y": 90
+    },
+    "facing=east,mount=wall,arrow=left": {
+      "model": "station_announcer:block/el_exit_sign_wall_left",
+      "y": 90
+    },
+    "facing=east,mount=wall,arrow=down": {
+      "model": "station_announcer:block/el_exit_sign_wall_down",
+      "y": 90
+    },
+    "facing=south,mount=ceiling,arrow=none": {
+      "model": "station_announcer:block/el_exit_sign_hang_none",
+      "y": 180
+    },
+    "facing=south,mount=ceiling,arrow=right": {
+      "model": "station_announcer:block/el_exit_sign_hang_right",
+      "y": 180
+    },
+    "facing=south,mount=ceiling,arrow=left": {
+      "model": "station_announcer:block/el_exit_sign_hang_left",
+      "y": 180
+    },
+    "facing=south,mount=ceiling,arrow=down": {
+      "model": "station_announcer:block/el_exit_sign_hang_down",
+      "y": 180
+    },
+    "facing=south,mount=wall,arrow=none": {
+      "model": "station_announcer:block/el_exit_sign_wall_none",
+      "y": 180
+    },
+    "facing=south,mount=wall,arrow=right": {
+      "model": "station_announcer:block/el_exit_sign_wall_right",
+      "y": 180
+    },
+    "facing=south,mount=wall,arrow=left": {
+      "model": "station_announcer:block/el_exit_sign_wall_left",
+      "y": 180
+    },
+    "facing=south,mount=wall,arrow=down": {
+      "model": "station_announcer:block/el_exit_sign_wall_down",
+      "y": 180
+    },
+    "facing=west,mount=ceiling,arrow=none": {
+      "model": "station_announcer:block/el_exit_sign_hang_none",
+      "y": 270
+    },
+    "facing=west,mount=ceiling,arrow=right": {
+      "model": "station_announcer:block/el_exit_sign_hang_right",
+      "y": 270
+    },
+    "facing=west,mount=ceiling,arrow=left": {
+      "model": "station_announcer:block/el_exit_sign_hang_left",
+      "y": 270
+    },
+    "facing=west,mount=ceiling,arrow=down": {
+      "model": "station_announcer:block/el_exit_sign_hang_down",
+      "y": 270
+    },
+    "facing=west,mount=wall,arrow=none": {
+      "model": "station_announcer:block/el_exit_sign_wall_none",
+      "y": 270
+    },
+    "facing=west,mount=wall,arrow=right": {
+      "model": "station_announcer:block/el_exit_sign_wall_right",
+      "y": 270
+    },
+    "facing=west,mount=wall,arrow=left": {
+      "model": "station_announcer:block/el_exit_sign_wall_left",
+      "y": 270
+    },
+    "facing=west,mount=wall,arrow=down": {
+      "model": "station_announcer:block/el_exit_sign_wall_down",
+      "y": 270
+    }
+  }
+}

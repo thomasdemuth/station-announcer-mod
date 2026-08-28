@@ -1,6 +1,12 @@
 {
   "replace": false,
   "values": [
-    "station_announcer:bench"
+    "station_announcer:bench",
+    "station_announcer:el_house_wall_green",
+    "station_announcer:el_house_wall_green_window",
+    "station_announcer:el_house_wall_cream",
+    "station_announcer:el_house_wall_cream_window",
+    "station_announcer:el_wood_platform",
+    "station_announcer:el_soffit"
   ]
 }

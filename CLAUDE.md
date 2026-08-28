@@ -323,6 +323,16 @@ MtrPidsClient; 5 tinted blocks. The scratchpad offline renderer
 (render_blockmodel.py + render_el*.py) drove the whole preview loop —
 recreate it for future model families. NOT verified in game: everything
 (placement connectivity, cutout layers, tint, name boards, collision feel).
+PHASE 3 same day (previews approved; +16 blocks, 44 el total): street stairs
+(ElSlopeBlock 45° rescale pieces), entrance portal (post+header), station
+house walls/windows/soffit/booth (ElBoothBlock), wood platform, tactile
+platform edge, EXIT sign (ElExitSignBlock mount+arrow cycle), goose-neck +
+lamppost (pole+head blocks), gable end upgraded to open truss. Generator
+module tools/gen_el_phase3.py called from gen_el_assets.build(); PROPS
+merged for verify. ALSO: the purple-texture postmortem — pngtool.write_png
+emits px[:4] bytes vs an RGBA header, so RGB 3-tuples corrupt every PNG;
+gen_el_assets.wpng() normalizes at the single write point. Validate PNGs by
+IDAT length, NOT pngtool.read_png (limited decoder, false negatives).
 
 ### TURNSTILE ROUND 2 (2026-08-19 evening) — fare feedback + photo-grade tubing; NOT yet deployed
 

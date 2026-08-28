@@ -1,0 +1,82 @@
+{
+  "parent": "minecraft:block/block",
+  "textures": {
+    "house": "station_announcer:block/el_house_green",
+    "housew": "station_announcer:block/el_house_green_window",
+    "housec": "station_announcer:block/el_house_cream",
+    "housecw": "station_announcer:block/el_house_cream_window",
+    "planks": "station_announcer:block/el_planks",
+    "edge": "station_announcer:block/el_platform_edge",
+    "soffit": "station_announcer:block/el_soffit",
+    "exit": "station_announcer:block/el_exit_sign",
+    "body": "station_announcer:block/el_steel_green",
+    "galv": "station_announcer:block/el_steel_silver",
+    "lattice": "station_announcer:block/el_lattice_green",
+    "roof": "station_announcer:block/el_roof_red",
+    "screen": "station_announcer:block/el_windscreen",
+    "corru": "station_announcer:block/el_corrugated",
+    "board": "station_announcer:block/el_board",
+    "particle": "station_announcer:block/el_steel_green"
+  },
+  "elements": [
+    {
+      "from": [
+        2,
+        4.5,
+        14.4
+      ],
+      "to": [
+        14,
+        12,
+        15.4
+      ],
+      "faces": {
+        "north": {
+          "texture": "#exit",
+          "uv": [
+            0,
+            4.25,
+            16,
+            7.75
+          ]
+        },
+        "east": {
+          "texture": "#exit",
+          "uv": [
+            0,
+            4.5,
+            1,
+            7.5
+          ]
+        },
+        "west": {
+          "texture": "#exit",
+          "uv": [
+            0,
+            4.5,
+            1,
+            7.5
+          ]
+        },
+        "up": {
+          "texture": "#exit",
+          "uv": [
+            0,
+            4.5,
+            1,
+            7.5
+          ]
+        },
+        "down": {
+          "texture": "#exit",
+          "uv": [
+            0,
+            4.5,
+            1,
+            7.5
+          ]
+        }
+      }
+    }
+  ]
+}

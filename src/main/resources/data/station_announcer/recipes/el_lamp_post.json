@@ -1,0 +1,21 @@
+{
+  "type": "minecraft:crafting_shaped",
+  "category": "building",
+  "key": {
+    "N": {
+      "item": "minecraft:iron_nugget"
+    },
+    "I": {
+      "item": "minecraft:iron_ingot"
+    }
+  },
+  "pattern": [
+    "N",
+    "I",
+    "I"
+  ],
+  "result": {
+    "item": "station_announcer:el_lamp_post",
+    "count": 2
+  }
+}

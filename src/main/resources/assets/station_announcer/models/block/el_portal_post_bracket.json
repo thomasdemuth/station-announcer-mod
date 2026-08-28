@@ -1,0 +1,123 @@
+{
+  "parent": "minecraft:block/block",
+  "textures": {
+    "house": "station_announcer:block/el_house_green",
+    "housew": "station_announcer:block/el_house_green_window",
+    "housec": "station_announcer:block/el_house_cream",
+    "housecw": "station_announcer:block/el_house_cream_window",
+    "planks": "station_announcer:block/el_planks",
+    "edge": "station_announcer:block/el_platform_edge",
+    "soffit": "station_announcer:block/el_soffit",
+    "exit": "station_announcer:block/el_exit_sign",
+    "body": "station_announcer:block/el_steel_green",
+    "galv": "station_announcer:block/el_steel_silver",
+    "lattice": "station_announcer:block/el_lattice_green",
+    "roof": "station_announcer:block/el_roof_red",
+    "screen": "station_announcer:block/el_windscreen",
+    "corru": "station_announcer:block/el_corrugated",
+    "board": "station_announcer:block/el_board",
+    "particle": "station_announcer:block/el_steel_green"
+  },
+  "elements": [
+    {
+      "from": [
+        7.6,
+        9.6,
+        9.4
+      ],
+      "to": [
+        8.4,
+        15.4,
+        15.2
+      ],
+      "faces": {
+        "east": {
+          "texture": "#lattice",
+          "uv": [
+            0,
+            0,
+            6,
+            6
+          ]
+        },
+        "west": {
+          "texture": "#lattice",
+          "uv": [
+            0,
+            0,
+            6,
+            6
+          ]
+        }
+      }
+    },
+    {
+      "from": [
+        6.9,
+        14.0,
+        6.9
+      ],
+      "to": [
+        9.1,
+        15.8,
+        15.9
+      ],
+      "faces": {
+        "north": {
+          "texture": "#body",
+          "uv": [
+            1,
+            4.75,
+            2.4,
+            10
+          ]
+        },
+        "south": {
+          "texture": "#body",
+          "uv": [
+            1,
+            4.75,
+            2.4,
+            10
+          ]
+        },
+        "east": {
+          "texture": "#body",
+          "uv": [
+            1,
+            4.75,
+            2.4,
+            10
+          ]
+        },
+        "west": {
+          "texture": "#body",
+          "uv": [
+            1,
+            4.75,
+            2.4,
+            10
+          ]
+        },
+        "up": {
+          "texture": "#body",
+          "uv": [
+            1,
+            4.75,
+            2.4,
+            10
+          ]
+        },
+        "down": {
+          "texture": "#body",
+          "uv": [
+            1,
+            4.75,
+            2.4,
+            10
+          ]
+        }
+      }
+    }
+  ]
+}

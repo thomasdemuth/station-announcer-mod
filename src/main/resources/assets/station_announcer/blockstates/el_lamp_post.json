@@ -1,0 +1,19 @@
+{
+  "variants": {
+    "facing=north": {
+      "model": "station_announcer:block/el_lamp_post_pole"
+    },
+    "facing=east": {
+      "model": "station_announcer:block/el_lamp_post_pole",
+      "y": 90
+    },
+    "facing=south": {
+      "model": "station_announcer:block/el_lamp_post_pole",
+      "y": 180
+    },
+    "facing=west": {
+      "model": "station_announcer:block/el_lamp_post_pole",
+      "y": 270
+    }
+  }
+}

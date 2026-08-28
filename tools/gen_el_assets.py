@@ -478,6 +478,7 @@ PLATFORM_TEX = {
     "screen": f"{MOD}:block/el_windscreen",
     "corru": f"{MOD}:block/el_corrugated",
     "corru_s": f"{MOD}:block/el_corrugated_silver",
+    "lattice": f"{MOD}:block/el_lattice_green",
     "glass": f"{MOD}:block/el_glass",
     "mesh": f"{MOD}:block/el_mesh",
     "roof": f"{MOD}:block/el_roof_red",
@@ -651,15 +652,18 @@ def canopy_gable_elements():
 
 
 def gable_end_elements():
-    """Stepped end plate closing a gable run's open end (authored WEST)."""
+    """Open truss triangle closing a gable run's end (authored WEST): bottom
+    chord, two 22.5° sloped chords following the roof pitch, lattice web."""
     els = []
-    for y0, y1, z0, z1 in ((0, 1.8, 1.2, 14.8), (1.8, 3.2, 3.8, 12.2),
-                           (3.2, 4.4, 6.2, 9.8)):
-        face = f("body", [1, 4.75, 7.75, 5.65 + (y1 - y0) / 2])
-        els.append(elem([0.2, y0, z0], [1.4, y1, z1], {
-            "north": face, "south": face, "east": face, "west": face,
-            "up": f("body", [1, 4.75, 1.6, 11.55]),
-        }))
+    chord = f("body", [0.25, 5, 15.75, 6.2])
+    els.append(elem([0.2, 0.2, 0.8], [1.4, 1.5, 15.2],
+                    {n: chord for n in ("north", "south", "east", "west", "up", "down")}))
+    for z0, angle, oz in ((0.8, -22.5, 1.6), (8.0, 22.5, 14.4)):
+        els.append(elem([0.2, 1.3, z0], [1.4, 2.6, z0 + 7.2],
+                        {n: chord for n in ("north", "south", "east", "west", "up", "down")},
+                        rotation={"origin": [0.8, 1.9, oz], "axis": "x", "angle": angle}))
+    lat = f("lattice", [2, 4, 14, 8])
+    els.append(elem([0.5, 1.4, 3.4], [1.1, 3.2, 12.6], {"east": lat, "west": lat}))
     return els
 
 
@@ -1094,6 +1098,9 @@ def build(assets_root, data_root):
         g.wj(os.path.join(data_root, MOD, "recipes", name + ".json"), recipe)
 
     build_platform(g, assets_root)
+    import gen_el_phase3
+    gen_el_phase3.build_final(g, assets_root, data_root, loot)
+    PROPS.update(gen_el_phase3.PROPS3)
     verify(assets_root)
 
 

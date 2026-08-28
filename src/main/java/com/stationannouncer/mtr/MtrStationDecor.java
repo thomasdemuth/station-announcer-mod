@@ -158,6 +158,46 @@ public final class MtrStationDecor {
     public static final ElCanopyBlock EL_CANOPY_GABLE = new ElCanopyBlock(settings(), 4.6);
     public static final ElNameBoardBlock EL_NAME_BOARD = new ElNameBoardBlock(settings(), EL_BOARD_SHAPE);
 
+    /**
+     * El phase 3 (EL_STATION_PLAN.md): street stairs + entrance portal,
+     * station house, and the platform details. House walls, planks and the
+     * platform edge are full OPAQUE cubes (vanilla culling); the lamps emit
+     * light constantly.
+     */
+    private static AbstractBlock.Settings opaqueSettings(BlockSoundGroup sounds) {
+        return AbstractBlock.Settings.create().strength(2.0f).sounds(sounds);
+    }
+
+    private static AbstractBlock.Settings lampSettings() {
+        return settings().luminance(state -> 14);
+    }
+
+    private static final VoxelShape EL_SLOPE_WALL_SHAPE = Block.createCuboidShape(5.9, 0.0, 0.0, 10.1, 16.0, 16.0);
+    private static final VoxelShape EL_SOFFIT_SHAPE = Block.createCuboidShape(0.0, 13.0, 0.0, 16.0, 16.0, 16.0);
+    private static final VoxelShape EL_GOOSENECK_SHAPE = Block.createCuboidShape(5.5, 6.0, 5.5, 10.5, 16.0, 15.5);
+    private static final VoxelShape EL_LAMP_HEAD_SHAPE = Block.createCuboidShape(5.5, 0.0, 5.5, 10.5, 9.0, 15.5);
+
+    public static final ElSlopeBlock EL_STAIR_SIDE = new ElSlopeBlock(settings(), EL_SLOPE_WALL_SHAPE);
+    public static final ElSlopeBlock EL_STAIR_CANOPY = new ElSlopeBlock(settings(),
+            Block.createCuboidShape(0.0, 0.0, 0.0, 16.0, 16.0, 16.0));
+    public static final ColumnBlock EL_PORTAL_POST = new ColumnBlock(settings(), EL_POST_SHAPE);
+    public static final FacingDecorBlock EL_PORTAL_HEADER = new FacingDecorBlock(settings(),
+            Block.createCuboidShape(0.0, 5.4, 6.8, 16.0, 15.6, 9.2));
+    public static final Block EL_HOUSE_WALL_GREEN = new Block(opaqueSettings(BlockSoundGroup.WOOD));
+    public static final Block EL_HOUSE_WALL_GREEN_WINDOW = new Block(opaqueSettings(BlockSoundGroup.WOOD));
+    public static final Block EL_HOUSE_WALL_CREAM = new Block(opaqueSettings(BlockSoundGroup.WOOD));
+    public static final Block EL_HOUSE_WALL_CREAM_WINDOW = new Block(opaqueSettings(BlockSoundGroup.WOOD));
+    public static final Block EL_WOOD_PLATFORM = new Block(opaqueSettings(BlockSoundGroup.WOOD));
+    public static final FacingDecorBlock EL_PLATFORM_EDGE = new FacingDecorBlock(
+            opaqueSettings(BlockSoundGroup.STONE), Block.createCuboidShape(0.0, 0.0, 0.0, 16.0, 16.0, 16.0));
+    public static final FacingDecorBlock EL_SOFFIT = new FacingDecorBlock(settings(), EL_SOFFIT_SHAPE);
+    public static final ElBoothBlock EL_BOOTH = new ElBoothBlock(settings());
+    public static final ElExitSignBlock EL_EXIT_SIGN = new ElExitSignBlock(settings());
+    public static final FacingDecorBlock EL_LAMP_GOOSENECK = new FacingDecorBlock(lampSettings(), EL_GOOSENECK_SHAPE);
+    public static final FacingDecorBlock EL_LAMP_POST = new FacingDecorBlock(settings(),
+            Block.createCuboidShape(5.6, 0.0, 5.6, 10.4, 16.0, 10.4));
+    public static final FacingDecorBlock EL_LAMP_HEAD = new FacingDecorBlock(lampSettings(), EL_LAMP_HEAD_SHAPE);
+
     public static final BlockEntityType<StopMarkerBlockEntity> STOP_MARKER_BLOCK_ENTITY =
             BlockEntityType.Builder.create(StopMarkerBlockEntity::new, STOP_MARKER).build(null);
 
@@ -324,6 +364,22 @@ public final class MtrStationDecor {
         registerBlock("el_canopy_flat_silver", EL_CANOPY_FLAT_SILVER, ModContent.DECORATION_ENTRIES);
         registerBlock("el_canopy_gable", EL_CANOPY_GABLE, ModContent.DECORATION_ENTRIES);
         registerBlock("el_name_board", EL_NAME_BOARD, ModContent.DECORATION_ENTRIES);
+        registerBlock("el_stair_side", EL_STAIR_SIDE, ModContent.DECORATION_ENTRIES);
+        registerBlock("el_stair_canopy", EL_STAIR_CANOPY, ModContent.DECORATION_ENTRIES);
+        registerBlock("el_portal_post", EL_PORTAL_POST, ModContent.DECORATION_ENTRIES);
+        registerBlock("el_portal_header", EL_PORTAL_HEADER, ModContent.DECORATION_ENTRIES);
+        registerBlock("el_house_wall_green", EL_HOUSE_WALL_GREEN, ModContent.DECORATION_ENTRIES);
+        registerBlock("el_house_wall_green_window", EL_HOUSE_WALL_GREEN_WINDOW, ModContent.DECORATION_ENTRIES);
+        registerBlock("el_house_wall_cream", EL_HOUSE_WALL_CREAM, ModContent.DECORATION_ENTRIES);
+        registerBlock("el_house_wall_cream_window", EL_HOUSE_WALL_CREAM_WINDOW, ModContent.DECORATION_ENTRIES);
+        registerBlock("el_wood_platform", EL_WOOD_PLATFORM, ModContent.DECORATION_ENTRIES);
+        registerBlock("el_platform_edge", EL_PLATFORM_EDGE, ModContent.DECORATION_ENTRIES);
+        registerBlock("el_soffit", EL_SOFFIT, ModContent.DECORATION_ENTRIES);
+        registerBlock("el_booth", EL_BOOTH, ModContent.DECORATION_ENTRIES);
+        registerBlock("el_exit_sign", EL_EXIT_SIGN, ModContent.DECORATION_ENTRIES);
+        registerBlock("el_lamp_gooseneck", EL_LAMP_GOOSENECK, ModContent.DECORATION_ENTRIES);
+        registerBlock("el_lamp_post", EL_LAMP_POST, ModContent.DECORATION_ENTRIES);
+        registerBlock("el_lamp_head", EL_LAMP_HEAD, ModContent.DECORATION_ENTRIES);
         registerBlock("entrance_railing_sign", ENTRANCE_RAILING_SIGN, ModContent.DECORATION_ENTRIES);
         registerBlock("emergency_exit_door", EMERGENCY_EXIT_DOOR, ModContent.DECORATION_ENTRIES);
         registerBlock("employee_door_mesh", EMPLOYEE_DOOR_MESH, ModContent.DECORATION_ENTRIES);
