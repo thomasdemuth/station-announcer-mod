@@ -1,39 +1,49 @@
 {
-  "multipart": [
-    {
-      "when": {
-        "facing": "north"
-      },
-      "apply": {
-        "model": "station_announcer:block/el_name_board_model"
-      }
+  "variants": {
+    "facing=north,mount=standing": {
+      "model": "station_announcer:block/el_name_board_model"
     },
-    {
-      "when": {
-        "facing": "east"
-      },
-      "apply": {
-        "model": "station_announcer:block/el_name_board_model",
-        "y": 90
-      }
+    "facing=north,mount=hanging": {
+      "model": "station_announcer:block/el_name_board_hanging"
     },
-    {
-      "when": {
-        "facing": "south"
-      },
-      "apply": {
-        "model": "station_announcer:block/el_name_board_model",
-        "y": 180
-      }
+    "facing=north,mount=wall": {
+      "model": "station_announcer:block/el_name_board_wall"
     },
-    {
-      "when": {
-        "facing": "west"
-      },
-      "apply": {
-        "model": "station_announcer:block/el_name_board_model",
-        "y": 270
-      }
+    "facing=east,mount=standing": {
+      "model": "station_announcer:block/el_name_board_model",
+      "y": 90
+    },
+    "facing=east,mount=hanging": {
+      "model": "station_announcer:block/el_name_board_hanging",
+      "y": 90
+    },
+    "facing=east,mount=wall": {
+      "model": "station_announcer:block/el_name_board_wall",
+      "y": 90
+    },
+    "facing=south,mount=standing": {
+      "model": "station_announcer:block/el_name_board_model",
+      "y": 180
+    },
+    "facing=south,mount=hanging": {
+      "model": "station_announcer:block/el_name_board_hanging",
+      "y": 180
+    },
+    "facing=south,mount=wall": {
+      "model": "station_announcer:block/el_name_board_wall",
+      "y": 180
+    },
+    "facing=west,mount=standing": {
+      "model": "station_announcer:block/el_name_board_model",
+      "y": 270
+    },
+    "facing=west,mount=hanging": {
+      "model": "station_announcer:block/el_name_board_hanging",
+      "y": 270
+    },
+    "facing=west,mount=wall": {
+      "model": "station_announcer:block/el_name_board_wall",
+      "y": 270
     }
-  ]
+  }
 }

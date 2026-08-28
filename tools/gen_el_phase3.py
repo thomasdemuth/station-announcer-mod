@@ -91,17 +91,32 @@ def tex_planks():
 
 
 def tex_concrete_edge():
-    """Platform edge top, 16px: concrete with the yellow tactile strip in
-    rows 0..5 (the track side edge)."""
-    rows = pk.canvas(16, 16, CONCRETE)
-    for x in range(16):
+    """Platform edge, 32 px (uv unit = 2 texels).
+
+    The TOP face samples this by footprint (u = x, v = z), so uv rows 0..5 —
+    texture rows 0..11 — are the block's NORTH strip, i.e. the FACING/track
+    edge. That band is the yellow tactile warning strip, drawn as three
+    STAGGERED ROWS OF TRUNCATED DOMES: each dome is a 2x2 cell with a lit
+    top-left and a shadowed bottom-right texel. The 2 px pitch divides 32, so
+    the dome grid runs unbroken from block to block along the platform.
+
+    Everything below is concrete: per-COLUMN tone variation only, because the
+    same texture skins the vertical side faces (uv rows 6..16) and a
+    horizontal band there would repeat on every stacked block."""
+    TACTILE_LIT = (246, 198, 62)
+    rows = pk.canvas(32, 32, CONCRETE)
+    for x in range(32):
         t = (CONCRETE, CONCRETE_LIT, CONCRETE, CONCRETE_DARK)[(x * 5) % 4]
-        for y in range(16):
+        for y in range(32):
             rows[y][x] = t
-    pk.rect(rows, 0, 0, 16, 5, TACTILE)
-    for x in range(0, 16, 2):
-        pk.rect(rows, x, 1, x + 1, 4, TACTILE_DARK)   # truncated domes read
-    pk.rect(rows, 0, 5, 16, 6, CONCRETE_DARK)
+    pk.rect(rows, 0, 0, 32, 10, TACTILE)
+    for i, y in enumerate((0, 4, 8)):
+        for x in range((i % 2) * 2, 32, 4):        # 4 px pitch: dome, 2 px gap
+            rows[y][x] = TACTILE_LIT
+            rows[y][x + 1] = TACTILE_LIT
+            rows[y + 1][x] = TACTILE_LIT
+            rows[y + 1][x + 1] = TACTILE_DARK      # the dome's shaded corner
+    pk.rect(rows, 0, 10, 32, 12, CONCRETE_DARK)     # groove behind the strip
     return rows
 
 
@@ -115,36 +130,59 @@ def tex_soffit():
     return rows
 
 
+def _tri_down(rows, cx, y0, half, colour):
+    """Solid triangle pointing down: `2*half+1` wide at y0, one px at the tip."""
+    for i in range(half + 1):
+        w = half - i
+        pk.rect(rows, cx - w, y0 + i, cx + w + 1, y0 + i + 1, colour)
+
+
+def _tri_side(rows, x0, cy, half, colour, right=True):
+    """Solid triangle pointing right (or left): `2*half+1` tall at the base."""
+    for i in range(half + 1):
+        h = half - i
+        x = x0 + i if right else x0 - i
+        pk.rect(rows, x, cy - h, x + 1, cy + h + 1, colour)
+
+
 def tex_exit():
-    """EXIT sign sheet, 32px, four 8-row zones: plain / right / left / down
-    arrows. White on black."""
-    rows = pk.canvas(32, 32, BLACK)
-    for zone, arrow in ((0, None), (8, "right"), (16, "left"), (24, "down")):
-        pk.rect(rows, 0, zone, 32, zone + 1, (34, 35, 38))
-        pk.rect(rows, 0, zone + 7, 32, zone + 8, (10, 10, 12))
-        label_w = pk.text_width("EXIT")
-        total = label_w + (5 if arrow else 0)
-        x0 = (32 - total) // 2
+    """EXIT sign sheet, 64px, four 16-row zones: plain / right / left / down
+    arrows, white on black.
+
+    Zone geometry is a CONTRACT with exit_sign_models(): 16 texture rows per
+    zone = 4 uv units (4 px per unit at 64), so the zone tops stay at uv v
+    0/4/8/12 and each sign face takes the WHOLE zone (uv height 4). The plate
+    is authored 12 x 3.5 px against the zone's 64:16 = 4:1 aspect, i.e. a 14 %
+    vertical squeeze — invisible on the lettering, and the plate stays the
+    wide thin strip the real signs are.
+
+    NOTE: el_lamp_* sample this sheet at uv (13..15, 4.4..5.4) for their bulb
+    glow, so the right-hand ~12 columns of every zone stay clear of artwork.
+    """
+    rows = pk.canvas(64, 64, BLACK)
+    for zone, arrow in ((0, None), (16, "right"), (32, "left"), (48, "down")):
+        pk.rect(rows, 0, zone, 64, zone + 1, (34, 35, 38))      # top highlight
+        pk.rect(rows, 0, zone + 15, 64, zone + 16, (10, 10, 12))  # bottom shadow
+        label_w = pk.text_width("EXIT", 2)                      # 30 px at scale 2
+        arrow_w = 13 if arrow else 0
+        total = label_w + (3 + arrow_w if arrow else 0)
+        x0 = (52 - total) // 2                                  # centred in cols 0..52
+        ty = zone + 3                                           # glyphs 10 px tall
+        cy = zone + 8
         if arrow == "left":
-            pk.text(rows, x0 + 5, zone + 1, "EXIT", WHITE)
-            ax = x0
-            pk.rect(rows, ax, zone + 3, ax + 4, zone + 4, WHITE)
-            rows[zone + 2][ax + 1] = WHITE
-            rows[zone + 4][ax + 1] = WHITE
+            pk.text(rows, x0 + arrow_w + 3, ty, "EXIT", WHITE, scale=2)
+            _tri_side(rows, x0 + 5, cy, 5, WHITE, right=False)
+            pk.rect(rows, x0 + 6, cy - 1, x0 + 13, cy + 2, WHITE)
         else:
-            pk.text(rows, x0, zone + 1, "EXIT", WHITE)
+            pk.text(rows, x0, ty, "EXIT", WHITE, scale=2)
+            ax = x0 + label_w + 3
             if arrow == "right":
-                ax = x0 + label_w + 1
-                pk.rect(rows, ax, zone + 3, ax + 4, zone + 4, WHITE)
-                rows[zone + 2][ax + 2] = WHITE
-                rows[zone + 4][ax + 2] = WHITE
+                pk.rect(rows, ax, cy - 1, ax + 7, cy + 2, WHITE)
+                _tri_side(rows, ax + 7, cy, 5, WHITE)
             elif arrow == "down":
-                ax = x0 + label_w + 1
-                pk.rect(rows, ax + 1, zone + 1, ax + 2, zone + 5, WHITE)
-                rows[zone + 4][ax] = WHITE
-                rows[zone + 4][ax + 3] = WHITE
-                rows[zone + 5][ax + 1] = WHITE
-                rows[zone + 5][ax + 2] = WHITE
+                cx = ax + 6
+                pk.rect(rows, cx - 1, zone + 2, cx + 2, zone + 9, WHITE)
+                _tri_down(rows, cx, zone + 8, 5, WHITE)
     return rows
 
 
@@ -288,18 +326,47 @@ def window_wall(ref):
 
 
 def platform_edge():
-    """Full cube: concrete top with the yellow tactile strip along the NORTH
-    (track) edge, riveted girder fascia on the north face."""
+    """Full opaque cube: concrete top with the yellow tactile dome strip along
+    the NORTH edge, riveted girder fascia on the north face, and the slab's
+    OVERHANG LIP standing proud of it.
+
+    ORIENTATION RULE — the block is a plain FacingDecorBlock, so placement
+    sets FACING to the OPPOSITE of the player's look: stand on the platform,
+    face the track, place, and the tactile strip + fascia land on the track
+    side (the mod's standing convention for facing decor). Everything on that
+    side of the block face is open air, which is what lets the lip and the two
+    fascia flanges stand PROUD of z = 0 the way a real edge overhangs its
+    girder — about 1 px = 6 cm, the real 2-3 inch nosing.
+
+    Nothing is coplanar: every proud element omits its SOUTH face, which would
+    otherwise sit exactly on the cube's own north face at z = 0."""
     top = f("edge", [0, 0, 16, 16])
     fascia = f("body", [0.25, 0.25, 15.75, 15.75])
+    web = f("body", [1, 5, 15, 6.4])            # plain steel slice, girder web
+    flange = f("body", [0.5, 12.6, 15.5, 14])   # the girder's flange band
     side = f("edge", [0, 6, 16, 16])
-    return [elem([0, 0, 0], [16, 16, 16], {
+    nose = f("edge", [0, 7.5, 16, 8.5])         # plain concrete, clear of the domes
+    dark = f("body", [1, 13, 15, 14.5])
+    els = [elem([0, 0, 0], [16, 16, 16], {
         "up": top,
         "north": dict(fascia, cullface="north"),
         "south": dict(side, cullface="south"),
         "east": dict(side, cullface="east"), "west": dict(side, cullface="west"),
         "down": f("body", [0.25, 5, 15.75, 8], cull="down"),
     })]
+    # the slab's nosing: 1 px of concrete overhanging the fascia
+    els.append(elem([0, 12.6, -1.0], [16, 16, 0], {
+        "north": f("edge", [0, 6.2, 16, 9.6]),
+        "up": nose, "down": dark,
+        "east": f("edge", [0, 6.2, 1, 9.6]), "west": f("edge", [15, 6.2, 16, 9.6]),
+    }))
+    # two shallow girder flanges under it, so the fascia reads like el_girder
+    for y0 in (1.2, 9.2):
+        els.append(elem([0, y0, -0.8], [16, y0 + 1.8, 0], {
+            "north": flange, "up": web, "down": web,
+            "east": f("body", [1, 5, 1.4, 6.4]), "west": f("body", [1, 5, 1.4, 6.4]),
+        }))
+    return els
 
 
 def soffit():
@@ -312,15 +379,28 @@ def soffit():
     })]
 
 
+"""EXIT sign geometry (shared by exit_sign() and exit_sign_models()).
+
+Real NYC exit signs are a WIDE THIN strip — about 0.75 m x 0.2 m — so the
+plate is 12 x 3.5 px and only 0.8 px thick, hung under a stub or held off a
+wall on two standoff brackets. The uv window is a whole 16-row zone of the
+64 px sheet (aspect 4:1), which is why the plate stays this shallow: a taller
+plate would stretch the lettering vertically."""
+EXIT_PLATE = (2.0, 8.0, 7.6, 14.0, 11.5, 8.4)      # hanging: x0 y0 z0 x1 y1 z1
+EXIT_WALL_PLATE = (2.0, 8.0, 14.2, 14.0, 11.5, 15.0)
+EXIT_STUB_Y = 11.0                                  # stub runs from here to the ceiling
+
+
 def exit_sign():
     """Hanging EXIT sign: plate on a stub, plain zone (arrow variants are
     uv-zone swaps in the real block)."""
-    plate = f("exit", [0, 0.25, 16, 3.75])
+    x0, y0, z0, x1, y1, z1 = EXIT_PLATE
+    plate = f("exit", [0, 0, 16, 4])
     edge = f("exit", [0, 0.5, 1, 3.5])
     return [
-        elem([7.3, 12.5, 7.6], [8.7, 16, 8.4],
+        elem([7.3, EXIT_STUB_Y, 7.6], [8.7, 16, 8.4],
              {n: f("body", [13.6, 2, 14.4, 5]) for n in ("north", "south", "east", "west")}),
-        elem([2, 5.5, 7.5], [14, 12.5, 8.5], {
+        elem([x0, y0, z0], [x1, y1, z1], {
             "north": plate, "south": plate,
             "east": edge, "west": edge, "up": edge, "down": edge,
         }),
@@ -398,28 +478,41 @@ def facing_variants(mdl):
 
 
 def exit_sign_models(g):
-    """Eight models: (ceiling|wall) x four arrow zones. The plate's back face
-    flips u so the lettering reads correctly from both sides."""
+    """Eight models: (ceiling|wall) x four arrow zones. Each zone is a full
+    16-row band of the 64 px sheet, so the uv window is exactly [0, v0, 16,
+    v0+4] and the 12 x 3.5 plate reads unstretched. The plate's back face
+    flips u so the lettering reads correctly from both sides.
+
+    Both mounts put the sign's readable face toward FACING (model -z): a
+    ceiling sign faces the way the placer was looking; a wall sign faces out
+    of the wall it was clicked onto."""
     zones = {"none": 0, "right": 4, "left": 8, "down": 12}
+    hx0, hy0, hz0, hx1, hy1, hz1 = EXIT_PLATE
+    wx0, wy0, wz0, wx1, wy1, wz1 = EXIT_WALL_PLATE
     for arrow, v0 in zones.items():
-        front = f("exit", [0, v0 + 0.25, 16, v0 + 3.75])
-        back = f("exit", [16, v0 + 0.25, 0, v0 + 3.75])
+        front = f("exit", [0, v0, 16, v0 + 4])
+        back = f("exit", [16, v0, 0, v0 + 4])
         edge = f("exit", [0, v0 + 0.5, 1, v0 + 3.5])
-        stub = {n: f("body", [13.6, 2, 14.4, 5])
-                for n in ("north", "south", "east", "west")}
+        steel = f("body", [13.6, 2, 14.4, 5])
+        stub = {n: steel for n in ("north", "south", "east", "west")}
         g.model(f"el_exit_sign_hang_{arrow}", TEX, [
-            elem([7.3, 12.5, 7.6], [8.7, 16, 8.4], dict(stub)),
-            elem([2, 5.5, 7.5], [14, 12.5, 8.5], {
+            elem([7.3, EXIT_STUB_Y, 7.6], [8.7, 16, 8.4], dict(stub)),
+            elem([hx0, hy0, hz0], [hx1, hy1, hz1], {
                 "north": front, "south": back,
                 "east": edge, "west": edge, "up": edge, "down": edge,
             }),
         ])
-        g.model(f"el_exit_sign_wall_{arrow}", TEX, [
-            elem([2, 4.5, 14.4], [14, 12, 15.4], {
-                "north": front,
-                "east": edge, "west": edge, "up": edge, "down": edge,
-            }),
-        ])
+        # Wall: the plate stands 1 px off the wall on two standoff brackets
+        # whose front ends are buried inside it (14.6 < 15.0, no coplanar
+        # faces) and whose face against the wall is omitted.
+        els = [elem([wx0, wy0, wz0], [wx1, wy1, wz1], {
+            "north": front, "south": edge,
+            "east": edge, "west": edge, "up": edge, "down": edge,
+        })]
+        for bx in (4.6, 10.4):
+            els.append(elem([bx, wy0 + 1, 14.6], [bx + 1.0, wy1 - 1, 16],
+                            {n: steel for n in ("east", "west", "up", "down")}))
+        g.model(f"el_exit_sign_wall_{arrow}", TEX, els)
 
 
 BLOCKS3 = ["el_stair_side", "el_stair_canopy", "el_portal_post", "el_portal_header",
