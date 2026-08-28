@@ -7,6 +7,14 @@
     },
     {
       "when": {
+        "down": "false"
+      },
+      "apply": {
+        "model": "station_announcer:block/el_portal_post_foot"
+      }
+    },
+    {
+      "when": {
         "facing": "north",
         "up": "false"
       },

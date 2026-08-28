@@ -168,71 +168,227 @@ TEX = {
 
 SLOPE = {"origin": [8, 8, 8], "axis": "x", "angle": 45, "rescale": True}
 
+# ---------------------------------------------------------------------------
+# THE 45° SLOPE FRAME (ElSlopeBlock pieces — stair side + stair canopy).
+#
+# A rescaled +45 rotation about x through (8,8,8) maps an authored point
+# (y_a, z_a) to  world y = y_a − z_a + 8 ,  world z = y_a + z_a − 8.
+# Two consequences drive every number below:
+#
+#   * ALONG the slope,  u = z_a − 8  (independent of y_a): each block covers
+#     u ∈ [−8, 8] and the next block up-slope (one up, one −z) is exactly
+#     Δu = −16, so any element spanning z_a 0..16 tiles a flight of ANY
+#     length with no gap and no overlap. Elements that must chain therefore
+#     span the full authored z; only mid-block detail may not.
+#   * ACROSS the slope,  v = y_a  is the perpendicular height, but measured
+#     VERTICALLY at a fixed world z a point sits at  y = 2·v − z. So one
+#     authored unit of y is TWO pixels of apparent height above the stairs.
+#
+# Against `subway_stairs` (two 8 px steps, same ascent-toward-FACING rule):
+#     v = 8  → the stair's soffit line (its re-entrant corners, y = 16 − z)
+#     v = 12 → the stair's NOSING line (y = 24 − z, the walking surface)
+# so the vertical height above the treads of anything on the slope is
+# 2·(v − 12) px. The screen's rail lands at v 19.5 → 15 px ≈ 0.94 m, and
+# the stringer bottom at v 5.6 → 12.8 px below the nosings.
+# ---------------------------------------------------------------------------
+NOSING_V = 12.0          # authored y of the stair nosing line
+SOFFIT_V = 8.0           # authored y of the stair soffit line
 
-# ------------------------------------------------------------------ models --
-def stair_side():
-    """45° side screen beside a stair run (chains one block up per block
-    forward, the handrail-slope arithmetic): kick, corrugated panel, top
-    rail — all rotated 45 rescale about (8,8,8) so centre y = 16 − z."""
-    panel = f("corru", [0, 0.25, 16, 12])
-    rail = f("body", [0.25, 4.75, 15.75, 6])
-    kick = f("body", [0.25, 5, 15.75, 6.4])
-    return [
-        elem([6.9, 2.4, 0], [9.1, 13.6, 16], {"east": panel, "west": panel},
+
+def stair_side(ref="body", sheet="corru"):
+    """45° side screen beside a stair run (Prospect Av: a panelled screen in
+    a distinct steel frame, stringer under the steps, handrail on top).
+
+    Frame, in v (see the slope frame note above):
+      stringer 5.6..8.4  — the beam under the steps, top on the soffit line
+      panel    8.0..18.2 — corrugated screen, ends buried in stringer/rail
+      mid rail 12.4..13.4 — proud rail right at tread level
+      top rail 18.0..19.5 — the handrail cap, 0.94 m over the nosings
+      pilaster — one per block, mid-block, proud of the panel both sides
+    Every member but the pilaster spans z 0..16, so the run chains."""
+    panel = f(sheet, [0, 0.25, 16, 10.45])
+    steel = f(ref, [0, 5, 16, 6.4])
+    cap = f(ref, [0, 5, 16, 6.2])
+    post = f(ref, [1, 4.75, 3.4, 11.2])
+    # run-end caps: an authored z=0 face lands exactly on the neighbour's
+    # z=16 face, so these are back-to-back inside the run (never visible,
+    # never coplanar-from-one-side) and close the flight at both ends.
+    endp = f(sheet, [0, 0.25, 2.5, 10.45])
+    ends = f(ref, [0, 5, 3, 6.4])
+    els = [
+        # stringer: top face sits on the soffit line, panel foot buried in it
+        elem([6.6, 5.6, 0], [9.4, 8.4, 16],
+             {"east": steel, "west": steel, "up": cap, "down": cap,
+              "north": ends, "south": ends},
              rotation=dict(SLOPE)),
-        elem([6.7, 13.2, 0], [9.3, 15.2, 16],
-             {"east": rail, "west": rail, "up": rail, "down": rail},
+        # the screen panel: butts the stringer top and the rail underside
+        # exactly (no up/down face of its own — those two members' lids are the
+        # only quads in those planes, so nothing is coplanar and nothing gaps)
+        elem([6.9, 8.4, 0], [9.1, 18.0, 16],
+             {"east": panel, "west": panel, "north": endp, "south": endp},
              rotation=dict(SLOPE)),
-        elem([6.7, 0.6, 0], [9.3, 2.8, 16],
-             {"east": kick, "west": kick, "down": kick}, rotation=dict(SLOPE)),
+        # mid rail at tread level, 0.2 proud of the panel — no run-end cap, its
+        # own would overlap the panel's in the z=0/16 planes
+        elem([6.7, 12.4, 0], [9.3, 13.4, 16],
+             {"east": cap, "west": cap, "up": cap, "down": cap},
+             rotation=dict(SLOPE)),
+        # handrail cap
+        elem([6.5, 18.0, 0], [9.5, 19.5, 16],
+             {"east": cap, "west": cap, "up": cap, "down": cap,
+              "north": ends, "south": ends},
+             rotation=dict(SLOPE)),
+        # pilaster: perpendicular to the slope, ends buried in rail/stringer
+        elem([6.3, 6.0, 6.8], [9.7, 19.2, 9.2],
+             {n: post for n in ("north", "south", "east", "west", "up", "down")},
+             rotation=dict(SLOPE)),
     ]
-
-
-def stair_canopy():
-    """45° red roof descending with the stairs, full block width, with edge
-    fascia strips; chains like the side screen."""
-    top = f("roof", [0, 0.25, 16, 15.75])
-    under = f("corru", [0, 0.25, 16, 15.75])
-    els = [elem([0, 6.9, 0], [16, 9.1, 16], {"up": top, "down": under},
-                rotation=dict(SLOPE))]
-    edge = f("roof", [0, 8.5, 16, 9.4])
-    for x0 in (0, 14.8):
-        els.append(elem([x0, 5.8, 0], [x0 + 1.2, 7.2, 16],
-                        {"east": edge, "west": edge, "down": edge},
-                        rotation=dict(SLOPE)))
     return els
 
 
-def portal_post_shaft():
-    face = f("body", [12.4, 0.25, 15.4, 15.75])
-    return [elem([6.6, 0, 6.6], [9.4, 16, 9.4],
-                 {n: face for n in ("north", "south", "east", "west")})]
+def stair_canopy(ref="body"):
+    """45° red standing-seam roof descending with the flight.
+
+      plane   v 7.2..8.8  — red seam sheet over a green corrugated soffit
+      seams   v 8.8..10.0 — raised ribs running DOWN the slope: one straddling
+                            each x boundary (so a wide roof gets one seam per
+                            joint, never a doubled ridge) plus a mid seam
+      rafter  x 0..1.6    — under-rib at the x boundary, reads from the street
+      eave    z 14.9..16  — cross purlin hugging the DOWN-slope boundary: a
+                            purlin at every joint AND the fascia at the foot
+      tongue  z −2..0     — up-slope flashing, 0.2 inset all round so it is
+                            buried inside the next block's plane when the run
+                            continues; at the top of the flight it tucks under
+                            an el_canopy_flat placed one up / one −z, closing
+                            the wedge that used to be an open hole.
+    Everything that must chain spans z 0..16."""
+    top = f("roof", [0, 0, 16, 16])
+    under = f("corru", [0, 0, 16, 16])
+    seam = f("roof", [0, 8.4, 16, 9.4])
+    rib = f(ref, [0, 5, 16, 6.4])
+    endr = f("roof", [0, 7, 16, 8.6])
+    rake = f("roof", [0, 7, 16, 8.6])
+    # every closing face here is coincident with the neighbour's matching face
+    # (opposite normals, buried between two solids) — so the run reads closed
+    # at its rake edges and at both ends instead of showing a hollow slot
+    els = [elem([0, 7.2, 0], [16, 8.8, 16],
+                {"up": top, "down": under, "north": endr, "south": endr,
+                 "east": rake, "west": rake},
+                rotation=dict(SLOPE))]
+    for x0, x1 in ((-0.7, 0.7), (7.3, 8.7)):        # standing seams
+        els.append(elem([x0, 8.8, 0], [x1, 10.0, 16],
+                        {"up": seam, "east": seam, "west": seam},
+                        rotation=dict(SLOPE)))
+    els.append(elem([0, 5.4, 0], [1.6, 7.2, 16],    # down-slope rafter
+                    {"down": rib, "east": rib, "west": rib},
+                    rotation=dict(SLOPE)))
+    els.append(elem([0, 5.6, 14.9], [16, 7.2, 16],  # cross purlin / foot eave
+                    {"down": rib, "north": rib, "south": rib},
+                    rotation=dict(SLOPE)))
+    els.append(elem([0.2, 7.4, -2], [15.8, 8.6, 0],  # up-slope flashing tongue
+                    {"up": top, "down": under, "north": rib,
+                     "east": rake, "west": rake},
+                    rotation=dict(SLOPE)))
+    return els
 
 
-def portal_post_bracket():
-    """Filigree scroll corner at the top of a portal post: lattice quarter
-    panel + arm reaching along the header direction (FACING)."""
-    lat = f("lattice", [0, 0, 6, 6])
-    arm = f("body", [1, 4.75, 2.4, 10])
+def portal_post_shaft(ref="body"):
+    """3.6 px cast portal post — deliberately beefier than the 2.8 px
+    el_canopy_post (and exactly the footprint EL_POST_SHAPE already
+    declares), with a proud corner bead on each arris."""
+    face = f(ref, [12.4, 0.25, 15.4, 15.75])
+    bead = f(ref, [13.6, 0.25, 14.4, 15.75])
+    els = [elem([6.2, 0, 6.2], [9.8, 16, 9.8],
+                {n: face for n in ("north", "south", "east", "west")})]
+    for x0 in (5.9, 9.4):
+        els.append(elem([x0, 0, 6.6], [x0 + 0.7, 16, 9.4],
+                        {n: bead for n in ("north", "south", "east", "west")}))
+    for z0 in (5.9, 9.4):
+        els.append(elem([6.6, 0, z0], [9.4, 16, z0 + 0.7],
+                        {n: bead for n in ("north", "south", "east", "west")}))
+    return els
+
+
+def portal_post_foot(ref="body"):
+    """Street plinth at the bottom of a portal-post stack (down=false)."""
+    face = f(ref, [1, 5, 12, 6.6])
     return [
-        elem([7.6, 9.6, 9.4], [8.4, 15.4, 15.2], {"east": lat, "west": lat}),
-        elem([6.9, 14.0, 6.9], [9.1, 15.8, 15.9],
-             {n: arm for n in ("north", "south", "east", "west", "up", "down")}),
+        elem([5.2, 0, 5.2], [10.8, 1.8, 10.8],
+             {n: face for n in ("north", "south", "east", "west")} | {"up": face}),
+        elem([5.7, 1.8, 5.7], [10.3, 3.0, 10.3],
+             {n: face for n in ("north", "south", "east", "west")} | {"up": face}),
     ]
 
 
-def portal_header():
-    """The ornamental frieze beam spanning the portal: top beam, lattice
-    band, bottom rail — a merging run along x."""
-    beam = f("body", [0.25, 5, 15.75, 7.8])
-    latt = f("lattice", [0, 3, 16, 9])
-    rail = f("body", [0.25, 5, 15.75, 6.2])
+def portal_post_bracket(ref="body"):
+    """The capital at the top of a portal-post stack: a collar, then a PAIR of
+    filigree scroll brackets (one each side along the header axis, the
+    el_canopy_post convention — FACING picks the run AXIS, so a portal reads
+    the same whichever way the builder was looking). Each bracket is a 1.2 px
+    45° knee brace under a slim top arm with a cutout lattice spandrel between
+    them — delicate lace, not a solid gusset."""
+    collar = f(ref, [1, 5, 5.6, 6.4])
+    arm = f(ref, [1, 5, 8, 6.2])
+    brace = f(ref, [1, 5, 8, 6.2])
+    lat = f("lattice", [0, 0, 8, 6])
+    els = [elem([5.8, 13.2, 5.8], [10.2, 14.2, 10.2],
+                {n: collar for n in ("north", "south", "east", "west")}
+                | {"up": collar, "down": collar})]
+    for right in (True, False):
+        # top arm, reaching out under the header
+        x0, x1 = (9.6, 16.0) if right else (0.0, 6.4)
+        els.append(elem([x0, 14.4, 7.3], [x1, 15.7, 8.7],
+                        {n: arm for n in ("north", "south", "up", "down",
+                                          "east", "west")}))
+        # 45° knee brace: authored along x, rotated about z about its OUTER
+        # end so it runs down and back into the post shaft. The authored bar
+        # is 8.8 long because a 45° turn without rescale projects to
+        # 8.8·cos45 = 6.2 px — exactly post face → arm end.
+        bx0, bx1 = (6.8, 15.6) if right else (0.4, 9.2)
+        origin = [15.6 if right else 0.4, 14.6, 8]
+        els.append(elem([bx0, 14.0, 7.4], [bx1, 15.2, 8.6],
+                        {n: brace for n in ("north", "south", "up", "down",
+                                            "east", "west")},
+                        rotation={"origin": origin, "axis": "z",
+                                  "angle": 45 if right else -45}))
+        # cutout lattice spandrel filling the corner over the brace
+        lx0, lx1 = (12.2, 15.6) if right else (0.4, 3.8)
+        els.append(elem([lx0, 11.8, 7.9], [lx1, 14.4, 8.1],
+                        {"north": lat, "south": lat}))
+    return els
+
+
+def portal_header(ref="body"):
+    """The ornamental frieze spanning a portal opening — a merging run along x
+    (no end faces, so segments butt seamlessly; the posts cap the run ends).
+
+    Stacked inside the block's declared 5.4..15.6 × z 6.8..9.2 envelope:
+      cornice   13.9..15.6, widest — an el_name_board placed in the cell
+                ABOVE stands its two legs straight on this cap
+      frieze    11.2..13.9
+      lattice    6.6..11.4, cutout filigree band (ends buried in the members)
+      chord      5.4..6.8, the bottom steel rail
+    A 2-post stack under this leaves 2 blocks + 5.4 px = 2.34 m of clear
+    opening, which is the 2.2–2.5 m the entrance photos show."""
+    cornice = f(ref, [0, 4.9, 16, 6.6])
+    beam = f(ref, [0, 5, 16, 7.7])
+    latt = f("lattice", [0, 2, 16, 9])
+    rail = f(ref, [0, 5, 16, 6.4])
+    # run-end caps (back-to-back against the neighbour inside a run, so they
+    # never z-fight; without them a header run showed hollow ends)
+    endc = f(ref, [0, 4.9, 2.4, 6.6])
+    endb = f(ref, [0, 5, 2, 7.7])
+    endr = f(ref, [0, 5, 2, 6.4])
     return [
-        elem([0, 12.8, 6.8], [16, 15.6, 9.2],
-             {"north": beam, "south": beam, "up": beam, "down": beam}),
-        elem([0, 6.8, 7.6], [16, 12.8, 8.4], {"north": latt, "south": latt}),
+        elem([0, 13.9, 6.8], [16, 15.6, 9.2],
+             {"north": cornice, "south": cornice, "up": cornice, "down": cornice,
+              "east": endc, "west": endc}),
+        elem([0, 11.2, 7.0], [16, 13.9, 9.0],
+             {"north": beam, "south": beam, "down": beam,
+              "east": endb, "west": endb}),
+        elem([0, 6.6, 7.7], [16, 11.4, 8.3], {"north": latt, "south": latt}),
         elem([0, 5.4, 7.0], [16, 6.8, 9.0],
-             {"north": rail, "south": rail, "up": rail, "down": rail}),
+             {"north": rail, "south": rail, "up": rail, "down": rail,
+              "east": endr, "west": endr}),
     ]
 
 
@@ -327,47 +483,99 @@ def exit_sign():
     ]
 
 
-def lamp_gooseneck():
-    """Ceiling/fascia-mounted goose-neck: stem, arm, drop, cone shade, bulb."""
-    steel = f("body", [13.6, 2, 14.4, 5])
-    def box(a, b):
-        return elem(a, b, {n: steel for n in ("north", "south", "east", "west", "up", "down")})
-    els = [box([6.9, 14.6, 6.9], [9.1, 16, 9.1]),
-           box([7.2, 10.8, 7.2], [8.8, 14.6, 8.8]),
-           box([7.2, 9.6, 7.2], [8.8, 11.0, 13.6]),
-           box([7.2, 8.0, 12.2], [8.8, 9.8, 13.8])]
-    shade = f("body", [1, 4.75, 4, 6.2])
-    els.append(elem([5.9, 6.8, 10.9], [10.1, 8.2, 15.1],
-                    {n: shade for n in ("north", "south", "east", "west", "up")}))
+def _cone_shade(ref, rings, glow_box):
+    """A stepped cone/teardrop shade: rings widening downward, each one
+    overlapping 0.2 up INTO the ring above so no two lids are coplanar (the
+    upper ring's down face is omitted, the lower ring's up face is drawn and
+    exposed only as the visible step). Ends with the lit bulb underneath."""
+    shade = f(ref, [1, 4.75, 5.6, 6.4])
+    els = []
+    for i, (x0, x1, y0, y1, z0, z1) in enumerate(rings):
+        faces = {n: shade for n in ("north", "south", "east", "west")}
+        faces["up"] = shade
+        if i == len(rings) - 1:
+            faces["down"] = shade                 # only the rim shows a lid
+        els.append(elem([x0, y0, z0], [x1, y1, z1], faces))
+    gx0, gy0, gz0, gx1, gy1, gz1 = glow_box
     glow = {"texture": "#exit", "uv": [13, 4.4, 15, 5.4], "shade": False}
-    bulb = {n: dict(glow) for n in ("north", "south", "east", "west", "down")}
-    els.append(elem([6.7, 6.2, 11.7], [9.3, 7.0, 14.3], bulb, shade=False))
+    els.append(elem([gx0, gy0, gz0], [gx1, gy1, gz1],
+                    {n: dict(glow)
+                     for n in ("north", "south", "east", "west", "down")},
+                    shade=False))
     return els
 
 
-def lamp_post_pole():
-    steel = f("body", [13.6, 0.25, 14.4, 15.75])
+def lamp_gooseneck(ref="body"):
+    """Ceiling-hung goose-neck (Prospect Av street canopy / mezzanine soffit):
+    canopy flange, stem, a 45° elbow, the horizontal reach and a stepped cone
+    shade with the bulb under it. Stays inside EL_GOOSENECK_SHAPE
+    (x 5.5..10.5, y 6..16, z 5.5..15.5)."""
+    steel = f(ref, [13.6, 2, 14.4, 5])
+    plate = f(ref, [1, 5, 4.6, 6])
+
+    def box(a, b, tex=None):
+        t = tex or steel
+        return elem(a, b, {n: t for n in ("north", "south", "east", "west",
+                                          "up", "down")})
+    els = [
+        box([6.2, 15.2, 6.2], [9.8, 16.0, 9.8], plate),      # ceiling flange
+        box([7.2, 12.6, 7.2], [8.8, 15.4, 8.8]),             # stem
+    ]
+    # 45° elbow: +45 about x descends toward +z, so the bar leaves the stem at
+    # (y 13.4, z 8.0) and arrives at (y 10.85, z 10.55) — the arm's centre
+    els.append(elem([7.2, 12.6, 8.0], [8.8, 14.2, 11.6],
+                    {n: steel for n in ("north", "south", "east", "west",
+                                        "up", "down")},
+                    rotation={"origin": [8, 13.4, 8.0], "axis": "x",
+                              "angle": 45}))
+    els.append(box([7.2, 10.0, 10.0], [8.8, 11.6, 14.0]))    # horizontal reach
+    els += _cone_shade(ref, [
+        (7.0, 9.0, 8.6, 10.3, 12.2, 14.2),
+        (6.4, 9.6, 7.8, 8.8, 11.6, 14.8),
+        (5.8, 10.2, 7.0, 8.0, 11.0, 15.4),
+    ], (6.8, 6.2, 12.0, 9.2, 7.2, 14.4))
+    return els
+
+
+def lamp_post_pole(ref="body"):
+    """Cast lamppost shaft. The collar rides EVERY block of a stack (the block
+    has no up/down state), so it is a slim moulded joint ring rather than a
+    street base — a band that reads as a repeat, not a mistake."""
+    steel = f(ref, [13.6, 0.25, 14.4, 15.75])
+    ring = f(ref, [1, 5, 4.8, 5.8])
     return [elem([6.9, 0, 6.9], [9.1, 16, 9.1],
                  {n: steel for n in ("north", "south", "east", "west")}),
-            elem([5.6, 0, 5.6], [10.4, 1.4, 10.4],
-                 {n: f("body", [1, 5, 5.8, 6.4])
-                  for n in ("north", "south", "east", "west", "up")})]
+            elem([6.3, 0, 6.3], [9.7, 0.8, 9.7],
+                 {n: ring for n in ("north", "south", "east", "west")}
+                 | {"up": ring})]
 
 
-def lamp_post_head():
-    steel = f("body", [13.6, 2, 14.4, 8])
-    els = [elem([6.9, 0, 6.9], [9.1, 8.6, 9.1],
-                {n: steel for n in ("north", "south", "east", "west")})]
-    arm = f("body", [1, 4.75, 2.6, 9.5])
-    els.append(elem([7.2, 7.2, 8.6], [8.8, 8.8, 14.6],
-                    {n: arm for n in ("north", "south", "east", "west", "up", "down")}))
-    shade = f("body", [1, 4.75, 4.4, 6.4])
-    els.append(elem([5.8, 6.4, 11.2], [10.2, 7.9, 15.4],
-                    {n: shade for n in ("north", "south", "east", "west", "up")}))
-    glow = {"texture": "#exit", "uv": [13, 4.4, 15, 5.4], "shade": False}
-    els.append(elem([6.5, 5.8, 11.9], [9.5, 6.6, 14.7],
-                    {n: dict(glow) for n in ("north", "south", "east", "west", "down")},
-                    shade=False))
+def lamp_post_head(ref="body"):
+    """The lamppost's top: shaft stub, moulded collar, a 45° elbow arm and the
+    same stepped cone shade. Inside EL_LAMP_HEAD_SHAPE (y 0..9, z 5.5..15.5)."""
+    steel = f(ref, [13.6, 2, 14.4, 8])
+    collar = f(ref, [1, 5, 5.2, 6])
+    els = [elem([6.9, 0, 6.9], [9.1, 6.6, 9.1],
+                {n: steel for n in ("north", "south", "east", "west")}),
+           elem([6.3, 6.6, 6.3], [9.7, 7.6, 9.7],
+                {n: collar for n in ("north", "south", "east", "west")}
+                | {"up": collar})]
+    # 45° elbow rising out of the collar (−45 about x ASCENDS toward +z),
+    # then the horizontal arm
+    arm = f(ref, [1, 4.75, 3.6, 6])
+    els.append(elem([7.2, 7.5, 8.4], [8.8, 8.9, 10.4],
+                    {n: arm for n in ("north", "south", "east", "west",
+                                      "up", "down")},
+                    rotation={"origin": [8, 8.2, 10.4], "axis": "x",
+                              "angle": -45}))
+    els.append(elem([7.2, 7.6, 10.0], [8.8, 8.8, 13.4],
+                    {n: arm for n in ("north", "south", "east", "west",
+                                      "up", "down")}))
+    els += _cone_shade(ref, [
+        (7.0, 9.0, 6.9, 8.0, 11.4, 13.6),
+        (6.6, 9.4, 6.1, 7.1, 10.8, 14.0),
+        (5.9, 10.1, 5.3, 6.3, 10.2, 14.6),
+    ], (6.9, 4.5, 11.2, 9.1, 5.5, 13.6))
     return els
 
 
@@ -525,10 +733,22 @@ def write_textures(texdir):
 
 
 def write_models(g):
+    # Silver-paint LAMP variants. The models are written but no blockstate
+    # references them yet — registering el_lamp_gooseneck_silver /
+    # el_lamp_post_silver / el_lamp_head_silver is a Java change (see
+    # EL_SET4_REPORT.md); verify() only walks models a blockstate names, so
+    # these ride along harmlessly until then.
+    for name, els in (
+            ("el_lamp_gooseneck_model_silver", lamp_gooseneck("galv")),
+            ("el_lamp_post_pole_silver", lamp_post_pole("galv")),
+            ("el_lamp_post_head_silver", lamp_post_head("galv")),
+            ("el_lamp_post_item_silver", lamp_post_pole("galv"))):
+        g.model(name, TEX, els)
     for name, els in (
             ("el_stair_side_model", stair_side()),
             ("el_stair_canopy_model", stair_canopy()),
             ("el_portal_post_shaft", portal_post_shaft()),
+            ("el_portal_post_foot", portal_post_foot()),
             ("el_portal_post_bracket", portal_post_bracket()),
             ("el_portal_header_model", portal_header()),
             ("el_house_wall_green", house_wall("house")),
@@ -541,7 +761,8 @@ def write_models(g):
             ("el_lamp_gooseneck_model", lamp_gooseneck()),
             ("el_lamp_post_pole", lamp_post_pole()),
             ("el_lamp_post_head", lamp_post_head()),
-            ("el_portal_post_item", portal_post_shaft() + portal_post_bracket()),
+            ("el_portal_post_item",
+             portal_post_shaft() + portal_post_foot() + portal_post_bracket()),
             ("el_lamp_post_item", lamp_post_pole())):
         g.model(name, TEX, els)
     exit_sign_models(g)
@@ -568,7 +789,9 @@ def build_final(g, assets_root, data_root, loot):
                        ("el_soffit", "el_soffit_model")):
         g.wj(os.path.join(assets_root, "blockstates", block + ".json"),
              {"variants": {"": {"model": f"{MOD}:block/{mdl}"}}})
-    parts = [{"apply": {"model": f"{MOD}:block/el_portal_post_shaft"}}]
+    parts = [{"apply": {"model": f"{MOD}:block/el_portal_post_shaft"}},
+             {"when": {"down": "false"},
+              "apply": {"model": f"{MOD}:block/el_portal_post_foot"}}]
     for facing, rot in ROTS:
         entry = {"model": f"{MOD}:block/el_portal_post_bracket"}
         if rot:
