@@ -325,9 +325,15 @@ recreate it for future model families. NOT verified in game: everything
 (placement connectivity, cutout layers, tint, name boards, collision feel).
 PHASE 3 same day (previews approved; +16 blocks, 44 el total): street stairs
 (ElSlopeBlock 45° rescale pieces), entrance portal (post+header), station
-house walls/windows/soffit/booth (ElBoothBlock), wood platform, tactile
+house walls/windows/soffit, wood platform, tactile
 platform edge, EXIT sign (ElExitSignBlock mount+arrow cycle), goose-neck +
-lamppost (pole+head blocks), gable end upgraded to open truss. Generator
+lamppost (pole+head blocks), gable end upgraded to open truss. QUALITY
+PASS same day (Thomas: "half-baked"): agent booth REMOVED, window walls
+rebuilt as real see-through framed glass (el_glazing cutout, nonOpaque),
+windscreens FULL-HEIGHT + STACKABLE (ElScreenBlock UP/DOWN, rail/kick
+models at stack ends), gable rebuilt at 45° pitch (rotation sign rule:
++45 about x descends toward +z — see EL_STATION_PLAN.md), stale models
+deleted, full asset audit clean. Generator
 module tools/gen_el_phase3.py called from gen_el_assets.build(); PROPS
 merged for verify. ALSO: the purple-texture postmortem — pngtool.write_png
 emits px[:4] bytes vs an RGBA header, so RGB 3-tuples corrupt every PNG;
