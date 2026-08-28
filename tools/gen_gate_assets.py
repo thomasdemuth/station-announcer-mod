@@ -429,10 +429,13 @@ def door_half_elements(upper):
 def write_alarm_lamp():
     for state in ("off", "on"):
         tex = f"{MOD}:block/gate_alarm_lamp_{state}"
-        piece("gate_alarm_lamp_" + state,
-              [{"from": [-1.8, 11, 4.2], "to": [1.8, 14.2, 11.8],
-                "faces": face_set("#lamp", [2, 2, 14, 14])}],
-              {"lamp": tex, "particle": tex})
+        box = {"from": [-1.8, 11, 4.2], "to": [1.8, 14.2, 11.8],
+               "faces": face_set("#lamp", [2, 2, 14, 14])}
+        if state == "on":
+            # a sounding strobe reads lit from every angle; the block also
+            # emits light while ALARM (luminance in MtrStationDecor)
+            box["shade"] = False
+        piece("gate_alarm_lamp_" + state, [box], {"lamp": tex, "particle": tex})
 
 
 def write_door_leaf():

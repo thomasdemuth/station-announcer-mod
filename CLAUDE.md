@@ -263,6 +263,31 @@ Four fixes/features from Thomas's feedback round (his answers, do not re-ask):
     block-model renderer, painter-sorted, handles element rotations —
     worth recreating for future model work): tripod side view shows the
     45° bar + perpendicular boss, HEET shows cage/comb/lintel. NOT in-game.
+- FOURTH BATCH — audit fixes (Thomas: "fix these", from the what-else-is-buggy review):
+  - EXIT-LANE PLATE: turnstile_exit gets its OWN lamp model set
+    (`turnstile_exit_lamp_*`, lamp_prefix param on turnstile_blockstate) —
+    the wrong-way (north) plate is a FIXED red no-entry bar in every state
+    (lamp_models plates accept a 6th fixed-state element); the dynamic plate
+    had covered the painted roundel and would have flashed GO at the
+    no-entry side.
+  - LAMP RACE: INDICATOR_DEADLINE static map (upper-pos → due time);
+    scheduledTick only clears once the deadline passed, so a stale WAIT
+    clear can no longer wipe a fresh GO early. Cleared in clearAttempts().
+  - WALL END COLLARS: new `WALL_RIGHT` property on TurnstileBaseBlock
+    (withRow() computes RIGHT + wall via isSideSolidFullSquare toward
+    rightDirection; old placements default false and self-heal on neighbor
+    update). Blockstate: right=false splits on wall_right —
+    `turnstile_tube_wall_end` (straight rail into a collar flange, 0.05
+    inset off the boundary) vs the curled elbow. Cap included via shared
+    row_end_parts(); HEET unaffected (joinsRow false). PROPS updated.
+  - Item icons redrawn to the tripod silhouette; sign hanger straps now
+    sample the tube steel (were sign-coloured); exit-door strobe: shade
+    false on the lit lamp + luminance 10 while ALARM (MtrStationDecor).
+  - Upper outline now includes the riser pipe (union to y24, fence-style).
+  - README caught up: MetroCard machine + MTR screen, tripod/HEET/exit-door
+    text, NEW subway stairs & handrails section (the family was never
+    documented). Label-swing math re-derived and CONFIRMED correct (point
+    (15,·,8) → (3,·,−4) matches the +90° local transform) — no change.
 - Build green at 2.4.17; deploy_jar.sh REFUSED (game open) — deploy + in-game test
   still pending: door placement feel, open/close + label swing, handrail thirds
   clicking, wall-detection placement, WAIT/STOP lamp flow, processor beeps,

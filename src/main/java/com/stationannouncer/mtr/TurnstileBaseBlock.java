@@ -33,18 +33,22 @@ public abstract class TurnstileBaseBlock extends Block {
     public static final EnumProperty<DoubleBlockHalf> HALF = Properties.DOUBLE_BLOCK_HALF;
     /** Another fare-control unit continues to the right (facing-relative). */
     public static final BooleanProperty RIGHT = BooleanProperty.of("right");
+    /** No unit to the right, but a solid wall — the tube run ends in a
+     * mounting collar against it instead of the curled elbow drop. */
+    public static final BooleanProperty WALL_RIGHT = BooleanProperty.of("wall_right");
 
     protected TurnstileBaseBlock(Settings settings) {
         super(settings);
         setDefaultState(getDefaultState()
                 .with(FACING, Direction.NORTH)
                 .with(HALF, DoubleBlockHalf.LOWER)
-                .with(RIGHT, false));
+                .with(RIGHT, false)
+                .with(WALL_RIGHT, false));
     }
 
     @Override
     protected void appendProperties(StateManager.Builder<Block, BlockState> builder) {
-        builder.add(FACING, HALF, RIGHT);
+        builder.add(FACING, HALF, RIGHT, WALL_RIGHT);
     }
 
     /** Direction along the row toward this unit's neighbor side. */
@@ -63,14 +67,14 @@ public abstract class TurnstileBaseBlock extends Block {
         BlockState state = getDefaultState()
                 .with(FACING, context.getHorizontalPlayerFacing().getOpposite())
                 .with(HALF, DoubleBlockHalf.LOWER);
-        return state.with(RIGHT, connectsRight(state, world, pos));
+        return withRow(state, world, pos);
     }
 
     @Override
     public void onPlaced(World world, BlockPos pos, BlockState state, @Nullable LivingEntity placer, ItemStack itemStack) {
         super.onPlaced(world, pos, state, placer, itemStack);
         BlockState upper = state.with(HALF, DoubleBlockHalf.UPPER);
-        world.setBlockState(pos.up(), upper.with(RIGHT, connectsRight(upper, world, pos.up())), Block.NOTIFY_ALL);
+        world.setBlockState(pos.up(), withRow(upper, world, pos.up()), Block.NOTIFY_ALL);
     }
 
     @Override
@@ -83,7 +87,20 @@ public abstract class TurnstileBaseBlock extends Block {
                 && (!neighborState.isOf(this) || neighborState.get(HALF) == half)) {
             return Blocks.AIR.getDefaultState();
         }
-        return state.with(RIGHT, connectsRight(state, world, pos));
+        return withRow(state, world, pos);
+    }
+
+    /** Recomputes both row properties: the neighbouring unit, or failing
+     * that whether a solid wall closes the row on the right. */
+    private BlockState withRow(BlockState state, WorldAccess world, BlockPos pos) {
+        boolean right = connectsRight(state, world, pos);
+        boolean wall = false;
+        if (!right && joinsRow()) {
+            Direction toWall = rightDirection(state);
+            BlockPos wallPos = pos.offset(toWall);
+            wall = world.getBlockState(wallPos).isSideSolidFullSquare(world, wallPos, toWall.getOpposite());
+        }
+        return state.with(RIGHT, right).with(WALL_RIGHT, wall);
     }
 
     /**

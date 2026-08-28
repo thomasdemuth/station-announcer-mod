@@ -43,8 +43,12 @@ public final class MtrStationDecor {
     /** Railing segment with the black station-name panel (brush to edit). */
     public static final RailingSignBlock ENTRANCE_RAILING_SIGN = new RailingSignBlock(settings());
 
-    /** Emergency exit door: exit-only, alarms, fines anyone coming the wrong way. */
-    public static final EmergencyExitDoorBlock EMERGENCY_EXIT_DOOR = new EmergencyExitDoorBlock(settings());
+    /** Emergency exit door: exit-only, alarms, fines anyone coming the wrong way.
+     * The strobe throws real light while the alarm sounds. */
+    public static final EmergencyExitDoorBlock EMERGENCY_EXIT_DOOR = new EmergencyExitDoorBlock(
+            settings().luminance(state ->
+                    state.contains(EmergencyExitDoorBlock.ALARM)
+                            && state.get(EmergencyExitDoorBlock.ALARM) ? 10 : 0));
 
     /**
      * Employees-only doors: fixed two-block staff doors that never open, in

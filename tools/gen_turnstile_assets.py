@@ -261,6 +261,9 @@ def icon(kind):
             pk.rect(rows, 9, y, 13, y + 1, STEEL)
         pk.rect(rows, 1, 0, 15, 1, STEEL_LIT)
     else:
+        # matches the rebuilt model: cabinet + pillar, horizontal blocking
+        # arm at cabinet-top height with a rubber tip, and the 45° arm
+        # dropping down-forward from the hub
         pk.rect(rows, 2, 4, 6, 16, STEEL)
         pk.rect(rows, 2, 4, 6, 5, STEEL_LIT)
         pk.rect(rows, 3, 0, 5, 4, PILLAR)
@@ -268,9 +271,12 @@ def icon(kind):
         if kind == "exit":
             pk.rect(rows, 3, 1, 5, 3, RED)
             pk.rect(rows, 3, 2, 5, 3, WHITE)
-        pk.rect(rows, 6, 8, 14, 10, STEEL_LIT)
-        pk.rect(rows, 12, 8, 14, 10, RUBBER)
-        pk.rect(rows, 6, 10, 8, 14, STEEL)
+        pk.rect(rows, 6, 5, 13, 7, STEEL_LIT)      # horizontal arm
+        pk.rect(rows, 13, 5, 15, 7, RUBBER)        # rubber tip
+        pk.rect(rows, 6, 4, 8, 8, STEEL_DARK)      # hub boss
+        for i in range(5):                          # down-forward 45° arm
+            pk.rect(rows, 7 + i, 7 + i, 9 + i, 9 + i, STEEL)
+        pk.rect(rows, 12, 12, 14, 14, RUBBER)
     return rows
 
 
@@ -491,17 +497,25 @@ def picto_plate(frm, to, face_dir, u0, u1, state_y):
 
 def lamp_models(prefix, boxes, plates=()):
     """Per-state indicator models. `boxes` are small lens boxes sampling the
-    lamp sprite's zone; `plates` are (frm, to, face_dir, u0, u1) pictogram
-    signs sampling the picto sprite's zone. All shade:false — lenses and lit
-    signs must not go dull on north faces."""
+    lamp sprite's zone; `plates` are (frm, to, face_dir, u0, u1[, fixed])
+    pictogram signs sampling the picto sprite's zone — a plate with a
+    `fixed` state shows that zone in EVERY model (a permanent sign riding
+    the lamp machinery). All shade:false — lenses and lit signs must not go
+    dull on north faces."""
     for state, uv in UV_LAMP.items():
         els = []
         for frm, to, sides in boxes:
             faces = {s: f("lamp", uv) for s in sides}
             els.append(elem(frm, to, faces, shade=False))
-        for frm, to, face_dir, u0, u1 in plates:
-            els.append(picto_plate(frm, to, face_dir, u0, u1, UV_PICTO_Y[state]))
+        for plate in plates:
+            frm, to, face_dir, u0, u1 = plate[:5]
+            shown = plate[5] if len(plate) > 5 else state
+            els.append(picto_plate(frm, to, face_dir, u0, u1, UV_PICTO_Y[shown]))
         model(f"{prefix}_lamp_{state}", els)
+
+
+PILLAR_PLATE_N = ([0.9, 7.0, 3.45], [4.1, 9.6, 4.05], "north", 6, 10)
+PILLAR_PLATE_S = ([0.9, 7.0, 11.95], [4.1, 9.6, 12.55], "south", 6, 10)
 
 
 def write_upper_and_lamps():
@@ -510,10 +524,12 @@ def write_upper_and_lamps():
     # the pillar's status display is now one pictogram plate per approach
     # face (replacing the old 2-px lens): green up arrow / red bar / amber
     # dot, proud over the screen zone
-    lamp_models("turnstile", [], plates=[
-        ([0.9, 7.0, 3.45], [4.1, 9.6, 4.05], "north", 6, 10),
-        ([0.9, 7.0, 11.95], [4.1, 9.6, 12.55], "south", 6, 10),
-    ])
+    lamp_models("turnstile", [], plates=[PILLAR_PLATE_N, PILLAR_PLATE_S])
+    # exit lanes: the wrong-way (north) plate ALWAYS shows the red bar — a
+    # green GO facing the no-entry side would read as an invitation, and the
+    # dynamic plate was covering the painted no-entry roundel behind it
+    lamp_models("turnstile_exit", [], plates=[
+        PILLAR_PLATE_N + ("stop",), PILLAR_PLATE_S])
 
 
 def sign_plate(exit_variant):
@@ -530,12 +546,13 @@ def sign_plate(exit_variant):
         "north": front, "south": back,
         "east": edge, "west": edge, "up": lid, "down": lid,
     })]
+    # steel hanger straps (not sign-coloured — they are hardware, not board)
     for x in (6.8, 13.5):
         els.append(elem([x, 21.7, 7.8], [x + 0.7, 23.2, 8.2], {
-            "north": f(tex, [2, 4.75, 2.7, 6.25]),
-            "south": f(tex, [2, 4.75, 2.7, 6.25]),
-            "east": f(tex, [2.2, 4.75, 2.6, 6.25]),
-            "west": f(tex, [2.2, 4.75, 2.6, 6.25]),
+            "north": f("tube", [1, 4.75, 1.7, 6.25]),
+            "south": f("tube", [1, 4.75, 1.7, 6.25]),
+            "east": f("tube", [1.2, 4.75, 1.6, 6.25]),
+            "west": f("tube", [1.2, 4.75, 1.6, 6.25]),
         }))
     return els
 
@@ -560,6 +577,14 @@ def write_tubes():
     els += octo_tube([7.0, 18.9, 7.0], [9.0, 21.9, 9.0], "y")
     els.append(steel_box([6.8, 18.3, 6.8], [9.2, 19.0, 9.2], seed_v=13.0))
     wj(os.path.join(ASSETS, "models/block/turnstile_tube_end.json"),
+       {"parent": "minecraft:block/block", "textures": TEXTURES, "elements": els})
+    # Row ends against a solid wall: the rail runs straight into a mounting
+    # collar flange, like the riser feet — no curled drop hanging in front
+    # of the wall. Flange inset 0.05 from the boundary so it never shares
+    # the wall block's face plane.
+    els = octo_tube([3.2, 22.05, 7.05], [15.3, 23.95, 8.95], "x")
+    els.append(steel_box([15.2, 21.5, 6.6], [15.95, 24.4, 9.4], seed_v=13.0))
+    wj(os.path.join(ASSETS, "models/block/turnstile_tube_wall_end.json"),
        {"parent": "minecraft:block/block", "textures": TEXTURES, "elements": els})
 
 
@@ -671,7 +696,22 @@ def ap(mdl, rot):
     return entry
 
 
-def turnstile_blockstate(upper_model, bridge_model="turnstile_tube_bridge"):
+def row_end_parts(facing, rot, bridge_model):
+    """Overhead-tube selectors shared by lane and cap: bridge to the next
+    unit, wall collar when the row meets a solid wall, curled elbow end
+    otherwise."""
+    return [
+        {"when": {"facing": facing, "half": "upper", "right": "true"},
+         "apply": ap(bridge_model, rot)},
+        {"when": {"facing": facing, "half": "upper", "right": "false", "wall_right": "true"},
+         "apply": ap("turnstile_tube_wall_end", rot)},
+        {"when": {"facing": facing, "half": "upper", "right": "false", "wall_right": "false"},
+         "apply": ap("turnstile_tube_end", rot)},
+    ]
+
+
+def turnstile_blockstate(upper_model, bridge_model="turnstile_tube_bridge",
+                         lamp_prefix="turnstile"):
     parts = []
     for facing, rot in ROTS:
         parts.append({"when": {"facing": facing, "half": "lower"}, "apply": ap("turnstile_cabinet", rot)})
@@ -679,11 +719,8 @@ def turnstile_blockstate(upper_model, bridge_model="turnstile_tube_bridge"):
         parts.append({"when": {"facing": facing, "half": "upper"}, "apply": ap(upper_model, rot)})
         for state in ("off", "go", "stop", "wait"):
             parts.append({"when": {"facing": facing, "half": "upper", "indicator": state},
-                          "apply": ap(f"turnstile_lamp_{state}", rot)})
-        parts.append({"when": {"facing": facing, "half": "upper", "right": "true"},
-                      "apply": ap(bridge_model, rot)})
-        parts.append({"when": {"facing": facing, "half": "upper", "right": "false"},
-                      "apply": ap("turnstile_tube_end", rot)})
+                          "apply": ap(f"{lamp_prefix}_lamp_{state}", rot)})
+        parts += row_end_parts(facing, rot, bridge_model)
     return {"multipart": parts}
 
 
@@ -692,10 +729,7 @@ def cap_blockstate():
     for facing, rot in ROTS:
         parts.append({"when": {"facing": facing, "half": "lower"}, "apply": ap("turnstile_cap_lower", rot)})
         parts.append({"when": {"facing": facing, "half": "upper"}, "apply": ap("turnstile_cap_upper", rot)})
-        parts.append({"when": {"facing": facing, "half": "upper", "right": "true"},
-                      "apply": ap("turnstile_tube_bridge", rot)})
-        parts.append({"when": {"facing": facing, "half": "upper", "right": "false"},
-                      "apply": ap("turnstile_tube_end", rot)})
+        parts += row_end_parts(facing, rot, "turnstile_tube_bridge")
     return {"multipart": parts}
 
 
@@ -751,9 +785,11 @@ def recipes():
 PROPS = {
     "turnstile": {"facing": {"north", "south", "east", "west"},
                   "half": {"lower", "upper"}, "right": {"true", "false"},
+                  "wall_right": {"true", "false"},
                   "indicator": {"off", "go", "stop", "wait"}},
     "turnstile_cap": {"facing": {"north", "south", "east", "west"},
-                      "half": {"lower", "upper"}, "right": {"true", "false"}},
+                      "half": {"lower", "upper"}, "right": {"true", "false"},
+                      "wall_right": {"true", "false"}},
 }
 PROPS["turnstile_exit"] = PROPS["turnstile"]
 PROPS["turnstile_heet"] = PROPS["turnstile"]
@@ -820,7 +856,8 @@ def main():
 
     wj(os.path.join(ASSETS, "blockstates/turnstile.json"), turnstile_blockstate("turnstile_upper"))
     wj(os.path.join(ASSETS, "blockstates/turnstile_exit.json"),
-       turnstile_blockstate("turnstile_upper_exit", "turnstile_tube_bridge_exit"))
+       turnstile_blockstate("turnstile_upper_exit", "turnstile_tube_bridge_exit",
+                            lamp_prefix="turnstile_exit"))
     wj(os.path.join(ASSETS, "blockstates/turnstile_cap.json"), cap_blockstate())
     wj(os.path.join(ASSETS, "blockstates/turnstile_heet.json"), heet_blockstate())
 

@@ -64,9 +64,18 @@ public class TurnstileBlock extends TurnstileBaseBlock {
     /** Last fare attempt per lane+player. */
     private static final Map<Crossing, Long> LAST_ATTEMPT = new HashMap<>();
 
+    /**
+     * When each lit indicator is due to clear, keyed by the upper half's pos.
+     * A scheduled tick only clears the lamp once this deadline has passed, so
+     * a stale WAIT-clear tick landing while a fresh GO is showing (slow fare
+     * callback) no longer wipes the GO early.
+     */
+    private static final Map<Long, Long> INDICATOR_DEADLINE = new HashMap<>();
+
     /** Drops all cooldown state (called when the server stops so nothing carries across worlds). */
     public static void clearAttempts() {
         LAST_ATTEMPT.clear();
+        INDICATOR_DEADLINE.clear();
     }
 
     /** False for exit-only lanes: everyone is processed as leaving the system. */
@@ -90,7 +99,11 @@ public class TurnstileBlock extends TurnstileBaseBlock {
         VoxelShape arm = createCuboidShape(3.0, 7.0, 3.0, 15.0, 16.0, 13.5);
         this.lowerCollision = rotations(cabinet);
         this.lowerOutline = rotations(net.minecraft.util.shape.VoxelShapes.union(cabinet, arm).simplify());
-        this.upperShape = rotations(createCuboidShape(0.0, 0.0, 4.0, 5.0, 10.0, 12.0));
+        // Pillar + cap, plus the riser pipe so the selection outline follows
+        // the geometry all the way up (shapes above 16 are legal, fence-style).
+        this.upperShape = rotations(net.minecraft.util.shape.VoxelShapes.union(
+                createCuboidShape(0.0, 0.0, 3.5, 5.0, 11.0, 12.5),
+                createCuboidShape(1.9, 11.0, 6.9, 4.1, 24.0, 9.1)).simplify());
     }
 
     @Override
@@ -198,6 +211,7 @@ public class TurnstileBlock extends TurnstileBaseBlock {
         BlockState upper = world.getBlockState(upperPos);
         if (upper.isOf(this) && upper.get(HALF) == DoubleBlockHalf.UPPER) {
             world.setBlockState(upperPos, upper.with(INDICATOR, indicator));
+            INDICATOR_DEADLINE.put(upperPos.asLong(), world.getTime() + clearTicks);
             world.scheduleBlockTick(upperPos, this, clearTicks);
         }
     }
@@ -301,8 +315,17 @@ public class TurnstileBlock extends TurnstileBaseBlock {
 
     @Override
     public void scheduledTick(BlockState state, ServerWorld world, BlockPos pos, Random random) {
-        if (state.get(INDICATOR) != Indicator.OFF) {
-            world.setBlockState(pos, state.with(INDICATOR, Indicator.OFF));
+        if (state.get(INDICATOR) == Indicator.OFF) {
+            return;
         }
+        // A superseded tick (deadline moved forward by a newer set) waits its
+        // turn; the newer set scheduled its own tick. A missing deadline
+        // (server restart dropped the map) clears immediately.
+        Long deadline = INDICATOR_DEADLINE.get(pos.asLong());
+        if (deadline != null && world.getTime() < deadline) {
+            return;
+        }
+        INDICATOR_DEADLINE.remove(pos.asLong());
+        world.setBlockState(pos, state.with(INDICATOR, Indicator.OFF));
     }
 }

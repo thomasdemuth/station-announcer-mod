@@ -32,7 +32,19 @@
       "when": {
         "facing": "north",
         "half": "upper",
-        "right": "false"
+        "right": "false",
+        "wall_right": "true"
+      },
+      "apply": {
+        "model": "station_announcer:block/turnstile_tube_wall_end"
+      }
+    },
+    {
+      "when": {
+        "facing": "north",
+        "half": "upper",
+        "right": "false",
+        "wall_right": "false"
       },
       "apply": {
         "model": "station_announcer:block/turnstile_tube_end"
@@ -73,7 +85,20 @@
       "when": {
         "facing": "east",
         "half": "upper",
-        "right": "false"
+        "right": "false",
+        "wall_right": "true"
+      },
+      "apply": {
+        "model": "station_announcer:block/turnstile_tube_wall_end",
+        "y": 90
+      }
+    },
+    {
+      "when": {
+        "facing": "east",
+        "half": "upper",
+        "right": "false",
+        "wall_right": "false"
       },
       "apply": {
         "model": "station_announcer:block/turnstile_tube_end",
@@ -115,7 +140,20 @@
       "when": {
         "facing": "south",
         "half": "upper",
-        "right": "false"
+        "right": "false",
+        "wall_right": "true"
+      },
+      "apply": {
+        "model": "station_announcer:block/turnstile_tube_wall_end",
+        "y": 180
+      }
+    },
+    {
+      "when": {
+        "facing": "south",
+        "half": "upper",
+        "right": "false",
+        "wall_right": "false"
       },
       "apply": {
         "model": "station_announcer:block/turnstile_tube_end",
@@ -157,7 +195,20 @@
       "when": {
         "facing": "west",
         "half": "upper",
-        "right": "false"
+        "right": "false",
+        "wall_right": "true"
+      },
+      "apply": {
+        "model": "station_announcer:block/turnstile_tube_wall_end",
+        "y": 270
+      }
+    },
+    {
+      "when": {
+        "facing": "west",
+        "half": "upper",
+        "right": "false",
+        "wall_right": "false"
       },
       "apply": {
         "model": "station_announcer:block/turnstile_tube_end",

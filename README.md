@@ -89,10 +89,11 @@ Furniture and dressing for Baker City stations, all in the Baker City tab:
   frame, rounded top hand rail and bolted foot plates. Placed in a row with the same
   facing the segments line up into one continuous run (the top rail carries straight
   through, frame members double up at each joint like the real thing).
-- **Fare Vending Machine** — a two-block-tall MetroCard machine, 8 px deep so it sits
-  flush against the wall behind it. And it actually works: right-click holding
-  **emeralds** to load MTR ticket balance (1 emerald = $10, the same rate as MTR's ticket
-  machine), right-click empty-handed to check your balance.
+- **MetroCard Vending Machine** — a two-block-tall MetroCard machine, 8 px deep so it
+  sits flush against the wall behind it. And it actually works: right-click holding an
+  **emerald** for a quick $10 top-up, or right-click with anything else to open **MTR's
+  own ticket-machine screen** — bulk emerald purchases with MTR's growing bonus rates,
+  balance shown on screen.
 - **Station Ambience Block** — a vent grille that quietly loops a **station hum** or **air
   vent** sound around itself. Right-click to pick the loop, volume and radius (4–48 blocks).
 
@@ -113,10 +114,22 @@ train's platform while lit, like the real mezzanine signs.
 
 ### Fare control & back-of-house (new in 2.0)
 
-- **Turnstile + Turnstile End Cap** — two-block-tall stainless fare lanes with reader
-  pillars and the overhead tubing arcing between units (it bridges and caps itself
-  automatically). Walking through charges your MTR ticket balance through MTR's own
-  system — entry and exit both, with MTR's barrier sounds. Close a row with the end cap.
+- **Turnstile + Exit Turnstile + Turnstile End Cap** — two-block-tall stainless fare
+  lanes with tripod arms, angled MetroCard readers and the overhead tubing arcing
+  between units (it bridges automatically, caps a free row end with a curled drop, and
+  ends against a wall with a mounting collar). Walking through charges your MTR ticket
+  balance through MTR's own system, with distinct entry/exit reader beeps; a pictogram
+  sign on the pillar shows green GO / red STOP / amber while the fare check runs, lit
+  at night. Right-click a lane empty-handed to hear your balance. Riders who can't
+  afford entry get an instant red STOP. The exit-only lane processes everyone as
+  leaving and permanently shows the red no-entry bar on its wrong-way side.
+- **High Entrance/Exit Turnstile (HEET)** — the full-height rotating cage gate, with a
+  comb rotor, lit lintel signs and the same fare behaviour.
+- **Emergency Exit Door & Gate Walls** — the alarmed exit door (fare evasion the wrong
+  way costs MTR's own $500 fine; the strobe throws real light while sounding), iron-bar
+  and grille dividing walls with shared posts, corners, and **Employees Only doors** in
+  three finishes that swing open on right-click and pull themselves shut after a few
+  seconds (label editable with the MTR brush).
 - **Holding Lights** (yellow/green, + hanging pole) — the platform dispatch lights, timed
   off live MTR arrivals: yellow lights up 5 s before the train arrives and holds while
   it dwells (going dark 3 s before departure); green blinks from departure until 15 s
@@ -124,6 +137,21 @@ train's platform while lit, like the real mezzanine signs.
 - **PIDS Drop Pole** — plain steel pole for hanging the PIDS clocks lower from tall
   ceilings. Same 2 px gauge as the hanging PIDS's own ceiling stub, so a stack of poles
   continues it without a step.
+
+### Subway stairs & handrails
+
+- **Subway Stairs** (modern floating / old concrete) — two 8 px steps per block; runs
+  detect their own top and bottom and paint the safety-yellow end treads themselves.
+  The modern stair's item right-click-cycles between the floating and closed builds.
+- **Stair Divider** — the black stringer beam between stair lanes, with floor feet,
+  landing caps and wings that adopt the neighbouring stairs.
+- **Subway Handrails** (wall / standing / double / floating) — 2 px steel tube rails.
+  Right-click **in the air** to cycle the shape: straight, 45° stair run, the two
+  stair-to-floor transitions, and both corners. On the floating and standing styles,
+  **where you click across the block picks the rail's side** — left third, middle, or
+  right third — so a rail can hug the edge of a stair lane. The wall style mounts on
+  the wall you click, and its sloped runs attach to whichever side of the block
+  actually has a wall.
 
 ### Railroad PIDS (requires MTR, new in 2.3)
 
