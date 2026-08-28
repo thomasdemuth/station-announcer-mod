@@ -79,6 +79,7 @@ const state = {
 		timer: null,         // poll interval id; null whenever nothing needs the data
 		fetching: false,
 		stationById: new Map(),
+		stationSort: { k: "name", asc: true },
 	},
 };
 
@@ -827,7 +828,8 @@ function initUi() {
 		if (tag === "input" || tag === "select" || tag === "textarea") return;
 		const key = e.key.toLowerCase();
 		if (key === "escape") {
-			if (state.stringline.view) setStringlineView(false);
+			if (!$("lineModal").classList.contains("hidden")) $("lineModal").classList.add("hidden");
+			else if (state.stringline.view) setStringlineView(false);
 			else if (state.analytics.view) setAnalyticsView(false);
 			else if (state.alertsOpen) setAlertsOpen(false);
 			else { state.selected = null; state.selectedStation = null; state.follow = false; updateDetail(); }
@@ -841,6 +843,20 @@ function initUi() {
 
 	initSearch();
 	$("stringFilter").oninput = renderStringBadges;
+
+	// analytics: line modal + sortable station table
+	$("lineModalClose").onclick = () => $("lineModal").classList.add("hidden");
+	$("lineModal").onclick = (e) => { if (e.target === $("lineModal")) $("lineModal").classList.add("hidden"); };
+	document.querySelectorAll("#stationTable th").forEach((th) => {
+		th.onclick = () => {
+			const k = th.dataset.k;
+			const sort = state.analytics.stationSort;
+			if (sort.k === k) sort.asc = !sort.asc;
+			else { sort.k = k; sort.asc = k === "name"; }
+			renderAnalytics();
+		};
+	});
+
 	loadPrefs();
 	$("stringBtn").onclick = () => setStringlineView(!state.stringline.view);
 	$("stringClose").onclick = () => setStringlineView(false);
@@ -1596,7 +1612,16 @@ function renderAnalytics() {
 	cards.innerHTML = "";
 	for (const line of lines) cards.appendChild(lineCard(line));
 
-	const stations = data.stations || [];
+	const stations = [...(data.stations || [])];
+	const { k: sortKey, asc } = state.analytics.stationSort;
+	stations.sort((a, b) => {
+		const va = sortKey === "name" ? firstLang(a.name).toLowerCase() : (a[sortKey] ?? 0);
+		const vb = sortKey === "name" ? firstLang(b.name).toLowerCase() : (b[sortKey] ?? 0);
+		const c = typeof va === "number" ? va - vb : String(va).localeCompare(String(vb));
+		return asc ? c : -c;
+	});
+	document.querySelectorAll("#stationTable th").forEach((th) =>
+		th.classList.toggle("sorted", th.dataset.k === sortKey));
 	stationWrap.classList.toggle("hidden", stations.length === 0);
 	const body = $("stationBody");
 	body.innerHTML = "";
@@ -1625,8 +1650,11 @@ function lineCard(line) {
 	head.innerHTML =
 		`<span class="chip" style="background:${color}">${escapeHtml(line.number || "•")}</span>` +
 		`<span class="name">${escapeHtml(firstLang(line.name)) || "Unnamed line"}</span>` +
-		`<span class="spacer"></span><span class="count">${line.departures} dep</span>`;
+		`<span class="spacer"></span><span class="count">${line.departures} dep</span>` +
+		`<span class="expand-hint">⤢</span>`;
 	card.appendChild(head);
+	card.title = "Click to expand with metric explanations";
+	card.onclick = () => openLineModal(line);
 
 	const stats = document.createElement("div");
 	stats.className = "line-stats";
@@ -1742,6 +1770,64 @@ function drawHeadwayChart(canvas, line) {
 		g.fillStyle = threshold > 0 && gap < threshold ? "#e5484d" : colorHex(line.color);
 		g.fill();
 	}
+}
+
+/**
+ * The enlarged line panel: a bigger headway chart plus every metric with a plain-
+ * language explanation of what it means and where the number comes from.
+ */
+function openLineModal(line) {
+	const data = state.analytics.data || {};
+	const tolerance = data.onTimeToleranceSeconds ?? 60;
+	const bunchPct = Math.round((data.bunchingFraction ?? 0.5) * 100);
+	$("lineModalChip").textContent = line.number || "•";
+	$("lineModalChip").style.background = colorHex(line.color);
+	$("lineModalTitle").textContent = firstLang(line.name) || "Unnamed line";
+
+	const stat = (k, v, why) =>
+		`<div class="modal-stat"><div class="k">${k}</div><div class="v">${v}</div><div class="why">${why}</div></div>`;
+	let html = `<canvas class="big-chart"></canvas>`;
+	html += `<div class="modal-stats">`;
+	html += stat("Departures", line.departures,
+		"Trains of this line that left a platform inside the analytics window.");
+	html += stat("On time", `<span class="${onTimeClass(line.onTimePct)}">${line.onTimePct}%</span>`,
+		`${line.onTime} of ${line.departures} departures within ±${tolerance}s of schedule. ` +
+		"Deviation is what MTR measures against the timetable at each stop — positive is late.");
+	html += stat("Avg deviation", fmtSigned(line.avgDeviationMs),
+		"Mean schedule deviation across all departures; a persistent positive value means the timetable is too tight.");
+	html += stat("Worst late / early", `${fmtSigned(line.worstLateMs)} / ${fmtSigned(line.worstEarlyMs)}`,
+		"The single latest and earliest departures in the window.");
+	html += stat("Avg dwell", fmtDur(line.avgDwellMs),
+		"Time stopped at platforms (doors cycle included), averaged over all stops.");
+	html += stat("Dwell overrun", `${fmtSigned(line.avgDwellOverrunMs)} avg · ${fmtSigned(line.maxDwellOverrunMs)} max`,
+		"Measured dwell minus the scheduled dwell baked into the path (per-route dwell overrides included). " +
+		"Overruns come from holds, door obstructions or passenger load.");
+	html += stat("Headway", `${fmtDur(line.avgHeadwayMs)} avg · ${fmtDur(line.medianHeadwayMs)} median`,
+		"Gap between consecutive departures of this line at the same platform. " +
+		"Even headways are what riders feel as reliable service.");
+	html += stat("Headway range", `${fmtDur(line.minHeadwayMs)} – ${fmtDur(line.maxHeadwayMs)}`,
+		`Reference: ${fmtDur(line.refHeadwayMs)} (${line.headwaySource === "scheduled"
+			? "from the depot's frequency sliders" : "median of what was actually observed"}).`);
+	html += `</div>`;
+
+	html += `<div class="modal-section">BUNCHING</div>`;
+	if (line.bunching && line.bunching.length) {
+		html += `<div class="modal-bunching">` + line.bunching.map((b) =>
+			`▲ ${fmtDur(b.gapMs)} gap — ${escapeHtml(firstLang(b.station)) || "?"} platform ${escapeHtml(firstLang(b.platform)) || "?"} at ${fmtClock(b.atMs)}`
+		).join("<br>") + `</div>`;
+	} else {
+		html += `<div class="modal-bunching none">No bunching alerts — no pair of trains ran closer than ${bunchPct}% of the reference headway.</div>`;
+	}
+	html += `<div class="modal-section">CHART</div>` +
+		`<div class="modal-stat" style="border-radius:8px"><div class="why">` +
+		`The chart plots each successive gap over time: the dashed line is the reference headway, ` +
+		`the shaded band is the bunching threshold (${bunchPct}% of reference), and red points fell inside it. ` +
+		`A sawtooth pattern means trains are pairing up; a flat line is perfect service.</div></div>`;
+
+	$("lineModalBody").innerHTML = html;
+	$("lineModal").classList.remove("hidden");
+	const canvas = $("lineModalBody").querySelector(".big-chart");
+	requestAnimationFrame(() => drawHeadwayChart(canvas, line));
 }
 
 function escapeHtml(s) {
@@ -2054,6 +2140,7 @@ function renderVariantChips() {
 	lastVariantSig = sig;
 	const wrap = $("stringVariants");
 	wrap.innerHTML = "";
+	$("stringVariantsRow").classList.toggle("hidden", routes.length < 2);
 	if (routes.length < 2) return; // nothing to toggle apart
 	const multiLine = new Set(routes.map((r) => lineKey(r.name))).size > 1;
 	for (const r of routes) {

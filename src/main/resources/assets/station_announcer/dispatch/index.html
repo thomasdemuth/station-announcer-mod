@@ -102,33 +102,41 @@
 
 	<section id="stringline" class="hidden">
 		<div id="stringHead">
-			<span class="an-title">STRINGLINES</span>
-			<input id="stringFilter" type="text" autocomplete="off" spellcheck="false"
-				placeholder="Filter lines…" title="Narrow the line badges">
-			<div id="stringBadges"></div>
-			<div id="stringVariants" title="Toggle the line's individual directions / service patterns"></div>
-			<button id="stringSegBtn" class="btn small" title="Show every train over a chosen span of stations, across all lines (interlined trunks)">Segment</button>
-			<span id="stringHint" class="an-meta hidden"></span>
-			<span class="spacer"></span>
-			<div class="toggles" id="stringToggles">
-				<label title="Seconds spent at each stop"><input type="checkbox" id="slDwell"> Dwell</label>
-				<label title="Running time between stations"><input type="checkbox" id="slRun"> Run</label>
-				<label title="Gap to the previous train of the same service at each stop"><input type="checkbox" id="slHeadway"> Headway</label>
-				<label title="Total time over the visible run"><input type="checkbox" id="slTravel"> Travel</label>
-				<label title="Draw all runs in grey (colour on hover) — useful when one line colour dominates"><input type="checkbox" id="slGrey"> Grey</label>
+			<div class="string-row">
+				<span class="an-title">STRINGLINES</span>
+				<input id="stringFilter" type="text" autocomplete="off" spellcheck="false"
+					placeholder="Filter lines…" title="Narrow the line badges">
+				<div id="stringBadges"></div>
+				<span class="spacer"></span>
+				<span id="stringMeta" class="an-meta"></span>
 			</div>
-			<button id="slCsvBtn" class="btn small" title="Download the visible departure history as CSV">CSV</button>
-			<label class="an-meta" id="stringEndWrap" title="Scrub the end of the window back through the recorded history">End
-				<input type="range" id="stringEnd" min="0" max="1000" value="1000">
-			</label>
-			<button id="stringLive" class="btn small active" title="Pin the right edge to now">LIVE</button>
-			<select id="stringWindow" title="Time window">
-				<option value="15">15 min</option>
-				<option value="30">30 min</option>
-				<option value="60" selected>1 h</option>
-				<option value="120">2 h</option>
-			</select>
-			<span id="stringMeta" class="an-meta"></span>
+			<div class="string-row">
+				<button id="stringSegBtn" class="btn small" title="Show every train over a chosen span of stations, across all lines (interlined trunks)">Segment</button>
+				<span id="stringHint" class="an-meta hidden"></span>
+				<div class="toggles" id="stringToggles">
+					<label title="Seconds spent at each stop"><input type="checkbox" id="slDwell"> Dwell</label>
+					<label title="Running time between stations"><input type="checkbox" id="slRun"> Run</label>
+					<label title="Gap to the previous train of the same service at each stop"><input type="checkbox" id="slHeadway"> Headway</label>
+					<label title="Total time over the visible run"><input type="checkbox" id="slTravel"> Travel</label>
+					<label title="Draw all runs in grey (colour on hover) — useful when one line colour dominates"><input type="checkbox" id="slGrey"> Grey</label>
+				</div>
+				<button id="slCsvBtn" class="btn small" title="Download the visible departure history as CSV">CSV</button>
+				<span class="spacer"></span>
+				<label class="an-meta" id="stringEndWrap" title="Scrub the end of the window back through the recorded history">End
+					<input type="range" id="stringEnd" min="0" max="1000" value="1000">
+				</label>
+				<button id="stringLive" class="btn small active" title="Pin the right edge to now">LIVE</button>
+				<select id="stringWindow" title="Time window">
+					<option value="15">15 min</option>
+					<option value="30">30 min</option>
+					<option value="60" selected>1 h</option>
+					<option value="120">2 h</option>
+				</select>
+			</div>
+			<div class="string-row hidden" id="stringVariantsRow">
+				<span class="row-label">VARIANTS</span>
+				<div id="stringVariants" title="Toggle the line's individual directions / service patterns"></div>
+			</div>
 			<button id="stringClose" class="btn small">&times;</button>
 		</div>
 		<div id="stringStage">
@@ -151,12 +159,12 @@
 				<div class="an-section">STATIONS</div>
 				<table id="stationTable">
 					<thead><tr>
-						<th>Station</th>
-						<th class="num">Departures</th>
-						<th class="num">On time</th>
-						<th class="num">Avg dwell overrun</th>
-						<th class="num">Max overrun</th>
-						<th class="num">Headway irregularity</th>
+						<th data-k="name">Station</th>
+						<th class="num" data-k="departures">Departures</th>
+						<th class="num" data-k="onTimePct">On time</th>
+						<th class="num" data-k="avgDwellOverrunMs">Avg dwell overrun</th>
+						<th class="num" data-k="maxDwellOverrunMs">Max overrun</th>
+						<th class="num" data-k="headwayIrregularity">Headway irregularity</th>
 					</tr></thead>
 					<tbody id="stationBody"></tbody>
 				</table>
@@ -164,6 +172,18 @@
 		</div>
 	</section>
 </main>
+
+<div id="lineModal" class="hidden">
+	<div id="lineModalCard">
+		<div id="lineModalHead">
+			<span id="lineModalChip" class="chip"></span>
+			<span id="lineModalTitle"></span>
+			<span class="spacer"></span>
+			<button id="lineModalClose" class="btn small">&times;</button>
+		</div>
+		<div id="lineModalBody"></div>
+	</div>
+</div>
 
 <script src="app.js"></script>
 </body>

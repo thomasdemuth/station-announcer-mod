@@ -28,6 +28,14 @@ import pngtool
 import pixel_kit as pk
 
 ROOT = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..")
+
+def wpng(path, rows):
+    """pngtool.write_png emits exactly px[:4] bytes per pixel against an RGBA
+    header — an RGB 3-tuple silently corrupts the file (every el texture
+    shipped purple once). Normalize every pixel to RGBA here, always."""
+    pngtool.write_png(path, [[tuple(px) + (255,) * (4 - len(px)) for px in row]
+                             for row in rows])
+
 MOD = "station_announcer"
 
 # ---------------------------------------------------------------- palettes --
@@ -732,13 +740,13 @@ def canopy_gable_blockstate(roof, end):
 
 def build_platform(g, assets_root):
     texdir = os.path.join(assets_root, "textures/block")
-    pngtool.write_png(os.path.join(texdir, "el_board.png"), tex_board())
-    pngtool.write_png(os.path.join(texdir, "el_windscreen.png"), tex_windscreen())
-    pngtool.write_png(os.path.join(texdir, "el_corrugated.png"), tex_corrugated(PAINTS["green"]))
-    pngtool.write_png(os.path.join(texdir, "el_corrugated_silver.png"), tex_corrugated(PAINTS["silver"]))
-    pngtool.write_png(os.path.join(texdir, "el_glass.png"), tex_glass())
-    pngtool.write_png(os.path.join(texdir, "el_mesh.png"), tex_mesh())
-    pngtool.write_png(os.path.join(texdir, "el_roof_red.png"), tex_roof_red())
+    wpng(os.path.join(texdir, "el_board.png"), tex_board())
+    wpng(os.path.join(texdir, "el_windscreen.png"), tex_windscreen())
+    wpng(os.path.join(texdir, "el_corrugated.png"), tex_corrugated(PAINTS["green"]))
+    wpng(os.path.join(texdir, "el_corrugated_silver.png"), tex_corrugated(PAINTS["silver"]))
+    wpng(os.path.join(texdir, "el_glass.png"), tex_glass())
+    wpng(os.path.join(texdir, "el_mesh.png"), tex_mesh())
+    wpng(os.path.join(texdir, "el_roof_red.png"), tex_roof_red())
 
     def pm(name, els):
         g.model(name, PLATFORM_TEX, els)
@@ -1007,10 +1015,10 @@ def build(assets_root, data_root):
     texdir = os.path.join(assets_root, "textures/block")
     os.makedirs(texdir, exist_ok=True)
     for paint, p in PAINTS.items():
-        pngtool.write_png(os.path.join(texdir, f"el_steel_{paint}.png"), tex_steel(p))
-        pngtool.write_png(os.path.join(texdir, f"el_lattice_{paint}.png"), tex_lattice(p))
-    pngtool.write_png(os.path.join(texdir, "el_deck_wood.png"), tex_deck_wood())
-    pngtool.write_png(os.path.join(texdir, "el_deck_steel.png"), tex_deck_steel())
+        wpng(os.path.join(texdir, f"el_steel_{paint}.png"), tex_steel(p))
+        wpng(os.path.join(texdir, f"el_lattice_{paint}.png"), tex_lattice(p))
+    wpng(os.path.join(texdir, "el_deck_wood.png"), tex_deck_wood())
+    wpng(os.path.join(texdir, "el_deck_steel.png"), tex_deck_steel())
 
     for paint, p in PAINTS.items():
         tinted = p["tint"]
