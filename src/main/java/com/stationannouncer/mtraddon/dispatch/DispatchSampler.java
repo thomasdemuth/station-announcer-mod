@@ -83,6 +83,12 @@ public final class DispatchSampler {
         public final long deviationMs;   // positive = late; only updated by MTR at stops
         public final boolean manual;
         public final int stopIndex;
+        // Route-relative progress for the stringline's live tips: the platform dwell
+        // segment last passed / next ahead, and the fraction of the way between them.
+        // 0 ids mean "none" (before the first / after the last platform of the path).
+        public final long prevPlatformId;
+        public final long nextPlatformId;
+        public final double platformFraction; // 0..1, 0 while at/traversing a platform
         // Static-ish (sent on full frames, on new vehicles, and when changed):
         public final long routeId;
         public final String routeName;
@@ -98,6 +104,7 @@ public final class DispatchSampler {
         VehicleSnapshot(long id, double x, double y, double z, double speedKmh, boolean reversed,
                         String railId, double railT, boolean doorsOpen, long dwellRemainingMs,
                         long deviationMs, boolean manual, int stopIndex,
+                        long prevPlatformId, long nextPlatformId, double platformFraction,
                         long routeId, String routeName, String routeNumber, int routeColor,
                         String destination, String nextStation,
                         long sidingId, String sidingName, String depotName, String[] cars) {
@@ -114,6 +121,9 @@ public final class DispatchSampler {
             this.deviationMs = deviationMs;
             this.manual = manual;
             this.stopIndex = stopIndex;
+            this.prevPlatformId = prevPlatformId;
+            this.nextPlatformId = nextPlatformId;
+            this.platformFraction = platformFraction;
             this.routeId = routeId;
             this.routeName = routeName;
             this.routeNumber = routeNumber;
@@ -132,6 +142,9 @@ public final class DispatchSampler {
                     && doorsOpen == other.doorsOpen && dwellRemainingMs == other.dwellRemainingMs
                     && deviationMs == other.deviationMs && manual == other.manual
                     && stopIndex == other.stopIndex
+                    && prevPlatformId == other.prevPlatformId
+                    && nextPlatformId == other.nextPlatformId
+                    && platformFraction == other.platformFraction
                     && (railId == null ? other.railId == null : railId.equals(other.railId));
         }
 
@@ -212,8 +225,45 @@ public final class DispatchSampler {
         String railId = null;
         double railT = -1;
         long dwellRemainingMs = 0;
+        long prevPlatformId = 0;
+        long nextPlatformId = 0;
+        double platformFraction = 0;
         ObjectImmutableList<PathData> path = extra.immutablePath;
         int index = Utilities.getIndexFromConditionalList(path, railProgress);
+        if (index >= 0 && index < path.size()) {
+            // Stringline live tip: the platform dwell segments bracketing the current
+            // position. Walking outward from the current segment keeps this O(gap)
+            // rather than O(path). While dwelling, railProgress sits on the NEXT
+            // segment's start and the previous segment is the platform → fraction 0;
+            // while traversing the platform segment itself both scans find it →
+            // fraction 0 too (the tip parks at the station, which is what the chart
+            // should show).
+            double prevEnd = 0;
+            double nextStart = 0;
+            for (int i = index; i >= 0; i--) {
+                PathData candidate = path.get(i);
+                if (candidate.getDwellTime() > 0 && candidate.getSavedRailBaseId() != 0
+                        && candidate.getStartDistance() <= railProgress) {
+                    prevPlatformId = candidate.getSavedRailBaseId();
+                    prevEnd = candidate.getEndDistance();
+                    break;
+                }
+            }
+            for (int i = index; i < path.size(); i++) {
+                PathData candidate = path.get(i);
+                if (candidate.getDwellTime() > 0 && candidate.getSavedRailBaseId() != 0
+                        && candidate.getEndDistance() >= railProgress) {
+                    nextPlatformId = candidate.getSavedRailBaseId();
+                    nextStart = candidate.getStartDistance();
+                    break;
+                }
+            }
+            if (prevPlatformId != 0 && nextPlatformId != 0 && prevPlatformId != nextPlatformId
+                    && nextStart > prevEnd) {
+                platformFraction = Math.round(Math.min(1, Math.max(0,
+                        (railProgress - prevEnd) / (nextStart - prevEnd))) * 1000.0) / 1000.0;
+            }
+        }
         if (index >= 0 && index < path.size()) {
             PathData segment = path.get(index);
             railId = segment.getRail().getHexId();
@@ -252,6 +302,7 @@ public final class DispatchSampler {
                 ((VehicleDeviationAccessor) vehicle).stationAnnouncer$getDeviation(),
                 extra.getIsCurrentlyManual(),
                 extra.getStopIndex(),
+                prevPlatformId, nextPlatformId, platformFraction,
                 extra.getThisRouteId(),
                 extra.getThisRouteName(),
                 extra.getThisRouteNumber(),

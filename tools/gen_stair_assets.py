@@ -573,6 +573,21 @@ def handrail_models():
     return out
 
 
+ALIGN_SHIFT = 5.5  # keep in sync with HandrailBlock.ALIGN_SHIFT
+ALIGNABLE = ("flat", "slope", "slope_bottom", "slope_top")
+
+
+def translate_x(element, dx):
+    """Slide a box sideways: geometry and any rotation origin move together
+    (slope tubes rotate about their own centre, so the origin must ride)."""
+    element["from"][0] += dx
+    element["to"][0] += dx
+    rot = element.get("rotation")
+    if rot:
+        rot["origin"][0] += dx
+    return element
+
+
 def write_handrails():
     models = handrail_models()
     for style, variants in models.items():
@@ -583,6 +598,16 @@ def write_handrails():
         mirrored = [mirror_x(json.loads(json.dumps(e)))
                     for e in models["wall"][variant]]
         model(f"subway_handrail_wall_{variant}_mirror", HR_TEX, mirrored)
+    # floating/standing rails also come edge-aligned: the same elements slid
+    # sideways so a stair-lane rail can hug the side of the lane. ±5.5 keeps
+    # everything (2 px rail, post, 4 px foot) clear of the block boundary —
+    # flush faces there would z-fight an adjacent lane's opposite-aligned rail.
+    for style in ("floating", "standing"):
+        for variant in ALIGNABLE:
+            for suffix, dx in (("left", -ALIGN_SHIFT), ("right", ALIGN_SHIFT)):
+                shifted = [translate_x(json.loads(json.dumps(e)), dx)
+                           for e in models[style][variant]]
+                model(f"subway_handrail_{style}_{variant}_{suffix}", HR_TEX, shifted)
 
 
 def mirror_x(element):
@@ -662,14 +687,24 @@ HANDRAIL_VARIANTS = ("flat", "slope", "slope_bottom", "slope_top",
 
 
 def handrail_blockstate(style):
+    """Keys list only the properties that pick a model for this style —
+    unlisted declared properties (align on wall/double, mirror on the rest)
+    are wildcards, the vanilla waterlogged pattern. Keys stay uniform per
+    file so every state matches exactly one entry."""
     variants = {}
     for facing, rot in ROTS:
         for variant in HANDRAIL_VARIANTS:
-            for mirror in ("true", "false"):
-                mdl = f"subway_handrail_{style}_{variant}"
-                if style == "wall" and mirror == "true" and variant.startswith("slope"):
-                    mdl += "_mirror"
-                variants[f"facing={facing},variant={variant},mirror={mirror}"] = ap(mdl, rot)
+            base = f"subway_handrail_{style}_{variant}"
+            if style == "wall":
+                for mirror in ("true", "false"):
+                    mdl = base + ("_mirror" if mirror == "true" and variant.startswith("slope") else "")
+                    variants[f"facing={facing},variant={variant},mirror={mirror}"] = ap(mdl, rot)
+            elif style == "double":
+                variants[f"facing={facing},variant={variant}"] = ap(base, rot)
+            else:  # floating / standing: edge-aligned models exist
+                for align in ("left", "center", "right"):
+                    mdl = base + (f"_{align}" if align != "center" and variant in ALIGNABLE else "")
+                    variants[f"facing={facing},variant={variant},align={align}"] = ap(mdl, rot)
     return {"variants": variants}
 
 
@@ -738,6 +773,7 @@ PROPS = {
                              "right": {"none", "modern", "old"}},
     **{f"subway_handrail_{style}": {"facing": {"north", "south", "east", "west"},
                                     "mirror": {"true", "false"},
+                                    "align": {"left", "center", "right"},
                                     "variant": set(("flat", "slope", "slope_bottom",
                                                     "slope_top", "corner_left",
                                                     "corner_right"))}

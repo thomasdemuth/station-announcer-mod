@@ -51,5 +51,10 @@ public class HandrailItem extends BlockItem {
                 .formatted(net.minecraft.util.Formatting.GRAY));
         tooltip.add(Text.translatable("gui.station_announcer.handrail_hint")
                 .formatted(net.minecraft.util.Formatting.DARK_GRAY));
+        HandrailBlock.Style style = ((HandrailBlock) getBlock()).style();
+        if (style == HandrailBlock.Style.FLOATING || style == HandrailBlock.Style.STANDING) {
+            tooltip.add(Text.translatable("gui.station_announcer.handrail_hint_side")
+                    .formatted(net.minecraft.util.Formatting.DARK_GRAY));
+        }
     }
 }

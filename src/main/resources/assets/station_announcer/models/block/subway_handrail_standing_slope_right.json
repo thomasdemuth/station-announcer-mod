@@ -1,0 +1,196 @@
+{
+  "parent": "minecraft:block/block",
+  "textures": {
+    "rail": "station_announcer:block/handrail_steel",
+    "particle": "station_announcer:block/handrail_steel"
+  },
+  "elements": [
+    {
+      "from": [
+        12.5,
+        13.5,
+        0
+      ],
+      "to": [
+        14.5,
+        15.5,
+        16
+      ],
+      "faces": {
+        "east": {
+          "texture": "#rail",
+          "uv": [
+            0.25,
+            8,
+            15.75,
+            10
+          ]
+        },
+        "west": {
+          "texture": "#rail",
+          "uv": [
+            0.25,
+            8,
+            15.75,
+            10
+          ]
+        },
+        "up": {
+          "texture": "#rail",
+          "uv": [
+            0.25,
+            8,
+            15.75,
+            10
+          ]
+        },
+        "down": {
+          "texture": "#rail",
+          "uv": [
+            0.25,
+            8,
+            15.75,
+            10
+          ]
+        },
+        "north": {
+          "texture": "#rail",
+          "uv": [
+            2,
+            2,
+            4,
+            4
+          ]
+        },
+        "south": {
+          "texture": "#rail",
+          "uv": [
+            2,
+            2,
+            4,
+            4
+          ]
+        }
+      },
+      "rotation": {
+        "origin": [
+          13.5,
+          14.5,
+          8
+        ],
+        "axis": "x",
+        "angle": 45,
+        "rescale": true
+      }
+    },
+    {
+      "from": [
+        12.5,
+        0,
+        7
+      ],
+      "to": [
+        14.5,
+        13.5,
+        9
+      ],
+      "faces": {
+        "north": {
+          "texture": "#rail",
+          "uv": [
+            0.25,
+            8,
+            2.25,
+            10
+          ]
+        },
+        "south": {
+          "texture": "#rail",
+          "uv": [
+            0.25,
+            8,
+            2.25,
+            10
+          ]
+        },
+        "east": {
+          "texture": "#rail",
+          "uv": [
+            0.25,
+            8,
+            2.25,
+            10
+          ]
+        },
+        "west": {
+          "texture": "#rail",
+          "uv": [
+            0.25,
+            8,
+            2.25,
+            10
+          ]
+        }
+      }
+    },
+    {
+      "from": [
+        11.5,
+        0,
+        6
+      ],
+      "to": [
+        15.5,
+        1,
+        10
+      ],
+      "faces": {
+        "north": {
+          "texture": "#rail",
+          "uv": [
+            0.25,
+            12,
+            4.25,
+            12.5
+          ]
+        },
+        "south": {
+          "texture": "#rail",
+          "uv": [
+            0.25,
+            12,
+            4.25,
+            12.5
+          ]
+        },
+        "east": {
+          "texture": "#rail",
+          "uv": [
+            0.25,
+            12,
+            4.25,
+            12.5
+          ]
+        },
+        "west": {
+          "texture": "#rail",
+          "uv": [
+            0.25,
+            12,
+            4.25,
+            12.5
+          ]
+        },
+        "up": {
+          "texture": "#rail",
+          "uv": [
+            0.25,
+            12,
+            4.25,
+            14
+          ]
+        }
+      }
+    }
+  ]
+}

@@ -669,6 +669,17 @@ public class StationDecorRenderer implements BlockEntityRenderer<StationDecorBlo
         matrices.push();
         matrices.translate(0.5, 0.0, 0.5);
         matrices.multiply(RotationAxis.POSITIVE_Y.rotationDegrees(180.0f - facingOf(entity).asRotation()));
+        // An open leaf is the closed geometry swung 90° about the hinge at
+        // model (3, 8) — local x −0.3125, z 0. The plate rides the leaf, so it
+        // takes the exact same turn before either face is painted.
+        var doorState = entity.getCachedState();
+        if (doorState.contains(com.stationannouncer.mtr.EmployeeDoorBlock.OPEN)
+                && doorState.get(com.stationannouncer.mtr.EmployeeDoorBlock.OPEN)) {
+            final float hingeX = 3.0f / 16.0f - 0.5f;
+            matrices.translate(hingeX, 0.0, 0.0);
+            matrices.multiply(RotationAxis.POSITIVE_Y.rotationDegrees(90.0f));
+            matrices.translate(-hingeX, 0.0, 0.0);
+        }
         for (int side = 0; side < 2; side++) {
             matrices.push();
             if (side == 1) {

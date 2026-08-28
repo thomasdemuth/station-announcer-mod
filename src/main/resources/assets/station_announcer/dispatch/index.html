@@ -26,7 +26,9 @@
 		<option value="dwell">Heat: dwell overrun</option>
 		<option value="headway">Heat: headway irregularity</option>
 	</select>
+	<button id="stringBtn" class="btn" title="Time–distance stringlines per line">Stringlines</button>
 	<button id="analyticsBtn" class="btn" title="Timetable &amp; headway analytics">Analytics</button>
+	<button id="alertsBtn" class="btn" title="Operational alerts">Alerts<span id="alertsBadge" class="alerts-badge hidden">0</span></button>
 	<button id="boardBtn" class="btn" title="Toggle the dispatch board">Board</button>
 	<button id="fitBtn" class="btn" title="Fit network in view">Fit</button>
 </header>
@@ -72,6 +74,36 @@
 			</tr></thead>
 			<tbody id="boardBody"></tbody>
 		</table>
+	</section>
+
+	<aside id="alertsFeed" class="hidden">
+		<div id="alertsHead">
+			<span class="an-title">ALERTS</span>
+			<span class="spacer"></span>
+			<button id="alertsClear" class="btn small">Clear</button>
+			<button id="alertsClose" class="btn small">&times;</button>
+		</div>
+		<div id="alertsBody"><div class="an-empty">No alerts</div></div>
+	</aside>
+
+	<section id="stringline" class="hidden">
+		<div id="stringHead">
+			<span class="an-title">STRINGLINES</span>
+			<div id="stringBadges"></div>
+			<span class="spacer"></span>
+			<select id="stringWindow" title="Time window">
+				<option value="15">15 min</option>
+				<option value="30">30 min</option>
+				<option value="60" selected>1 h</option>
+				<option value="120">2 h</option>
+			</select>
+			<span id="stringMeta" class="an-meta"></span>
+			<button id="stringClose" class="btn small">&times;</button>
+		</div>
+		<div id="stringStage">
+			<canvas id="slCanvas"></canvas>
+			<div id="slTip" class="hidden"></div>
+		</div>
 	</section>
 
 	<section id="analytics" class="hidden">

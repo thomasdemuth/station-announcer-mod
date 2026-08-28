@@ -171,6 +171,51 @@ handrail variants IN the right-click cycle, manual divider block). Assets GENERA
   A top-down camera made the standing rails look flattened once — eye-level shots
   disproved it; don't chase that again.
 
+### 2.4.17 (2026-08-27) — door orientation/opening, edge-aligned handrails, MVM rename; NOT yet deployed/play-tested
+
+Four fixes/features from Thomas's feedback round (his answers, do not re-ask):
+- **Both 2-tall doors place by LOOK DIRECTION now**: `facing = getHorizontalPlayerFacing()`
+  (was `.getOpposite()` = signs faced away) and the adopt-the-neighbouring-run's-facing
+  loop is DELETED from EmergencyExitDoorBlock + EmployeeDoorBlock — the player's look
+  is authoritative (Thomas: it "ignored" him). A door reversed inside a run shows
+  doubled posts at its joints (its own frame) — accepted trade-off, joins() still
+  requires exact facing match.
+- **Employee doors open**: OPEN property, right-click (non-brush) swings both halves
+  (iron-door sound, NO alarm), collision empty while open, auto-close after
+  `AUTO_CLOSE_TICKS` = 80 (4 s) via scheduledTick on the lower half. Open models are
+  `swing()` of the closed elements (exit door's hinge x3 z8) —
+  `employee_door_{style}_open_{half}` in gen_gate_assets.py; blockstate leaf parts
+  gained open=true/false conditions + contract sets updated. The BER label plate
+  swings with the leaf (StationDecorRenderer: translate/rotate90/untranslate about
+  local x −0.3125 when OPEN).
+- **Handrails**: new `ALIGN` EnumProperty (left/center/right) on all four styles;
+  floating+standing non-corner variants get `_left`/`_right` models (same elements
+  translate_x'd ±5.5 px — ±5.5 keeps rail/post/foot clear of block boundaries, flush
+  would z-fight the adjacent lane's opposite-aligned rail). Picked from WHERE IN THE
+  BLOCK you click (thirds across the run); double/wall/corners stay center. Blockstate
+  keys per style are uniform: floating/standing = facing×variant×align (mirror
+  wildcard), double = facing×variant, wall unchanged. WALL FIXES: sloped mirror was
+  INVERTED vs the click (comment said stand-position, code used hit-pos with the wrong
+  sign) — now the rail sits on the side that actually HAS a solid wall
+  (isSideSolidFullSquare), tie → the clicked side; flat/corner clicked on a
+  floor/ceiling now searches look/right/left/behind for a real wall. Wall-slope
+  OUTLINES now hug the correct side (were centered). Item tooltip gained a
+  side-hint line (floating/standing only).
+- fare_machine renamed "MetroCard Vending Machine" (lang only).
+- **TICKET_RESEARCH.md**: deep dive on MTR 4.0.1 TicketSystem (all bytecode-verified):
+  fares = $2 + $1×Manhattan zone distance (Station.getZone1/2/3), entry allowed iff
+  balance ≥ 0, exit never denied (can go negative), MTR's evasion fine is $500 (ours
+  $100), our turnstile `hasEntryRecord` uses ANY-of-3 zone scores where MTR's
+  entered() needs ALL — one-line exactness bug. No dry-run API but getBalance +
+  scoreboards replicate the deny decision synchronously. BlockTicketBarrier blocks
+  with an invisible 24px z7..9 collision wall (CLOSED+PENDING), opens in callback,
+  40-tick re-close — complete recipe for an optional blocking mode. P1–P12
+  prioritized proposals at the end; P10 (BER rotor spin) + P11 (fine → $500) are
+  flagged [ask Thomas]. Nothing implemented from it yet.
+- Build green at 2.4.17; deploy_jar.sh REFUSED (game open) — deploy + in-game test
+  still pending: door placement feel, open/close + label swing, handrail thirds
+  clicking, wall-detection placement.
+
 ### TURNSTILE ROUND 2 (2026-08-19 evening) — fare feedback + photo-grade tubing; NOT yet deployed
 
 **Fare feedback**: passing a turnstile now action-bars the rider

@@ -115,15 +115,11 @@ public class EmergencyExitDoorBlock extends Block implements com.stationannounce
 
     @Override
     public BlockState getPlacementState(ItemPlacementContext context) {
-        Direction facing = context.getHorizontalPlayerFacing().getOpposite();
-        for (Direction side : Direction.values()) {
-            BlockState neighbour = context.getWorld().getBlockState(context.getBlockPos().offset(side));
-            if (neighbour.getBlock() instanceof com.stationannouncer.block.GateSection
-                    && neighbour.contains(FACING)) {
-                facing = neighbour.get(FACING);
-                break;
-            }
-        }
+        // The paid-side signage faces the placer: you stand where the signs
+        // should read and place. The door never adopts a neighbouring run's
+        // facing — the player's look direction is authoritative, and a door
+        // reversed within a run simply frames itself with its own posts.
+        Direction facing = context.getHorizontalPlayerFacing();
         BlockPos above = context.getBlockPos().up();
         if (above.getY() >= context.getWorld().getTopY() - 1
                 || !context.getWorld().getBlockState(above).isReplaceable()) {

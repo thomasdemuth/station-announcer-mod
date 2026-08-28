@@ -117,15 +117,24 @@ public final class AnalyticsAggregator {
         public final List<StationStats> stations;
         /** The {@code data} object served by {@code /dispatch/api/analytics}; never mutated after publish. */
         public final JsonObject json;
+        /**
+         * The raw departure events of the window, time-sorted and immutable — the
+         * stringline endpoint draws its train traces from these (each departure's
+         * {@code dwellMs} reconstructs the arrival instant), so publishing them here
+         * costs one List.copyOf per recompute and no new recording machinery.
+         */
+        public final List<AnalyticsEvent> events;
 
         Aggregate(String dimension, long computedAt, int departures,
-                  List<LineStats> lines, List<StationStats> stations, JsonObject json) {
+                  List<LineStats> lines, List<StationStats> stations, JsonObject json,
+                  List<AnalyticsEvent> events) {
             this.dimension = dimension;
             this.computedAt = computedAt;
             this.departures = departures;
             this.lines = lines;
             this.stations = stations;
             this.json = json;
+            this.events = events;
         }
     }
 
@@ -245,7 +254,7 @@ public final class AnalyticsAggregator {
         stations.sort(Comparator.comparing((StationStats station) -> displayName(station.name)));
 
         return new Aggregate(dimension, now, events.size(), List.copyOf(lines), List.copyOf(stations),
-                toJson(dimension, now, events.size(), lines, stations, config));
+                toJson(dimension, now, events.size(), lines, stations, config), List.copyOf(events));
     }
 
     private record Gap(AnalyticsEvent event, long millis) {

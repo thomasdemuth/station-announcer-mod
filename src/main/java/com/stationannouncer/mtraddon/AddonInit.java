@@ -74,6 +74,7 @@ public final class AddonInit {
             // connected clients and the streamer thread itself.
             DispatchRegistry.clear();
             DispatchStreamer.shutdown();
+            com.stationannouncer.mtraddon.dispatch.DispatchEvents.clear();
             // Feature 6: drop the captured Simulator references before MTR stops them.
             MtrSimulators.clear();
         });

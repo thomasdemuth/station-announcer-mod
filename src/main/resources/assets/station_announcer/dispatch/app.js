@@ -37,8 +37,27 @@ const state = {
 	lastServerTime: 0,
 	lastFrameAt: 0,
 	selected: null,
+	selectedStation: null,  // station id shown in the side panel (mutually exclusive with selected)
 	follow: false,
 	es: null,
+	holds: new Set(),        // platform ids currently holding a train (SSE)
+	obstructed: new Set(),   // vehicle ids with door obstructions (SSE)
+	alerts: [],              // newest last; capped at 200
+	alertsOpen: false,
+	alertsUnread: 0,
+	stringline: {
+		view: false,
+		groups: [],          // [{key, display, number, color, routeIds:[]}]
+		groupKey: null,
+		axis: null,          // stringline endpoint axis payload (all routes)
+		deps: [],            // departure rows for the selected group
+		windowMin: 60,
+		timer: null,
+		fetching: false,
+		hover: null,         // {trace, segIndex} under the cursor
+		mouse: null,         // [x, y] canvas-local
+		traces: [],          // rebuilt each draw; hit-testing reads it
+	},
 	lastEventAt: 0,
 	view: { x: 0, z: 0, scale: 1 },  // world center + px per block
 	layers: { speed: true, signals: true, stations: true, trainLabels: true },
@@ -101,8 +120,19 @@ async function boot() {
 		return;
 	}
 	setInterval(refetchNetwork, 60000);
+	fetchAlertBacklog();
 	requestAnimationFrame(frame);
 	setInterval(renderBoard, 1000);
+}
+
+async function fetchAlertBacklog() {
+	try {
+		const body = await (await fetch(`${API}/alerts`)).json();
+		const alerts = (body.data || body).alerts || [];
+		const seen = new Set(state.alerts.map((a) => a.seq));
+		for (const a of alerts) if (!seen.has(a.seq)) addAlert(a, true);
+		renderAlerts();
+	} catch (e) { /* transient */ }
 }
 
 function fillDimSelect() {
@@ -121,6 +151,14 @@ async function loadDimension(n) {
 	state.dim = n;
 	state.vehicles.clear();
 	state.signals.clear();
+	state.holds = new Set();
+	state.obstructed = new Set();
+	state.selectedStation = null;
+	state.stringline.axis = null;
+	state.stringline.deps = [];
+	state.stringline.groups = [];
+	state.stringline.groupKey = null;
+	if (state.stringline.view) fetchStringline();
 	setAnalyticsData(null);
 	if (state.analytics.timer) fetchAnalytics();   // different dimension → refetch now
 	state.emaInterval = 0;
@@ -299,6 +337,11 @@ function handleFrame(f, isFull) {
 	(f.signals || []).forEach((s) => state.signals.set(s.rail, s));
 	(f.signalsCleared || []).forEach((id) => state.signals.delete(id));
 
+	// Absent on deltas = unchanged; full frames always carry both.
+	if (f.holds) state.holds = new Set(f.holds);
+	if (f.obstructed) state.obstructed = new Set(f.obstructed);
+	(f.alerts || []).forEach(addAlert);
+
 	if (state.selected && !state.vehicles.has(state.selected)) { state.selected = null; state.follow = false; }
 	updateDetail();
 }
@@ -455,7 +498,8 @@ function drawStatic(dpr) {
 }
 
 function frame() {
-	// The analytics overlay covers the whole stage — don't burn frames drawing under it.
+	// A full-stage overlay covers the map — don't burn frames drawing under it.
+	if (state.stringline.view) { drawStringline(); requestAnimationFrame(frame); return; }
 	if (state.analytics.view) { requestAnimationFrame(frame); return; }
 	const dpr = resize();
 	if (staticDirty) { drawStatic(dpr); staticDirty = false; }
@@ -487,6 +531,27 @@ function frame() {
 			ctx.beginPath(); ctx.arc(sx, sy, 4, 0, Math.PI * 2);
 			ctx.fillStyle = aspect; ctx.fill();
 			ctx.strokeStyle = "#0b0e14"; ctx.lineWidth = 1; ctx.stroke();
+		}
+	}
+
+	// held platforms — pulsing amber ring + HOLD tag at the platform midpoint
+	if (state.holds.size) {
+		const pulse = 0.5 + 0.5 * Math.sin(frameNow / 300);
+		for (const platId of state.holds) {
+			const p = state.platforms.get(platId);
+			if (!p) continue;
+			const [sx, sy] = worldToScreen(p.mid[0], p.mid[2]);
+			ctx.beginPath();
+			ctx.arc(sx, sy, 7 + pulse * 4, 0, Math.PI * 2);
+			ctx.strokeStyle = `rgba(245,185,66,${0.45 + pulse * 0.5})`;
+			ctx.lineWidth = 2.5;
+			ctx.stroke();
+			if (state.view.scale > 0.5) {
+				ctx.font = "700 9px " + getComputedStyle(document.body).getPropertyValue("--mono");
+				ctx.textAlign = "center";
+				ctx.fillStyle = "#f5b942";
+				ctx.fillText("HOLD", sx, sy + 22);
+			}
 		}
 	}
 
@@ -577,7 +642,14 @@ function initUi() {
 	$("analyticsClose").onclick = () => setAnalyticsView(false);
 	$("heatSelect").onchange = (e) => setHeatMode(e.target.value);
 	renderHeatLegend();
-	$("closeDetail").onclick = () => { state.selected = null; state.follow = false; updateDetail(); };
+	$("closeDetail").onclick = () => { state.selected = null; state.selectedStation = null; state.follow = false; updateDetail(); };
+	$("stringBtn").onclick = () => setStringlineView(!state.stringline.view);
+	$("stringClose").onclick = () => setStringlineView(false);
+	$("stringWindow").onchange = (e) => { state.stringline.windowMin = parseInt(e.target.value, 10); };
+	$("alertsBtn").onclick = () => setAlertsOpen(!state.alertsOpen);
+	$("alertsClose").onclick = () => setAlertsOpen(false);
+	$("alertsClear").onclick = () => { state.alerts = []; renderAlerts(); };
+	initStringlineCanvas();
 	$("followBtn").onclick = () => { state.follow = !state.follow; $("followBtn").classList.toggle("active", state.follow); };
 
 	// pan/zoom
@@ -636,9 +708,32 @@ function clickAt(cx, cy) {
 		if (d < bestD) { best = id; bestD = d; }
 	}
 	state.selected = best;
-	if (!best) state.follow = false;
+	state.selectedStation = null;
+	if (!best) {
+		state.follow = false;
+		// No train hit — a click inside a station area opens the station panel.
+		const v = state.view;
+		const wx = v.x + (x - canvas.clientWidth / 2) / v.scale;
+		const wz = v.z + (y - canvas.clientHeight / 2) / v.scale;
+		for (const st of state.stations) {
+			const b = st.bounds;
+			if (wx >= b[0] && wx <= b[3] + 1 && wz >= b[2] && wz <= b[5] + 1) {
+				state.selectedStation = st.id;
+				// One-shot analytics fetch so the panel can show the station's scores.
+				if (!state.analytics.data) fetchAnalytics();
+				break;
+			}
+		}
+	}
 	updateDetail();
 	renderBoard();
+}
+
+/** True when this vehicle is sitting at a platform that is actively holding it. */
+function vehicleHeld(rec) {
+	const d = rec.data;
+	return !!(d.pPlat && d.pPlat !== "0" && d.pFrac === 0 && (d.kmh ?? 0) === 0
+		&& state.holds.has(d.pPlat));
 }
 
 function centerOn(id) {
@@ -655,6 +750,7 @@ function centerOn(id) {
 function updateDetail() {
 	const el = $("detail");
 	const rec = state.selected ? state.vehicles.get(state.selected) : null;
+	if (!rec && state.selectedStation) { renderStationPanel(el); return; }
 	if (!rec) { el.classList.add("hidden"); return; }
 	el.classList.remove("hidden");
 	const r = rec.route || {};
@@ -664,12 +760,14 @@ function updateDetail() {
 	const d = rec.data;
 	const [devTxt, devCls] = fmtDev(d.devMs);
 	const dwellS = d.dwellMs > 0 ? Math.ceil(d.dwellMs / 1000) + "s" : "—";
+	const heldTag = vehicleHeld(rec) ? ' <span class="badge held">HELD</span>' : "";
+	const blockedTag = state.obstructed.has(state.selected) ? ' <span class="badge blocked">BLOCKED</span>' : "";
 	const rows = [
 		["Destination", firstLang(r.dest) || "—"],
 		["Next station", firstLang(r.nextStation) || "—"],
 		["Speed", (d.kmh ?? 0).toFixed(1) + " km/h"],
-		["Schedule", `<span class="${devCls}">${devTxt}</span>`],
-		["Doors", d.doors ? "OPEN" : "closed"],
+		["Schedule", `<span class="${devCls}">${devTxt}</span>` + heldTag],
+		["Doors", (d.doors ? "OPEN" : "closed") + blockedTag],
 		["Dwell left", dwellS],
 		["Mode", d.manual ? "MANUAL" : "ATO"],
 	];
@@ -678,7 +776,83 @@ function updateDetail() {
 	if (rec.consist && rec.consist.cars) {
 		html += `<div class="consist">${rec.consist.cars.length} car(s): ${rec.consist.cars.join(" + ")}</div>`;
 	}
+	$("followBtn").style.display = "";
 	$("detailBody").innerHTML = html;
+}
+
+/* ---------- station panel ---------- */
+
+function renderStationPanel(el) {
+	const st = state.stations.find((s) => s.id === state.selectedStation);
+	if (!st) { el.classList.add("hidden"); state.selectedStation = null; return; }
+	el.classList.remove("hidden");
+	$("followBtn").style.display = "none";
+	$("detailChip").textContent = "●";
+	$("detailChip").style.background = colorHex(st.color);
+	$("detailTitle").textContent = firstLang(st.name) || "Station";
+
+	let html = "";
+
+	// Platforms with their calling routes, dwell, and hold state.
+	const platforms = [...state.platforms.values()].filter((p) => p.stationId === st.id);
+	if (platforms.length) {
+		html += `<div class="sta-section">PLATFORMS</div>`;
+		for (const p of platforms) {
+			const routeChips = (p.routeIds || []).map((rid) => {
+				const r = state.routes.get(rid);
+				if (!r || r.hidden) return "";
+				return `<span class="chip" style="background:${colorHex(r.color)}">${escapeHtml(r.number || firstLang(r.name))}</span>`;
+			}).join("");
+			const held = state.holds.has(p.id) ? ' <span class="badge held">HELD</span>' : "";
+			html += `<div class="sta-plat"><span class="pname">${escapeHtml(firstLang(p.name))}</span>` +
+				routeChips + held +
+				`<span class="dwell">dwell ${Math.round((p.dwellMs || 0) / 1000)}s</span></div>`;
+		}
+	}
+
+	// Live trains whose next stop is this station.
+	const inbound = [];
+	for (const [id, rec] of state.vehicles) {
+		const r = rec.route;
+		if (!r || firstLang(r.nextStation) !== firstLang(st.name)) continue;
+		inbound.push({ id, rec });
+	}
+	html += `<div class="sta-section">INBOUND</div>`;
+	if (!inbound.length) {
+		html += `<div class="sta-inbound" style="color:var(--dim)">No train heading here right now</div>`;
+	}
+	for (const { id, rec } of inbound) {
+		const r = rec.route;
+		const [devTxt, devCls] = fmtDev(rec.data.devMs);
+		html += `<div class="sta-inbound" data-veh="${escapeHtml(id)}" style="cursor:pointer">` +
+			`<span class="chip" style="background:${colorHex(r.color)}">${escapeHtml(r.number || firstLang(r.name))}</span>` +
+			`<span>${escapeHtml(firstLang(r.dest)) || "—"}</span>` +
+			`<span class="spacer"></span><span class="${devCls}">${devTxt}</span></div>`;
+	}
+
+	// The analytics window's scorecard for this station, when loaded.
+	const stats = state.analytics.stationById.get(st.id);
+	if (stats) {
+		html += `<div class="sta-section">LAST ${state.analytics.data.windowMinutes || 60} MIN</div>`;
+		const rows = [
+			["Departures", stats.departures],
+			["On time", `<span class="${onTimeClass(stats.onTimePct)}">${stats.onTimePct}%</span>`],
+			["Avg dwell overrun", fmtSigned(stats.avgDwellOverrunMs)],
+			["Headway irregularity", stats.headwaySamples >= 2 ? stats.headwayIrregularity.toFixed(2) : "—"],
+		];
+		html += rows.map(([k, v]) => `<div class="row"><span class="k">${k}</span><span class="v">${v}</span></div>`).join("");
+	}
+
+	$("detailBody").innerHTML = html;
+	$("detailBody").querySelectorAll("[data-veh]").forEach((row) => {
+		row.onclick = () => {
+			state.selected = row.dataset.veh;
+			state.selectedStation = null;
+			centerOn(state.selected);
+			updateDetail();
+			renderBoard();
+		};
+	});
 }
 
 /* ---------- dispatch board ---------- */
@@ -695,6 +869,8 @@ function boardRow(id, rec) {
 		kmh: d.kmh ?? 0,
 		dev: d.devMs ?? 0,
 		doors: d.doors ? "OPEN" : "",
+		held: vehicleHeld(rec),
+		blocked: state.obstructed.has(id),
 		dwell: d.dwellMs > 0 ? Math.ceil(d.dwellMs / 1000) : 0,
 		mode: d.manual ? "MAN" : "ATO",
 	};
@@ -724,7 +900,7 @@ function renderBoard() {
 			`<td>${row.dest}</td><td>${row.next}</td>` +
 			`<td class="num">${row.kmh.toFixed(0)}</td>` +
 			`<td class="num ${devCls}">${devTxt}</td>` +
-			`<td>${row.doors}</td>` +
+			`<td>${row.doors}${row.held ? '<span class="badge held">HELD</span>' : ""}${row.blocked ? '<span class="badge blocked">BLK</span>' : ""}</td>` +
 			`<td class="num">${row.dwell || "—"}</td>` +
 			`<td>${row.mode}</td>`;
 		tr.onclick = () => { state.selected = row.id; centerOn(row.id); updateDetail(); renderBoard(); };
@@ -773,6 +949,7 @@ function setAnalyticsData(data) {
 }
 
 function setAnalyticsView(on) {
+	if (on && state.stringline.view) setStringlineView(false);
 	state.analytics.view = on;
 	$("analytics").classList.toggle("hidden", !on);
 	$("analyticsBtn").classList.toggle("active", on);
@@ -1032,6 +1209,477 @@ function escapeHtml(s) {
 		.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
 }
 
+/* ---------- alerts ---------- */
+
+const ALERT_KINDS = {
+	hold_cap: "HOLD CAP",
+	door_backstop: "DOORS",
+	late: "LATE",
+	stalled: "STALLED",
+};
+
+function addAlert(a, quiet) {
+	if (state.alerts.some((x) => x.seq === a.seq)) return;
+	state.alerts.push(a);
+	state.alerts.sort((x, y) => x.seq - y.seq);
+	if (state.alerts.length > 200) state.alerts.splice(0, state.alerts.length - 200);
+	if (!quiet && !state.alertsOpen) {
+		state.alertsUnread++;
+	}
+	renderAlerts();
+}
+
+function setAlertsOpen(on) {
+	state.alertsOpen = on;
+	$("alertsFeed").classList.toggle("hidden", !on);
+	$("alertsBtn").classList.toggle("active", on);
+	if (on) state.alertsUnread = 0;
+	renderAlerts();
+}
+
+function fmtClock(t) {
+	const d = new Date(t);
+	return String(d.getHours()).padStart(2, "0") + ":" + String(d.getMinutes()).padStart(2, "0");
+}
+
+function renderAlerts() {
+	const badge = $("alertsBadge");
+	badge.classList.toggle("hidden", state.alertsUnread === 0);
+	badge.textContent = state.alertsUnread;
+	if (!state.alertsOpen) return;
+	const body = $("alertsBody");
+	if (!state.alerts.length) { body.innerHTML = '<div class="an-empty">No alerts</div>'; return; }
+	body.innerHTML = "";
+	for (let i = state.alerts.length - 1; i >= 0; i--) {
+		const a = state.alerts[i];
+		const row = document.createElement("div");
+		row.className = "alert-row";
+		row.innerHTML =
+			`<span class="dot" style="background:${a.severity === "bad" ? "var(--red)" : "var(--amber)"}"></span>` +
+			`<span class="kind">${ALERT_KINDS[a.kind] || a.kind.toUpperCase()}</span>` +
+			`<span class="msg">${escapeHtml(a.detail)}</span>` +
+			`<span class="when">${fmtClock(a.t)}</span>`;
+		row.onclick = () => {
+			if (a.veh && state.vehicles.has(a.veh)) {
+				state.selected = a.veh;
+				state.selectedStation = null;
+				setStringlineView(false);
+				centerOn(a.veh);
+				updateDetail();
+				renderBoard();
+			} else if (a.plat && state.platforms.has(a.plat)) {
+				const p = state.platforms.get(a.plat);
+				state.view.x = p.mid[0]; state.view.z = p.mid[2];
+				if (state.view.scale < 1) state.view.scale = 1.5;
+				setStringlineView(false);
+				invalidateStatic();
+			}
+		};
+		body.appendChild(row);
+	}
+}
+
+/* ---------- stringlines ---------- */
+
+/* Poll cadence for the departure history while the view is open; the live tips move
+ * every frame off the SSE stream regardless. */
+const STRINGLINE_POLL_MS = 15000;
+
+/** A route's line grouping key: the part before MTR's "||" direction separator. */
+function lineKey(name) {
+	return (name || "").split("||")[0];
+}
+
+function setStringlineView(on) {
+	state.stringline.view = on;
+	$("stringline").classList.toggle("hidden", !on);
+	$("stringBtn").classList.toggle("active", on);
+	if (on) {
+		if (state.analytics.view) setAnalyticsView(false);
+		fetchStringline();
+		if (!state.stringline.timer) {
+			state.stringline.timer = setInterval(fetchStringline, STRINGLINE_POLL_MS);
+		}
+	} else if (state.stringline.timer) {
+		clearInterval(state.stringline.timer);
+		state.stringline.timer = null;
+	}
+}
+
+async function fetchStringline() {
+	const sl = state.stringline;
+	if (DEMO) { applyStringline(demoStringline()); return; }
+	if (sl.fetching || document.hidden) return;
+	sl.fetching = true;
+	try {
+		const routesParam = sl.groupKey
+			? sl.groups.find((g) => g.key === sl.groupKey)?.routeIds.join(",") || ""
+			: "";
+		const body = await (await fetch(`${API}/stringline?dimension=${state.dim}&routes=${encodeURIComponent(routesParam)}`)).json();
+		applyStringline(body.data || body);
+	} catch (e) {
+		/* transient */
+	} finally {
+		sl.fetching = false;
+	}
+}
+
+function applyStringline(data) {
+	const sl = state.stringline;
+	sl.axis = data.axis || null;
+	sl.deps = data.deps || [];
+	sl.windowServerMin = data.windowMinutes || 60;
+	sl.analyticsEnabled = data.analyticsEnabled !== false;
+
+	// Group routes into lines by the "||" key; badges rebuild only when changed.
+	const groups = [];
+	const byKey = new Map();
+	for (const r of (sl.axis?.routes || [])) {
+		if (r.hidden || (r.stations || []).length < 2) continue;
+		const key = lineKey(r.name);
+		let g = byKey.get(key);
+		if (!g) {
+			g = { key, display: firstLang(key) || "Line", number: r.number, color: r.color, routeIds: [] };
+			byKey.set(key, g);
+			groups.push(g);
+		}
+		g.routeIds.push(r.id);
+	}
+	groups.sort((a, b) => String(a.number || a.display).localeCompare(String(b.number || b.display), undefined, { numeric: true }));
+	const changed = JSON.stringify(groups.map((g) => g.key)) !== JSON.stringify(sl.groups.map((g) => g.key));
+	sl.groups = groups;
+	if (!sl.groupKey || !groups.some((g) => g.key === sl.groupKey)) {
+		sl.groupKey = groups.length ? groups[0].key : null;
+		if (sl.groupKey && !DEMO) fetchStringline(); // first pick: fetch its deps
+	}
+	if (changed) renderStringBadges();
+	renderStringMeta();
+}
+
+function renderStringBadges() {
+	const wrap = $("stringBadges");
+	wrap.innerHTML = "";
+	for (const g of state.stringline.groups) {
+		const b = document.createElement("button");
+		b.className = "sl-badge" + (g.key === state.stringline.groupKey ? " active" : "");
+		b.innerHTML = `<span class="bullet" style="background:${colorHex(g.color)}">${escapeHtml(g.number || "")}</span>${escapeHtml(g.display)}`;
+		b.onclick = () => {
+			state.stringline.groupKey = g.key;
+			renderStringBadges();
+			fetchStringline();
+		};
+		wrap.appendChild(b);
+	}
+}
+
+function renderStringMeta() {
+	const sl = state.stringline;
+	const live = liveGroupVehicles().length;
+	$("stringMeta").textContent = sl.analyticsEnabled
+		? `${sl.deps.length} departures in the last ${sl.windowServerMin} min · ${live} live`
+		: "analytics.enabled is off on the server — no departure history";
+}
+
+/** The selected group's routes as a Set of route ids. */
+function groupRouteIds() {
+	const g = state.stringline.groups.find((x) => x.key === state.stringline.groupKey);
+	return new Set(g ? g.routeIds : []);
+}
+
+function liveGroupVehicles() {
+	const ids = groupRouteIds();
+	const out = [];
+	for (const [id, rec] of state.vehicles) {
+		if (rec.route && ids.has(rec.route.id)) out.push({ id, rec });
+	}
+	return out;
+}
+
+const slCanvas = $("slCanvas");
+const slCtx = slCanvas.getContext("2d");
+
+function initStringlineCanvas() {
+	slCanvas.addEventListener("mousemove", (e) => {
+		const rect = slCanvas.getBoundingClientRect();
+		state.stringline.mouse = [e.clientX - rect.left, e.clientY - rect.top];
+	});
+	slCanvas.addEventListener("mouseleave", () => {
+		state.stringline.mouse = null;
+		state.stringline.hover = null;
+		$("slTip").classList.add("hidden");
+	});
+	slCanvas.addEventListener("click", () => {
+		const hover = state.stringline.hover;
+		if (hover && hover.trace.veh && state.vehicles.has(hover.trace.veh)) {
+			state.selected = hover.trace.veh;
+			state.selectedStation = null;
+			setStringlineView(false);
+			centerOn(hover.trace.veh);
+			updateDetail();
+			renderBoard();
+		}
+	});
+}
+
+/**
+ * Rebuilds the y axis and traces, then draws — called from the shared rAF loop while
+ * the view is open, so the right edge tracks "now" and the live tips glide.
+ *
+ * Axis: the group's route with the most stations provides the station rows, spaced by
+ * real distance; every OTHER route of the group (usually the opposite direction) maps
+ * its platforms onto those rows by station id, so both directions cross on one chart —
+ * the pvibien look. Traces: analytics departures (arrival = t − dwell, giving the flat
+ * dwell segment) chained per vehicle, split when a gap exceeds 20 min or the stop
+ * index restarts (next round trip); the newest trace gets a live tip from the SSE
+ * stream's prev/next-platform fraction.
+ */
+function drawStringline() {
+	const sl = state.stringline;
+	const dpr = window.devicePixelRatio || 1;
+	const w = slCanvas.clientWidth, h = slCanvas.clientHeight;
+	if (!w || !h) return;
+	if (slCanvas.width !== w * dpr || slCanvas.height !== h * dpr) {
+		slCanvas.width = w * dpr;
+		slCanvas.height = h * dpr;
+	}
+	const g = slCtx;
+	g.setTransform(dpr, 0, 0, dpr, 0, 0);
+	g.clearRect(0, 0, w, h);
+
+	const css = getComputedStyle(document.body);
+	const mono = css.getPropertyValue("--mono");
+	const dim = css.getPropertyValue("--dim").trim() || "#7d8aa5";
+	const border = css.getPropertyValue("--border").trim() || "#232c3f";
+
+	const ids = groupRouteIds();
+	const routes = (sl.axis?.routes || []).filter((r) => ids.has(r.id));
+	if (!routes.length) {
+		g.fillStyle = dim;
+		g.font = "13px system-ui";
+		g.textAlign = "center";
+		g.fillText(sl.axis ? "No line selected" : "Loading…", w / 2, h / 2);
+		return;
+	}
+
+	// --- y axis from the longest route of the group
+	const axisRoute = routes.reduce((a, b) => (b.stations.length > a.stations.length ? b : a));
+	const stations = axisRoute.stations;
+	const total = Math.max(1, stations[stations.length - 1].dist);
+	const pad = { l: 150, r: 14, t: 16, b: 26 };
+	const plotH = h - pad.t - pad.b, plotW = w - pad.l - pad.r;
+	const Y = (dist) => pad.t + (dist / total) * plotH;
+
+	// platform id → y, and station id → y for cross-direction mapping
+	const platY = new Map(), staY = new Map();
+	for (const s of stations) {
+		platY.set(s.plat, Y(s.dist));
+		if (s.sta !== "0") staY.set(s.sta, Y(s.dist));
+	}
+	for (const r of routes) {
+		if (r === axisRoute) continue;
+		for (const s of r.stations) {
+			if (!platY.has(s.plat) && staY.has(s.sta)) platY.set(s.plat, staY.get(s.sta));
+		}
+	}
+
+	// --- time window, right edge = now
+	const tNow = now();
+	const t0 = tNow - sl.windowMin * 60000;
+	const X = (t) => pad.l + ((t - t0) / (tNow - t0)) * plotW;
+
+	// --- grid: station rows + time ticks
+	g.font = "11px system-ui";
+	g.textAlign = "right";
+	let lastLabelY = -99;
+	for (const s of stations) {
+		const y = Y(s.dist);
+		g.strokeStyle = border;
+		g.lineWidth = 1;
+		g.beginPath(); g.moveTo(pad.l, y); g.lineTo(w - pad.r, y); g.stroke();
+		if (y - lastLabelY >= 13) {
+			g.fillStyle = dim;
+			let label = firstLang(s.staName) || firstLang(s.platName) || "?";
+			if (label.length > 22) label = label.slice(0, 21) + "…";
+			g.fillText(label, pad.l - 8, y + 3.5);
+			lastLabelY = y;
+		}
+	}
+	const tickMin = sl.windowMin <= 15 ? 2 : sl.windowMin <= 30 ? 5 : sl.windowMin <= 60 ? 10 : 15;
+	g.textAlign = "center";
+	g.font = "10px " + mono;
+	const firstTick = Math.ceil(t0 / (tickMin * 60000)) * tickMin * 60000;
+	for (let t = firstTick; t <= tNow; t += tickMin * 60000) {
+		const x = X(t);
+		g.strokeStyle = "color-mix(in srgb, " + border + " 55%, transparent)";
+		g.strokeStyle = border + "";
+		g.globalAlpha = 0.45;
+		g.beginPath(); g.moveTo(x, pad.t); g.lineTo(x, pad.t + plotH); g.stroke();
+		g.globalAlpha = 1;
+		g.fillStyle = dim;
+		g.fillText(fmtClock(t), x, h - 8);
+	}
+
+	// --- traces from the departure history
+	const traces = buildTraces(platY, t0, tNow);
+	sl.traces = traces;
+
+	// hover hit-test (against last frame's geometry is fine at 60 fps)
+	sl.hover = null;
+	if (sl.mouse) {
+		let bestD = 7;
+		for (const tr of traces) {
+			for (let i = 1; i < tr.pts.length; i++) {
+				const d = segDist(sl.mouse, tr.pts[i - 1], tr.pts[i]);
+				if (d < bestD) { bestD = d; sl.hover = { trace: tr, seg: i }; }
+			}
+		}
+	}
+
+	for (const tr of traces) {
+		const hovered = sl.hover && sl.hover.trace === tr;
+		g.strokeStyle = tr.color;
+		g.lineWidth = hovered ? 3 : 1.6;
+		g.globalAlpha = sl.hover && !hovered ? 0.35 : 1;
+		g.beginPath();
+		for (let i = 0; i < tr.pts.length; i++) {
+			i === 0 ? g.moveTo(tr.pts[i][0], tr.pts[i][1]) : g.lineTo(tr.pts[i][0], tr.pts[i][1]);
+		}
+		g.stroke();
+		if (tr.live) {
+			const tip = tr.pts[tr.pts.length - 1];
+			g.beginPath();
+			g.arc(tip[0], tip[1], hovered ? 5 : 3.5, 0, Math.PI * 2);
+			g.fillStyle = tr.color;
+			g.fill();
+			g.strokeStyle = "#0b0e14";
+			g.lineWidth = 1;
+			g.stroke();
+		}
+	}
+	g.globalAlpha = 1;
+
+	// axis frame on top of the gutter
+	g.strokeStyle = border;
+	g.lineWidth = 1;
+	g.beginPath(); g.moveTo(pad.l, pad.t); g.lineTo(pad.l, pad.t + plotH); g.stroke();
+
+	// tooltip
+	const tip = $("slTip");
+	if (sl.hover && sl.mouse) {
+		const tr = sl.hover.trace;
+		tip.classList.remove("hidden");
+		tip.style.left = Math.min(w - 270, sl.mouse[0] + 14) + "px";
+		tip.style.top = Math.min(h - 80, sl.mouse[1] + 12) + "px";
+		const [devTxt, devCls] = fmtDev(tr.lastDev);
+		tip.innerHTML = `<div class="t"><span class="chip" style="background:${tr.color}">${escapeHtml(tr.number)}</span> ` +
+			`${escapeHtml(tr.routeName)}</div>` +
+			`<div>${tr.live ? "Live — click to follow on the map" : "Completed run"}</div>` +
+			`<div>Last dev: <span class="${devCls}">${devTxt}</span></div>`;
+	} else {
+		tip.classList.add("hidden");
+	}
+	renderStringMeta();
+}
+
+/**
+ * Chains the departure rows [veh, plat, t, dwell, dev, stop, routeId] into per-run
+ * polylines in screen space, then appends the live tips.
+ */
+function buildTraces(platY, t0, tNow) {
+	const sl = state.stringline;
+	const X = (t) => {
+		const w = slCanvas.clientWidth;
+		const pad = { l: 150, r: 14 };
+		return pad.l + ((t - t0) / (tNow - t0)) * (w - pad.l - pad.r);
+	};
+	const routeById = new Map((sl.axis?.routes || []).map((r) => [r.id, r]));
+	const byVeh = new Map();
+	for (const row of sl.deps) {
+		const [veh, plat, t, dwell, dev, stop, routeId] = row;
+		if (t < t0 - 20 * 60000) continue; // keep a little pre-window so lines enter from the left
+		if (!byVeh.has(veh)) byVeh.set(veh, []);
+		byVeh.get(veh).push({ plat, t, dwell, dev, stop, routeId });
+	}
+
+	const traces = [];
+	for (const [veh, events] of byVeh) {
+		events.sort((a, b) => a.t - b.t);
+		let current = null;
+		let lastStop = -1, lastT = 0;
+		for (const ev of events) {
+			const y = platY.get(ev.plat);
+			if (y === undefined) continue; // platform not on this group's axis (branch/depot leg)
+			const newRun = !current || ev.stop < lastStop || ev.t - lastT > 20 * 60000;
+			if (newRun) {
+				const route = routeById.get(ev.routeId);
+				current = {
+					veh,
+					color: route ? colorHex(route.color) : "#9aa7bf",
+					number: route ? (route.number || "") : "",
+					routeName: route ? firstLang(lineKey(route.name)) : "",
+					pts: [],
+					lastDev: ev.dev,
+					lastPlat: ev.plat,
+					lastT: ev.t,
+					live: false,
+				};
+				traces.push(current);
+			}
+			// arrival (t − dwell) then departure (t): the flat dwell segment
+			const arrivalT = ev.t - (ev.dwell || 0);
+			current.pts.push([X(arrivalT), y]);
+			current.pts.push([X(ev.t), y]);
+			current.lastDev = ev.dev;
+			current.lastPlat = ev.plat;
+			current.lastT = ev.t;
+			lastStop = ev.stop;
+			lastT = ev.t;
+		}
+	}
+
+	// live tips: attach to the vehicle's newest trace, or start a fresh dot
+	for (const { id, rec } of liveGroupVehicles()) {
+		const d = rec.data;
+		const yPrev = d.pPlat && d.pPlat !== "0" ? platY.get(d.pPlat) : undefined;
+		const yNext = d.nPlat && d.nPlat !== "0" ? platY.get(d.nPlat) : undefined;
+		let y;
+		if (yPrev !== undefined && yNext !== undefined) y = yPrev + (yNext - yPrev) * (d.pFrac || 0);
+		else if (yPrev !== undefined) y = yPrev;
+		else if (yNext !== undefined) y = yNext;
+		else continue;
+		let trace = null;
+		for (const tr of traces) {
+			if (tr.veh === id && (!trace || tr.lastT > trace.lastT)) trace = tr;
+		}
+		if (trace && tNow - trace.lastT <= 20 * 60000) {
+			trace.pts.push([X(tNow), y]);
+			trace.live = true;
+			trace.lastDev = d.devMs ?? trace.lastDev;
+		} else {
+			const r = rec.route;
+			traces.push({
+				veh: id,
+				color: r ? colorHex(r.color) : "#9aa7bf",
+				number: r ? (r.number || "") : "",
+				routeName: r ? firstLang(lineKey(r.name)) : "",
+				pts: [[X(tNow), y]],
+				lastDev: d.devMs ?? 0,
+				lastT: tNow,
+				live: true,
+			});
+		}
+	}
+	return traces;
+}
+
+/** Distance from point p to segment ab, in px. */
+function segDist(p, a, b) {
+	const dx = b[0] - a[0], dy = b[1] - a[1];
+	const len2 = dx * dx + dy * dy || 1;
+	const t = Math.max(0, Math.min(1, ((p[0] - a[0]) * dx + (p[1] - a[1]) * dy) / len2));
+	return Math.hypot(p[0] - (a[0] + dx * t), p[1] - (a[1] + dy * t));
+}
+
 /* ---------- status ui ---------- */
 
 function setStatus(s) {
@@ -1085,6 +1733,53 @@ function demoAnalytics() {
 	};
 }
 
+/**
+ * Synthetic stringline payload: a six-station line, both directions, departures every
+ * 6 min over the last 90 min, so the chart shows crossing diagonals, flat dwells and
+ * one long-dwell outlier without a server.
+ */
+function demoStringline() {
+	const t = now();
+	const staNames = ["Baker City Central|贝克城", "Canal St", "Union Sq", "Grand Ave", "Harbor North", "Airport"];
+	const mkStations = (prefix, reversed) => {
+		const list = [];
+		const order = reversed ? [...staNames].reverse() : staNames;
+		for (let i = 0; i < order.length; i++) {
+			list.push({
+				plat: prefix + (i + 1), platName: String(i + 1),
+				sta: "st" + (reversed ? order.length - i : i + 1) + "d", staName: order[i],
+				dist: i === 0 ? 0 : list[i - 1].dist + 400 + ((i * 137) % 260),
+			});
+		}
+		return list;
+	};
+	const axis = {
+		schemaVersion: 1, dimension: "demo:overworld",
+		routes: [
+			{ id: "rt1n", name: "Demo Express|演示||Northbound", number: "4", color: 0x00933c, hidden: false, stations: mkStations("pn", false) },
+			{ id: "rt1s", name: "Demo Express|演示||Southbound", number: "4", color: 0x00933c, hidden: false, stations: mkStations("ps", true) },
+		],
+	};
+	const deps = [];
+	const runMs = 90 * 1000, dwellMs = 20 * 1000, headway = 6 * 60 * 1000;
+	for (let dir = 0; dir < 2; dir++) {
+		const prefix = dir === 0 ? "pn" : "ps";
+		const routeId = dir === 0 ? "rt1n" : "rt1s";
+		for (let n = 0; n < 16; n++) {
+			const start = t - 95 * 60000 + n * headway + dir * headway / 2;
+			const veh = "d" + prefix + n;
+			for (let i = 0; i < 6; i++) {
+				const slow = (n === 7 && i === 2) ? 90 * 1000 : 0; // one long-dwell outlier
+				const depT = start + i * (runMs + dwellMs) + slow;
+				if (depT > t) break;
+				deps.push([veh, prefix + (i + 1), depT, dwellMs + slow, (n % 5 - 1) * 20000 + slow, i, routeId]);
+			}
+		}
+	}
+	deps.sort((a, b) => a[2] - b[2]);
+	return { axis, deps, windowMinutes: 90, analyticsEnabled: true, now: t };
+}
+
 function bootDemo() {
 	state.dims = ["demo:overworld"];
 	state.updateMillis = 333;
@@ -1120,10 +1815,13 @@ function bootDemo() {
 			{ id: "st2", name: "Harbor North", color: 0xe5484d, bounds: [20, 60, 150, 100, 70, 170], platformIds: ["pl2"] },
 		],
 		platforms: [
-			{ id: "pl1", name: "1", dwellMs: 10000, stationId: "st1", p1: [30, 64, 0], p2: [90, 64, 0], mid: [60, 64, 0], routeIds: ["rt1"] },
-			{ id: "pl2", name: "2", dwellMs: 10000, stationId: "st2", p1: [30, 64, 160], p2: [90, 64, 160], mid: [60, 64, 160], routeIds: ["rt1"] },
+			{ id: "pl1", name: "1", dwellMs: 10000, stationId: "st1", p1: [30, 64, 0], p2: [90, 64, 0], mid: [60, 64, 0], routeIds: ["rt1n"] },
+			{ id: "pl2", name: "2", dwellMs: 10000, stationId: "st2", p1: [30, 64, 160], p2: [90, 64, 160], mid: [60, 64, 160], routeIds: ["rt1n", "rt1s"] },
 		],
-		routes: [{ id: "rt1", name: "Demo Express|演示", number: "4", color: 0x00933c, hidden: false }],
+		routes: [
+			{ id: "rt1n", name: "Demo Express|演示||Northbound", number: "4", color: 0x00933c, hidden: false },
+			{ id: "rt1s", name: "Demo Express|演示||Southbound", number: "4", color: 0x00933c, hidden: false },
+		],
 	});
 	fitView();
 	setStatus("live");
@@ -1136,6 +1834,7 @@ function bootDemo() {
 	];
 	const boatLoop = ["b1", "b2"];
 	const boat = { id: "v3", li: 0, t: 0.3, kmh: 22, devMs: 0 };
+	let demoLastAlertSlot = -1;
 	setInterval(() => {
 		const st = now();
 		boat.t += 0.02;
@@ -1148,24 +1847,37 @@ function bootDemo() {
 			route: { id: "rt2", name: "Harbor Ferry", number: "F", color: 0x3fc1c9, dest: "Harbor North", nextStation: "Harbor North" },
 			consist: { sidingId: "sd2", siding: "Dock", depot: "Ferry Dock", cars: ["boat_1"] },
 		};
-		const vehicles = trains.map((tr) => {
+		const vehicles = trains.map((tr, ti) => {
 			tr.t += 0.04 * (tr.kmh / 60);
 			if (tr.t >= 1) { tr.t -= 1; tr.li = (tr.li + 1) % loop.length; }
 			const railId = loop[tr.li];
 			const p = railPoint(railId, tr.t) || [0, 0];
+			// stringline live tip: a phase gliding over the demo axis's pn1..pn6
+			const phase = ((st / 1000 + ti * 270) % 540) / 540 * 5;
+			const seg = Math.min(4, Math.floor(phase));
 			return {
 				id: tr.id, x: p[0], y: 64, z: p[1], kmh: tr.kmh + Math.sin(st / 3000) * 8,
 				rev: false, rail: railId, railT: tr.t, doors: tr.t < 0.05, dwellMs: 0,
 				devMs: tr.devMs, manual: tr.id === "v2", stop: tr.li,
-				route: { id: "rt1", name: "Demo Express|演示", number: "4", color: 0x00933c, dest: "Harbor North", nextStation: tr.li < 4 ? "Harbor North" : "Baker City Central|贝克城" },
+				pPlat: "pn" + (seg + 1), nPlat: "pn" + (seg + 2), pFrac: Math.round((phase - seg) * 1000) / 1000,
+				route: { id: "rt1n", name: "Demo Express|演示||Northbound", number: "4", color: 0x00933c, dest: "Harbor North", nextStation: tr.li < 4 ? "Harbor North" : "Baker City Central|贝克城" },
 				consist: { sidingId: "sd1", siding: "S1", depot: "Demo Depot", cars: ["m7_a", "m7_b", "m7_b", "m7_a"] },
 			};
 		});
 		vehicles.push(boatVehicle);
-		handleFrame({ schemaVersion: 1, serverTime: st, dimension: 0, vehicles, signals: [
+		// holds pulse on platform 1 half the time; v2's doors get "obstructed" briefly
+		const cycle = Math.floor(st / 20000) % 2 === 0;
+		const frameObj = { schemaVersion: 1, serverTime: st, dimension: 0, vehicles, signals: [
 			{ rail: "r1", occupied: [16711680], reserved: [] },
 			{ rail: "r3", occupied: [], reserved: [16711680] },
-		], signalsCleared: [] }, false);
+		], signalsCleared: [], holds: cycle ? ["pl1"] : [], obstructed: Math.floor(st / 15000) % 3 === 0 ? ["v2"] : [] };
+		if (Math.floor(st / 45000) !== demoLastAlertSlot) {
+			demoLastAlertSlot = Math.floor(st / 45000);
+			frameObj.alerts = [{ seq: demoLastAlertSlot, t: st, kind: ["late", "stalled", "hold_cap"][demoLastAlertSlot % 3],
+				severity: demoLastAlertSlot % 3 === 1 ? "bad" : "warn", veh: "v1",
+				detail: "Train 4 to Harbor North is running " + (2 + demoLastAlertSlot % 4) + "+ min behind schedule" }];
+		}
+		handleFrame(frameObj, false);
 	}, 333);
 	requestAnimationFrame(frame);
 	setInterval(renderBoard, 1000);

@@ -185,6 +185,13 @@ public final class HoldRuleEngine {
         long releaseAt = state[AWAITED] + rule.transferSeconds() * 1_000L;
         boolean capExpired = now - state[STARTED] >= (config.maxHoldSeconds + rule.transferSeconds()) * 1_000L;
         if (now >= releaseAt || capExpired) {
+            if (capExpired && now < releaseAt) {
+                // The awaited connection never arrived — released by the deadlock cap,
+                // which an operator should hear about (a cancelled train upstream).
+                com.stationannouncer.mtraddon.dispatch.DispatchEvents.alert("hold_cap", "warn",
+                        vehicleId, platformId,
+                        "Hold released by the deadlock cap — the awaited connection never arrived");
+            }
             state[SERVED] = 1;
             HELD_PLATFORMS.remove(platformId);
             return false;

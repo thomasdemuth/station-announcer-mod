@@ -208,6 +208,8 @@ public final class DoorObstructionEngine {
         StationAnnouncer.LOGGER.warn(
                 "Door obstruction exceeded its cap ({} ms past roll) — force-releasing; report this",
                 now - state[2]);
+        com.stationannouncer.mtraddon.dispatch.DispatchEvents.alert("door_backstop", "bad", 0, 0,
+                "A door obstruction exceeded its cap and was force-released (" + ((now - state[2]) / 1000) + "s past roll)");
         state[1] = 0;
         return true;
     }

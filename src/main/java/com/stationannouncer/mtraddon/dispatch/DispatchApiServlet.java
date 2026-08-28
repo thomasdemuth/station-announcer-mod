@@ -50,6 +50,7 @@ import java.util.function.Consumer;
  */
 public final class DispatchApiServlet extends ServletBase {
     private final ConcurrentHashMap<String, CachedResponse> networkResponses = new ConcurrentHashMap<>();
+    private final ConcurrentHashMap<String, CachedResponse> stringlineAxisResponses = new ConcurrentHashMap<>();
 
     public DispatchApiServlet(ObjectImmutableList<Simulator> simulators) {
         super(simulators);
@@ -57,7 +58,7 @@ public final class DispatchApiServlet extends ServletBase {
 
     @Override
     protected void doGet(HttpServletRequest request, HttpServletResponse response) {
-        if (unavailable(response) || handleAnalytics(request, response)) {
+        if (unavailable(response) || handleAnalytics(request, response) || handleAlerts(request, response)) {
             return;
         }
         super.doGet(request, response);
@@ -69,10 +70,27 @@ public final class DispatchApiServlet extends ServletBase {
      */
     @Override
     protected void doPost(HttpServletRequest request, HttpServletResponse response) {
-        if (unavailable(response) || handleAnalytics(request, response)) {
+        if (unavailable(response) || handleAnalytics(request, response) || handleAlerts(request, response)) {
             return;
         }
         super.doPost(request, response);
+    }
+
+    /**
+     * {@code alerts} — the retained alert backlog, answered synchronously on the Jetty
+     * worker like {@code analytics}: the ring is its own monitor-guarded snapshot and
+     * has no reason to queue work onto a simulator.
+     */
+    private static boolean handleAlerts(HttpServletRequest request, HttpServletResponse response) {
+        if (!"alerts".equals(firstSegment(request))) {
+            return false;
+        }
+        JsonObject data = new JsonObject();
+        data.addProperty("schemaVersion", DispatchStreamer.SCHEMA_VERSION);
+        data.add("alerts", DispatchEvents.backlogJson());
+        DispatchStaticServlet.sendText(response, 200, "application/json;charset=utf-8",
+                new Response(200, "Success", data).getJson().toString());
+        return true;
     }
 
     /**
@@ -160,6 +178,21 @@ public final class DispatchApiServlet extends ServletBase {
             sendResponse.accept(networkResponses
                     .computeIfAbsent(simulator.dimension, key -> new CachedResponse(DispatchNetwork::build, 30_000))
                     .get(simulator));
+        } else if ("stringline".equals(endpoint)) {
+            // Axis (route/station geometry) is cached like the network payload; the
+            // departure rows are filtered fresh per request from the published
+            // analytics snapshot (immutable — safe to read here on the simulator
+            // thread or anywhere else). Nesting the cached axis object into a new
+            // parent is serialization-only reuse; nothing ever mutates it.
+            JsonObject payload = new JsonObject();
+            payload.add("axis", stringlineAxisResponses
+                    .computeIfAbsent(simulator.dimension, key -> new CachedResponse(DispatchStringline::buildAxis, 30_000))
+                    .get(simulator));
+            payload.add("deps", DispatchStringline.depsJson(simulator.dimension, parameters.get("routes")));
+            payload.addProperty("windowMinutes", AddonServerConfig.get().analytics.windowMinutes);
+            payload.addProperty("analyticsEnabled", AddonServerConfig.get().analytics.enabled);
+            payload.addProperty("now", System.currentTimeMillis());
+            sendResponse.accept(payload);
         } else {
             JsonObject error = new JsonObject();
             error.addProperty("error", "unknown endpoint: " + endpoint);

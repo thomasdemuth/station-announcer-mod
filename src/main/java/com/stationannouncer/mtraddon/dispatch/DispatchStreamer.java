@@ -2,6 +2,8 @@ package com.stationannouncer.mtraddon.dispatch;
 
 import com.stationannouncer.StationAnnouncer;
 import com.stationannouncer.mtraddon.AddonServerConfig;
+import com.stationannouncer.mtraddon.DoorObstructionEngine;
+import com.stationannouncer.mtraddon.HoldRuleEngine;
 import org.mtr.core.simulation.Simulator;
 import org.mtr.libraries.com.google.gson.JsonArray;
 import org.mtr.libraries.com.google.gson.JsonObject;
@@ -13,6 +15,7 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.TreeSet;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CopyOnWriteArrayList;
@@ -109,6 +112,19 @@ public final class DispatchStreamer {
         long tick;
         Map<Long, DispatchSampler.VehicleSnapshot> vehicles = new HashMap<>();
         Map<String, DispatchSampler.SignalSnapshot> signals = new HashMap<>();
+        Set<Long> holds = Set.of();
+        Set<Long> obstructed = Set.of();
+        /** New clients read the backlog over /api/alerts; the stream pushes only newer. */
+        long lastAlertSeq = DispatchEvents.latestSeq();
+        /** vehicleId → detector state for the stalled/late alerts. */
+        Map<Long, VehicleWatch> watch = new HashMap<>();
+    }
+
+    /** Per-vehicle detector memory (streamer thread only). */
+    private static final class VehicleWatch {
+        long stoppedSince;      // 0 = moving or legitimately stopped
+        boolean stallAlerted;
+        boolean lateAlerted;
     }
 
     static boolean hasCapacity() {
@@ -269,6 +285,19 @@ public final class DispatchStreamer {
             currentSignals.put(signal.railId, signal);
         }
 
+        // Live hold / obstruction state (thread-safe reads: both engines expose
+        // ConcurrentHashMap-backed snapshots) plus the abnormal-state detectors,
+        // which may append to the alert ring this same tick.
+        Set<Long> holds = HoldRuleEngine.heldPlatforms();
+        Set<Long> obstructed = DoorObstructionEngine.obstructedVehicleIds();
+        runDetectors(state, sample, holds, obstructed);
+        List<DispatchEvents.Alert> newAlerts = DispatchEvents.since(state.lastAlertSeq);
+        if (!newAlerts.isEmpty()) {
+            state.lastAlertSeq = newAlerts.get(newAlerts.size() - 1).seq();
+        }
+        boolean holdsChanged = !holds.equals(state.holds);
+        boolean obstructedChanged = !obstructed.equals(state.obstructed);
+
         byte[] deltaFrame = null;
         byte[] fullFrame = null;
         List<Client> dead = null;
@@ -279,12 +308,25 @@ public final class DispatchStreamer {
             byte[] frame;
             if (fullTick || client.needsFull) {
                 if (fullFrame == null) {
-                    fullFrame = frame("full", buildFull(dimensionIndex, sample));
+                    JsonObject payload = buildFull(dimensionIndex, sample);
+                    payload.add("holds", idArray(holds));
+                    payload.add("obstructed", idArray(obstructed));
+                    addAlerts(payload, newAlerts);
+                    fullFrame = frame("full", payload);
                 }
                 frame = fullFrame;
             } else {
                 if (deltaFrame == null) {
-                    deltaFrame = frame("delta", buildDelta(dimensionIndex, sample, state, currentVehicles, currentSignals));
+                    JsonObject payload = buildDelta(dimensionIndex, sample, state, currentVehicles, currentSignals);
+                    // Absent keys mean "unchanged" on deltas; the full frame re-baselines.
+                    if (holdsChanged) {
+                        payload.add("holds", idArray(holds));
+                    }
+                    if (obstructedChanged) {
+                        payload.add("obstructed", idArray(obstructed));
+                    }
+                    addAlerts(payload, newAlerts);
+                    deltaFrame = frame("delta", payload);
                 }
                 frame = deltaFrame;
             }
@@ -300,10 +342,96 @@ public final class DispatchStreamer {
 
         state.vehicles = currentVehicles;
         state.signals = currentSignals;
+        state.holds = holds;
+        state.obstructed = obstructed;
 
         if (dead != null) {
             dead.forEach(DispatchStreamer::unregister);
         }
+    }
+
+    // --------------------------------------------------------- abnormal-state alerts ----
+
+    /** Deviation past this raises one {@code late} alert (until it recovers below). */
+    private static final long LATE_ALERT_MILLIS = 180_000;
+    /** Stationary this long with no legitimate reason raises one {@code stalled} alert. */
+    private static final long STALL_ALERT_MILLIS = 90_000;
+
+    /**
+     * Streamer-thread detectors over the fresh sample. Alerts are edge-triggered per
+     * vehicle: one when the condition starts, re-armed when it clears. A stop is
+     * "legitimate" while the vehicle is dwelling, held at a platform, door-obstructed
+     * or driven manually — everything else stopped for {@value #STALL_ALERT_MILLIS} ms
+     * (a red signal in a deadlock, the class of problem Thomas found by walking there)
+     * is worth a ticker line.
+     */
+    private static void runDetectors(DimensionState state, DispatchSampler.DimensionSample sample,
+                                     Set<Long> holds, Set<Long> obstructed) {
+        for (DispatchSampler.VehicleSnapshot vehicle : sample.vehicles) {
+            VehicleWatch watch = state.watch.computeIfAbsent(vehicle.id, key -> new VehicleWatch());
+
+            boolean veryLate = vehicle.deviationMs >= LATE_ALERT_MILLIS;
+            if (veryLate && !watch.lateAlerted) {
+                watch.lateAlerted = true;
+                DispatchEvents.alert("late", "warn", vehicle.id, 0,
+                        labelOf(vehicle) + " is " + (vehicle.deviationMs / 60_000) + "+ min behind schedule");
+            } else if (!veryLate) {
+                watch.lateAlerted = false;
+            }
+
+            boolean legitimatelyStopped = vehicle.dwellRemainingMs > 0 || vehicle.manual
+                    || obstructed.contains(vehicle.id)
+                    || (vehicle.prevPlatformId != 0 && holds.contains(vehicle.prevPlatformId)
+                        && vehicle.platformFraction == 0);
+            if (vehicle.speedKmh > 0 || legitimatelyStopped) {
+                watch.stoppedSince = 0;
+                watch.stallAlerted = false;
+            } else {
+                if (watch.stoppedSince == 0) {
+                    watch.stoppedSince = sample.sampledAt;
+                } else if (!watch.stallAlerted && sample.sampledAt - watch.stoppedSince >= STALL_ALERT_MILLIS) {
+                    watch.stallAlerted = true;
+                    DispatchEvents.alert("stalled", "bad", vehicle.id, 0,
+                            labelOf(vehicle) + " has been stopped for "
+                                    + ((sample.sampledAt - watch.stoppedSince) / 1000) + "s outside a dwell");
+                }
+            }
+        }
+        state.watch.keySet().removeIf(id -> {
+            for (DispatchSampler.VehicleSnapshot vehicle : sample.vehicles) {
+                if (vehicle.id == id) {
+                    return false;
+                }
+            }
+            return true;
+        });
+    }
+
+    private static String labelOf(DispatchSampler.VehicleSnapshot vehicle) {
+        String route = vehicle.routeNumber != null && !vehicle.routeNumber.isEmpty()
+                ? vehicle.routeNumber
+                : (vehicle.routeName == null ? "" : vehicle.routeName.split("\\|")[0]);
+        String destination = vehicle.destination == null ? "" : vehicle.destination.split("\\|")[0];
+        return ("Train " + route + (destination.isEmpty() ? "" : " to " + destination)).trim();
+    }
+
+    private static JsonArray idArray(Set<Long> ids) {
+        JsonArray array = new JsonArray();
+        for (long id : ids) {
+            array.add(String.valueOf(id));
+        }
+        return array;
+    }
+
+    private static void addAlerts(JsonObject payload, List<DispatchEvents.Alert> alerts) {
+        if (alerts.isEmpty()) {
+            return;
+        }
+        JsonArray array = new JsonArray();
+        for (DispatchEvents.Alert alert : alerts) {
+            array.add(alert.toJson());
+        }
+        payload.add("alerts", array);
     }
 
     private static JsonObject payloadHeader(int dimensionIndex, long sampledAt) {
@@ -393,6 +521,12 @@ public final class DispatchStreamer {
         json.addProperty("devMs", vehicle.deviationMs);
         json.addProperty("manual", vehicle.manual);
         json.addProperty("stop", vehicle.stopIndex);
+        // Route-relative progress for the stringline's live tips. Always present ("0"
+        // = none): the frontend merges deltas over old state, so an omitted key would
+        // leave a stale tip behind at the path's extremes.
+        json.addProperty("pPlat", String.valueOf(vehicle.prevPlatformId));
+        json.addProperty("nPlat", String.valueOf(vehicle.nextPlatformId));
+        json.addProperty("pFrac", vehicle.platformFraction);
         if (includeStatic) {
             JsonObject route = new JsonObject();
             route.addProperty("id", String.valueOf(vehicle.routeId));

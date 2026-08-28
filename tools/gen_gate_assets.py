@@ -556,9 +556,9 @@ BLOCK_PROPS = {
     "emergency_exit_door": {"facing", "half", "open", "powered", "alarm", "left", "right"},
     "track_warning_sign_wall": {"facing"},
     "track_warning_sign_gate": {"facing", "open", "hinge"},
-    "employee_door_mesh": {"facing", "half", "left", "right"},
-    "employee_door_black": {"facing", "half", "left", "right"},
-    "employee_door_white": {"facing", "half", "left", "right"},
+    "employee_door_mesh": {"facing", "half", "open", "left", "right"},
+    "employee_door_black": {"facing", "half", "open", "left", "right"},
+    "employee_door_white": {"facing", "half", "open", "left", "right"},
 }
 
 
@@ -799,8 +799,8 @@ def employee_leaf_elements(upper, style):
     """One half of the employees-only door leaf.
 
     Same bones as the emergency exit door (stiles burying inside the
-    4.5..11.5-deep posts, leaf 0.5..15.5) but a fixed leaf that never swings:
-    kick rail, two panels with a lock rail at the half seam, top rail. The
+    4.5..11.5-deep posts, leaf 0.5..15.5): kick rail, two panels with a lock
+    rail at the half seam, top rail. The
     panels are wire mesh (cutout, top AND bottom - the user's spec), solid
     black, or solid painted steel depending on the variant; the geometry is
     shared so the three doors line up in a mixed run.
@@ -862,10 +862,11 @@ def employee_door_icon(style):
 
 
 def write_employee_doors():
-    """Three fixed staff doors sharing the gates' post rhythm.
+    """Three staff doors sharing the gates' post rhythm.
 
-    No OPEN state and no swing models - an employees-only door is scenery that
-    never opens. The white variant carries white posts too, so it blends into
+    Each leaf has a closed model and a true 90-degree swing() of the same
+    elements (the exit door's hinge and point map, so a mixed run swings
+    identically). The white variant carries white posts too, so it blends into
     a tiled wall the way the user asked; the mesh and black ones keep the
     ironwork posts of the run they stand in.
     """
@@ -882,7 +883,9 @@ def write_employee_doors():
         frame_tex = WHITE_TEX if style == "white" else IRON_TEX
         textures = {"frame": frame_tex, "mesh": MESH_TEX, "particle": frame_tex}
         for half, upper in (("lower", False), ("upper", True)):
-            piece(f"employee_door_{style}_{half}", employee_leaf_elements(upper, style), textures)
+            closed = employee_leaf_elements(upper, style)
+            piece(f"employee_door_{style}_{half}", closed, textures)
+            piece(f"employee_door_{style}_open_{half}", [swing(e) for e in closed], textures)
 
         post = "gate_post_white" if style == "white" else "gate_post"
         post_right = "gate_post_white_right" if style == "white" else "gate_post_right"
@@ -896,8 +899,10 @@ def write_employee_doors():
             parts.append({"when": dict(base), "apply": rot(post, y)})
             parts.append({"when": dict(base, right="false"), "apply": rot(post_right, y)})
             for half in ("lower", "upper"):
-                parts.append({"when": dict(base, half=half),
+                parts.append({"when": dict(base, half=half, open="false"),
                               "apply": rot(f"employee_door_{style}_{half}", y)})
+                parts.append({"when": dict(base, half=half, open="true"),
+                              "apply": rot(f"employee_door_{style}_open_{half}", y)})
         wj(os.path.join(ASSETS, "blockstates", f"employee_door_{style}.json"), {"multipart": parts})
 
         pngtool.write_png(os.path.join(ROOT,
