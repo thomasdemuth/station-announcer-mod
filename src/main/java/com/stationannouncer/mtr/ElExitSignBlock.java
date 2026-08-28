@@ -26,6 +26,14 @@ import org.jetbrains.annotations.Nullable;
  * The black EXIT sign: hanging from a ceiling stub or flat on a wall (MOUNT
  * from the clicked face), with the arrow cycled by right-click — plain EXIT,
  * right, left, down.
+ *
+ * <p>PLACEMENT CONVENTION (shared with {@link ElNameBoardBlock}): clicking a
+ * wall gives MOUNT=WALL with FACING = the clicked side, so the lettering
+ * reads out of the wall; clicking a ceiling or a floor gives MOUNT=CEILING
+ * with FACING = the placer's look reversed, the facing-decor convention. The
+ * plate is a wide thin strip — 12 x 3.5 px, i.e. ~0.75 m x 0.2 m, the real
+ * proportions — and the wall variant stands 1 px off the wall on two visible
+ * standoff brackets.
  */
 public class ElExitSignBlock extends Block {
     public static final DirectionProperty FACING = Properties.HORIZONTAL_FACING;
@@ -57,8 +65,11 @@ public class ElExitSignBlock extends Block {
         super(settings);
         setDefaultState(getDefaultState().with(FACING, Direction.NORTH)
                 .with(MOUNT, Mount.CEILING).with(ARROW, Arrow.NONE));
-        this.hanging = TurnstileBaseBlock.rotations(createCuboidShape(2.0, 5.5, 7.0, 14.0, 16.0, 9.0));
-        this.wall = TurnstileBaseBlock.rotations(createCuboidShape(2.0, 4.5, 14.4, 14.0, 12.0, 16.0));
+        // Plate is a wide thin strip (12 x 3.5 px, gen_el_phase3.EXIT_PLATE);
+        // the hanging outline runs up to the ceiling so the stub is clickable,
+        // the wall outline covers plate + standoff brackets.
+        this.hanging = TurnstileBaseBlock.rotations(createCuboidShape(2.0, 8.0, 7.2, 14.0, 16.0, 8.8));
+        this.wall = TurnstileBaseBlock.rotations(createCuboidShape(2.0, 7.5, 14.0, 14.0, 12.0, 16.0));
     }
 
     @Override

@@ -80,7 +80,8 @@ public class StationDecorRenderer implements BlockEntityRenderer<StationDecorBlo
                 paintMosaic(matrices, vertexConsumers, mosaic.text(), color, mosaic.run());
             }
         } else if (block instanceof com.stationannouncer.mtr.ElNameBoardBlock) {
-            paintElNameBoard(matrices, vertexConsumers, name);
+            paintElNameBoard(matrices, vertexConsumers, name,
+                    entity.getCachedState().get(com.stationannouncer.mtr.ElNameBoardBlock.MOUNT));
         } else if (block instanceof com.stationannouncer.mtr.StationColumnBlock column) {
             paintColumnBoard(matrices, vertexConsumers, name, column.boardOffset());
         } else if (block instanceof com.stationannouncer.mtr.RailingSignBlock) {
@@ -650,20 +651,45 @@ public class StationDecorRenderer implements BlockEntityRenderer<StationDecorBlo
     // ------------------------------------------------------- el name board
 
     /**
-     * The elevated platform's black name board: white text on both faces of
-     * the block-model plate (the plate itself is geometry; only the letters
-     * are painted here). Plate spans model x 1..15, y 6..13, faces z 7.4/8.6.
+     * The elevated platform's black name board: white text on the block-model
+     * plate (the plate itself is geometry; only the letters are painted here).
+     *
+     * <p>The plate is 14 x 7 model px on every mount — x 1..15, 7 px tall,
+     * 1.2 px thick — so the canvas is always 56 x 28 units (64 units/block)
+     * and the text fitting never changes. Only the plate's TOP y and FRONT z
+     * move with MOUNT (see {@code NAME_BOARD_PLATE} in
+     * {@code tools/gen_el_assets.py} — the same table):
+     * <pre>
+     *   standing  y 6..13  z 7.4..8.6   top 13   front 7.4   both faces
+     *   hanging   y 5..12  z 7.4..8.6   top 12   front 7.4   both faces
+     *   wall      y 5..12  z 13.8..15   top 12   front 13.8  front only
+     * </pre>
+     * Canvas math: after the caller's {@code translate(0.5, 0, 0.5)} +
+     * {@code rotate(180 - facing)} the viewer sits on local -Z, so model
+     * coordinate m maps to local m/16 - 0.5. The canvas origin is therefore
+     * (x 15 → 0.4375, y top/16, z front/16 - 0.5) pushed 0.008 toward the
+     * viewer, and {@code scale(-UNIT, -UNIT, UNIT)} grows canvas x toward
+     * model x 1 and canvas y downward. The BACK face reuses the same numbers
+     * because the standing and hanging plates are centred on z = 8: rotating
+     * 180° about Y negates local x and z, so the identical translate lands on
+     * the far face. The wall plate is NOT centred (it is against the wall),
+     * which is exactly why it is drawn one-sided.
      */
-    private void paintElNameBoard(MatrixStack matrices, VertexConsumerProvider vertexConsumers, String name) {
+    private void paintElNameBoard(MatrixStack matrices, VertexConsumerProvider vertexConsumers,
+                                  String name, com.stationannouncer.mtr.ElNameBoardBlock.Mount mount) {
         if (name.isEmpty()) {
             return;
         }
-        for (int side = 0; side < 2; side++) {
+        boolean wall = mount == com.stationannouncer.mtr.ElNameBoardBlock.Mount.WALL;
+        float top = mount == com.stationannouncer.mtr.ElNameBoardBlock.Mount.STANDING ? 13.0f : 12.0f;
+        float front = wall ? 13.8f : 7.4f;
+        int sides = wall ? 1 : 2;
+        for (int side = 0; side < sides; side++) {
             matrices.push();
             if (side == 1) {
                 matrices.multiply(RotationAxis.POSITIVE_Y.rotationDegrees(180.0f));
             }
-            matrices.translate(0.4375, 0.8125, -0.0375 - 0.008);
+            matrices.translate(0.4375, top / 16.0f, front / 16.0f - 0.5 - 0.008);
             matrices.scale(-UNIT, -UNIT, UNIT);
             CanvasPainter painter = new CanvasPainter(matrices, vertexConsumers);
             String text = upperCase(name);

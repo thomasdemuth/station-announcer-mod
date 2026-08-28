@@ -1,100 +1,96 @@
 {
   "parent": "minecraft:block/block",
   "textures": {
-    "house": "station_announcer:block/el_house_green",
-    "housec": "station_announcer:block/el_house_cream",
-    "glaze": "station_announcer:block/el_glazing",
-    "planks": "station_announcer:block/el_planks",
-    "edge": "station_announcer:block/el_platform_edge",
-    "soffit": "station_announcer:block/el_soffit",
-    "exit": "station_announcer:block/el_exit_sign",
-    "body": "station_announcer:block/el_steel_green",
-    "galv": "station_announcer:block/el_steel_silver",
-    "lattice": "station_announcer:block/el_lattice_green",
-    "roof": "station_announcer:block/el_roof_red",
     "screen": "station_announcer:block/el_windscreen",
     "corru": "station_announcer:block/el_corrugated",
+    "corru_s": "station_announcer:block/el_corrugated_silver",
+    "lattice": "station_announcer:block/el_lattice_green",
+    "glass": "station_announcer:block/el_glass",
+    "mesh": "station_announcer:block/el_mesh",
+    "roof": "station_announcer:block/el_roof_red",
+    "body": "station_announcer:block/el_steel_green",
+    "galv": "station_announcer:block/el_steel_silver",
     "board": "station_announcer:block/el_board",
     "particle": "station_announcer:block/el_steel_green"
   },
   "elements": [
     {
       "from": [
-        2.0,
-        8.0,
-        14.2
+        1,
+        5,
+        13.8
       ],
       "to": [
-        14.0,
-        11.5,
+        15,
+        12,
         15.0
       ],
       "faces": {
         "north": {
-          "texture": "#exit",
+          "texture": "#board",
           "uv": [
-            0,
-            8,
-            16,
-            12
-          ]
-        },
-        "south": {
-          "texture": "#exit",
-          "uv": [
-            0,
-            8.5,
-            1,
-            11.5
+            0.5,
+            0.5,
+            15.5,
+            7.5
           ]
         },
         "east": {
-          "texture": "#exit",
+          "texture": "#board",
           "uv": [
-            0,
-            8.5,
-            1,
-            11.5
+            0.5,
+            4,
+            2,
+            7.5
           ]
         },
         "west": {
-          "texture": "#exit",
+          "texture": "#board",
           "uv": [
-            0,
-            8.5,
-            1,
-            11.5
+            0.5,
+            4,
+            2,
+            7.5
           ]
         },
         "up": {
-          "texture": "#exit",
+          "texture": "#board",
           "uv": [
-            0,
-            8.5,
-            1,
-            11.5
+            0.5,
+            4,
+            2,
+            7.5
           ]
         },
         "down": {
-          "texture": "#exit",
+          "texture": "#board",
           "uv": [
-            0,
-            8.5,
-            1,
-            11.5
+            0.5,
+            4,
+            2,
+            7.5
+          ]
+        },
+        "south": {
+          "texture": "#board",
+          "uv": [
+            0.5,
+            4,
+            2,
+            7.5
           ]
         }
       }
     },
     {
       "from": [
-        4.6,
-        9.0,
+        3.0,
+        6,
         14.6
       ],
       "to": [
-        5.6,
-        10.5,
+        4.2,
+        11,
         16
       ],
       "faces": {
@@ -138,13 +134,13 @@
     },
     {
       "from": [
-        10.4,
-        9.0,
+        11.8,
+        6,
         14.6
       ],
       "to": [
-        11.4,
-        10.5,
+        13.0,
+        11,
         16
       ],
       "faces": {

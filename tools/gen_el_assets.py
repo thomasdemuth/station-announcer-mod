@@ -1081,19 +1081,55 @@ def tex_board():
     return rows
 
 
-def name_board_elements():
-    """The black station-name board on two stubs (text comes from the BE
-    renderer in game, like the named columns)."""
+# The name board's PLATE PLANE is shared with the block-entity renderer
+# (StationDecorRenderer.paintElNameBoard paints the letters onto it), so these
+# three numbers are a CONTRACT — change them here and there together:
+#
+#   mount     plate box (model px)                 top   front  faces
+#   standing  x 1..15  y 6..13  z 7.4..8.6          13     7.4   both
+#   hanging   x 1..15  y 5..12  z 7.4..8.6          12     7.4   both
+#   wall      x 1..15  y 5..12  z 13.8..15.0        12    13.8   front only
+#
+# Every mount keeps the plate 14 px wide and 7 px tall so the renderer's canvas
+# (56 x 28 units at 64 units/block) and its text sizing never change; only the
+# plate's top y and front z move.
+NAME_BOARD_PLATE = {
+    "standing": (6, 13, 7.4, 8.6),
+    "hanging": (5, 12, 7.4, 8.6),
+    "wall": (5, 12, 13.8, 15.0),
+}
+
+
+def name_board_elements(mount="standing"):
+    """The black station-name board (text comes from the BE renderer in game,
+    like the named columns). Three mounts, picked from the clicked face:
+    STANDING on two stubs (a windscreen top rail or any floor), HANGING from
+    two ceiling stubs, WALL flush on the wall behind two standoff brackets."""
+    y0, y1, z0, z1 = NAME_BOARD_PLATE[mount]
     plate = f("board", [0.5, 0.5, 15.5, 7.5])
     edge = f("board", [0.5, 4, 2, 7.5])
-    els = [elem([1, 6, 7.4], [15, 13, 8.6], {
-        "north": plate, "south": plate,
-        "east": edge, "west": edge, "up": edge, "down": edge,
-    })]
-    for x0 in (2.5, 12.5):
-        els.append(elem([x0, 0, 7.6], [x0 + 1.2, 6, 8.4],
-                        {n: f("body", [13.6, 2, 14.4, 5])
-                         for n in ("north", "south", "east", "west")}))
+    stub = f("body", [13.6, 2, 14.4, 5])
+    faces = {"north": plate, "east": edge, "west": edge, "up": edge, "down": edge}
+    if mount != "wall":
+        faces["south"] = plate          # double-sided board, read from either side
+    else:
+        faces["south"] = edge           # 1 px of dark plate against the wall
+    els = [elem([1, y0, z0], [15, y1, z1], faces)]
+    if mount == "standing":
+        for x0 in (2.5, 12.5):          # legs down to whatever it stands on
+            els.append(elem([x0, 0, 7.6], [x0 + 1.2, y0, 8.4],
+                            {n: stub for n in ("north", "south", "east", "west")}))
+    elif mount == "hanging":
+        for x0 in (2.5, 12.5):          # hangers up into the ceiling
+            els.append(elem([x0, y1, 7.6], [x0 + 1.2, 16, 8.4],
+                            {n: stub for n in ("north", "south", "east", "west")}))
+    else:
+        # Standoff brackets: their front ends are BURIED inside the plate
+        # (14.6 < 15.0) so no face is coplanar with the plate's back, and the
+        # face against the wall is omitted (vanilla-fence precedent).
+        for x0 in (3.0, 11.8):
+            els.append(elem([x0, y0 + 1, 14.6], [x0 + 1.2, y1 - 1, 16],
+                            {n: stub for n in ("east", "west", "up", "down")}))
     return els
 
 
@@ -1123,6 +1159,22 @@ def platform_screen_blockstate(panel, post_left, post_right, rail, kick,
         parts.append({"when": {"facing": facing, "up": "false"}, "apply": ap(rail)})
         parts.append({"when": {"facing": facing, "down": "false"}, "apply": ap(kick)})
     return {"multipart": parts}
+
+
+def name_board_blockstate():
+    """facing x mount (12 states). FACING is the direction the board's front
+    reads toward: away from the placer for standing/hanging, out of the wall
+    for the wall mount (the clicked face)."""
+    variants = {}
+    for facing, rot in (("north", 0), ("east", 90), ("south", 180), ("west", 270)):
+        for mount, mdl in (("standing", "el_name_board_model"),
+                           ("hanging", "el_name_board_hanging"),
+                           ("wall", "el_name_board_wall")):
+            entry = {"model": f"{MOD}:block/{mdl}"}
+            if rot:
+                entry["y"] = rot
+            variants[f"facing={facing},mount={mount}"] = entry
+    return {"variants": variants}
 
 
 def platform_simple_blockstate(panel):
@@ -1255,7 +1307,9 @@ def build_platform(g, assets_root):
     pm("el_canopy_gable_end_crown", gable_end_crown_elements())
     pm("el_canopy_gable_end_slope", gable_end_slope_elements())
     pm("el_canopy_gable_end_slope_east", gable_end_slope_elements(14.6))
-    pm("el_name_board_model", name_board_elements())
+    pm("el_name_board_model", name_board_elements("standing"))
+    pm("el_name_board_hanging", name_board_elements("hanging"))
+    pm("el_name_board_wall", name_board_elements("wall"))
 
     # blockstates
     for block, panel, silver, base in (
@@ -1292,7 +1346,7 @@ def build_platform(g, assets_root):
     g.wj(os.path.join(assets_root, "blockstates", "el_canopy_gable.json"),
          canopy_gable_blockstate())
     g.wj(os.path.join(assets_root, "blockstates", "el_name_board.json"),
-         platform_simple_blockstate("el_name_board_model"))
+         name_board_blockstate())
 
     # item models: screens show panel + both posts, the rest their base model
     for block, panel, silver in (("el_windscreen", "el_windscreen_panel", False),
@@ -1381,7 +1435,8 @@ PROPS = {
            "north": {"true", "false"}, "south": {"true", "false"},
            "east": {"true", "false"}, "west": {"true", "false"}}
        for b in ("el_canopy_flat", "el_canopy_flat_silver", "el_canopy_gable")},
-    "el_name_board": {"facing": {"north", "south", "east", "west"}},
+    "el_name_board": {"facing": {"north", "south", "east", "west"},
+                      "mount": {"standing", "wall", "hanging"}},
 }
 
 RECIPES = {
