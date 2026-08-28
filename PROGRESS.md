@@ -2638,3 +2638,31 @@ board's line-filter chips were single-select — both are Sets now. Frontend-onl
 Verified in ?demo=1: both line badges active at once → magenta 7 Local overlaid
 on the green Express with combined variant chips (screenshot); board filter with
 two lines in the set matches all three demo trains, cleared cleanly.
+
+## Dispatch web UI round 9 — stringline rows, analytics line modal, sortable stations (2026-08-28)
+
+Thomas: stringline head too cluttered (wants lines / options / variants as rows);
+analytics line panels should enlarge with explanations; station list sortable.
+Frontend-only.
+
+- **Stringline head restructured into three fixed rows**: (1) title + line filter +
+  line badges + meta, (2) options — Segment, annotation toggles, CSV, End scrub,
+  LIVE, window, (3) VARIANTS row with the direction chips, auto-hidden when the
+  selection has fewer than two routes. Close button stays absolutely pinned
+  top-right so wrapping can never strand it.
+- **Analytics line modal**: line cards are clickable (hover ring + ⤢ hint) and open
+  a centred glass modal — 220 px headway chart, then a tile grid where EVERY metric
+  carries a plain-language explanation of what it means and where the number comes
+  from (on-time tolerance and bunching threshold interpolated from the server
+  config; dwell overrun names holds/door obstructions/loads as causes; headway
+  reference names the depot frequency sliders vs observed median), a bunching list
+  with timestamps, and a how-to-read-the-chart note. Closes via ×, backdrop click
+  or Escape (modal takes Escape priority over the overlays).
+- **Station table sortable** on every column (th data-k + stationSort state):
+  numeric columns sort WORST-FIRST on first click (that is what a dispatcher scans
+  for), name ascending; second click flips; active header highlighted.
+
+Verified in ?demo=1: three-row head reads cleanly (screenshot); modal shows the
+big chart + explained tiles for Demo Express; sorting by headway irregularity
+orders Baker City (0.62) before Harbor North (0.11) then flips; sorted th
+highlighted; modal Escape/backdrop close.
