@@ -359,6 +359,15 @@ function handleFrame(f, isFull) {
 		}
 		rec.samples.push({ t: f.serverTime, x: v.x, z: v.z, rail: v.rail, railT });
 		if (rec.samples.length > 4) rec.samples.shift();
+		// Ordered trail of recently traversed rails — the consist renderer walks it
+		// backwards so trailing cars stay on the curve the head just left.
+		if (v.rail) {
+			if (!rec.railHistory) rec.railHistory = [];
+			if (rec.railHistory[rec.railHistory.length - 1] !== v.rail) {
+				rec.railHistory.push(v.rail);
+				if (rec.railHistory.length > 8) rec.railHistory.shift();
+			}
+		}
 		state.vehicles.set(v.id, rec);
 	});
 
@@ -424,6 +433,59 @@ function vehiclePos(rec, renderTime) {
 	}
 	return { x: a.x + (b.x - a.x) * f, z: a.z + (b.z - a.z) * f, hx: b.x - a.x, hz: b.z - a.z,
 		rail: b.rail, railT: b.railT, paramDir: 0 };
+}
+
+/**
+ * The head's rail plus the rails the train recently traversed, oriented for
+ * backward walking. Each link's travel direction on ITS OWN polyline is derived
+ * geometrically: the previous rail must share an endpoint with where the train
+ * ENTERED the current one, and that shared point is the previous rail's exit.
+ * Chain stops at a gap > 3 blocks (teleport / missing data).
+ */
+function consistChain(rec, headRail, headDir) {
+	const chain = [{ r: headRail, dir: headDir }];
+	const history = rec.railHistory || [];
+	let index = history.lastIndexOf(headRail.id);
+	let current = chain[0];
+	while (chain.length < 5 && index > 0) {
+		const previous = state.rails.get(history[index - 1]);
+		if (!previous || previous.points.length < 2) break;
+		const pts = current.r.points;
+		const entry = current.dir > 0 ? pts[0] : pts[pts.length - 1];
+		const pFirst = previous.points[0];
+		const pLast = previous.points[previous.points.length - 1];
+		const dFirst = Math.hypot(pFirst[0] - entry[0], pFirst[2] - entry[2]);
+		const dLast = Math.hypot(pLast[0] - entry[0], pLast[2] - entry[2]);
+		if (Math.min(dFirst, dLast) > 3) break;
+		current = { r: previous, dir: dLast <= dFirst ? 1 : -1 }; // exit at the shared end
+		chain.push(current);
+		index--;
+	}
+	return chain;
+}
+
+/**
+ * Position {x, z} a given track-distance BEHIND the head, walking the chain across
+ * rail boundaries — this is what keeps trailing cars ON the curve after the head
+ * has moved onto the next rail (they used to snap to the new rail's tangent).
+ * Runs off the end of the chain → linear extension via railDistPoint (fallback).
+ */
+function chainPos(chain, headDist, behind) {
+	let position = headDist;
+	let remaining = behind;
+	for (let i = 0; i < chain.length; i++) {
+		const { r, dir } = chain[i];
+		const L = r.cum[r.cum.length - 1] || 1;
+		const available = dir > 0 ? position : L - position;
+		if (remaining <= available || i === chain.length - 1) {
+			return railDistPoint(r, position - dir * remaining);
+		}
+		remaining -= available;
+		const next = chain[i + 1];
+		const nextL = next.r.cum[next.r.cum.length - 1] || 1;
+		position = next.dir > 0 ? nextL : 0; // continue from the previous rail's exit end
+	}
+	return null;
 }
 
 /**
@@ -734,16 +796,17 @@ function drawConsist(rec, p, color, selected, dimmed) {
 	const scale = state.view.scale;
 	const carH = Math.max(4.5, Math.min(11, 3 * scale)) * (uiScale() > 1.2 ? 1.15 : 1);
 	const headDist = p.railT * L;
+	const chain = consistChain(rec, r, dir);
 	let offset = 0;
 	ctx.save();
 	if (dimmed) ctx.globalAlpha = 0.25;
 	for (let i = 0; i < lengths.length; i++) {
 		const len = lengths[i];
-		const centerDist = headDist - dir * (offset + len / 2);
+		const behindCenter = offset + len / 2;
 		offset += len + 0.8;
-		const c = railDistPoint(r, centerDist);
-		const fwd = railDistPoint(r, centerDist + dir * len * 0.45);
-		const back = railDistPoint(r, centerDist - dir * len * 0.45);
+		const c = chainPos(chain, headDist, behindCenter);
+		const fwd = chainPos(chain, headDist, behindCenter - len * 0.45);
+		const back = chainPos(chain, headDist, behindCenter + len * 0.45);
 		if (!c || !fwd || !back) continue;
 		const [cx, cy] = worldToScreen(c.x, c.z);
 		const carAngle = Math.atan2(fwd.z - back.z, fwd.x - back.x);

@@ -2684,3 +2684,25 @@ history) simply show no ghost.
 Verified in ?demo=1: hovering a +20s Northbound run draws the dashed schedule
 hugging the actual with the offset visible, tooltip labels it; non-hovered
 state unchanged.
+
+## Dispatch web UI round 11 — consist cross-rail curve fix (2026-08-28)
+
+Thomas's bug: multi-car trains curve well but SNAP once the first car leaves the
+curve. Root cause: the consist was laid out along the HEAD's current rail only —
+after the head crossed a boundary, trailing cars were drawn on the NEW rail's
+straight tangent extension instead of the curve they were still on.
+
+Fix: each vehicle keeps a `railHistory` (ordered trail of recently traversed
+rail ids, capped 8, maintained at sample ingestion). `consistChain()` builds the
+head's rail plus up to 4 previous rails, orienting each link geometrically (the
+previous rail must share an endpoint within 3 blocks with where the train
+ENTERED the current one — that shared point is the previous rail's exit; a
+bigger gap = teleport, chain stops). `chainPos()` resolves any track-distance
+behind the head by walking the chain across boundaries; only past the chain's
+end does it fall back to the old linear extension. Car centres AND the angle
+sample points go through chainPos, so cars bend through boundaries too.
+
+Verified by probe in ?demo=1: with history [r1,r2,r3] and the head 5 blocks
+into r3, a point 30 back lands at (166,19) ON r2's curve (old code: (180,15),
+the r3 tangent — the reported snap), and 70 back resolves across TWO
+boundaries to (132,3). Chain orientation r3+/r2+/r1+ all correct.
