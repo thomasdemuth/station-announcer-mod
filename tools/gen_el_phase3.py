@@ -42,38 +42,55 @@ LAMP_GLOW = (255, 236, 190)
 
 
 # ---------------------------------------------------------------- textures --
+def mix(a, b, t):
+    return tuple(int(round(a[i] + (b[i] - a[i]) * t)) for i in range(3))
+
+
 def tex_house(base, lit, dark, shadow):
-    """Board-and-batten siding, 32px: 8-px boards with a proud batten strip —
-    vertical boards, per-column only, stack-safe."""
+    """Board-and-batten siding, 32 px (= 2 texels per model px), 8-texel
+    (4 px) boards. What sells the depth is not the batten's own colour but
+    the HARD SHADOW it casts on the board beside it and the way the board
+    then brightens back toward the next batten:
+
+        col 0  batten, lit edge      col 4  board, brightening
+        col 1  batten, top face      col 5  board
+        col 2  batten, shaded edge   col 6  board
+        col 3  cast shadow (hard)    col 7  board edge, falling into the seam
+
+    Vertical-only, so it tiles along a wall and up a storey."""
     rows = pk.canvas(32, 32, base)
+    strip = [lit, mix(lit, base, 0.35), mix(base, dark, 0.6), shadow,
+             mix(shadow, base, 0.65), base, mix(base, lit, 0.25), dark]
     for x in range(32):
-        m = x % 8
-        tone = base
-        if m in (0, 1):
-            tone = lit                     # the batten catches light
-        elif m == 2:
-            tone = shadow                  # shadow beside the batten
-        elif m == 5:
-            tone = dark
+        tone = strip[x % 8]
+        if (x * 7) % 11 == 4 and x % 8 > 3:      # a little board-to-board grain
+            tone = mix(tone, dark, 0.3)
         for y in range(32):
             rows[y][x] = tone
     return rows
 
 
 def tex_glazing():
-    """Wired glass you can actually see through: transparent field, thin
-    diamond wire grid, sparse glare pixels. CUTOUT layer — visible pixels
-    are opaque, everything else is empty (the vanilla-glass approach)."""
-    rows = pk.canvas(16, 16, (0, 0, 0, 0))
-    WIRE = (88, 96, 100, 255)
-    for y in range(16):
-        for x in range(16):
-            if (x + y) % 8 == 0 or (x - y) % 8 == 0:
+    """Wired glass you can actually see through: transparent field, a diamond
+    wire grid on a 4-texel period and a couple of glare runs. CUTOUT layer,
+    so every visible pixel is FULLY opaque and everything else is empty
+    alpha 0 — a cutout discards a < 0.5, there is no half-transparency."""
+    rows = pk.canvas(32, 32, (0, 0, 0, 0))
+    WIRE = (92, 104, 110, 255)
+    WIRE_LIT = (128, 142, 148, 255)
+    GLARE = (226, 236, 240, 255)
+    for y in range(32):
+        for x in range(32):
+            if (x + y) % 8 == 0:
                 rows[y][x] = WIRE
-    for i in range(4):
-        rows[2 + i][11 + i if 11 + i < 16 else 15] = (222, 230, 234, 255)
-    rows[12][3] = (222, 230, 234, 255)
-    rows[13][4] = (222, 230, 234, 255)
+            elif (x - y) % 8 == 0:
+                rows[y][x] = WIRE_LIT
+    for i in range(14):                       # long glare run across the pane
+        if 4 + i < 32 and 6 + i < 32:
+            rows[4 + i][6 + i] = GLARE
+    for i in range(7):
+        if 18 + i < 32 and 21 + i < 32:
+            rows[18 + i][21 + i] = GLARE
     return rows
 
 
@@ -106,11 +123,15 @@ def tex_concrete_edge():
 
 
 def tex_soffit():
-    """Beadboard mezzanine ceiling: fine per-column lines."""
-    rows = pk.canvas(16, 16, SOFFIT)
-    for x in range(16):
-        t = SOFFIT_LINE if x % 4 == 0 else (SOFFIT if x % 4 != 2 else (196, 188, 170))
-        for y in range(16):
+    """Beadboard mezzanine ceiling, 32 px: 4-texel (2 px = 12 cm) boards, each
+    a rounded BEAD — groove, then the bead rising to a highlight and falling
+    away — instead of the flat line-every-4 the first cut had. Per-column
+    only, so a ceiling tiles in both directions without banding."""
+    rows = pk.canvas(32, 32, SOFFIT)
+    bead = [SOFFIT_LINE, (200, 192, 174), (232, 226, 210), SOFFIT]
+    for x in range(32):
+        t = bead[x % 4]
+        for y in range(32):
             rows[y][x] = t
     return rows
 
@@ -250,38 +271,70 @@ def house_wall(ref):
 
 
 def window_wall(ref):
-    """A REAL window: sill, lintel and jambs of the wall material framing an
-    opening, with a see-through wired-glass pane (cutout) in the middle.
-    Both faces identical; outer faces cull against full neighbours."""
+    """A REAL double-hung station window. The wall gives the opening its
+    sill / lintel / jambs; inside the reveal sits a SASH — head rail, bottom
+    rail, two stiles and the meeting rail across the middle where the two
+    sashes overlap — and the wired glass (cutout) sits behind the sash, so
+    the window reads as a frame with depth instead of a hole with a sticker
+    over it. 1-over-1 lights, which is what the real headhouse windows are.
+
+    Sizes, at 1 block = 1 m: opening 0.69 m wide x 0.59 m tall inside the
+    sash, sill 3.5 px (0.22 m) and lintel 2.5 px. A window course placed at
+    head height therefore has its glass at 0.27..0.86 m above that course's
+    floor — stack two window blocks for a full-height storefront light.
+
+    Depth scheme (nothing coplanar): reveal 0..16 -> sash at z 6.5..9.5 ->
+    glass at 7.4..8.6, so every glass edge is buried inside the sash and
+    every sash end is buried inside the reveal."""
     def w(uv, cull=None):
         face = f(ref, uv)
         if cull:
             face["cullface"] = cull
         return face
+
+    def sash(frm, to):
+        """A sash member: the wall material, sampled from the batten strip so
+        the joinery reads a shade darker than the boards around it."""
+        s = f(ref, [2, 4, 3, 9])
+        return elem(frm, to, {n: dict(s) for n in
+                              ("north", "south", "east", "west", "up", "down")})
+
+    x0, x1, y0, y1 = 2.5, 13.5, 3.5, 13.5      # the opening in the wall
+    sx, sy = 1.0, 1.0                          # sash stile / rail width
     els = [
-        elem([0, 0, 0], [16, 3, 16], {                     # sill
-            "north": w([0, 13, 16, 16], "north"), "south": w([0, 13, 16, 16], "south"),
-            "east": w([0, 13, 16, 16], "east"), "west": w([0, 13, 16, 16], "west"),
+        elem([0, 0, 0], [16, y0, 16], {                     # sill course
+            "north": w([0, 12.5, 16, 16], "north"), "south": w([0, 12.5, 16, 16], "south"),
+            "east": w([0, 12.5, 16, 16], "east"), "west": w([0, 12.5, 16, 16], "west"),
             "up": w([0, 0, 16, 16]), "down": w([0, 0, 16, 16], "down"),
         }),
-        elem([0, 13, 0], [16, 16, 16], {                   # lintel
-            "north": w([0, 0, 16, 3], "north"), "south": w([0, 0, 16, 3], "south"),
-            "east": w([0, 0, 16, 3], "east"), "west": w([0, 0, 16, 3], "west"),
+        elem([0, y1, 0], [16, 16, 16], {                    # lintel course
+            "north": w([0, 0, 16, 2.5], "north"), "south": w([0, 0, 16, 2.5], "south"),
+            "east": w([0, 0, 16, 2.5], "east"), "west": w([0, 0, 16, 2.5], "west"),
             "up": w([0, 0, 16, 16], "up"), "down": w([0, 0, 16, 16]),
         }),
-        elem([0, 3, 0], [2, 13, 16], {                     # west jamb
-            "north": w([0, 3, 2, 13], "north"), "south": w([14, 3, 16, 13], "south"),
-            "west": w([0, 3, 16, 13], "west"), "east": w([0, 3, 16, 13]),
+        elem([0, y0, 0], [x0, y1, 16], {                    # west jamb
+            "north": w([0, 2.5, 2.5, 12.5], "north"), "south": w([13.5, 2.5, 16, 12.5], "south"),
+            "west": w([0, 2.5, 16, 12.5], "west"), "east": w([0, 2.5, 16, 12.5]),
         }),
-        elem([14, 3, 0], [16, 13, 16], {                   # east jamb
-            "north": w([14, 3, 16, 13], "north"), "south": w([0, 3, 2, 13], "south"),
-            "east": w([0, 3, 16, 13], "east"), "west": w([0, 3, 16, 13]),
+        elem([x1, y0, 0], [16, y1, 16], {                   # east jamb
+            "north": w([13.5, 2.5, 16, 12.5], "north"), "south": w([0, 2.5, 2.5, 12.5], "south"),
+            "east": w([0, 2.5, 16, 12.5], "east"), "west": w([0, 2.5, 16, 12.5]),
         }),
-        # the glass: centre pane, ends buried inside the frame (no up/down/
-        # east/west faces — they would be coplanar with the reveals)
-        elem([2, 3, 7.25], [14, 13, 8.75], {
-            "north": f("glaze", [2, 3, 14, 13]),
-            "south": f("glaze", [2, 3, 14, 13]),
+        # the sash: stiles, head + bottom rails, and the meeting rail
+        sash([x0, y0, 6.5], [x0 + sx, y1, 9.5]),
+        sash([x1 - sx, y0, 6.5], [x1, y1, 9.5]),
+        sash([x0 + sx, y1 - sy, 6.5], [x1 - sx, y1, 9.5]),
+        sash([x0 + sx, y0, 6.5], [x1 - sx, y0 + sy, 9.5]),
+        sash([x0 + sx, 8.0, 6.5], [x1 - sx, 9.0, 9.5]),
+        # the glass, one light above the meeting rail and one below; edges
+        # buried inside the sash, so no up/down/east/west faces
+        elem([x0 + sx, y0 + sy, 7.4], [x1 - sx, 8.0, 8.6], {
+            "north": f("glaze", [3.5, 8.5, 12.5, 12.5]),
+            "south": f("glaze", [3.5, 8.5, 12.5, 12.5]),
+        }),
+        elem([x0 + sx, 9.0, 7.4], [x1 - sx, y1 - sy, 8.6], {
+            "north": f("glaze", [3.5, 3.5, 12.5, 7]),
+            "south": f("glaze", [3.5, 3.5, 12.5, 7]),
         }),
     ]
     return els

@@ -389,74 +389,132 @@ ROOF_RED_DARK = (104, 32, 30)
 
 
 def tex_windscreen():
-    """Classic windscreen sheet, 32px: rows 0..14 beige panel with batten
-    shadows, rows 14..24 wired-glass glazing with mullions, rows 24..32
-    green frame rails."""
+    """Classic windscreen sheet, 32 px in THREE zones the panel models slice
+    (2 texels = 1 model px, so a zone's uv is texels/2):
+
+      rows  0..16   beige board-and-batten panel — 8-texel (4 px) boards, a
+                    2-texel batten with its own lit/shaded edge and the HARD
+                    shadow it casts on the board beside it, then the board
+                    field falling away into the next seam. That cast shadow
+                    is what makes the battens read as proud strips rather
+                    than as painted stripes.
+      rows 16..28   wired glass: glaze field, 4-texel wire diamonds, green
+                    mullions every 8 texels (one pane per 4 model px), a
+                    glazing bead top and bottom, two glare streaks.
+      rows 28..32   green frame rail — the proud transom between the two and
+                    the stock the panel edges are trimmed with.
+
+    Everything except the three zone boundaries varies per COLUMN only, so a
+    run tiles along x and a stack never repeats a horizontal feature (each
+    zone is sampled exactly once, by one element)."""
     g = PAINTS["green"]
     rows = pk.canvas(32, 32, CREAM)
-    grain = [CREAM, (222, 212, 192), CREAM, (206, 196, 176), CREAM, CREAM_DARK,
-             CREAM, (210, 200, 180)]
+    # 8-texel (4 px) board: a 2-texel batten, the hard shadow it casts, then
+    # five texels of near-flat board. Making the batten narrow and the board
+    # WIDE is what separates "proud strips on a panel" from "fluting".
+    grain = [CREAM, (222, 212, 192), CREAM, (212, 202, 182)]
+    strip = {0: (236, 226, 204), 1: (214, 204, 184), 2: (170, 160, 141),
+             3: (198, 188, 168), 7: (192, 182, 162)}
     for x in range(32):
-        t = grain[(x * 5) % len(grain)]
-        for y in range(14):
+        t = strip.get(x % 8, grain[(x * 5) % len(grain)])
+        for y in range(16):
             rows[y][x] = t
-        if x % 8 == 0:
-            pk.rect(rows, x, 0, x + 1, 14, (188, 178, 158))
-        if x % 8 == 1:
-            pk.rect(rows, x, 0, x + 1, 14, CREAM_DARK)
-    pk.rect(rows, 0, 12, 32, 14, CREAM_DARK)
-    pk.rect(rows, 0, 14, 32, 24, GLAZE)
-    for pane in range(0, 32, 8):
-        for i in range(8):          # diagonal glare streak per pane
-            y = 15 + (i * 8) // 8
-            if y < 23:
-                rows[y][pane + 7 - i] = GLAZE_LIT
-        pk.rect(rows, pane + 2, 20, pane + 7, 23, GLAZE_DARK)
-    for x in range(0, 32, 8):
-        pk.rect(rows, x, 14, x + 1, 24, g["dark"])
-    pk.rect(rows, 0, 14, 32, 15, GLAZE_DARK)
-    pk.rect(rows, 0, 24, 32, 32, g["base"])
-    pk.rect(rows, 0, 24, 32, 25, g["lit"])
+
+    # ---- glazing band -----------------------------------------------------
+    # wired glass: 8-texel diamonds in a tone only just off the glaze (a
+    # 4-texel grid in GLAZE_DARK came out as a chequerboard, not as wire)
+    wire = tuple(int(a + (b - a) * 0.45) for a, b in zip(GLAZE, GLAZE_DARK))
+    pk.rect(rows, 0, 16, 32, 28, GLAZE)
+    for y in range(16, 28):
+        for x in range(32):
+            if (x + y) % 8 == 0 or (x - y) % 8 == 0:
+                rows[y][x] = wire
+    for x in range(32):                                  # pane sheen column
+        if x % 16 in (5, 6):
+            for y in range(16, 28):
+                if rows[y][x] == GLAZE:
+                    rows[y][x] = GLAZE_LIT
+    for i in range(11):                                  # two glare streaks
+        for x0 in (2, 18):
+            xx, yy = x0 + i, 16 + i
+            if xx < 32 and yy < 28:
+                rows[yy][xx] = GLAZE_LIT if i % 2 else (226, 238, 242)
+    for x in range(0, 32, 16):                           # mullions: 2 panes/block
+        pk.rect(rows, x, 16, x + 1, 28, g["dark"])
+        pk.rect(rows, x + 1, 16, x + 2, 28, g["base"])
+    pk.rect(rows, 0, 16, 32, 17, g["dark"])              # glazing beads
+    pk.rect(rows, 0, 27, 32, 28, g["shadow"])
+
+    # ---- green frame stock ------------------------------------------------
+    pk.rect(rows, 0, 28, 32, 32, g["base"])
+    pk.rect(rows, 0, 28, 32, 29, g["lit"])
     pk.rect(rows, 0, 31, 32, 32, g["shadow"])
+    for x in range(4, 32, 16):                           # bolt heads on the rail
+        pk.rect(rows, x, 29, x + 2, 31, g["lit"])
+        rows[29][x] = g["rivet"]
     return rows
 
 
 def tex_corrugated(g):
-    """Corrugated sheet, period 4 with a full shading cycle per flute and an
-    occasional weather-streak flute (vertical-only: tiles along runs)."""
+    """Corrugated sheet, 32 px. The flute is a real WAVE over its 4-texel
+    (2 px) period — crest, falling flank, trough, rising flank — not the
+    sawtooth the first cut had (lit→base→dark→shadow then a jump straight
+    back to lit, which read as painted stripes). Vertical-only, so it tiles
+    along a run and up a stack."""
     rows = pk.canvas(32, 32, g["base"])
+    wave = (g["lit"], g["base"], g["shadow"], g["dark"])
     for x in range(32):
-        m = x % 4
-        tone = (g["lit"], g["base"], g["dark"], g["shadow"])[m]
-        if x % 16 == 9:
-            tone = g["shadow"]
+        tone = wave[x % 4]
+        if x % 16 == 10 and tone is g["lit"]:
+            tone = g["base"]                    # a dulled crest = weathering
         for y in range(32):
             rows[y][x] = tone
     return rows
 
 
 def tex_glass():
-    """Modern windscreen glass, 16px cutout: clear with a sheen streak."""
-    rows = pk.canvas(16, 16, (0, 0, 0, 0))
-    for i in range(16):
-        x = (i + 4) % 16
-        rows[i][x] = (222, 232, 236, 90)
-        rows[i][(x + 1) % 16] = (206, 220, 226, 60)
-    for i in (0, 15):
-        pass  # edges stay open; the frame is geometry
+    """Modern windscreen glass, 32 px CUTOUT. Cutout alpha is BINARY (the
+    layer discards a < 0.5), so the first cut — a field of alpha-60..90
+    sheen pixels — discarded every pixel and the pane rendered completely
+    invisible. Every visible pixel here is fully opaque: a pane border (the
+    vanilla-glass trick, which also reads as the pane division of a glazed
+    screen), corner gussets and two glare streaks; the field is empty."""
+    rows = pk.canvas(32, 32, (0, 0, 0, 0))
+    edge = (206, 220, 226, 255)
+    edge_dark = (168, 186, 194, 255)
+    glare = (238, 246, 250, 255)
+    for i in range(32):
+        rows[0][i] = rows[31][i] = edge_dark
+        rows[i][0] = rows[i][31] = edge_dark
+        rows[1][i] = rows[i][1] = edge
+    # VERTICAL sheen columns, not diagonals: both faces of a pane are drawn,
+    # and through the holes you see the far face MIRRORED — a diagonal streak
+    # therefore crosses its own reflection and paints an X on every pane.
+    for x in (7, 8, 22):
+        for y in range(3, 29):
+            rows[y][x] = glare if x != 8 else edge
     return rows
 
 
 def tex_mesh():
-    """Chain-link, 16px cutout: 45° diamonds, strap 1px, period 4."""
-    rows = pk.canvas(16, 16, (0, 0, 0, 0))
-    steel = (150, 152, 155, 255)
-    dark = (118, 120, 122, 255)
-    for off in range(-16, 32, 4):
-        for i in range(16):
-            for xx, tone in (((off + i) % 16, steel), ((off - i) % 16, dark)):
-                if 0 <= xx < 16:
-                    rows[i][xx] = tone
+    """Chain-link, 32 px CUTOUT: 45° diamonds on a 4-texel (2 px) period with
+    1-texel straps, the two strand directions in different tones and the
+    darker one broken at every crossing so the weave reads as over/under
+    rather than as a printed grid (the platform-barrier lesson). Period 4
+    divides 32, so diamonds continue across block joints."""
+    rows = pk.canvas(32, 32, (0, 0, 0, 0))
+    steel = (176, 179, 182, 255)
+    dark = (126, 129, 132, 255)
+    for y in range(32):
+        for x in range(32):
+            down = (x + y) % 4 == 0
+            up = (x - y) % 4 == 0
+            if down and up:
+                rows[y][x] = steel          # crossing: the near strand wins
+            elif down:
+                rows[y][x] = steel
+            elif up:
+                rows[y][x] = dark
     return rows
 
 
@@ -489,79 +547,158 @@ PLATFORM_TEX = {
 }
 
 
-def windscreen_panel_elements():
-    """Classic: beige panel below, wired-glass band above. FULL BLOCK HEIGHT
-    now — screens stack into a tall wall (the old 14.6-px screen read as a
-    fence); the separate rail/kick models cap the stack's top and foot."""
+# --- the one z-scheme every screen part is authored against -----------------
+# posts are the outermost thing on a screen and NOTHING else may reach their
+# planes: the panel sits inside them, the glazing sits inside the panel plane,
+# the rail and kick sit just inside the posts (0.05) so a post's open top and
+# foot are buried under them at a stack's ends but no two faces are coplanar.
+POST_Z = (6.9, 9.1)
+CAP_Z = (6.95, 9.05)          # top rail + kick plate
+TRANSOM_Z = (7.1, 8.9)        # the proud rail between panel and glazing
+PANEL_Z = (7.35, 8.65)        # solid beige / corrugated sheet plane
+GLAZE_Z = (7.55, 8.45)        # glass recessed behind the frame
+PANE_Z = (7.65, 8.35)         # a bare glass / mesh pane
+
+
+def windscreen_base_elements():
+    """Classic screen, LOWER course (up=true): the solid beige panel. Real
+    windscreens are solid to about chest height and glazed above, so which
+    model a block draws follows its place in the stack — a 2-high run is
+    solid, then apron+transom+glass."""
+    face = f("screen", [0, 0.25, 16, 7.75])
+    return [elem([0, 0, PANEL_Z[0]], [16, 16, PANEL_Z[1]],
+                 {"north": face, "south": face})]
+
+
+def windscreen_head_elements():
+    """Classic screen, TOP course (up=false, and the whole of a 1-high one):
+    beige apron, proud green transom rail, wired-glass band above it. The
+    apron shares the base panel's plane exactly, so a base|head joint has no
+    step and no open ends — the two boxes read as one sheet."""
+    apron = f("screen", [0, 3.75, 16, 7.75])
+    rail = f("screen", [0, 14.25, 16, 15.75])
+    lid = f("screen", [0, 14.5, 16, 15.5])
+    glass = f("screen", [0, 8.25, 16, 13.75])
     return [
-        elem([0, 0, 7.3], [16, 10.2, 8.7], {
-            "north": f("screen", [0, 0.25, 16, 6.75]),
-            "south": f("screen", [0, 0.25, 16, 6.75]),
-        }),
-        elem([0, 10.2, 7.5], [16, 16, 8.5], {
-            "north": f("screen", [0, 7.1, 16, 11.9]),
-            "south": f("screen", [0, 7.1, 16, 11.9]),
-        }),
+        elem([0, 0, PANEL_Z[0]], [16, 7.4, PANEL_Z[1]],
+             {"north": apron, "south": apron}),
+        elem([0, 7.4, TRANSOM_Z[0]], [16, 8.8, TRANSOM_Z[1]],
+             {"north": rail, "south": rail, "up": lid, "down": lid}),
+        elem([0, 8.8, GLAZE_Z[0]], [16, 16, GLAZE_Z[1]],
+             {"north": glass, "south": glass}),
     ]
 
 
 def windscreen_corrugated_elements():
-    sheet = f("corru", [0, 0.25, 16, 13])
-    return [elem([0, 0, 7.4], [16, 16, 8.6], {"north": sheet, "south": sheet})]
+    sheet = f("corru", [0, 0.25, 16, 15.75])
+    return [elem([0, 0, PANEL_Z[0]], [16, 16, PANEL_Z[1]],
+                 {"north": sheet, "south": sheet})]
 
 
 def windscreen_glass_elements():
-    pane = f("glass", [0, 0, 16, 16])
-    return [elem([0, 0, 7.7], [16, 16, 8.3], {"north": pane, "south": pane})]
+    pane = f("glass", [0.25, 0.25, 15.75, 15.75])
+    return [elem([0, 0, PANE_Z[0]], [16, 16, PANE_Z[1]],
+                 {"north": pane, "south": pane})]
 
 
 def windscreen_mesh_elements():
     pane = f("mesh", [0, 0, 16, 16])
-    return [elem([0, 0, 7.8], [16, 16, 8.2], {"north": pane, "south": pane})]
+    return [elem([0, 0, PANE_Z[0]], [16, 16, PANE_Z[1]],
+                 {"north": pane, "south": pane})]
 
 
 def screen_top_rail(ref):
-    """Handrail capping a screen stack's top block (up=false)."""
+    """Handrail capping a screen stack's top block (up=false). Inside the
+    posts in z so it buries their open tops; no end faces, because the posts
+    already cover its ends at a run end (the platform-barrier rule: only the
+    posts may touch x=0/16)."""
     rail = f(ref, [0.25, 4.75, 15.75, 6] if ref == "body" else [1, 5, 9, 5.9])
-    return [elem([0, 14.6, 7.0], [16, 16, 9.0],
-                 {"north": rail, "south": rail, "up": rail, "down": rail})]
+    lid = f(ref, [0.25, 5, 15.75, 5.8] if ref == "body" else [1, 5.1, 9, 5.8])
+    return [elem([0, 14.5, CAP_Z[0]], [16, 16, CAP_Z[1]],
+                 {"north": rail, "south": rail, "up": lid, "down": lid})]
 
 
 def screen_kick(ref):
     """Kick plate at a screen stack's foot (down=false)."""
     kick = f(ref, [0.25, 5, 15.75, 6.2] if ref == "body" else [1, 5, 9, 6])
-    return [elem([0, 0, 7.05], [16, 1.2, 8.95], {
+    return [elem([0, 0, CAP_Z[0]], [16, 1.3, CAP_Z[1]], {
         "north": kick, "south": kick, "up": kick,
         "down": dict(kick, cullface="down"),
     })]
 
 
+def round_bar_x(y0, y1, z0, z1, face, cap=None):
+    """A pipe running along X read as ROUND: the core box plus a twin rotated
+    45° about the run axis (the turnstile-tubing trick). The twin's faces cut
+    across the core's corners, so the union reads octagonal and no two faces
+    are ever coplanar. `cap` (optional) closes the pipe's ends."""
+    cy, cz = (y0 + y1) / 2, (z0 + z1) / 2
+    faces = {"north": face, "south": face, "up": face, "down": face}
+    if cap:
+        faces = dict(faces, east=cap, west=cap)
+    # the twin is inset 0.08 along the run so its end caps can never be
+    # coplanar with the core's (two coincident same-facing quads WOULD fight)
+    return [elem([0.02, y0, z0], [15.98, y1, z1], dict(faces)),
+            elem([0.1, y0, z0], [15.9, y1, z1], dict(faces),
+                 rotation={"origin": [8, cy, cz], "axis": "x", "angle": 45})]
+
+
+def round_post_y(x0, x1, z0, z1, y0, y1, face, cap=None):
+    """The same trick for an upright: core plus a 45° twin about Y."""
+    cx, cz = (x0 + x1) / 2, (z0 + z1) / 2
+    faces = {n: face for n in ("north", "south", "east", "west")}
+    if cap:
+        faces = dict(faces, up=cap)
+    return [elem([x0, y0, z0], [x1, y1, z1], dict(faces)),
+            elem([x0, y0, z0], [x1, y1, z1], dict(faces),
+                 rotation={"origin": [cx, (y0 + y1) / 2, cz], "axis": "y", "angle": 45})]
+
+
+# pipe railing: rail centres at 14.3 px (0.89 m — the top of the block's own
+# outline shape) and 7.6 px, i.e. a standard two-rail platform edge rail.
+RAIL_TOP_C, RAIL_MID_C = 14.3, 7.6
+
+
 def railing_old_elements():
-    """Two-rail pipe railing, green — the open-platform edge rail."""
+    """Two-rail pipe railing, green — the open-platform edge rail. Both rails
+    and the post are octagonal (round), post slimmer than the rails so its
+    top buries inside the top rail instead of sharing a plane with it."""
     els = []
-    for y0 in (13.2, 6.6):
-        rail = f("body", [0.25, 4.75, 15.75, 6], False)
-        els.append(elem([0, y0, 7.2], [16, y0 + 1.6, 8.8],
-                        {"north": rail, "south": rail, "up": rail, "down": rail}))
+    face = f("body", [0.25, 4.75, 15.75, 6])
+    cap = f("body", [1, 5, 2.2, 6.2])
+    for c in (RAIL_TOP_C, RAIL_MID_C):
+        els += round_bar_x(c - 0.6, c + 0.6, 7.4, 8.6, face, cap)
     post = f("body", [13.6, 0.5, 14.4, 7.5])
-    els.append(elem([7, 0, 7.1], [9, 13.2, 8.9],
-                    {n: post for n in ("north", "south", "east", "west")}))
+    els += round_post_y(7.5, 8.5, 7.5, 8.5, 0, RAIL_TOP_C, post)
+    foot = f("body", [1, 5, 4, 6])
+    els.append(elem([6.4, 0, 6.4], [9.6, 0.9, 9.6],
+                    dict({n: foot for n in ("north", "south", "east", "west", "up")},
+                         down=f("body", [1, 5, 4, 6], cull="down"))))
     return els
 
 
 def railing_modern_elements():
-    """Galvanized picket railing, pitch 2."""
+    """Galvanized picket railing: round top rail, flat bottom rail, 0.9-px
+    pickets on a 2-px pitch (6.9 cm gaps — inside the real 10 cm rule) and a
+    heavier post at the block centre, i.e. one post per metre of run."""
     els = []
-    top = f("galv", [0.25, 5, 15.75, 6.4])
-    els.append(elem([0, 13.6, 7.0], [16, 15.0, 9.0],
-                    {"north": top, "south": top, "up": top, "down": top}))
+    face = f("galv", [0.25, 5, 15.75, 6.4])
+    cap = f("galv", [1, 5, 2.4, 6.4])
+    els += round_bar_x(RAIL_TOP_C - 0.7, RAIL_TOP_C + 0.7, 7.3, 8.7, face, cap)
     bottom = f("galv", [0.25, 5, 15.75, 5.9])
     els.append(elem([0, 1.6, 7.3], [16, 2.5, 8.7],
                     {"north": bottom, "south": bottom, "up": bottom, "down": bottom}))
-    pick = f("galv", [13.7, 1, 14.3, 6.7])
+    # pickets sample the CLEAN band (texel rows 10..22): the steel sheet's
+    # vertical rivet ladder lives at u 13.5..14.5 and stippled every picket
+    pick = f("galv", [1, 5, 1.8, 11])
     for x in range(1, 16, 2):
-        els.append(elem([x, 1.6, 7.6], [x + 0.9, 13.6, 8.4],
+        if x in (7, 9):
+            continue                      # the centre post stands here instead
+        els.append(elem([x, 1.6, 7.6], [x + 0.9, RAIL_TOP_C, 8.4],
                         {n: pick for n in ("north", "south", "east", "west")}))
+    post = f("galv", [13.4, 0.5, 14.6, 7.5])
+    els.append(elem([7.2, 0, 7.2], [8.8, RAIL_TOP_C, 8.8],
+                    {n: post for n in ("north", "south", "east", "west")}))
     return els
 
 
@@ -687,10 +824,14 @@ def name_board_elements():
     return els
 
 
-def platform_screen_blockstate(panel, post_left, post_right, rail, kick):
+def platform_screen_blockstate(panel, post_left, post_right, rail, kick,
+                               panel_base=None):
     """Merging run: panel always, LEFT post always (shared at each joint),
     RIGHT post only where the run ends — gate-wall rhythm. Screens also
-    stack: the rail caps the top of a stack, the kick sits at its foot."""
+    stack: the rail caps the top of a stack, the kick sits at its foot, and
+    (classic screen only) `panel_base` is the solid panel every course BELOW
+    the top draws, so a 2-high run is solid up to chest height and glazed
+    above, the way the Marcy / Bay Pkwy screens are built."""
     parts = []
     for facing, rot in (("north", 0), ("east", 90), ("south", 180), ("west", 270)):
         def ap(mdl):
@@ -698,7 +839,12 @@ def platform_screen_blockstate(panel, post_left, post_right, rail, kick):
             if rot:
                 entry["y"] = rot
             return entry
-        parts.append({"when": {"facing": facing}, "apply": ap(panel)})
+        if panel_base:
+            parts.append({"when": {"facing": facing, "up": "false"}, "apply": ap(panel)})
+            parts.append({"when": {"facing": facing, "up": "true"},
+                          "apply": ap(panel_base)})
+        else:
+            parts.append({"when": {"facing": facing}, "apply": ap(panel)})
         parts.append({"when": {"facing": facing}, "apply": ap(post_left)})
         parts.append({"when": {"facing": facing, "right": "false"}, "apply": ap(post_right)})
         parts.append({"when": {"facing": facing, "up": "false"}, "apply": ap(rail)})
@@ -755,7 +901,8 @@ def build_platform(g, assets_root):
         g.model(name, PLATFORM_TEX, els)
 
     # panels (posts split out so runs share them)
-    pm("el_windscreen_panel", windscreen_panel_elements())
+    pm("el_windscreen_panel", windscreen_head_elements())
+    pm("el_windscreen_panel_base", windscreen_base_elements())
     pm("el_windscreen_corrugated_panel", windscreen_corrugated_elements())
     pm("el_windscreen_glass_panel", windscreen_glass_elements())
     pm("el_windscreen_mesh_panel", windscreen_mesh_elements())
@@ -786,15 +933,17 @@ def build_platform(g, assets_root):
     pm("el_name_board_model", name_board_elements())
 
     # blockstates
-    for block, panel, silver in (("el_windscreen", "el_windscreen_panel", False),
-                                 ("el_windscreen_corrugated", "el_windscreen_corrugated_panel", False),
-                                 ("el_windscreen_glass", "el_windscreen_glass_panel", True),
-                                 ("el_windscreen_mesh", "el_windscreen_mesh_panel", True)):
+    for block, panel, silver, base in (
+            ("el_windscreen", "el_windscreen_panel", False, "el_windscreen_panel_base"),
+            ("el_windscreen_corrugated", "el_windscreen_corrugated_panel", False, None),
+            ("el_windscreen_glass", "el_windscreen_glass_panel", True, None),
+            ("el_windscreen_mesh", "el_windscreen_mesh_panel", True, None)):
         sv = "_silver" if silver else ""
         g.wj(os.path.join(assets_root, "blockstates", block + ".json"),
              platform_screen_blockstate(panel, f"el_screen_post_left{sv}",
                                         f"el_screen_post_right{sv}",
-                                        f"el_screen_rail{sv}", f"el_screen_kick{sv}"))
+                                        f"el_screen_rail{sv}", f"el_screen_kick{sv}",
+                                        base))
     g.wj(os.path.join(assets_root, "blockstates", "el_railing_pipe.json"),
          platform_simple_blockstate("el_railing_pipe_panel"))
     g.wj(os.path.join(assets_root, "blockstates", "el_railing_modern.json"),
@@ -893,8 +1042,12 @@ PROPS = {
            "left": {"true", "false"}, "right": {"true", "false"},
            "up": {"true", "false"}, "down": {"true", "false"}}
        for b in BLOCKS[16:20]},
+    # railings are ElScreenBlocks too — they carry left/right/up/down even
+    # though their blockstate keys on facing alone (a post every block IS the
+    # look; there is nothing to share at a joint)
     **{b: {"facing": {"north", "south", "east", "west"},
-           "left": {"true", "false"}, "right": {"true", "false"}}
+           "left": {"true", "false"}, "right": {"true", "false"},
+           "up": {"true", "false"}, "down": {"true", "false"}}
        for b in BLOCKS[20:22]},
     **{b: {"facing": {"north", "south", "east", "west"},
            "up": {"true", "false"}, "down": {"true", "false"}}
