@@ -1,0 +1,387 @@
+{
+  "parent": "minecraft:block/block",
+  "textures": {
+    "body": "station_announcer:block/el_steel_station",
+    "particle": "station_announcer:block/el_steel_station"
+  },
+  "elements": [
+    {
+      "from": [
+        0.4,
+        -9.4,
+        6.7
+      ],
+      "to": [
+        3.4,
+        1.6,
+        9.3
+      ],
+      "faces": {
+        "north": {
+          "texture": "#body",
+          "uv": [
+            1,
+            4.25,
+            4,
+            12.25
+          ],
+          "tintindex": 0
+        },
+        "south": {
+          "texture": "#body",
+          "uv": [
+            1,
+            4.25,
+            4,
+            12.25
+          ],
+          "tintindex": 0
+        },
+        "east": {
+          "texture": "#body",
+          "uv": [
+            1,
+            4.25,
+            4.2,
+            12.25
+          ],
+          "tintindex": 0
+        },
+        "west": {
+          "texture": "#body",
+          "uv": [
+            1,
+            4.25,
+            4.2,
+            12.25
+          ],
+          "tintindex": 0
+        }
+      },
+      "rotation": {
+        "origin": [
+          1.9,
+          1.6,
+          8
+        ],
+        "axis": "z",
+        "angle": 45
+      }
+    },
+    {
+      "from": [
+        3.1999999999999997,
+        -6.4,
+        6.7
+      ],
+      "to": [
+        6.199999999999999,
+        1.6,
+        9.3
+      ],
+      "faces": {
+        "north": {
+          "texture": "#body",
+          "uv": [
+            1,
+            4.25,
+            4,
+            12.25
+          ],
+          "tintindex": 0
+        },
+        "south": {
+          "texture": "#body",
+          "uv": [
+            1,
+            4.25,
+            4,
+            12.25
+          ],
+          "tintindex": 0
+        },
+        "east": {
+          "texture": "#body",
+          "uv": [
+            1,
+            4.25,
+            4.2,
+            12.25
+          ],
+          "tintindex": 0
+        },
+        "west": {
+          "texture": "#body",
+          "uv": [
+            1,
+            4.25,
+            4.2,
+            12.25
+          ],
+          "tintindex": 0
+        }
+      },
+      "rotation": {
+        "origin": [
+          4.699999999999999,
+          1.6,
+          8
+        ],
+        "axis": "z",
+        "angle": 45
+      }
+    },
+    {
+      "from": [
+        6.0,
+        -3.4,
+        6.7
+      ],
+      "to": [
+        9.0,
+        1.6,
+        9.3
+      ],
+      "faces": {
+        "north": {
+          "texture": "#body",
+          "uv": [
+            1,
+            4.25,
+            4,
+            12.25
+          ],
+          "tintindex": 0
+        },
+        "south": {
+          "texture": "#body",
+          "uv": [
+            1,
+            4.25,
+            4,
+            12.25
+          ],
+          "tintindex": 0
+        },
+        "east": {
+          "texture": "#body",
+          "uv": [
+            1,
+            4.25,
+            4.2,
+            12.25
+          ],
+          "tintindex": 0
+        },
+        "west": {
+          "texture": "#body",
+          "uv": [
+            1,
+            4.25,
+            4.2,
+            12.25
+          ],
+          "tintindex": 0
+        }
+      },
+      "rotation": {
+        "origin": [
+          7.5,
+          1.6,
+          8
+        ],
+        "axis": "z",
+        "angle": 45
+      }
+    },
+    {
+      "from": [
+        12.6,
+        -9.4,
+        6.7
+      ],
+      "to": [
+        15.6,
+        1.6,
+        9.3
+      ],
+      "faces": {
+        "north": {
+          "texture": "#body",
+          "uv": [
+            1,
+            4.25,
+            4,
+            12.25
+          ],
+          "tintindex": 0
+        },
+        "south": {
+          "texture": "#body",
+          "uv": [
+            1,
+            4.25,
+            4,
+            12.25
+          ],
+          "tintindex": 0
+        },
+        "east": {
+          "texture": "#body",
+          "uv": [
+            1,
+            4.25,
+            4.2,
+            12.25
+          ],
+          "tintindex": 0
+        },
+        "west": {
+          "texture": "#body",
+          "uv": [
+            1,
+            4.25,
+            4.2,
+            12.25
+          ],
+          "tintindex": 0
+        }
+      },
+      "rotation": {
+        "origin": [
+          14.1,
+          1.6,
+          8
+        ],
+        "axis": "z",
+        "angle": -45
+      }
+    },
+    {
+      "from": [
+        9.8,
+        -6.4,
+        6.7
+      ],
+      "to": [
+        12.8,
+        1.6,
+        9.3
+      ],
+      "faces": {
+        "north": {
+          "texture": "#body",
+          "uv": [
+            1,
+            4.25,
+            4,
+            12.25
+          ],
+          "tintindex": 0
+        },
+        "south": {
+          "texture": "#body",
+          "uv": [
+            1,
+            4.25,
+            4,
+            12.25
+          ],
+          "tintindex": 0
+        },
+        "east": {
+          "texture": "#body",
+          "uv": [
+            1,
+            4.25,
+            4.2,
+            12.25
+          ],
+          "tintindex": 0
+        },
+        "west": {
+          "texture": "#body",
+          "uv": [
+            1,
+            4.25,
+            4.2,
+            12.25
+          ],
+          "tintindex": 0
+        }
+      },
+      "rotation": {
+        "origin": [
+          11.3,
+          1.6,
+          8
+        ],
+        "axis": "z",
+        "angle": -45
+      }
+    },
+    {
+      "from": [
+        7.0,
+        -3.4,
+        6.7
+      ],
+      "to": [
+        10.0,
+        1.6,
+        9.3
+      ],
+      "faces": {
+        "north": {
+          "texture": "#body",
+          "uv": [
+            1,
+            4.25,
+            4,
+            12.25
+          ],
+          "tintindex": 0
+        },
+        "south": {
+          "texture": "#body",
+          "uv": [
+            1,
+            4.25,
+            4,
+            12.25
+          ],
+          "tintindex": 0
+        },
+        "east": {
+          "texture": "#body",
+          "uv": [
+            1,
+            4.25,
+            4.2,
+            12.25
+          ],
+          "tintindex": 0
+        },
+        "west": {
+          "texture": "#body",
+          "uv": [
+            1,
+            4.25,
+            4.2,
+            12.25
+          ],
+          "tintindex": 0
+        }
+      },
+      "rotation": {
+        "origin": [
+          8.5,
+          1.6,
+          8
+        ],
+        "axis": "z",
+        "angle": -45
+      }
+    }
+  ]
+}

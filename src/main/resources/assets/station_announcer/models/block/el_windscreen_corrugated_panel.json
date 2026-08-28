@@ -1,0 +1,149 @@
+{
+  "parent": "minecraft:block/block",
+  "textures": {
+    "screen": "station_announcer:block/el_windscreen",
+    "corru": "station_announcer:block/el_corrugated",
+    "corru_s": "station_announcer:block/el_corrugated_silver",
+    "glass": "station_announcer:block/el_glass",
+    "mesh": "station_announcer:block/el_mesh",
+    "roof": "station_announcer:block/el_roof_red",
+    "body": "station_announcer:block/el_steel_green",
+    "galv": "station_announcer:block/el_steel_silver",
+    "board": "station_announcer:block/el_board",
+    "particle": "station_announcer:block/el_steel_green"
+  },
+  "elements": [
+    {
+      "from": [
+        0,
+        0.9,
+        7.4
+      ],
+      "to": [
+        16,
+        13.5,
+        8.6
+      ],
+      "faces": {
+        "north": {
+          "texture": "#corru",
+          "uv": [
+            0,
+            0.25,
+            16,
+            13
+          ]
+        },
+        "south": {
+          "texture": "#corru",
+          "uv": [
+            0,
+            0.25,
+            16,
+            13
+          ]
+        }
+      }
+    },
+    {
+      "from": [
+        0,
+        0,
+        7.1
+      ],
+      "to": [
+        16,
+        0.9,
+        8.9
+      ],
+      "faces": {
+        "north": {
+          "texture": "#corru",
+          "uv": [
+            0,
+            13.5,
+            16,
+            14.2
+          ]
+        },
+        "south": {
+          "texture": "#corru",
+          "uv": [
+            0,
+            13.5,
+            16,
+            14.2
+          ]
+        },
+        "up": {
+          "texture": "#corru",
+          "uv": [
+            0,
+            13.5,
+            16,
+            14.4
+          ]
+        },
+        "down": {
+          "texture": "#corru",
+          "uv": [
+            0,
+            13.5,
+            16,
+            14.4
+          ]
+        }
+      }
+    },
+    {
+      "from": [
+        0,
+        13.5,
+        7.1
+      ],
+      "to": [
+        16,
+        14.6,
+        8.9
+      ],
+      "faces": {
+        "north": {
+          "texture": "#corru",
+          "uv": [
+            0,
+            13.5,
+            16,
+            14.2
+          ]
+        },
+        "south": {
+          "texture": "#corru",
+          "uv": [
+            0,
+            13.5,
+            16,
+            14.2
+          ]
+        },
+        "up": {
+          "texture": "#corru",
+          "uv": [
+            0,
+            13.5,
+            16,
+            14.4
+          ]
+        },
+        "down": {
+          "texture": "#corru",
+          "uv": [
+            0,
+            13.5,
+            16,
+            14.4
+          ]
+        }
+      }
+    }
+  ]
+}

@@ -1,0 +1,149 @@
+{
+  "parent": "minecraft:block/block",
+  "textures": {
+    "screen": "station_announcer:block/el_windscreen",
+    "corru": "station_announcer:block/el_corrugated",
+    "corru_s": "station_announcer:block/el_corrugated_silver",
+    "glass": "station_announcer:block/el_glass",
+    "mesh": "station_announcer:block/el_mesh",
+    "roof": "station_announcer:block/el_roof_red",
+    "body": "station_announcer:block/el_steel_green",
+    "galv": "station_announcer:block/el_steel_silver",
+    "board": "station_announcer:block/el_board",
+    "particle": "station_announcer:block/el_steel_green"
+  },
+  "elements": [
+    {
+      "from": [
+        0,
+        1.2,
+        7.7
+      ],
+      "to": [
+        16,
+        14.2,
+        8.3
+      ],
+      "faces": {
+        "north": {
+          "texture": "#glass",
+          "uv": [
+            0,
+            0,
+            16,
+            16
+          ]
+        },
+        "south": {
+          "texture": "#glass",
+          "uv": [
+            0,
+            0,
+            16,
+            16
+          ]
+        }
+      }
+    },
+    {
+      "from": [
+        0,
+        0,
+        7.0
+      ],
+      "to": [
+        16,
+        1.2,
+        9.0
+      ],
+      "faces": {
+        "north": {
+          "texture": "#galv",
+          "uv": [
+            1,
+            5,
+            9,
+            5.6
+          ]
+        },
+        "south": {
+          "texture": "#galv",
+          "uv": [
+            1,
+            5,
+            9,
+            5.6
+          ]
+        },
+        "up": {
+          "texture": "#galv",
+          "uv": [
+            1,
+            5,
+            9,
+            6
+          ]
+        },
+        "down": {
+          "texture": "#galv",
+          "uv": [
+            1,
+            5,
+            9,
+            6
+          ]
+        }
+      }
+    },
+    {
+      "from": [
+        0,
+        14.2,
+        7.0
+      ],
+      "to": [
+        16,
+        15.4,
+        9.0
+      ],
+      "faces": {
+        "north": {
+          "texture": "#galv",
+          "uv": [
+            1,
+            5,
+            9,
+            5.6
+          ]
+        },
+        "south": {
+          "texture": "#galv",
+          "uv": [
+            1,
+            5,
+            9,
+            5.6
+          ]
+        },
+        "up": {
+          "texture": "#galv",
+          "uv": [
+            1,
+            5,
+            9,
+            6
+          ]
+        },
+        "down": {
+          "texture": "#galv",
+          "uv": [
+            1,
+            5,
+            9,
+            6
+          ]
+        }
+      }
+    }
+  ]
+}

@@ -19,8 +19,22 @@ import org.jetbrains.annotations.Nullable;
  * station otherwise.
  */
 public class StationColumnBlock extends ColumnBlock implements BlockEntityProvider {
+    /** How far (blocks) the name board floats off the column centre — the
+     * renderer reads this so slimmer columns (the el family) keep the board
+     * hugging their face instead of the iron column's flange plane. */
+    private final float boardOffset;
+
     public StationColumnBlock(Settings settings, VoxelShape northShape) {
+        this(settings, northShape, 0.25f);
+    }
+
+    public StationColumnBlock(Settings settings, VoxelShape northShape, float boardOffset) {
         super(settings, northShape);
+        this.boardOffset = boardOffset;
+    }
+
+    public float boardOffset() {
+        return boardOffset;
     }
 
     @Nullable

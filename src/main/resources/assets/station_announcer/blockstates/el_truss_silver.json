@@ -1,0 +1,40 @@
+{
+  "multipart": [
+    {
+      "when": {
+        "axis": "x"
+      },
+      "apply": {
+        "model": "station_announcer:block/el_truss_silver"
+      }
+    },
+    {
+      "when": {
+        "axis": "x",
+        "braced": "true"
+      },
+      "apply": {
+        "model": "station_announcer:block/el_girder_brace_silver"
+      }
+    },
+    {
+      "when": {
+        "axis": "z"
+      },
+      "apply": {
+        "model": "station_announcer:block/el_truss_silver",
+        "y": 90
+      }
+    },
+    {
+      "when": {
+        "axis": "z",
+        "braced": "true"
+      },
+      "apply": {
+        "model": "station_announcer:block/el_girder_brace_silver",
+        "y": 90
+      }
+    }
+  ]
+}

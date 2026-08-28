@@ -1,0 +1,67 @@
+{
+  "parent": "minecraft:block/block",
+  "textures": {
+    "screen": "station_announcer:block/el_windscreen",
+    "corru": "station_announcer:block/el_corrugated",
+    "corru_s": "station_announcer:block/el_corrugated_silver",
+    "glass": "station_announcer:block/el_glass",
+    "mesh": "station_announcer:block/el_mesh",
+    "roof": "station_announcer:block/el_roof_red",
+    "body": "station_announcer:block/el_steel_green",
+    "galv": "station_announcer:block/el_steel_silver",
+    "board": "station_announcer:block/el_board",
+    "particle": "station_announcer:block/el_steel_green"
+  },
+  "elements": [
+    {
+      "from": [
+        14.4,
+        0,
+        6.9
+      ],
+      "to": [
+        16.0,
+        15.5,
+        9.1
+      ],
+      "faces": {
+        "north": {
+          "texture": "#galv",
+          "uv": [
+            1,
+            4.75,
+            1.8,
+            12.75
+          ]
+        },
+        "south": {
+          "texture": "#galv",
+          "uv": [
+            1,
+            4.75,
+            1.8,
+            12.75
+          ]
+        },
+        "east": {
+          "texture": "#galv",
+          "uv": [
+            1,
+            4.75,
+            1.8,
+            12.75
+          ]
+        },
+        "west": {
+          "texture": "#galv",
+          "uv": [
+            1,
+            4.75,
+            1.8,
+            12.75
+          ]
+        }
+      }
+    }
+  ]
+}

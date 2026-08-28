@@ -295,6 +295,35 @@ Four fixes/features from Thomas's feedback round (his answers, do not re-ask):
   model rebuild (tripod look, reader heads, pictogram plates day+night,
   HEET comb/lintel, signboard straps).
 
+### NYC ELEVATED STATION KIT (2026-08-28) — 28 new blocks, both phases; NOT in-game tested
+
+**Read EL_STATION_PLAN.md** — photo research (image sweeps: 125 St viaduct,
+Jamaica Ave, Marcy Av, W 8th St, Bay Pkwy, Astoria rebuild), Thomas's decisions
+(hand-placed blocks only, no creator tool; green + galvanized + station-tint +
+station-named; all four windscreens; PREVIEWS BEFORE CODE — he required render
+previews of every model/texture before anything landed, approved both phases
+from them, asked for beefier braces + texture depth + modularity for any
+platform size + PIDS-hangability + concrete floors as the walking surface).
+All assets by `tools/gen_el_assets.py` — never hand-edit; verify() enforces
+props/uv/rotation contracts. STRUCTURE: el columns (solid + see-through
+lattice; ColumnBlock UP/DOWN reuse: street base / gusset cap at stack ends;
+named variants ride StationColumnBlock + a new per-block boardOffset — the
+renderer's column board plane is no longer hardcoded 0.25), plate girder +
+lattice truss (ElGirderBlock: AXIS + BRACED — over any ColumnBlock the model
+grows 3-step 45° knee-brace gussets reaching into the column block), tie deck
+(see-through, deep stringers to y0 so it SITS on girders, top-slab collision)
++ full-cube plate deck (ElDeckBlock overrides isSideInvisible, glass rule).
+PLATFORM: 4 windscreens + 2 railings (ElScreenBlock left/right shared-post
+runs), stacking canopy posts (brackets only at stack top), flat/gable
+canopies (ElCanopyBlock AXIS + NSEW: fascia girders on open edges, gable end
+plates on open ridge ends; authored LOW so they land on posts; centre
+purlin/tie chord = steel for hanging PIDS stubs), el_name_board (BE +
+paintElNameBoard, auto station name). Tint providers + cutouts registered in
+MtrPidsClient; 5 tinted blocks. The scratchpad offline renderer
+(render_blockmodel.py + render_el*.py) drove the whole preview loop —
+recreate it for future model families. NOT verified in game: everything
+(placement connectivity, cutout layers, tint, name boards, collision feel).
+
 ### TURNSTILE ROUND 2 (2026-08-19 evening) — fare feedback + photo-grade tubing; NOT yet deployed
 
 **Fare feedback**: passing a turnstile now action-bars the rider

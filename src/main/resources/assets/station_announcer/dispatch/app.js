@@ -60,6 +60,7 @@ const state = {
 		traces: [],          // rebuilt each draw; hit-testing reads it
 		mode: "line",        // "line" | "segment" (interlined-trunk view)
 		segStations: [],      // station ids picked on the axis in segment mode
+		routeOff: new Set(),  // route ids toggled OFF via the variant chips
 		built: null,          // cached time-space trace geometry {sig, stations, platY, traces}
 		layout: null,         // last draw's axis layout (label hit-testing)
 		refetchWanted: false,
@@ -848,6 +849,7 @@ function initUi() {
 		const sl = state.stringline;
 		sl.mode = sl.mode === "segment" ? "line" : "segment";
 		sl.segStations = [];
+		sl.routeOff.clear();
 		sl.built = null;
 		renderSegUi();
 		fetchStringline();
@@ -1909,6 +1911,7 @@ function renderStringBadges() {
 		b.onclick = () => {
 			state.stringline.groupKey = g.key;
 			state.stringline.segStations = [];
+			state.stringline.routeOff.clear();
 			state.stringline.built = null;
 			renderStringBadges();
 			renderSegUi();
@@ -1991,12 +1994,50 @@ function activeRouteIds() {
 }
 
 function liveGroupVehicles() {
+	const sl = state.stringline;
 	const ids = new Set(activeRouteIds());
 	const out = [];
 	for (const [id, rec] of state.vehicles) {
-		if (rec.route && ids.has(rec.route.id)) out.push({ id, rec });
+		if (rec.route && ids.has(rec.route.id) && !sl.routeOff.has(rec.route.id)) out.push({ id, rec });
 	}
 	return out;
+}
+
+/**
+ * One chip per route of the active set — the "Line 1||North A" / "||South A"
+ * variants Thomas wants to toggle individually. Click flips that route off/on;
+ * filtering is client-side (the deps for the whole set are already loaded), so
+ * it is instant. Signature-guarded: called from the draw loop but touches the
+ * DOM only when the set or the toggles change.
+ */
+let lastVariantSig = "";
+function renderVariantChips() {
+	const sl = state.stringline;
+	const ids = activeRouteIds();
+	const routes = (sl.axis?.routes || []).filter((r) => ids.includes(r.id));
+	const sig = ids.join(",") + "|" + [...sl.routeOff].join(",");
+	if (sig === lastVariantSig) return;
+	lastVariantSig = sig;
+	const wrap = $("stringVariants");
+	wrap.innerHTML = "";
+	if (routes.length < 2) return; // nothing to toggle apart
+	const multiLine = new Set(routes.map((r) => lineKey(r.name))).size > 1;
+	for (const r of routes) {
+		const variant = firstLang((r.name || "").split("||")[1] || "") || firstLang(r.name) || "?";
+		const label = multiLine ? ((r.number ? r.number + " " : "") + variant) : variant;
+		const chip = document.createElement("button");
+		chip.className = "variant-chip" + (sl.routeOff.has(r.id) ? " off" : "");
+		chip.innerHTML = `<span class="vdot" style="background:${colorHex(r.color)}"></span><span class="vlabel">${escapeHtml(label)}</span>`;
+		chip.title = firstLang(lineKey(r.name)) + " — " + variant + " (click to toggle)";
+		chip.onclick = () => {
+			if (sl.routeOff.has(r.id)) sl.routeOff.delete(r.id);
+			else if (routes.some((x) => x.id !== r.id && !sl.routeOff.has(x.id))) sl.routeOff.add(r.id);
+			// (refuse to hide the LAST visible variant — an empty chart reads as broken)
+			sl.built = null;
+			renderVariantChips();
+		};
+		wrap.appendChild(chip);
+	}
 }
 
 const slCanvas = $("slCanvas");
@@ -2070,6 +2111,8 @@ function buildGeometry() {
 		const ids = new Set((sl.groups.find((g) => g.key === sl.groupKey) || {}).routeIds || []);
 		routesUsed = (sl.axis.routes || []).filter((r) => ids.has(r.id));
 	}
+	// variant chips: routes toggled off contribute neither platforms nor traces
+	routesUsed = routesUsed.filter((r) => !sl.routeOff.has(r.id));
 	const platDist = new Map(), staDist = new Map();
 	for (const s of stations) {
 		platDist.set(s.plat, s.dist);
@@ -2094,6 +2137,7 @@ function buildGeometry() {
 		let current = null;
 		let lastStop = -1, lastT = 0;
 		for (const [, plat, t, dwell, dev, stop, routeId] of rows) {
+			if (sl.routeOff.has(routeId)) continue; // variant toggled off
 			const dist = platDist.get(plat);
 			if (dist === undefined) continue; // off this axis (branch / outside the segment)
 			if (!current || stop < lastStop || t - lastT > 20 * 60000) {
@@ -2125,6 +2169,7 @@ function buildGeometry() {
 	const headways = [];
 	const lastDep = new Map();
 	for (const [, plat, t, , , , routeId] of sl.deps) {
+		if (sl.routeOff.has(routeId)) continue; // variant toggled off
 		const dist = platDist.get(plat);
 		if (dist === undefined) continue;
 		const key = routeId + "|" + plat;
@@ -2183,6 +2228,7 @@ function drawStringline() {
 	const t0 = tEnd - sl.windowMin * 60000;
 	const X = (t) => pad.l + ((t - t0) / (tEnd - t0)) * plotW;
 	sl.layout = { padL: pad.l, stations: B.stations.map((s) => ({ sta: s.sta, y: Y(s.dist) })) };
+	renderVariantChips();
 
 	// grid: station rows (selected corridor bounds highlighted) + time ticks
 	const stationFont = Math.round(12 * us);

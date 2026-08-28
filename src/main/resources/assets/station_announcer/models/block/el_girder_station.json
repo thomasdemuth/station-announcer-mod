@@ -1,0 +1,261 @@
+{
+  "parent": "minecraft:block/block",
+  "textures": {
+    "body": "station_announcer:block/el_steel_station",
+    "particle": "station_announcer:block/el_steel_station"
+  },
+  "elements": [
+    {
+      "from": [
+        0,
+        1.2,
+        6.7
+      ],
+      "to": [
+        16,
+        14.8,
+        9.3
+      ],
+      "faces": {
+        "north": {
+          "texture": "#body",
+          "uv": [
+            0.25,
+            0.25,
+            15.75,
+            15.75
+          ],
+          "tintindex": 0
+        },
+        "south": {
+          "texture": "#body",
+          "uv": [
+            0.25,
+            0.25,
+            15.75,
+            15.75
+          ],
+          "tintindex": 0
+        }
+      }
+    },
+    {
+      "from": [
+        0,
+        0,
+        5.5
+      ],
+      "to": [
+        16,
+        1.2,
+        10.5
+      ],
+      "faces": {
+        "north": {
+          "texture": "#body",
+          "uv": [
+            1,
+            5,
+            9,
+            5.6
+          ],
+          "tintindex": 0
+        },
+        "south": {
+          "texture": "#body",
+          "uv": [
+            1,
+            5,
+            9,
+            5.6
+          ],
+          "tintindex": 0
+        },
+        "up": {
+          "texture": "#body",
+          "uv": [
+            1,
+            5,
+            9,
+            7.5
+          ],
+          "tintindex": 0
+        },
+        "down": {
+          "texture": "#body",
+          "uv": [
+            1,
+            5,
+            9,
+            7.5
+          ],
+          "tintindex": 0,
+          "cullface": "down"
+        }
+      }
+    },
+    {
+      "from": [
+        0,
+        14.8,
+        5.5
+      ],
+      "to": [
+        16,
+        16,
+        10.5
+      ],
+      "faces": {
+        "north": {
+          "texture": "#body",
+          "uv": [
+            1,
+            5,
+            9,
+            5.6
+          ],
+          "tintindex": 0
+        },
+        "south": {
+          "texture": "#body",
+          "uv": [
+            1,
+            5,
+            9,
+            5.6
+          ],
+          "tintindex": 0
+        },
+        "up": {
+          "texture": "#body",
+          "uv": [
+            1,
+            5,
+            9,
+            7.5
+          ],
+          "tintindex": 0,
+          "cullface": "up"
+        },
+        "down": {
+          "texture": "#body",
+          "uv": [
+            1,
+            5,
+            9,
+            7.5
+          ],
+          "tintindex": 0
+        }
+      }
+    },
+    {
+      "from": [
+        0.05,
+        1.2,
+        6.3
+      ],
+      "to": [
+        1.1,
+        14.8,
+        9.7
+      ],
+      "faces": {
+        "north": {
+          "texture": "#body",
+          "uv": [
+            13.6,
+            1,
+            14.4,
+            7.8
+          ],
+          "tintindex": 0
+        },
+        "south": {
+          "texture": "#body",
+          "uv": [
+            13.6,
+            1,
+            14.4,
+            7.8
+          ],
+          "tintindex": 0
+        },
+        "east": {
+          "texture": "#body",
+          "uv": [
+            1,
+            5,
+            2.7,
+            11.8
+          ],
+          "tintindex": 0
+        },
+        "west": {
+          "texture": "#body",
+          "uv": [
+            1,
+            5,
+            2.7,
+            11.8
+          ],
+          "tintindex": 0
+        }
+      }
+    },
+    {
+      "from": [
+        14.9,
+        1.2,
+        6.3
+      ],
+      "to": [
+        15.950000000000001,
+        14.8,
+        9.7
+      ],
+      "faces": {
+        "north": {
+          "texture": "#body",
+          "uv": [
+            13.6,
+            1,
+            14.4,
+            7.8
+          ],
+          "tintindex": 0
+        },
+        "south": {
+          "texture": "#body",
+          "uv": [
+            13.6,
+            1,
+            14.4,
+            7.8
+          ],
+          "tintindex": 0
+        },
+        "east": {
+          "texture": "#body",
+          "uv": [
+            1,
+            5,
+            2.7,
+            11.8
+          ],
+          "tintindex": 0
+        },
+        "west": {
+          "texture": "#body",
+          "uv": [
+            1,
+            5,
+            2.7,
+            11.8
+          ],
+          "tintindex": 0
+        }
+      }
+    }
+  ]
+}

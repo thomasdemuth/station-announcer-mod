@@ -1,0 +1,25 @@
+{
+  "multipart": [
+    {
+      "apply": {
+        "model": "station_announcer:block/el_column_shaft_lattice_station"
+      }
+    },
+    {
+      "when": {
+        "down": "false"
+      },
+      "apply": {
+        "model": "station_announcer:block/el_column_foot_station"
+      }
+    },
+    {
+      "when": {
+        "up": "false"
+      },
+      "apply": {
+        "model": "station_announcer:block/el_column_cap_station"
+      }
+    }
+  ]
+}

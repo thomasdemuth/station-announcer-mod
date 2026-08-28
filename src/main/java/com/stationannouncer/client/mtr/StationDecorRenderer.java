@@ -79,8 +79,10 @@ public class StationDecorRenderer implements BlockEntityRenderer<StationDecorBlo
             if (mosaic.run() > 0) {
                 paintMosaic(matrices, vertexConsumers, mosaic.text(), color, mosaic.run());
             }
-        } else if (block instanceof com.stationannouncer.mtr.StationColumnBlock) {
-            paintColumnBoard(matrices, vertexConsumers, name);
+        } else if (block instanceof com.stationannouncer.mtr.ElNameBoardBlock) {
+            paintElNameBoard(matrices, vertexConsumers, name);
+        } else if (block instanceof com.stationannouncer.mtr.StationColumnBlock column) {
+            paintColumnBoard(matrices, vertexConsumers, name, column.boardOffset());
         } else if (block instanceof com.stationannouncer.mtr.RailingSignBlock) {
             paintRailingSign(entity, matrices, vertexConsumers, name);
         }
@@ -622,23 +624,51 @@ public class StationDecorRenderer implements BlockEntityRenderer<StationDecorBlo
      * (the column body itself, including the station-color tint, comes from
      * the block model and color provider).
      */
-    private void paintColumnBoard(MatrixStack matrices, VertexConsumerProvider vertexConsumers, String name) {
+    private void paintColumnBoard(MatrixStack matrices, VertexConsumerProvider vertexConsumers,
+                                  String name, float offset) {
         if (name.isEmpty()) {
             return;
         }
-        // Name board on both wide faces (front flange face at local z -0.25).
+        // Name board on both wide faces; the face plane comes from the block
+        // (iron column flange 0.25, the slim el column 0.1875).
         for (int side = 0; side < 2; side++) {
             matrices.push();
             if (side == 1) {
                 matrices.multiply(RotationAxis.POSITIVE_Y.rotationDegrees(180.0f));
             }
-            matrices.translate(0.3125, 0.75, -0.25 - 0.01);
+            matrices.translate(0.3125, 0.75, -offset - 0.01);
             matrices.scale(-UNIT, -UNIT, UNIT);
             CanvasPainter painter = new CanvasPainter(matrices, vertexConsumers);
             painter.quad(0, 0, 40, 16, 0.0f, BOARD_BLACK);
             String text = upperCase(name);
             float size = Math.min(9, 36 / Math.max(1, painter.width(text, 1)));
             painter.textCentered(text, 20, 8 - size / 2.0f, size, TEXT_WHITE);
+            matrices.pop();
+        }
+    }
+
+    // ------------------------------------------------------- el name board
+
+    /**
+     * The elevated platform's black name board: white text on both faces of
+     * the block-model plate (the plate itself is geometry; only the letters
+     * are painted here). Plate spans model x 1..15, y 6..13, faces z 7.4/8.6.
+     */
+    private void paintElNameBoard(MatrixStack matrices, VertexConsumerProvider vertexConsumers, String name) {
+        if (name.isEmpty()) {
+            return;
+        }
+        for (int side = 0; side < 2; side++) {
+            matrices.push();
+            if (side == 1) {
+                matrices.multiply(RotationAxis.POSITIVE_Y.rotationDegrees(180.0f));
+            }
+            matrices.translate(0.4375, 0.8125, -0.0375 - 0.008);
+            matrices.scale(-UNIT, -UNIT, UNIT);
+            CanvasPainter painter = new CanvasPainter(matrices, vertexConsumers);
+            String text = upperCase(name);
+            float size = Math.min(11, 50 / Math.max(1, painter.width(text, 1)));
+            painter.textCentered(text, 28, 14 - size / 2.0f, size, TEXT_WHITE);
             matrices.pop();
         }
     }

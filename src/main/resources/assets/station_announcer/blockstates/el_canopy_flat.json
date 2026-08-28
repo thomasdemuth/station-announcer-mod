@@ -1,0 +1,56 @@
+{
+  "multipart": [
+    {
+      "when": {
+        "axis": "x"
+      },
+      "apply": {
+        "model": "station_announcer:block/el_canopy_flat_slab"
+      }
+    },
+    {
+      "when": {
+        "axis": "z"
+      },
+      "apply": {
+        "model": "station_announcer:block/el_canopy_flat_slab",
+        "y": 90
+      }
+    },
+    {
+      "when": {
+        "north": "false"
+      },
+      "apply": {
+        "model": "station_announcer:block/el_canopy_fascia"
+      }
+    },
+    {
+      "when": {
+        "east": "false"
+      },
+      "apply": {
+        "model": "station_announcer:block/el_canopy_fascia",
+        "y": 90
+      }
+    },
+    {
+      "when": {
+        "south": "false"
+      },
+      "apply": {
+        "model": "station_announcer:block/el_canopy_fascia",
+        "y": 180
+      }
+    },
+    {
+      "when": {
+        "west": "false"
+      },
+      "apply": {
+        "model": "station_announcer:block/el_canopy_fascia",
+        "y": 270
+      }
+    }
+  ]
+}

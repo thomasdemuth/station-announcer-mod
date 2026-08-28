@@ -1,0 +1,11 @@
+{
+  "variants": {
+    "axis=x": {
+      "model": "station_announcer:block/el_deck_ties_model"
+    },
+    "axis=z": {
+      "model": "station_announcer:block/el_deck_ties_model",
+      "y": 90
+    }
+  }
+}

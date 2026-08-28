@@ -1,0 +1,166 @@
+{
+  "parent": "minecraft:block/block",
+  "textures": {
+    "plate": "station_announcer:block/el_deck_steel",
+    "body": "station_announcer:block/el_steel_green",
+    "particle": "station_announcer:block/el_deck_steel"
+  },
+  "elements": [
+    {
+      "from": [
+        0,
+        12.4,
+        0
+      ],
+      "to": [
+        16,
+        16,
+        16
+      ],
+      "faces": {
+        "up": {
+          "texture": "#plate",
+          "uv": [
+            0.25,
+            0.25,
+            15.75,
+            15.75
+          ]
+        },
+        "down": {
+          "texture": "#plate",
+          "uv": [
+            0.25,
+            0.25,
+            15.75,
+            15.75
+          ]
+        },
+        "north": {
+          "texture": "#plate",
+          "uv": [
+            0.25,
+            6,
+            15.75,
+            7.75
+          ],
+          "cullface": "north"
+        },
+        "south": {
+          "texture": "#plate",
+          "uv": [
+            0.25,
+            6,
+            15.75,
+            7.75
+          ],
+          "cullface": "south"
+        },
+        "east": {
+          "texture": "#plate",
+          "uv": [
+            0.25,
+            6,
+            15.75,
+            7.75
+          ],
+          "cullface": "east"
+        },
+        "west": {
+          "texture": "#plate",
+          "uv": [
+            0.25,
+            6,
+            15.75,
+            7.75
+          ],
+          "cullface": "west"
+        }
+      }
+    },
+    {
+      "from": [
+        0,
+        0,
+        3.4
+      ],
+      "to": [
+        16,
+        12.4,
+        5.4
+      ],
+      "faces": {
+        "north": {
+          "texture": "#body",
+          "uv": [
+            0.25,
+            0.25,
+            15.75,
+            12.2
+          ]
+        },
+        "south": {
+          "texture": "#body",
+          "uv": [
+            0.25,
+            0.25,
+            15.75,
+            12.2
+          ]
+        },
+        "down": {
+          "texture": "#body",
+          "uv": [
+            0.25,
+            5,
+            15.75,
+            7
+          ],
+          "cullface": "down"
+        }
+      }
+    },
+    {
+      "from": [
+        0,
+        0,
+        10.6
+      ],
+      "to": [
+        16,
+        12.4,
+        12.6
+      ],
+      "faces": {
+        "north": {
+          "texture": "#body",
+          "uv": [
+            0.25,
+            0.25,
+            15.75,
+            12.2
+          ]
+        },
+        "south": {
+          "texture": "#body",
+          "uv": [
+            0.25,
+            0.25,
+            15.75,
+            12.2
+          ]
+        },
+        "down": {
+          "texture": "#body",
+          "uv": [
+            0.25,
+            5,
+            15.75,
+            7
+          ],
+          "cullface": "down"
+        }
+      }
+    }
+  ]
+}

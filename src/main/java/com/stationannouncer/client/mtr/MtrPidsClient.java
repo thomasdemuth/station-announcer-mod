@@ -74,6 +74,18 @@ public final class MtrPidsClient {
         net.fabricmc.fabric.api.blockrenderlayer.v1.BlockRenderLayerMap.INSTANCE.putBlock(
                 com.stationannouncer.mtr.MtrStationDecor.EMPLOYEE_DOOR_MESH,
                 net.minecraft.client.render.RenderLayer.getCutoutMipped());
+        // The el lattice columns/trusses have see-through X-laced webs, and
+        // the glass and mesh windscreens are cutout panes.
+        net.fabricmc.fabric.api.blockrenderlayer.v1.BlockRenderLayerMap.INSTANCE.putBlocks(
+                net.minecraft.client.render.RenderLayer.getCutoutMipped(),
+                com.stationannouncer.mtr.MtrStationDecor.EL_LATTICE_COLUMN,
+                com.stationannouncer.mtr.MtrStationDecor.EL_LATTICE_COLUMN_SILVER,
+                com.stationannouncer.mtr.MtrStationDecor.EL_LATTICE_COLUMN_STATION,
+                com.stationannouncer.mtr.MtrStationDecor.EL_TRUSS,
+                com.stationannouncer.mtr.MtrStationDecor.EL_TRUSS_SILVER,
+                com.stationannouncer.mtr.MtrStationDecor.EL_TRUSS_STATION,
+                com.stationannouncer.mtr.MtrStationDecor.EL_WINDSCREEN_GLASS,
+                com.stationannouncer.mtr.MtrStationDecor.EL_WINDSCREEN_MESH);
 
         BlockEntityRendererFactories.register(MtrPids.PIDS_BLOCK_ENTITY, context -> new PidsNycRenderer());
         BlockEntityRendererFactories.register(MtrStationDecor.DECOR_BLOCK_ENTITY, context -> new StationDecorRenderer());
@@ -117,10 +129,16 @@ public final class MtrPidsClient {
         // on chunk-meshing worker threads while MTR data may be updating.
         net.fabricmc.fabric.api.client.rendering.v1.ColorProviderRegistry.BLOCK.register(
                 (state, world, pos, tintIndex) -> pos == null ? FALLBACK_STATION_COLOR : stationColor(pos),
-                MtrStationDecor.COLUMN_IRON_STATION, MtrStationDecor.COLUMN_IRON_NAMED_STATION);
+                MtrStationDecor.COLUMN_IRON_STATION, MtrStationDecor.COLUMN_IRON_NAMED_STATION,
+                MtrStationDecor.EL_COLUMN_STATION, MtrStationDecor.EL_COLUMN_NAMED_STATION,
+                MtrStationDecor.EL_LATTICE_COLUMN_STATION,
+                MtrStationDecor.EL_GIRDER_STATION, MtrStationDecor.EL_TRUSS_STATION);
         net.fabricmc.fabric.api.client.rendering.v1.ColorProviderRegistry.ITEM.register(
                 (stack, tintIndex) -> FALLBACK_STATION_COLOR,
-                MtrStationDecor.COLUMN_IRON_STATION, MtrStationDecor.COLUMN_IRON_NAMED_STATION);
+                MtrStationDecor.COLUMN_IRON_STATION, MtrStationDecor.COLUMN_IRON_NAMED_STATION,
+                MtrStationDecor.EL_COLUMN_STATION, MtrStationDecor.EL_COLUMN_NAMED_STATION,
+                MtrStationDecor.EL_LATTICE_COLUMN_STATION,
+                MtrStationDecor.EL_GIRDER_STATION, MtrStationDecor.EL_TRUSS_STATION);
 
         // Tile wall: the band's station tint and the name tablet's renderer.
         SubwayWallsClient.register();

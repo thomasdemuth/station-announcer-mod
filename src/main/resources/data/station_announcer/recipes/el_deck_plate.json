@@ -1,0 +1,17 @@
+{
+  "type": "minecraft:crafting_shaped",
+  "category": "building",
+  "key": {
+    "I": {
+      "item": "minecraft:iron_ingot"
+    }
+  },
+  "pattern": [
+    "III",
+    "III"
+  ],
+  "result": {
+    "item": "station_announcer:el_deck_plate",
+    "count": 6
+  }
+}

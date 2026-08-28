@@ -1,0 +1,21 @@
+{
+  "type": "minecraft:crafting_shaped",
+  "category": "building",
+  "key": {
+    "P": {
+      "item": "minecraft:glass_pane"
+    },
+    "I": {
+      "item": "minecraft:iron_ingot"
+    }
+  },
+  "pattern": [
+    "P",
+    "P",
+    "I"
+  ],
+  "result": {
+    "item": "station_announcer:el_windscreen_glass",
+    "count": 2
+  }
+}

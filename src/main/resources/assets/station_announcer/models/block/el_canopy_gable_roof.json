@@ -1,0 +1,235 @@
+{
+  "parent": "minecraft:block/block",
+  "textures": {
+    "screen": "station_announcer:block/el_windscreen",
+    "corru": "station_announcer:block/el_corrugated",
+    "corru_s": "station_announcer:block/el_corrugated_silver",
+    "glass": "station_announcer:block/el_glass",
+    "mesh": "station_announcer:block/el_mesh",
+    "roof": "station_announcer:block/el_roof_red",
+    "body": "station_announcer:block/el_steel_green",
+    "galv": "station_announcer:block/el_steel_silver",
+    "board": "station_announcer:block/el_board",
+    "particle": "station_announcer:block/el_steel_green"
+  },
+  "elements": [
+    {
+      "from": [
+        0,
+        0.6,
+        0
+      ],
+      "to": [
+        16,
+        2.4,
+        8.6
+      ],
+      "faces": {
+        "up": {
+          "texture": "#roof",
+          "uv": [
+            0,
+            0.25,
+            16,
+            8.25
+          ]
+        },
+        "down": {
+          "texture": "#roof",
+          "uv": [
+            0,
+            0.25,
+            16,
+            8.25
+          ]
+        },
+        "north": {
+          "texture": "#roof",
+          "uv": [
+            0,
+            8.5,
+            16,
+            9.3
+          ]
+        },
+        "south": {
+          "texture": "#roof",
+          "uv": [
+            0,
+            8.5,
+            16,
+            9.3
+          ]
+        }
+      },
+      "rotation": {
+        "origin": [
+          8,
+          1.5,
+          1.0
+        ],
+        "axis": "x",
+        "angle": -22.5
+      }
+    },
+    {
+      "from": [
+        0,
+        0.6,
+        7.4
+      ],
+      "to": [
+        16,
+        2.4,
+        16.0
+      ],
+      "faces": {
+        "up": {
+          "texture": "#roof",
+          "uv": [
+            0,
+            0.25,
+            16,
+            8.25
+          ]
+        },
+        "down": {
+          "texture": "#roof",
+          "uv": [
+            0,
+            0.25,
+            16,
+            8.25
+          ]
+        },
+        "north": {
+          "texture": "#roof",
+          "uv": [
+            0,
+            8.5,
+            16,
+            9.3
+          ]
+        },
+        "south": {
+          "texture": "#roof",
+          "uv": [
+            0,
+            8.5,
+            16,
+            9.3
+          ]
+        }
+      },
+      "rotation": {
+        "origin": [
+          8,
+          1.5,
+          15.0
+        ],
+        "axis": "x",
+        "angle": 22.5
+      }
+    },
+    {
+      "from": [
+        0,
+        3.4,
+        6.7
+      ],
+      "to": [
+        16,
+        4.6,
+        9.3
+      ],
+      "faces": {
+        "north": {
+          "texture": "#roof",
+          "uv": [
+            0,
+            8.5,
+            16,
+            9.5
+          ]
+        },
+        "south": {
+          "texture": "#roof",
+          "uv": [
+            0,
+            8.5,
+            16,
+            9.5
+          ]
+        },
+        "up": {
+          "texture": "#roof",
+          "uv": [
+            0,
+            8.5,
+            16,
+            9.5
+          ]
+        },
+        "down": {
+          "texture": "#roof",
+          "uv": [
+            0,
+            8.5,
+            16,
+            9.5
+          ]
+        }
+      }
+    },
+    {
+      "from": [
+        0,
+        0,
+        6.9
+      ],
+      "to": [
+        16,
+        1.2,
+        9.1
+      ],
+      "faces": {
+        "north": {
+          "texture": "#body",
+          "uv": [
+            0.25,
+            5,
+            15.75,
+            6.2
+          ]
+        },
+        "south": {
+          "texture": "#body",
+          "uv": [
+            0.25,
+            5,
+            15.75,
+            6.2
+          ]
+        },
+        "down": {
+          "texture": "#body",
+          "uv": [
+            0.25,
+            5,
+            15.75,
+            6.2
+          ]
+        },
+        "up": {
+          "texture": "#body",
+          "uv": [
+            0.25,
+            5,
+            15.75,
+            6.2
+          ]
+        }
+      }
+    }
+  ]
+}
