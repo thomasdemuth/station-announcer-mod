@@ -118,6 +118,7 @@ public final class AddonClientInit {
             ClientDoorObstructions.clear();
             ClientDwellOverrides.clear();
             ClientAnnouncementTemplates.clear();
+            ClientAccessibility.clear();
             ClientLiftDoors.clear();
             ClientPlatformGroups.clear();
             ClientDispatchInfo.clear();
@@ -137,6 +138,8 @@ public final class AddonClientInit {
         registerRouteDwellButton();
         registerAnnouncementTemplateSync();
         registerRouteAnnouncementButton();
+        registerAccessibilitySync();
+        registerStationAccessibilityButton();
         registerLiftDoorSync();
         registerLiftDoorSidesButton();
         registerPlatformGroupSync();
@@ -381,6 +384,81 @@ public final class AddonClientInit {
                             buttonWidth, hostButton.getHeight())
                     .build());
         });
+    }
+
+    // ------------------------------------------- station accessibility
+
+    /** Server → client step-free map sync (join + after each edit). */
+    private static void registerAccessibilitySync() {
+        ClientPlayNetworking.registerGlobalReceiver(AddonNetworking.ACCESSIBILITY_S2C,
+                (client, handler, buf, responseSender) -> {
+                    int count = buf.readVarInt();
+                    if (count < 0 || count > 10_000) {
+                        return;
+                    }
+                    Map<Long, long[]> accessibility = new HashMap<>(Math.max(1, count));
+                    for (int i = 0; i < count; i++) {
+                        long stationId = buf.readLong();
+                        int platformCount = buf.readVarInt();
+                        if (platformCount < 0 || platformCount > AddonNetworking.MAX_ACCESSIBLE_PLATFORMS) {
+                            return;
+                        }
+                        long[] platforms = new long[platformCount];
+                        for (int j = 0; j < platformCount; j++) {
+                            platforms[j] = buf.readLong();
+                        }
+                        accessibility.put(stationId, platforms);
+                    }
+                    client.execute(() -> ClientAccessibility.replace(accessibility));
+                });
+    }
+
+    /**
+     * "Accessibility…" button on MTR's Edit Station screen — beside the zone
+     * fields, per Thomas's spec. The Station rides the same reflective
+     * {@code EditNameColorScreenBase.data} read as the route button.
+     */
+    private static void registerStationAccessibilityButton() {
+        ScreenEvents.AFTER_INIT.register((client, screen, scaledWidth, scaledHeight) -> {
+            if (!(screen instanceof org.mtr.mod.screen.EditStationScreen)) {
+                return;
+            }
+            if (!MinecraftClientData.hasPermission()) {
+                return;
+            }
+            org.mtr.core.data.Station station = readStation(screen);
+            if (station == null) {
+                return;
+            }
+            long stationId = station.getId();
+            String display = station.getName().split("\\|")[0];
+            List<StationAccessibilityScreen.PlatformEntry> platforms = new ArrayList<>();
+            station.savedRails.forEach(platform -> platforms.add(new StationAccessibilityScreen.PlatformEntry(
+                    platform.getId(), platform.getName().split("\\|")[0])));
+            Screens.getButtons(screen).add(ButtonWidget.builder(
+                            Text.translatable("gui.station_announcer.accessibility.button"),
+                            button -> client.setScreen(new StationAccessibilityScreen(stationId, display, platforms, screen)))
+                    .dimensions(screen.width - 124, screen.height - 24, 120, 20)
+                    .build());
+        });
+    }
+
+    private static org.mtr.core.data.Station readStation(Screen screen) {
+        try {
+            if (editScreenDataField == null) {
+                if (editScreenDataLookupFailed) {
+                    return null;
+                }
+                editScreenDataField = org.mtr.mod.screen.EditNameColorScreenBase.class.getDeclaredField("data");
+                editScreenDataField.setAccessible(true);
+            }
+            Object value = editScreenDataField.get(screen);
+            return value instanceof org.mtr.core.data.Station ? (org.mtr.core.data.Station) value : null;
+        } catch (Exception e) {
+            editScreenDataLookupFailed = true;
+            StationAnnouncer.LOGGER.warn("Could not read the station from EditStationScreen", e);
+            return null;
+        }
     }
 
     // ---------------------------------------- per-route announcement templates

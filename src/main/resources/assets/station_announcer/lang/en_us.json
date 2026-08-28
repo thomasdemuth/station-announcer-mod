@@ -593,5 +593,13 @@
   "gui.station_announcer.route_announcement.preset_nyc": "Preset: NYC",
   "gui.station_announcer.route_announcement.preset_simple": "Preset: Simple",
   "gui.station_announcer.route_announcement.preset_transfer": "Preset: UK",
-  "gui.station_announcer.route_announcement.play": "▶ Hear it"
+  "gui.station_announcer.route_announcement.play": "▶ Hear it",
+  "gui.station_announcer.accessibility.button": "Accessibility…",
+  "gui.station_announcer.accessibility.title": "Step-Free Accessibility",
+  "gui.station_announcer.accessibility.heading": "Step-free accessibility — %s",
+  "gui.station_announcer.accessibility.station_on": "♿ Station is step-free accessible: YES",
+  "gui.station_announcer.accessibility.station_off": "Station is step-free accessible: NO",
+  "gui.station_announcer.accessibility.hint_all": "No platforms ticked = every platform counts as step-free",
+  "gui.station_announcer.accessibility.hint_some": "%s platform(s) marked step-free — the rest are not",
+  "gui.station_announcer.accessibility.no_platforms": "This station has no platforms yet"
 }

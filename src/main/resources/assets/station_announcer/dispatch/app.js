@@ -70,6 +70,7 @@ const state = {
 	lastEventAt: 0,
 	view: { x: 0, z: 0, scale: 1 },  // world center + px per block
 	layers: { speed: true, signals: true, stations: true, trainLabels: true },
+	stepFree: false,         // dim non-accessible stations; search lists step-free only
 	sort: { k: "route", asc: true },
 	networkBox: null,
 	analytics: {
@@ -596,6 +597,7 @@ function drawStatic(dpr) {
 	for (const st of state.stations) {
 		const b = st.bounds;
 		if (b[3] < wLeft || b[0] > wRight || b[5] < wTop || b[2] > wBottom) continue;
+		if (state.stepFree && !st.accessible) g.globalAlpha = 0.28;
 		const [x1, y1] = worldToScreen(st.bounds[0], st.bounds[2]);
 		const [x2, y2] = worldToScreen(st.bounds[3] + 1, st.bounds[5] + 1);
 		const hot = heat !== "off" ? heatColor(heat, state.analytics.stationById.get(st.id)) : null;
@@ -609,6 +611,7 @@ function drawStatic(dpr) {
 		}
 		g.lineWidth = hot ? 2 : 1;
 		g.beginPath(); g.roundRect(x1, y1, x2 - x1, y2 - y1, 4); g.fill(); g.stroke();
+		g.globalAlpha = 1;
 	}
 
 	// rails (bbox-culled: only what intersects the viewport is stroked)
@@ -652,12 +655,14 @@ function drawStatic(dpr) {
 			if (b[3] < wLeft || b[0] > wRight || b[5] < wTop || b[2] > wBottom) continue;
 			const [sx] = worldToScreen((st.bounds[0] + st.bounds[3]) / 2, 0);
 			const [, sy] = worldToScreen(0, st.bounds[2]);
-			const label = firstLang(st.name);
+			const label = (st.accessible ? "\u267f " : "") + firstLang(st.name);
+			if (state.stepFree && !st.accessible) g.globalAlpha = 0.28;
 			g.fillStyle = "#0b0e14cc";
 			const tw = g.measureText(label).width;
 			g.fillRect(sx - tw / 2 - 4, sy - 12 - 12 * s, tw + 8, 4 + 12 * s);
 			g.fillStyle = "#e7ecf7";
 			g.fillText(label, sx, sy - 12);
+			g.globalAlpha = 1;
 		}
 	}
 }
@@ -905,6 +910,7 @@ function initUi() {
 	};
 	bind("lySpeed", "speed"); bind("lySignals", "signals");
 	bind("lyStations", "stations"); bind("lyTrainLabels", "trainLabels");
+	$("lyStepFree").onchange = (e) => { state.stepFree = e.target.checked; invalidateStatic(); savePrefs(); };
 
 	$("fitBtn").onclick = fitView;
 	$("boardBtn").onclick = () => { $("board").classList.toggle("hidden"); $("boardBtn").classList.toggle("active"); };
@@ -1117,8 +1123,8 @@ function updateMapTip(x, y) {
 			const b = st.bounds;
 			if (wx >= b[0] && wx <= b[3] + 1 && wz >= b[2] && wz <= b[5] + 1) {
 				const plats = [...state.platforms.values()].filter((p) => p.stationId === st.id).length;
-				html = `<div class="t">${escapeHtml(firstLang(st.name))}</div>` +
-					`<div class="sub">${plats} platform(s) · click for details</div>`;
+				html = `<div class="t">${st.accessible ? "\u267f " : ""}${escapeHtml(firstLang(st.name))}</div>` +
+					`<div class="sub">${plats} platform(s)${st.accessible ? " · step-free" : ""} · click for details</div>`;
 				break;
 			}
 		}
@@ -1147,9 +1153,10 @@ function searchResults(q) {
 	};
 	const stations = [];
 	for (const st of state.stations) {
+		if (state.stepFree && !st.accessible) continue; // step-free mode: only accessible stations
 		const name = firstLang(st.name);
 		const sc = score(name);
-		if (sc) stations.push({ sc, label: name, dotColor: colorHex(st.color), sub: "jump to", action: () => gotoStation(st) });
+		if (sc) stations.push({ sc, label: (st.accessible ? "\u267f " : "") + name, dotColor: colorHex(st.color), sub: "jump to", action: () => gotoStation(st) });
 	}
 	const lineMap = new Map();
 	for (const r of state.routes.values()) {
@@ -1299,6 +1306,7 @@ function savePrefs() {
 			slWindow: state.stringline.windowMin,
 			slShow: state.stringline.show,
 			slGrey: !!state.stringline.grey,
+			stepFree: !!state.stepFree,
 		}));
 	} catch (e) { /* storage unavailable — prefs just don't persist */ }
 }
@@ -1331,6 +1339,8 @@ function loadPrefs() {
 	}
 	state.stringline.grey = !!p.slGrey;
 	$("slGrey").checked = state.stringline.grey;
+	state.stepFree = !!p.stepFree;
+	$("lyStepFree").checked = state.stepFree;
 	invalidateStatic();
 }
 
@@ -1397,9 +1407,12 @@ function renderStationPanel(el) {
 	$("followBtn").style.display = "none";
 	$("detailChip").textContent = "●";
 	$("detailChip").style.background = colorHex(st.color);
-	$("detailTitle").textContent = firstLang(st.name) || "Station";
+	$("detailTitle").textContent = (st.accessible ? "\u267f " : "") + (firstLang(st.name) || "Station");
 
 	let html = "";
+	if (st.accessible) {
+		html += `<div class="sta-inbound" style="color:var(--green)">\u267f Step-free accessible station</div>`;
+	}
 
 	// Platforms with their calling routes, dwell, and hold state.
 	const platforms = [...state.platforms.values()].filter((p) => p.stationId === st.id);
@@ -1412,7 +1425,8 @@ function renderStationPanel(el) {
 				return `<span class="chip" style="background:${colorHex(r.color)}">${escapeHtml(r.number || firstLang(r.name))}</span>`;
 			}).join("");
 			const held = state.holds.has(p.id) ? ' <span class="badge held">HELD</span>' : "";
-			html += `<div class="sta-plat"><span class="pname">${escapeHtml(firstLang(p.name))}</span>` +
+			const stepFreeMark = p.accessible ? " \u267f" : "";
+			html += `<div class="sta-plat"><span class="pname">${escapeHtml(firstLang(p.name))}${stepFreeMark}</span>` +
 				routeChips + held +
 				`<span class="dwell">dwell ${Math.round((p.dwellMs || 0) / 1000)}s</span></div>`;
 		}
@@ -2885,11 +2899,11 @@ function bootDemo() {
 		schemaVersion: 1, dimension: "demo:overworld", dimensionIndex: 0, dimensions: state.dims,
 		rails,
 		stations: [
-			{ id: "st1", name: "Baker City Central|贝克城", color: 0x4da3ff, bounds: [20, 60, -10, 100, 70, 10], platformIds: ["pl1"] },
+			{ id: "st1", name: "Baker City Central|贝克城", color: 0x4da3ff, bounds: [20, 60, -10, 100, 70, 10], platformIds: ["pl1"], accessible: true, accessiblePlatforms: ["pl1"] },
 			{ id: "st2", name: "Harbor North", color: 0xe5484d, bounds: [20, 60, 150, 100, 70, 170], platformIds: ["pl2"] },
 		],
 		platforms: [
-			{ id: "pl1", name: "1", dwellMs: 10000, stationId: "st1", p1: [30, 64, 0], p2: [90, 64, 0], mid: [60, 64, 0], routeIds: ["rt1n"] },
+			{ id: "pl1", name: "1", dwellMs: 10000, stationId: "st1", p1: [30, 64, 0], p2: [90, 64, 0], mid: [60, 64, 0], routeIds: ["rt1n"], accessible: true },
 			{ id: "pl2", name: "2", dwellMs: 10000, stationId: "st2", p1: [30, 64, 160], p2: [90, 64, 160], mid: [60, 64, 160], routeIds: ["rt1n", "rt1s"] },
 		],
 		routes: [

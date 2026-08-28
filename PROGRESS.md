@@ -2799,3 +2799,37 @@ add a see-AND-HEAR preview. RouteAnnouncementScreen rebuilt:
 
 Compile green. NOT in-game tested — the button-insert caret behaviour and the
 spoken preview both need a real GUI session.
+
+## Station accessibility (step-free) — 2026-08-28
+
+Thomas: mark stations "accessible" in station settings (beside zones), with
+per-platform granularity; wheelchair icon on the system map; filter for
+step-free journeys. (The system map itself gets its own overhaul later — this
+lays the data foundation.)
+
+**Data** (dwell-override pattern): AddonStore.accessibility — station id →
+step-free platform ids, EMPTY ARRAY = every platform (the editor normalizes
+all-ticked to empty). Persisted in data.json; S2C `addon_accessibility` full
+map (join + change) into ClientAccessibility; C2S `addon_update_accessibility`
+(op-gated, 64-platform cap).
+
+**GUI**: "Accessibility…" button injected into MTR's Edit Station screen (the
+zone screen; same reflective EditNameColorScreenBase.data read as the route
+button; platforms gathered from Station.savedRails). StationAccessibilityScreen:
+master toggle "Station is step-free: YES/NO", per-platform ☑ ♿ rows (scrollable
+past 8), hint explaining none-ticked = all platforms, Done/Cancel.
+
+**Dispatch web UI**: network payload stations gain `accessible` (+
+`accessiblePlatforms` when a subset), platforms gain `accessible` — read from
+AddonStore inside DispatchNetwork.build (rides the 30 s cache; icon appears on
+the map within a minute of an edit). Frontend: ♿ prefix on accessible stations'
+map labels / station-panel title / search rows / hover tooltip; a green
+"Step-free accessible station" line and per-platform ♿ marks in the station
+panel; and a "♿ Step-free only" toggle in the Layers panel (persisted pref)
+that dims non-accessible stations to 28% and limits station SEARCH results to
+step-free stations. MTR's own system-map webapp is untouched — that is the
+future overhaul.
+
+Verified in ?demo=1 (st1 accessible via pl1 only): map icon, panel badge +
+platform mark, Harbor North dimmed under the filter. NOT in-game tested: the
+Edit Station button, the editor screen, save/sync round-trip.

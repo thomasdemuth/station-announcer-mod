@@ -61,6 +61,9 @@ public final class AddonStore {
 
     private static Path dataPath;
     private static final Map<Long, AddonSnapshots.HoldRule> holdRules = new LinkedHashMap<>();
+    /** Accessibility: station id → step-free platform ids (empty = every platform). */
+    private static final Map<Long, long[]> accessibility = new LinkedHashMap<>();
+
     /** Announcement templates: route id → template string (client presentation). */
     private static final Map<Long, String> announcementTemplates = new LinkedHashMap<>();
 
@@ -104,6 +107,7 @@ public final class AddonStore {
             holdRules.clear();
             dwellOverrides.clear();
             announcementTemplates.clear();
+            accessibility.clear();
             liftDoors.clear();
             platformGroups.clear();
             disabledStops.clear();
@@ -122,6 +126,7 @@ public final class AddonStore {
                     readHoldRules(root.getAsJsonObject("holdRules"));
                     readDwellOverrides(root.getAsJsonObject("dwellOverrides"));
                     readAnnouncementTemplates(root.getAsJsonObject("announcementTemplates"));
+                    readAccessibility(root.getAsJsonObject("accessibility"));
                     readLiftDoors(root.getAsJsonObject("liftDoors"));
                     readPlatformGroups(root.getAsJsonObject("platformGroups"));
                     // Seed the engine's persisted runtime BEFORE publishGroups prunes
@@ -222,6 +227,35 @@ public final class AddonStore {
             }
         }
         publishDwell();
+        markDirty();
+    }
+
+    // ------------------------------------------------- accessibility
+
+    /** Server thread: an immutable snapshot safe to iterate while building packets. */
+    public static Map<Long, long[]> accessibilityView() {
+        synchronized (LOCK) {
+            Map<Long, long[]> copy = new LinkedHashMap<>(accessibility.size());
+            accessibility.forEach((stationId, platforms) -> copy.put(stationId, platforms.clone()));
+            return copy;
+        }
+    }
+
+    /**
+     * Server thread: mark a station step-free (with an optional platform subset —
+     * empty means every platform) or clear it entirely. Presentation data: the
+     * dispatch map and future system-map work read it; nothing simulates on it.
+     */
+    public static void setAccessibility(long stationId, boolean accessible, long[] platformIds) {
+        synchronized (LOCK) {
+            if (!accessible) {
+                if (accessibility.remove(stationId) == null) {
+                    return;
+                }
+            } else {
+                accessibility.put(stationId, platformIds == null ? new long[0] : platformIds.clone());
+            }
+        }
         markDirty();
     }
 
@@ -677,6 +711,24 @@ public final class AddonStore {
         }
     }
 
+    private static void readAccessibility(JsonObject accessibilityJson) {
+        if (accessibilityJson == null) {
+            return;
+        }
+        for (Map.Entry<String, JsonElement> entry : accessibilityJson.entrySet()) {
+            try {
+                JsonArray platformsJson = entry.getValue().getAsJsonArray();
+                long[] platforms = new long[platformsJson.size()];
+                for (int i = 0; i < platforms.length; i++) {
+                    platforms[i] = platformsJson.get(i).getAsLong();
+                }
+                accessibility.put(Long.parseLong(entry.getKey()), platforms);
+            } catch (Exception e) {
+                StationAnnouncer.LOGGER.warn("Skipping malformed accessibility entry '{}'", entry.getKey(), e);
+            }
+        }
+    }
+
     private static void readAnnouncementTemplates(JsonObject templatesJson) {
         if (templatesJson == null) {
             return;
@@ -962,6 +1014,15 @@ public final class AddonStore {
             announcementTemplates.forEach((routeId, template) ->
                     templatesJson.addProperty(Long.toString(routeId), template));
             root.add("announcementTemplates", templatesJson);
+            JsonObject accessibilityJson = new JsonObject();
+            accessibility.forEach((stationId, platforms) -> {
+                JsonArray platformsJson = new JsonArray(platforms.length);
+                for (long platform : platforms) {
+                    platformsJson.add(platform);
+                }
+                accessibilityJson.add(Long.toString(stationId), platformsJson);
+            });
+            root.add("accessibility", accessibilityJson);
             JsonObject liftDoorsJson = new JsonObject();
             liftDoors.forEach((liftId, sides) -> {
                 JsonObject sidesJson = new JsonObject();

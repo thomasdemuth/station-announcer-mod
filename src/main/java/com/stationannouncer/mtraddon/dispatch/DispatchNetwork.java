@@ -86,6 +86,10 @@ public final class DispatchNetwork {
         }
         root.add("rails", rails);
 
+        // Step-free accessibility (addon store): stationId → platform subset
+        // (empty = every platform). Rides the 30 s network cache like the rest.
+        java.util.Map<Long, long[]> accessibility = com.stationannouncer.mtraddon.AddonStore.accessibilityView();
+
         // --- Stations (AreaBase corners; names raw "Eng|Other" — frontend splits).
         JsonArray stations = new JsonArray();
         for (Station station : simulator.stations) {
@@ -104,6 +108,15 @@ public final class DispatchNetwork {
             JsonArray platformIds = new JsonArray();
             station.savedRails.forEach(platform -> platformIds.add(String.valueOf(platform.getId())));
             stationJson.add("platformIds", platformIds);
+            long[] accessiblePlatforms = accessibility.get(station.getId());
+            stationJson.addProperty("accessible", accessiblePlatforms != null);
+            if (accessiblePlatforms != null && accessiblePlatforms.length > 0) {
+                JsonArray accessibleJson = new JsonArray(accessiblePlatforms.length);
+                for (long platform : accessiblePlatforms) {
+                    accessibleJson.add(String.valueOf(platform));
+                }
+                stationJson.add("accessiblePlatforms", accessibleJson);
+            }
             stations.add(stationJson);
         }
         root.add("stations", stations);
@@ -129,6 +142,10 @@ public final class DispatchNetwork {
             JsonArray routeIds = new JsonArray();
             platform.routes.forEach(route -> routeIds.add(String.valueOf(route.getId())));
             platformJson.add("routeIds", routeIds);
+            long[] stationAccessible = station == null ? null : accessibility.get(station.getId());
+            boolean platformAccessible = stationAccessible != null && (stationAccessible.length == 0
+                    || java.util.Arrays.stream(stationAccessible).anyMatch(id -> id == platform.getId()));
+            platformJson.addProperty("accessible", platformAccessible);
             platforms.add(platformJson);
         }
         root.add("platforms", platforms);

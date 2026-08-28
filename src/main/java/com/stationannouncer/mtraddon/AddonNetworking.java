@@ -67,6 +67,8 @@ public final class AddonNetworking {
     public static final Identifier UPDATE_HOLD_RULE_C2S = StationAnnouncer.id("addon_update_hold_rule");
     public static final Identifier DWELL_OVERRIDES_S2C = StationAnnouncer.id("addon_dwell_overrides");
     public static final Identifier ANNOUNCEMENT_TEMPLATES_S2C = StationAnnouncer.id("addon_announcement_templates");
+    public static final Identifier ACCESSIBILITY_S2C = StationAnnouncer.id("addon_accessibility");
+    public static final Identifier UPDATE_ACCESSIBILITY_C2S = StationAnnouncer.id("addon_update_accessibility");
     public static final Identifier UPDATE_ANNOUNCEMENT_TEMPLATE_C2S = StationAnnouncer.id("addon_update_announcement_template");
     public static final Identifier UPDATE_DWELL_OVERRIDES_C2S = StationAnnouncer.id("addon_update_dwell_overrides");
     public static final Identifier LIFT_DOORS_S2C = StationAnnouncer.id("addon_lift_doors");
@@ -91,6 +93,9 @@ public final class AddonNetworking {
      * sliders allow 0.5 s – 600 s (MAX_DWELL_TIME = 1200 half-seconds); we floor
      * at a full second per the addon spec.
      */
+    /** A station has at most a handful of platforms; 64 is far beyond any real one. */
+    public static final int MAX_ACCESSIBLE_PLATFORMS = 64;
+
     /** Announcement templates are short spoken lines, not documents. */
     public static final int MAX_TEMPLATE_LENGTH = 500;
 
@@ -173,6 +178,27 @@ public final class AddonNetworking {
                 }
                 AddonStore.setAnnouncementTemplate(routeId, template.trim());
                 broadcastAnnouncementTemplates(server);
+            });
+        });
+
+        ServerPlayNetworking.registerGlobalReceiver(UPDATE_ACCESSIBILITY_C2S, (server, player, handler, buf, responseSender) -> {
+            long stationId = buf.readLong();
+            boolean accessible = buf.readBoolean();
+            int count = buf.readVarInt();
+            if (count < 0 || count > MAX_ACCESSIBLE_PLATFORMS) {
+                return;
+            }
+            long[] platformIds = new long[count];
+            for (int i = 0; i < count; i++) {
+                platformIds[i] = buf.readLong();
+            }
+
+            server.execute(() -> {
+                if (!player.hasPermissionLevel(AddonServerConfig.get().editPermissionLevel)) {
+                    return;
+                }
+                AddonStore.setAccessibility(stationId, accessible, platformIds);
+                broadcastAccessibility(server);
             });
         });
 
@@ -363,6 +389,18 @@ public final class AddonNetworking {
     }
 
     /** On join, through the connection event's sender. */
+    public static void syncAccessibilityTo(PacketSender sender) {
+        sender.sendPacket(ACCESSIBILITY_S2C, buildAccessibilityBuf());
+    }
+
+    /** After a change, to everyone (a long + a few longs per step-free station). */
+    public static void broadcastAccessibility(MinecraftServer server) {
+        for (ServerPlayerEntity player : server.getPlayerManager().getPlayerList()) {
+            ServerPlayNetworking.send(player, ACCESSIBILITY_S2C, buildAccessibilityBuf());
+        }
+    }
+
+    /** On join, through the connection event's sender. */
     public static void syncAnnouncementTemplatesTo(PacketSender sender) {
         sender.sendPacket(ANNOUNCEMENT_TEMPLATES_S2C, buildAnnouncementTemplatesBuf());
     }
@@ -440,6 +478,20 @@ public final class AddonNetworking {
             buf.writeVarInt(members.length);
             for (long member : members) {
                 buf.writeLong(member);
+            }
+        });
+        return buf;
+    }
+
+    private static PacketByteBuf buildAccessibilityBuf() {
+        Map<Long, long[]> accessibility = AddonStore.accessibilityView();
+        PacketByteBuf buf = PacketByteBufs.create();
+        buf.writeVarInt(accessibility.size());
+        accessibility.forEach((stationId, platforms) -> {
+            buf.writeLong(stationId);
+            buf.writeVarInt(platforms.length);
+            for (long platform : platforms) {
+                buf.writeLong(platform);
             }
         });
         return buf;
