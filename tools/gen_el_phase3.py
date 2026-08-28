@@ -189,16 +189,32 @@ def stair_side():
 
 
 def stair_canopy():
-    """45° red roof descending with the stairs, full block width, with edge
-    fascia strips; chains like the side screen."""
+    """45° red roof descending with the stairs, full block width; chains like
+    the side screen (centre y = 16 − z, so a run follows any flight).
+
+    Detailed to match the platform canopies: the same 1.6 px standing-seam
+    sheet, an eave board along each side edge (hanging BELOW the sheet, not
+    standing proud of it — the flat canopy's fascia lesson), and crosswise
+    rafters on a pitch of 8 so the underside rhythm is identical inside a
+    block and across a joint. Every member is rotated with the sheet, and
+    the run-continuation faces (z ends) are omitted so a flight is one
+    unbroken plane."""
     top = f("roof", [0, 0.25, 16, 15.75])
     under = f("corru", [0, 0.25, 16, 15.75])
-    els = [elem([0, 6.9, 0], [16, 9.1, 16], {"up": top, "down": under},
-                rotation=dict(SLOPE))]
+    els = [elem([0, 6.9, 0], [16, 9.1, 16], {
+        "up": top, "down": under,
+        "east": f("roof", [0, 8.5, 16, 9.4]),
+        "west": f("roof", [0, 8.5, 16, 9.4]),
+    }, rotation=dict(SLOPE))]
     edge = f("roof", [0, 8.5, 16, 9.4])
-    for x0 in (0, 14.8):
-        els.append(elem([x0, 5.8, 0], [x0 + 1.2, 7.2, 16],
-                        {"east": edge, "west": edge, "down": edge},
+    for x0 in (0.05, 14.35):
+        els.append(elem([x0, 5.2, 0], [x0 + 1.6, 6.85, 16],
+                        {"east": edge, "west": edge, "down": edge, "up": edge},
+                        rotation=dict(SLOPE)))
+    rafter = f("body", [0.25, 5, 15.75, 6.2])
+    for z0 in (3.2, 11.2):
+        els.append(elem([1.7, 5.5, z0], [14.3, 6.85, z0 + 1.6],
+                        {"north": rafter, "south": rafter, "down": rafter},
                         rotation=dict(SLOPE)))
     return els
 
