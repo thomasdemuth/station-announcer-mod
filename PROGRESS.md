@@ -2595,3 +2595,25 @@ panel and clears the box (Enter verified via synthetic KeyboardEvent — the CDP
 key path drops keys while the browser pane is hidden; the type path delivered).
 LINES rows can't appear in the demo because the demo network payload only lists
 the Express routes — real servers list every route.
+
+## Dispatch web UI round 7 — variant toggles on the stringline (2026-08-28)
+
+Thomas: can't toggle a line's directions/segments (Line 1||North A vs ||South A)
+individually. Frontend-only.
+
+**Variant chips**: beside the line badges, one chip per route of the ACTIVE set
+(the line group, or the segment's interlined routes) labelled by the part after
+the "||" separator (route-number-prefixed when the set spans lines), with the
+route's colour dot. Clicking toggles that route off/on — off chips dim +
+strikethrough, and the route contributes neither platforms, traces, headway
+samples nor live tips. Filtering is client-side over the already-loaded deps, so
+toggling is instant; the y-axis stays donated by the group's longest route
+regardless of toggles, so the chart never re-scales while flipping directions.
+The LAST visible variant refuses to toggle off (an empty chart reads as broken).
+Selections clear on line-badge change and segment-mode toggle. Chip rendering is
+signature-guarded from the draw loop.
+
+Verified in ?demo=1: Northbound/Southbound chips appear for Demo Express;
+toggling Southbound off leaves only the parallel Northbound diagonals
+(screenshot), chip shows the off state, toggling back restores the crossing
+pattern.
