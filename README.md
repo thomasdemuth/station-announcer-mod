@@ -138,6 +138,33 @@ train's platform while lit, like the real mezzanine signs.
   ceilings. Same 2 px gauge as the hanging PIDS's own ceiling stub, so a stack of poles
   continues it without a step.
 
+### NYC elevated station kit
+
+The steel bones and platform furniture of a New York el, in classic
+Dual-Contracts green, galvanized silver, and **station-color tinted** paints:
+
+- **El Columns** (solid riveted / see-through lattice) — slim 6 px columns
+  that stack to any height: the bottom block grows the street base plates,
+  the top flares the gusset cap. Named variants carry the station name on a
+  black board, live from MTR.
+- **Plate Girder & Lattice Truss** — axis-placed like logs; set one directly
+  over any column and it grows the curved knee braces down the column's
+  sides, so a bent assembles itself.
+- **Tie Deck & Plate Deck** — the track deck: open ties you can see daylight
+  through from the street, or solid riveted plate; walkable on top with
+  clearance beneath.
+- **Windscreens ×4** (panel + wired glazing, corrugated, modern glass, mesh)
+  and **Railings** (green pipe / galvanized picket) — merging runs sharing
+  one post per joint, any length.
+- **Canopy Posts + Canopies** (flat corrugated / red standing-seam gable) —
+  posts stack with brackets at the top; canopies tile to any platform
+  footprint, hanging riveted fascias on open edges and closing gable ends
+  automatically, with purlins underneath for hanging PIDS and signs.
+- **El Station Name Board** — the black Bay Parkway-style board, name live
+  from the MTR station, right-click for a custom name.
+
+The concrete and tile platform floors above are the intended walking surface.
+
 ### Subway stairs & handrails
 
 - **Subway Stairs** (modern floating / old concrete) — two 8 px steps per block; runs
