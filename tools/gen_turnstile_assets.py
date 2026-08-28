@@ -475,16 +475,17 @@ def pillar_elements(exit_variant):
     return els
 
 
-UV_PICTO_Y = {"off": 0, "go": 8, "stop": 16, "wait": 24}
+# picto zone tops in UV units (32-px sprite -> 8-texel zone = 4 uv)
+UV_PICTO_Y = {"off": 0, "go": 4, "stop": 8, "wait": 12}
 
 
 def picto_plate(frm, to, face_dir, u0, u1, state_y):
     """A status sign plate: the outward face samples the state's pictogram
     zone, every other face the zone's dark border corner. shade:false so
     the sign reads flat-lit from any angle — MTR's own barrier trick."""
-    edge = f("picto", [0.25, state_y + 0.25, 1.75, state_y + 1.75])
+    edge = f("picto", [0.15, state_y + 0.15, 0.85, state_y + 0.85])
     faces = {s: edge for s in ("north", "south", "east", "west", "up", "down")}
-    faces[face_dir] = f("picto", [u0, state_y + 1, u1, state_y + 7])
+    faces[face_dir] = f("picto", [u0, state_y + 0.5, u1, state_y + 3.5])
     return elem(frm, to, faces, shade=False)
 
 
@@ -510,8 +511,8 @@ def write_upper_and_lamps():
     # face (replacing the old 2-px lens): green up arrow / red bar / amber
     # dot, proud over the screen zone
     lamp_models("turnstile", [], plates=[
-        ([0.9, 7.0, 3.45], [4.1, 9.6, 4.05], "north", 12, 20),
-        ([0.9, 7.0, 11.95], [4.1, 9.6, 12.55], "south", 12, 20),
+        ([0.9, 7.0, 3.45], [4.1, 9.6, 4.05], "north", 6, 10),
+        ([0.9, 7.0, 11.95], [4.1, 9.6, 12.55], "south", 6, 10),
     ])
 
 
@@ -654,8 +655,8 @@ def write_heet():
         ([0.4, 10.5, 14.75], [1.6, 12, 15.3], ("south", "east", "west", "up", "down")),
         ([14.4, 10.5, 14.75], [15.6, 12, 15.3], ("south", "east", "west", "up", "down")),
     ], plates=[
-        ([5, 13.2, 0.2], [11, 14.8, 0.8], "north", 5, 27),
-        ([5, 13.2, 15.2], [11, 14.8, 15.8], "south", 5, 27),
+        ([5, 13.2, 0.2], [11, 14.8, 0.8], "north", 2.5, 13.5),
+        ([5, 13.2, 15.2], [11, 14.8, 15.8], "south", 2.5, 13.5),
     ])
 
 

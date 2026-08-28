@@ -230,10 +230,45 @@ Four fixes/features from Thomas's feedback round (his answers, do not re-ask):
     (`Init.REGISTRY.sendPacketToClient(new ServerPlayerEntity(player), new
     PacketOpenTicketMachineScreen(balance))`); emerald quick top-up kept.
   - Exit-door EVASION_FINE 100 → 500 (matches MTR's own evasion charge).
+- THIRD BATCH same session — FARE-GATE MODEL REBUILD (Thomas: "the model itself
+  needs improvement"; scope he picked: low turnstile + HEET + tubing/signs, all
+  four complaints: no real tripod / too blocky / proportions / flat textures):
+  - TRIPOD (write_arm rebuilt): cast collar + 45°-TILTED SPINDLE BOSS (box
+    authored along y, rotated +45 about x — the real NYC axis direction) +
+    horizontal octagonal blocking arm at hub height y13 (was y11ish) + ONE
+    through-bar rotated −45 about x whose ends are the down-forward and
+    up-back arms (120° spacing impossible with single-axis rotations; the
+    perpendicular collapse reads right). Rubber tips on all three ends
+    (shared RUBBER_UV). Java outline arm box widened to (3,7,3)-(15,16,13.5).
+  - PILLAR: two angled swipe-reader heads (±22.5° about x) flanking the riser
+    foot on the cap — the MetroCard reader tilt; tilted top carries the slot
+    art. The 2px lens is GONE, replaced by a pictogram STATUS PLATE per
+    approach face (green up-arrow GO / red bar STOP / amber dot WAIT / dark
+    off), new `turnstile_picto` sprite (32px, four 8-texel zones — NOTE uv is
+    in 16-UNIT SPACE: zone tops 0/4/8/12, a texel-coord window was the first
+    bug). All lamp/picto elements shade:false.
+  - HEET: five 1px cage bars on a 2px pitch (was four 1.2px), proud waist
+    rail band on the lower half (wider than the bars so they bury inside it),
+    rotor = octagonal drum (core + 45° y-twin) + comb prongs every 2.4px with
+    rubber cap end faces, lit lintel pictogram signs on the roof fascia
+    (north+south) via the heet lamp models.
+  - TUBING: signboard bigger (10px wide, centred on the LANE centre x10.5)
+    hung on two visible straps burying into the rail; bordered sign texture.
+  - TEXTURES: brushed() wider tonal range + deep seams (still per-column
+    only); pillar face got recessed bezel + scanlined screen, lit slot lip,
+    concentric tap rings.
+  - Java luminance: TURNSTILE/EXIT/HEET use fareGateSettings() = luminance 7
+    while INDICATOR != OFF (MTR-barrier precedent); cap stays plain.
+  - VERIFIED OFFLINE via scratchpad render_blockmodel.py (tiny isometric
+    block-model renderer, painter-sorted, handles element rotations —
+    worth recreating for future model work): tripod side view shows the
+    45° bar + perpendicular boss, HEET shows cage/comb/lintel. NOT in-game.
 - Build green at 2.4.17; deploy_jar.sh REFUSED (game open) — deploy + in-game test
   still pending: door placement feel, open/close + label swing, handrail thirds
   clicking, wall-detection placement, WAIT/STOP lamp flow, processor beeps,
-  ticket-machine screen from the fare machine.
+  ticket-machine screen from the fare machine, and the whole fare-gate
+  model rebuild (tripod look, reader heads, pictogram plates day+night,
+  HEET comb/lintel, signboard straps).
 
 ### TURNSTILE ROUND 2 (2026-08-19 evening) — fare feedback + photo-grade tubing; NOT yet deployed
 
