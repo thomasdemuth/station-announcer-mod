@@ -2,9 +2,8 @@
   "parent": "minecraft:block/block",
   "textures": {
     "house": "station_announcer:block/el_house_green",
-    "housew": "station_announcer:block/el_house_green_window",
     "housec": "station_announcer:block/el_house_cream",
-    "housecw": "station_announcer:block/el_house_cream_window",
+    "glaze": "station_announcer:block/el_glazing",
     "planks": "station_announcer:block/el_planks",
     "edge": "station_announcer:block/el_platform_edge",
     "soffit": "station_announcer:block/el_soffit",

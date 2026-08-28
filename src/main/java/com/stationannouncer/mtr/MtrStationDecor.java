@@ -184,14 +184,13 @@ public final class MtrStationDecor {
     public static final FacingDecorBlock EL_PORTAL_HEADER = new FacingDecorBlock(settings(),
             Block.createCuboidShape(0.0, 5.4, 6.8, 16.0, 15.6, 9.2));
     public static final Block EL_HOUSE_WALL_GREEN = new Block(opaqueSettings(BlockSoundGroup.WOOD));
-    public static final Block EL_HOUSE_WALL_GREEN_WINDOW = new Block(opaqueSettings(BlockSoundGroup.WOOD));
+    public static final Block EL_HOUSE_WALL_GREEN_WINDOW = new Block(opaqueSettings(BlockSoundGroup.WOOD).nonOpaque());
     public static final Block EL_HOUSE_WALL_CREAM = new Block(opaqueSettings(BlockSoundGroup.WOOD));
-    public static final Block EL_HOUSE_WALL_CREAM_WINDOW = new Block(opaqueSettings(BlockSoundGroup.WOOD));
+    public static final Block EL_HOUSE_WALL_CREAM_WINDOW = new Block(opaqueSettings(BlockSoundGroup.WOOD).nonOpaque());
     public static final Block EL_WOOD_PLATFORM = new Block(opaqueSettings(BlockSoundGroup.WOOD));
     public static final FacingDecorBlock EL_PLATFORM_EDGE = new FacingDecorBlock(
             opaqueSettings(BlockSoundGroup.STONE), Block.createCuboidShape(0.0, 0.0, 0.0, 16.0, 16.0, 16.0));
     public static final FacingDecorBlock EL_SOFFIT = new FacingDecorBlock(settings(), EL_SOFFIT_SHAPE);
-    public static final ElBoothBlock EL_BOOTH = new ElBoothBlock(settings());
     public static final ElExitSignBlock EL_EXIT_SIGN = new ElExitSignBlock(settings());
     public static final FacingDecorBlock EL_LAMP_GOOSENECK = new FacingDecorBlock(lampSettings(), EL_GOOSENECK_SHAPE);
     public static final FacingDecorBlock EL_LAMP_POST = new FacingDecorBlock(settings(),
@@ -375,7 +374,6 @@ public final class MtrStationDecor {
         registerBlock("el_wood_platform", EL_WOOD_PLATFORM, ModContent.DECORATION_ENTRIES);
         registerBlock("el_platform_edge", EL_PLATFORM_EDGE, ModContent.DECORATION_ENTRIES);
         registerBlock("el_soffit", EL_SOFFIT, ModContent.DECORATION_ENTRIES);
-        registerBlock("el_booth", EL_BOOTH, ModContent.DECORATION_ENTRIES);
         registerBlock("el_exit_sign", EL_EXIT_SIGN, ModContent.DECORATION_ENTRIES);
         registerBlock("el_lamp_gooseneck", EL_LAMP_GOOSENECK, ModContent.DECORATION_ENTRIES);
         registerBlock("el_lamp_post", EL_LAMP_POST, ModContent.DECORATION_ENTRIES);

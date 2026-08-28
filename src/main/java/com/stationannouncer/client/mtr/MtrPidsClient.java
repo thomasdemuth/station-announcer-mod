@@ -88,7 +88,9 @@ public final class MtrPidsClient {
                 com.stationannouncer.mtr.MtrStationDecor.EL_WINDSCREEN_MESH,
                 com.stationannouncer.mtr.MtrStationDecor.EL_PORTAL_POST,
                 com.stationannouncer.mtr.MtrStationDecor.EL_PORTAL_HEADER,
-                com.stationannouncer.mtr.MtrStationDecor.EL_CANOPY_GABLE);
+                com.stationannouncer.mtr.MtrStationDecor.EL_CANOPY_GABLE,
+                com.stationannouncer.mtr.MtrStationDecor.EL_HOUSE_WALL_GREEN_WINDOW,
+                com.stationannouncer.mtr.MtrStationDecor.EL_HOUSE_WALL_CREAM_WINDOW);
 
         BlockEntityRendererFactories.register(MtrPids.PIDS_BLOCK_ENTITY, context -> new PidsNycRenderer());
         BlockEntityRendererFactories.register(MtrStationDecor.DECOR_BLOCK_ENTITY, context -> new StationDecorRenderer());

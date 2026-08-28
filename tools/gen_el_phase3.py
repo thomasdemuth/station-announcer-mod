@@ -60,20 +60,20 @@ def tex_house(base, lit, dark, shadow):
     return rows
 
 
-def tex_house_window(wall_rows):
-    """The wall sheet with a wired-glass window band, texel rows 6..22:
-    frame, glazing with mullions and a glare streak."""
-    rows = [list(r) for r in wall_rows]
-    pk.rect(rows, 1, 6, 31, 22, HOUSE_GREEN_SHADOW)
-    pk.rect(rows, 2, 7, 30, 21, GLAZE)
-    for pane in range(2, 30, 9):
-        pk.rect(rows, pane + 8, 7, pane + 9, 21, HOUSE_GREEN_SHADOW)
-    for i in range(10):
-        y = 8 + i
-        if y < 20:
-            rows[y][4 + i] = GLAZE_LIT
-            rows[y][5 + i] = GLAZE_LIT
-    pk.rect(rows, 2, 18, 30, 21, GLAZE_DARK)
+def tex_glazing():
+    """Wired glass you can actually see through: transparent field, thin
+    diamond wire grid, sparse glare pixels. CUTOUT layer — visible pixels
+    are opaque, everything else is empty (the vanilla-glass approach)."""
+    rows = pk.canvas(16, 16, (0, 0, 0, 0))
+    WIRE = (88, 96, 100, 255)
+    for y in range(16):
+        for x in range(16):
+            if (x + y) % 8 == 0 or (x - y) % 8 == 0:
+                rows[y][x] = WIRE
+    for i in range(4):
+        rows[2 + i][11 + i if 11 + i < 16 else 15] = (222, 230, 234, 255)
+    rows[12][3] = (222, 230, 234, 255)
+    rows[13][4] = (222, 230, 234, 255)
     return rows
 
 
@@ -150,9 +150,8 @@ def tex_exit():
 
 TEX = {
     "house": f"{MOD}:block/el_house_green",
-    "housew": f"{MOD}:block/el_house_green_window",
     "housec": f"{MOD}:block/el_house_cream",
-    "housecw": f"{MOD}:block/el_house_cream_window",
+    "glaze": f"{MOD}:block/el_glazing",
     "planks": f"{MOD}:block/el_planks",
     "edge": f"{MOD}:block/el_platform_edge",
     "soffit": f"{MOD}:block/el_soffit",
@@ -250,6 +249,44 @@ def house_wall(ref):
     return full_cube(ref)
 
 
+def window_wall(ref):
+    """A REAL window: sill, lintel and jambs of the wall material framing an
+    opening, with a see-through wired-glass pane (cutout) in the middle.
+    Both faces identical; outer faces cull against full neighbours."""
+    def w(uv, cull=None):
+        face = f(ref, uv)
+        if cull:
+            face["cullface"] = cull
+        return face
+    els = [
+        elem([0, 0, 0], [16, 3, 16], {                     # sill
+            "north": w([0, 13, 16, 16], "north"), "south": w([0, 13, 16, 16], "south"),
+            "east": w([0, 13, 16, 16], "east"), "west": w([0, 13, 16, 16], "west"),
+            "up": w([0, 0, 16, 16]), "down": w([0, 0, 16, 16], "down"),
+        }),
+        elem([0, 13, 0], [16, 16, 16], {                   # lintel
+            "north": w([0, 0, 16, 3], "north"), "south": w([0, 0, 16, 3], "south"),
+            "east": w([0, 0, 16, 3], "east"), "west": w([0, 0, 16, 3], "west"),
+            "up": w([0, 0, 16, 16], "up"), "down": w([0, 0, 16, 16]),
+        }),
+        elem([0, 3, 0], [2, 13, 16], {                     # west jamb
+            "north": w([0, 3, 2, 13], "north"), "south": w([14, 3, 16, 13], "south"),
+            "west": w([0, 3, 16, 13], "west"), "east": w([0, 3, 16, 13]),
+        }),
+        elem([14, 3, 0], [16, 13, 16], {                   # east jamb
+            "north": w([14, 3, 16, 13], "north"), "south": w([0, 3, 2, 13], "south"),
+            "east": w([0, 3, 16, 13], "east"), "west": w([0, 3, 16, 13]),
+        }),
+        # the glass: centre pane, ends buried inside the frame (no up/down/
+        # east/west faces — they would be coplanar with the reveals)
+        elem([2, 3, 7.25], [14, 13, 8.75], {
+            "north": f("glaze", [2, 3, 14, 13]),
+            "south": f("glaze", [2, 3, 14, 13]),
+        }),
+    ]
+    return els
+
+
 def platform_edge():
     """Full cube: concrete top with the yellow tactile strip along the NORTH
     (track) edge, riveted girder fascia on the north face."""
@@ -273,45 +310,6 @@ def soffit():
         "down": face, "up": dict(face, cullface="up"),
         "north": edge, "south": edge, "east": edge, "west": edge,
     })]
-
-
-def booth_lower():
-    """Agent booth, lower half: green wainscot cabinet + counter lip."""
-    wain = f("house", [1, 4, 15, 15.5])
-    els = [elem([1.5, 0, 1.5], [14.5, 16, 14.5],
-                {n: wain for n in ("north", "south", "east", "west")})]
-    lip = f("body", [1, 5, 15, 5.9])
-    els.append(elem([0.8, 13.6, 0.8], [15.2, 15.0, 15.2],
-                    {n: lip for n in ("north", "south", "east", "west", "up", "down")}))
-    return els
-
-
-def booth_upper():
-    """Upper half: corner posts, glazing on three sides, speak grille on the
-    front, overhanging cap roof."""
-    els = []
-    post = f("house", [13.6, 1, 14.4, 12])
-    for x0, z0 in ((1.5, 1.5), (12.9, 1.5), (1.5, 12.9), (12.9, 12.9)):
-        els.append(elem([x0, 0, z0], [x0 + 1.6, 12, z0 + 1.6],
-                        {n: post for n in ("north", "south", "east", "west")}))
-    glz = f("housew", [1, 3.5, 15, 10.5])
-    for face_dir, box in (("north", [3.1, 0, 1.7, 12.9, 12, 2.5]),
-                          ("east", [13.5, 0, 3.1, 14.3, 12, 12.9]),
-                          ("west", [1.7, 0, 3.1, 2.5, 12, 12.9])):
-        x0, y0, z0, x1, y1, z1 = box
-        els.append(elem([x0, y0, z0], [x1, y1, z1],
-                        {"north": glz, "south": glz, "east": glz, "west": glz}))
-    # back wall solid + speak grille dot on the front glazing
-    back = f("house", [1, 3.5, 15, 10.5])
-    els.append(elem([3.1, 0, 13.5], [12.9, 12, 14.3],
-                    {"north": back, "south": back}))
-    grille = f("board", [2, 2, 6, 6])
-    els.append(elem([6.5, 4, 1.55], [9.5, 7, 1.7], {"north": grille}))
-    cap = f("house", [1, 0.5, 15, 3])
-    els.append(elem([0.4, 12, 0.4], [15.6, 14.4, 15.6],
-                    {n: cap for n in ("north", "south", "east", "west")}
-                    | {"up": f("house", [1, 1, 15, 15]), "down": f("house", [1, 1, 15, 15])}))
-    return els
 
 
 def exit_sign():
@@ -427,7 +425,7 @@ def exit_sign_models(g):
 BLOCKS3 = ["el_stair_side", "el_stair_canopy", "el_portal_post", "el_portal_header",
            "el_house_wall_green", "el_house_wall_green_window",
            "el_house_wall_cream", "el_house_wall_cream_window",
-           "el_wood_platform", "el_platform_edge", "el_soffit", "el_booth",
+           "el_wood_platform", "el_platform_edge", "el_soffit",
            "el_exit_sign", "el_lamp_gooseneck", "el_lamp_post", "el_lamp_head"]
 
 FACINGS4 = {"north", "south", "east", "west"}
@@ -439,7 +437,6 @@ PROPS3 = {
     "el_house_wall_cream": {}, "el_house_wall_cream_window": {},
     "el_wood_platform": {}, "el_soffit": {},
     "el_platform_edge": {"facing": FACINGS4},
-    "el_booth": {"facing": FACINGS4, "half": {"lower", "upper"}},
     "el_exit_sign": {"facing": FACINGS4, "mount": {"ceiling", "wall"},
                      "arrow": {"none", "right", "left", "down"}},
     "el_lamp_gooseneck": {"facing": FACINGS4},
@@ -493,11 +490,6 @@ RECIPES3 = {
                                   {"item": "minecraft:oak_planks"},
                                   {"item": "minecraft:white_dye"}],
                   "result": {"item": f"{MOD}:el_soffit", "count": 4}},
-    "el_booth": {"type": "minecraft:crafting_shapeless", "category": "building",
-                 "ingredients": [{"item": f"{MOD}:el_house_wall_green"},
-                                 {"item": "minecraft:glass_pane"},
-                                 {"item": "minecraft:iron_ingot"}],
-                 "result": {"item": f"{MOD}:el_booth"}},
     "el_exit_sign": {"type": "minecraft:crafting_shapeless", "category": "building",
                      "ingredients": [{"item": "minecraft:iron_ingot"},
                                      {"item": "minecraft:black_dye"}],
@@ -524,9 +516,8 @@ def write_textures(texdir):
     green_wall = tex_house(HOUSE_GREEN, HOUSE_GREEN_LIT, HOUSE_GREEN_DARK, HOUSE_GREEN_SHADOW)
     cream_wall = tex_house(HOUSE_CREAM, HOUSE_CREAM_LIT, HOUSE_CREAM_DARK, HOUSE_CREAM_SHADOW)
     wpng(os.path.join(texdir, "el_house_green.png"), green_wall)
-    wpng(os.path.join(texdir, "el_house_green_window.png"), tex_house_window(green_wall))
     wpng(os.path.join(texdir, "el_house_cream.png"), cream_wall)
-    wpng(os.path.join(texdir, "el_house_cream_window.png"), tex_house_window(cream_wall))
+    wpng(os.path.join(texdir, "el_glazing.png"), tex_glazing())
     wpng(os.path.join(texdir, "el_planks.png"), tex_planks())
     wpng(os.path.join(texdir, "el_platform_edge.png"), tex_concrete_edge())
     wpng(os.path.join(texdir, "el_soffit.png"), tex_soffit())
@@ -541,14 +532,12 @@ def write_models(g):
             ("el_portal_post_bracket", portal_post_bracket()),
             ("el_portal_header_model", portal_header()),
             ("el_house_wall_green", house_wall("house")),
-            ("el_house_wall_green_window", house_wall("housew")),
+            ("el_house_wall_green_window", window_wall("house")),
             ("el_house_wall_cream", house_wall("housec")),
-            ("el_house_wall_cream_window", house_wall("housecw")),
+            ("el_house_wall_cream_window", window_wall("housec")),
             ("el_wood_platform_model", full_cube("planks")),
             ("el_platform_edge_model", platform_edge()),
             ("el_soffit_model", soffit()),
-            ("el_booth_lower", booth_lower()),
-            ("el_booth_upper", booth_upper()),
             ("el_lamp_gooseneck_model", lamp_gooseneck()),
             ("el_lamp_post_pole", lamp_post_pole()),
             ("el_lamp_post_head", lamp_post_head()),
@@ -586,14 +575,6 @@ def build_final(g, assets_root, data_root, loot):
             entry["y"] = rot
         parts.append({"when": {"facing": facing, "up": "false"}, "apply": entry})
     g.wj(os.path.join(assets_root, "blockstates", "el_portal_post.json"), {"multipart": parts})
-    booth = {}
-    for facing, rot in ROTS:
-        for half in ("lower", "upper"):
-            entry = {"model": f"{MOD}:block/el_booth_{half}"}
-            if rot:
-                entry["y"] = rot
-            booth[f"facing={facing},half={half}"] = entry
-    g.wj(os.path.join(assets_root, "blockstates", "el_booth.json"), {"variants": booth})
     exit_bs = {}
     for facing, rot in ROTS:
         for mount in ("ceiling", "wall"):
@@ -614,27 +595,15 @@ def build_final(g, assets_root, data_root, loot):
              "el_house_wall_cream_window": "el_house_wall_cream_window",
              "el_wood_platform": "el_wood_platform_model",
              "el_platform_edge": "el_platform_edge_model", "el_soffit": "el_soffit_model",
-             "el_booth": "el_booth_upper", "el_exit_sign": "el_exit_sign_hang_none",
+             "el_exit_sign": "el_exit_sign_hang_none",
              "el_lamp_gooseneck": "el_lamp_gooseneck_model",
              "el_lamp_post": "el_lamp_post_item", "el_lamp_head": "el_lamp_post_head"}
     for block, mdl in items.items():
         g.wj(os.path.join(assets_root, "models/item", block + ".json"),
              {"parent": f"{MOD}:block/{mdl}"})
 
-    # loot: the booth drops from its lower half only, everything else plain
     for block in BLOCKS3:
-        if block == "el_booth":
-            g.wj(os.path.join(data_root, MOD, "loot_tables/blocks", block + ".json"), {
-                "type": "minecraft:block",
-                "pools": [{"rolls": 1,
-                           "entries": [{"type": "minecraft:item", "name": f"{MOD}:{block}"}],
-                           "conditions": [
-                               {"condition": "minecraft:block_state_property",
-                                "block": f"{MOD}:{block}",
-                                "properties": {"half": "lower"}},
-                               {"condition": "minecraft:survives_explosion"}]}]})
-        else:
-            g.wj(os.path.join(data_root, MOD, "loot_tables/blocks", block + ".json"), loot(block))
+        g.wj(os.path.join(data_root, MOD, "loot_tables/blocks", block + ".json"), loot(block))
     for name, recipe in RECIPES3.items():
         g.wj(os.path.join(data_root, MOD, "recipes", name + ".json"), recipe)
 
