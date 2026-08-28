@@ -763,3 +763,7 @@ body {
 
 #stationTable th { cursor: pointer; user-select: none; }
 #stationTable th.sorted { color: var(--accent); }
+
+/* step-free badge icon (SVG asset) */
+.acc-icon { width: 13px; height: 13px; vertical-align: -2px; border-radius: 3px; }
+#detailTitle .acc-icon { width: 15px; height: 15px; vertical-align: -3px; }

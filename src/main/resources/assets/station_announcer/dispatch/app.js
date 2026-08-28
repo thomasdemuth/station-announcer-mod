@@ -519,6 +519,13 @@ function railDistPoint(r, dist) {
 
 const canvas = $("map");
 const ctx = canvas.getContext("2d");
+
+/* The step-free badge (Thomas's artwork), drawn on the canvas map and used as
+ * <img> in the DOM panels. Redraw the static layer once it decodes. */
+const ACCESS_ICON = new Image();
+ACCESS_ICON.onload = invalidateStatic;
+ACCESS_ICON.src = "access_badge.svg";
+const ACCESS_IMG = '<img class="acc-icon" src="access_badge.svg" alt="Step-free">';
 let staticCanvas = document.createElement("canvas");
 let staticDirty = true;
 function invalidateStatic() { staticDirty = true; }
@@ -655,13 +662,21 @@ function drawStatic(dpr) {
 			if (b[3] < wLeft || b[0] > wRight || b[5] < wTop || b[2] > wBottom) continue;
 			const [sx] = worldToScreen((st.bounds[0] + st.bounds[3]) / 2, 0);
 			const [, sy] = worldToScreen(0, st.bounds[2]);
-			const label = (st.accessible ? "\u267f " : "") + firstLang(st.name);
+			const label = firstLang(st.name);
 			if (state.stepFree && !st.accessible) g.globalAlpha = 0.28;
+			const icon = st.accessible && ACCESS_ICON.complete && ACCESS_ICON.naturalWidth > 0;
+			const iconSize = Math.round(11 * s);
 			g.fillStyle = "#0b0e14cc";
 			const tw = g.measureText(label).width;
-			g.fillRect(sx - tw / 2 - 4, sy - 12 - 12 * s, tw + 8, 4 + 12 * s);
+			const total = tw + (icon ? iconSize + 4 : 0);
+			g.fillRect(sx - total / 2 - 4, sy - 12 - 12 * s, total + 8, 4 + 12 * s);
+			if (icon) {
+				g.drawImage(ACCESS_ICON, sx - total / 2, sy - 11 - iconSize + 2, iconSize, iconSize);
+			}
 			g.fillStyle = "#e7ecf7";
-			g.fillText(label, sx, sy - 12);
+			g.textAlign = "left";
+			g.fillText(label, sx - total / 2 + (icon ? iconSize + 4 : 0), sy - 12);
+			g.textAlign = "center";
 			g.globalAlpha = 1;
 		}
 	}
@@ -1123,7 +1138,7 @@ function updateMapTip(x, y) {
 			const b = st.bounds;
 			if (wx >= b[0] && wx <= b[3] + 1 && wz >= b[2] && wz <= b[5] + 1) {
 				const plats = [...state.platforms.values()].filter((p) => p.stationId === st.id).length;
-				html = `<div class="t">${st.accessible ? "\u267f " : ""}${escapeHtml(firstLang(st.name))}</div>` +
+				html = `<div class="t">${st.accessible ? ACCESS_IMG + " " : ""}${escapeHtml(firstLang(st.name))}</div>` +
 					`<div class="sub">${plats} platform(s)${st.accessible ? " · step-free" : ""} · click for details</div>`;
 				break;
 			}
@@ -1156,7 +1171,7 @@ function searchResults(q) {
 		if (state.stepFree && !st.accessible) continue; // step-free mode: only accessible stations
 		const name = firstLang(st.name);
 		const sc = score(name);
-		if (sc) stations.push({ sc, label: (st.accessible ? "\u267f " : "") + name, dotColor: colorHex(st.color), sub: "jump to", action: () => gotoStation(st) });
+		if (sc) stations.push({ sc, label: name, icon: st.accessible, dotColor: colorHex(st.color), sub: "jump to", action: () => gotoStation(st) });
 	}
 	const lineMap = new Map();
 	for (const r of state.routes.values()) {
@@ -1235,7 +1250,7 @@ function renderSearch() {
 			const marker = row.chip !== undefined
 				? `<span class="chip" style="background:${row.chipColor}">${escapeHtml(row.chip)}</span>`
 				: `<span class="sig-dot" style="background:${row.dotColor}"></span>`;
-			el.innerHTML = `${marker}<span class="sr-label">${escapeHtml(row.label)}</span><span class="sr-sub">${escapeHtml(row.sub)}</span>`;
+			el.innerHTML = `${marker}<span class="sr-label">${row.icon ? ACCESS_IMG + " " : ""}${escapeHtml(row.label)}</span><span class="sr-sub">${escapeHtml(row.sub)}</span>`;
 			const index = searchState.flat.length;
 			el.onmouseenter = () => setSearchActive(index);
 			el.onclick = () => runSearchRow(row);
@@ -1407,11 +1422,11 @@ function renderStationPanel(el) {
 	$("followBtn").style.display = "none";
 	$("detailChip").textContent = "●";
 	$("detailChip").style.background = colorHex(st.color);
-	$("detailTitle").textContent = (st.accessible ? "\u267f " : "") + (firstLang(st.name) || "Station");
+	$("detailTitle").innerHTML = (st.accessible ? ACCESS_IMG + " " : "") + escapeHtml(firstLang(st.name) || "Station");
 
 	let html = "";
 	if (st.accessible) {
-		html += `<div class="sta-inbound" style="color:var(--green)">\u267f Step-free accessible station</div>`;
+		html += `<div class="sta-inbound" style="color:var(--green)">${ACCESS_IMG} Step-free accessible station</div>`;
 	}
 
 	// Platforms with their calling routes, dwell, and hold state.
@@ -1425,7 +1440,7 @@ function renderStationPanel(el) {
 				return `<span class="chip" style="background:${colorHex(r.color)}">${escapeHtml(r.number || firstLang(r.name))}</span>`;
 			}).join("");
 			const held = state.holds.has(p.id) ? ' <span class="badge held">HELD</span>' : "";
-			const stepFreeMark = p.accessible ? " \u267f" : "";
+			const stepFreeMark = p.accessible ? " " + ACCESS_IMG : "";
 			html += `<div class="sta-plat"><span class="pname">${escapeHtml(firstLang(p.name))}${stepFreeMark}</span>` +
 				routeChips + held +
 				`<span class="dwell">dwell ${Math.round((p.dwellMs || 0) / 1000)}s</span></div>`;

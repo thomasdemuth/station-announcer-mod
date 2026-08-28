@@ -2833,3 +2833,21 @@ future overhaul.
 Verified in ?demo=1 (st1 accessible via pl1 only): map icon, panel badge +
 platform mark, Harbor North dimmed under the filter. NOT in-game tested: the
 Edit Station button, the editor screen, save/sync round-trip.
+
+## Accessibility icon — Thomas's artwork (2026-08-28)
+
+Thomas supplied the wheelchair icon SVG (MTA-style, three variants in one file).
+Split into three assets in the dispatch frontend (served by DispatchStaticServlet,
+svg is in its MIME map): access_badge.svg (white on blue rounded square — the one
+in use), access_outline.svg (blue on white, bordered) and access_glyph.svg (bare
+blue) kept for the system-map overhaul. The ♿ text glyph is REPLACED everywhere
+in the dispatch UI: map station labels draw the badge on the canvas (preloaded
+Image, onload → invalidateStatic; label backing sized icon+text, text left-
+aligned after the badge), and the DOM spots (station-panel title + step-free
+line + per-platform marks, search rows, hover tooltip, the Layers "Step-free
+only" label) use an <img class="acc-icon"> tag. The in-game GUI keeps the text
+glyph (unifont renders U+267F; a texture would need a rasterized PNG — do it if
+Thomas wants the icon in-game too).
+
+Verified in ?demo=1 (screenshots): badge on the map label, panel title, green
+step-free line, platform row, search row; Harbor North stays icon-free.
