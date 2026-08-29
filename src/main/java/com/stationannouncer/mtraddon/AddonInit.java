@@ -6,6 +6,7 @@ import com.stationannouncer.mtraddon.analytics.AnalyticsRecorder;
 import com.stationannouncer.mtraddon.dispatch.DispatchRegistry;
 import com.stationannouncer.mtraddon.dispatch.DispatchStreamer;
 import com.stationannouncer.mtraddon.dispatch.DispatchWebSetup;
+import com.stationannouncer.mtraddon.dispatch.TerrainScanner;
 import com.stationannouncer.mtraddon.disruption.DisruptionBroadcaster;
 import com.stationannouncer.mtraddon.disruption.DisruptionNetworking;
 import com.stationannouncer.mtraddon.disruption.MtrSimulators;
@@ -49,6 +50,9 @@ public final class AddonInit {
         ServerLifecycleEvents.SERVER_STARTED.register(server -> {
             AddonServerConfig.get(); // load (and cache) the config before any simulator asks for it
             AddonStore.load(server);
+            // Dispatch-map terrain: retains the server (nothing else in the addon does)
+            // and reads whatever water polygons a previous /dispatch terrain scan cached.
+            TerrainScanner.onServerStarted(server);
             // Timetable analytics: opens <save>/station-announcer-addon/analytics/, prunes
             // expired day files, replays the recent tail into the metric window and starts
             // the writer thread. A no-op when analytics.enabled is false.
@@ -68,6 +72,8 @@ public final class AddonInit {
             AddonStore.flush();
             // Flush the queued analytics events and stop the writer before the simulators go.
             AnalyticsRecorder.stop();
+            // Join any in-flight terrain.json write and drop the retained server/world refs.
+            TerrainScanner.onServerStopping();
             // Dispatch teardown before MTR's Main.stop(). Clear the registry FIRST so
             // late servlet requests answer 503 and no new SSE client can register (which
             // would restart the streamer thread we are about to stop), then drop the
@@ -96,6 +102,9 @@ public final class AddonInit {
         // second, and only sent when an answer changes — which, with nothing held
         // or stuck, is never: the whole tick is two isEmpty checks.
         ServerTickEvents.END_SERVER_TICK.register(server -> {
+            // Terrain scanning gets its time-budgeted slice EVERY tick, so it sits ahead
+            // of the countdown early-return below. Two field reads when no scan is running.
+            TerrainScanner.tick();
             // Feature 6 shares this ticker (no new per-tick loop): once a second it
             // retires whatever has expired and lets the disruption broadcaster do
             // its (heavily throttled) work. Both calls return after one or two

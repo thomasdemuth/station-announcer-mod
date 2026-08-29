@@ -398,7 +398,7 @@ public final class AnalyticsRecorder {
      * no depot frequency set. Cached per route for {@value #HEADWAY_CACHE_MILLIS} ms; the
      * scan is over {@code simulator.depots}, which is a handful of entries.</p>
      */
-    private static long scheduledHeadwayMillis(Simulator simulator, long routeId) {
+    public static long scheduledHeadwayMillis(Simulator simulator, long routeId) {
         if (routeId == 0) {
             return 0;
         }

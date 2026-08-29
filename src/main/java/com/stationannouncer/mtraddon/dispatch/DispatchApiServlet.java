@@ -35,6 +35,11 @@ import java.util.function.Consumer;
  *       ({@link AnalyticsAggregator}). Handled before ServletBase's simulator hop and
  *       answered straight from the off-thread cache, so polling it costs the simulation
  *       nothing at all.</li>
+ *   <li>{@code mapdata} — the System Map+ payload ({@link DispatchMapData}): per-route
+ *       platform order, leg rail chains and durations, station platform clustering,
+ *       scheduled headways. Per-dimension 30 s {@link CachedResponse} like network.</li>
+ *   <li>{@code terrain} — cached water polygons from the last {@code /dispatch terrain
+ *       scan} ({@link TerrainScanner}); empty until a scan has run.</li>
  * </ul>
  *
  * <p>{@code /dispatch/api/ping} and {@code /dispatch/api/stream} are separate exact-path
@@ -51,6 +56,7 @@ import java.util.function.Consumer;
 public final class DispatchApiServlet extends ServletBase {
     private final ConcurrentHashMap<String, CachedResponse> networkResponses = new ConcurrentHashMap<>();
     private final ConcurrentHashMap<String, CachedResponse> stringlineAxisResponses = new ConcurrentHashMap<>();
+    private final ConcurrentHashMap<String, CachedResponse> mapDataResponses = new ConcurrentHashMap<>();
 
     public DispatchApiServlet(ObjectImmutableList<Simulator> simulators) {
         super(simulators);
@@ -193,6 +199,17 @@ public final class DispatchApiServlet extends ServletBase {
             payload.addProperty("analyticsEnabled", AddonServerConfig.get().analytics.enabled);
             payload.addProperty("now", System.currentTimeMillis());
             sendResponse.accept(payload);
+        } else if ("mapdata".equals(endpoint)) {
+            // System Map+ payload: route geometry chains + leg durations + station
+            // platform clustering + headways. Same 30 s per-dimension cache as network.
+            sendResponse.accept(mapDataResponses
+                    .computeIfAbsent(simulator.dimension, key -> new CachedResponse(DispatchMapData::build, 30_000))
+                    .get(simulator));
+        } else if ("terrain".equals(endpoint)) {
+            // Water polygons from the last /dispatch terrain scan. The scanner's
+            // snapshot is volatile-immutable, so reading it here is thread-safe and
+            // cheap; empty polygons until a scan has run in this dimension.
+            sendResponse.accept(TerrainScanner.terrainJson(simulator.dimension));
         } else {
             JsonObject error = new JsonObject();
             error.addProperty("error", "unknown endpoint: " + endpoint);
