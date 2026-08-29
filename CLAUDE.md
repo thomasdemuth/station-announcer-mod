@@ -295,6 +295,25 @@ Four fixes/features from Thomas's feedback round (his answers, do not re-ask):
   model rebuild (tripod look, reader heads, pictogram plates day+night,
   HEET comb/lintel, signboard straps).
 
+### SYSTEM MAP+ (2026-08-29) — geographic map + journey planner, SHIPPED 2.4.32; NOT in-game tested
+
+All five phases done in one day (read PROGRESS.md "System Map+" for details).
+Mock v2 approved by Thomas (tools/nextmap_mock/, :8792) → server data
+(`/dispatch/api/mapdata` + `/dispatch/api/terrain` in DispatchApiServlet;
+DispatchMapData legs are PAIR-KEYED off the baked pathMainRoute because the
+cycle is ROTATED — never assume it starts at a route's first stop; TerrainScanner
+= `/dispatch terrain scan`, 2 ms/tick server-thread water scan, verified with a
+placed pond) → frontend `dispatch/map.html|js|css` (light paper theme, merged/
+offset ribbons, split-station parts, direction-aware label declutter, selection
+fade+glow, ?demo=1 acceptance harness + scratchpad vm harnesses) → planner
+(single label-correcting multi-criteria search, (platform,routeAboard) states,
+live-vehicle departure projection → headway phase → 5 min estimate; step-free
+HARD on board/alight/transfer; ride edges DIRECTED — return trips need return
+routes) → entry points (dashboard row 3-way split incl. "Map+"; dispatch topbar
+link). Deployed to both profiles; awaiting Thomas's play pass: dashboard button,
+real-network mapdata joins, `/dispatch terrain scan` on Baker City, river
+accuracy, live journeys.
+
 ### NYC ELEVATED STATION KIT (2026-08-28) — 28 new blocks, both phases; NOT in-game tested
 
 **FIVE-AGENT QUALITY PASS MERGED (2026-08-28 late): all five el item sets
