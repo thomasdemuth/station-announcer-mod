@@ -118,8 +118,11 @@ public final class DispatchApiServlet extends ServletBase {
             DispatchStaticServlet.sendText(response, 400, "text/plain;charset=utf-8", "invalid dimension");
             return true;
         }
-        // Integer.MIN_VALUE = "absent or unparseable"; no real tile index is ever negative
-        // (the scan origin is the bounding box's own snapped low corner).
+        // Tile indices are relative to the dimension's permanent origin, so a network that
+        // has grown toward -x/-z legitimately has NEGATIVE ones — they are passed through
+        // untouched. Integer.MIN_VALUE is only the "absent or unparseable" sentinel (no
+        // tile can sit 2^31 tiles from the origin; the scanner refuses long before that),
+        // and the index lookup is what actually decides whether a tile exists.
         int tx = intParameter(request, "tx", Integer.MIN_VALUE);
         int tz = intParameter(request, "tz", Integer.MIN_VALUE);
         byte[] png = tx == Integer.MIN_VALUE || tz == Integer.MIN_VALUE

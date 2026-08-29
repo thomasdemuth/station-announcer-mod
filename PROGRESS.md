@@ -3008,3 +3008,26 @@ NOT in-game tested: everything (Thomas's pass: satellite legibility on a real
 scan, long-press feel, GPS smoothness at 4 Hz, express marks on real
 patterns). Baker City needs /dispatch terrain scan AND /dispatch satellite
 scan run once as op.
+
+## System Map+ — automatic basemap scans on launch (2026-08-29 evening)
+
+Thomas: scans should run automatically on every launch, cached so covered
+areas never re-scan. `dispatch.autoScan` (default true) in the addon config;
+AddonInit arms a 300-tick one-shot after SERVER_STARTED, then a 3-stage
+chain: terrain pass (all dimensions with rails, sequential) → satellite pass
+once terrain is idle. Manual /dispatch scans unaffected and never collide
+(shared pending guard). TERRAIN: cached bbox containment check — covered →
+skip (logged with both boxes); grown/missing → full re-scan (rings can't
+merge across scans; 8-block grid is cheap). SATELLITE: tile grid origin is
+now FIXED per dimension forever (first scan sets it; growth toward −x/−z
+makes NEGATIVE tile indices — filenames, index, satmeta, sattile all handle
+them; endpoint sentinel comment fixed); auto pass diffs needed vs indexed
+tiles and scans ONLY missing tiles (wanted[] tested BEFORE any chunk access,
+so cached areas cost zero chunk loads), merging into the index without
+touching existing tiles. Manual satellite scan stays a FULL refresh (the way
+to re-image rebuilt areas). Transparent tiles are now written+indexed (else
+void tiles would re-scan every launch); MAX_TILE_RECT=65536 guards a stray
+rail. VERIFIED live on the dev rig: covered launch → both passes skip
+instantly with clear logs; deleted one tile from the cache → next launch
+scanned exactly that 1 tile (65k samples, 39 s), kept 3, merged to 4.
+2.4.36. NOT tested: multi-dimension networks, negative-index growth in game.

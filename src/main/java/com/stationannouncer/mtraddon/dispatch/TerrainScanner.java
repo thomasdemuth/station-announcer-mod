@@ -47,6 +47,15 @@ import java.util.Map;
  * from the simulator thread by the dispatch servlet and only reads one volatile
  * reference to an immutable snapshot.</p>
  *
+ * <p><b>Automatic pass.</b> With {@code dispatch.autoScan} on (the default),
+ * {@link com.stationannouncer.mtraddon.AddonInit} calls {@link #autoScan()} a few
+ * seconds after the server starts. It walks every simulated dimension one at a time and
+ * scans only where the cached {@code bbox} does NOT already contain the box the network
+ * needs — on a settled world that is one log line per dimension and no chunk loads at
+ * all. Auto scans reuse this class's machinery verbatim, with a null command source, so
+ * their feedback goes to the log and {@code /dispatch terrain status} reports them
+ * exactly like a manual scan.</p>
+ *
  * <p>Nothing here is required for the map to work: with no scan ever run, the getter
  * answers with an empty polygon list.</p>
  */
@@ -87,6 +96,16 @@ public final class TerrainScanner {
     /** The last background save, joined at shutdown. */
     private static volatile Thread writer;
 
+    /**
+     * The margin the automatic pass uses — the manual command's own default, so an
+     * auto-scanned cache is exactly what {@code /dispatch terrain scan} would produce.
+     */
+    private static final int AUTO_MARGIN = 128;
+    /** Dimensions the once-per-launch auto pass still has to check. Server thread only. */
+    private static final java.util.ArrayDeque<String> AUTO_QUEUE = new java.util.ArrayDeque<>();
+    /** True while that pass is walking the queue (volatile so {@link #isIdle()} is honest). */
+    private static volatile boolean autoActive;
+
     private TerrainScanner() {
     }
 
@@ -97,6 +116,8 @@ public final class TerrainScanner {
         server = minecraftServer;
         active = null;
         pending = false;
+        autoActive = false;
+        AUTO_QUEUE.clear();
         Path path = minecraftServer.getSavePath(WorldSavePath.ROOT)
                 .resolve("station-announcer-addon").resolve("terrain.json").normalize();
         terrainPath = path;
@@ -124,9 +145,20 @@ public final class TerrainScanner {
         writer = null;
         active = null;
         pending = false;
+        autoActive = false;
+        AUTO_QUEUE.clear();
         terrain = Map.of();
         terrainPath = null;
         server = null;
+    }
+
+    /**
+     * Nothing running: no scan, no simulator round-trip in flight and no auto pass left
+     * to walk. The satellite auto-scan waits on this so the two never sample in the same
+     * tick, and {@link com.stationannouncer.mtraddon.AddonInit} polls it once a tick.
+     */
+    public static boolean isIdle() {
+        return active == null && !pending && !autoActive;
     }
 
     // ------------------------------------------------------------- the ticker
@@ -138,6 +170,12 @@ public final class TerrainScanner {
     public static void tick() {
         Scan scan = active;
         if (scan == null) {
+            // The auto pass is pumped from here rather than chained off finish(): waiting
+            // for "nothing is running" each tick is what lets a manual scan cut in front
+            // of it without either one having to know about the other.
+            if (autoActive && !pending) {
+                pumpAuto();
+            }
             return;
         }
         long deadline = System.nanoTime() + TICK_BUDGET_NANOS;
@@ -242,10 +280,27 @@ public final class TerrainScanner {
         }
 
         int margin = Math.max(0, Math.min(1024, marginBlocks));
-        pending = true;
         source.sendFeedback(() -> Text.literal("Measuring the network in " + dimension + "…")
                 .formatted(Formatting.GRAY), false);
-        final Simulator simulator = target;
+        measure(minecraftServer, target, (any, minX, minZ, maxX, maxZ) ->
+                beginScan(source, world, dimension, any, minX, minZ, maxX, maxZ, margin));
+        return 1;
+    }
+
+    /** What {@link #measure} hands back, on the server thread, as plain longs. */
+    @FunctionalInterface
+    private interface BoundsHandler {
+        void handle(boolean any, long minX, long minZ, long maxX, long maxZ);
+    }
+
+    /**
+     * The network's extents, asked of MTR on the owning simulator's thread and handed
+     * back on the server thread. Shared by the command and the automatic pass — the
+     * {@link #pending} flag is held across the hop, so neither can start while the other
+     * is still measuring.
+     */
+    private static void measure(MinecraftServer minecraftServer, Simulator simulator, BoundsHandler handler) {
+        pending = true;
         simulator.run(() -> {
             long minX = Long.MAX_VALUE;
             long minZ = Long.MAX_VALUE;
@@ -282,21 +337,27 @@ public final class TerrainScanner {
             final long fMaxX = maxX;
             final long fMaxZ = maxZ;
             final boolean fAny = any;
-            minecraftServer.execute(() -> beginScan(source, world, dimension, fAny, fMinX, fMinZ, fMaxX, fMaxZ, margin));
+            minecraftServer.execute(() -> {
+                pending = false;
+                handler.handle(fAny, fMinX, fMinZ, fMaxX, fMaxZ);
+            });
         });
-        return 1;
     }
 
-    /** Server thread: turn the network extents into a grid and arm the ticker. */
+    /**
+     * Server thread: turn the network extents into a grid and arm the ticker.
+     *
+     * <p>{@code source} is null for the automatic pass — every message then goes to the
+     * log instead of a chat window (see {@link #tell}).</p>
+     */
     private static void beginScan(ServerCommandSource source, ServerWorld world, String dimension,
                                   boolean any, long minX, long minZ, long maxX, long maxZ, int margin) {
-        pending = false;
         if (active != null) {
-            source.sendError(Text.literal("A terrain scan started in the meantime — " + status()));
+            tell(source, Text.literal("A terrain scan started in the meantime — " + status()), true);
             return;
         }
         if (!any) {
-            source.sendError(Text.literal("No rails or stations in " + dimension + " yet — nothing to scan."));
+            tell(source, Text.literal("No rails or stations in " + dimension + " yet — nothing to scan."), true);
             return;
         }
         long lowX = snapDown(minX - margin);
@@ -307,26 +368,26 @@ public final class TerrainScanner {
         // would overflow the int grid arithmetic below, so refuse rather than wrap.
         if (Math.abs(lowX) > WORLD_LIMIT || Math.abs(lowZ) > WORLD_LIMIT
                 || Math.abs(highX) > WORLD_LIMIT || Math.abs(highZ) > WORLD_LIMIT) {
-            source.sendError(Text.literal("The network extends past the world limit ("
-                    + lowX + "," + lowZ + " to " + highX + "," + highZ + ") — check for a stray rail."));
+            tell(source, Text.literal("The network extends past the world limit ("
+                    + lowX + "," + lowZ + " to " + highX + "," + highZ + ") — check for a stray rail."), true);
             return;
         }
         long width = (highX - lowX) / GRID + 1;
         long height = (highZ - lowZ) / GRID + 1;
         long total = width * height;
         if (total > MAX_SAMPLES) {
-            source.sendError(Text.literal("That would be " + total + " samples (" + width + "×" + height
+            tell(source, Text.literal("That would be " + total + " samples (" + width + "×" + height
                     + " on a " + GRID + "-block grid), over the " + MAX_SAMPLES + " cap. Reduce the margin"
-                    + " — or check for a stray rail far from the network."));
+                    + " — or check for a stray rail far from the network."), true);
             return;
         }
 
         Scan scan = new Scan(world, dimension, source, (int) lowX, (int) lowZ, (int) width, (int) height,
                 lowX, lowZ, highX, highZ);
         active = scan;
-        source.sendFeedback(() -> Text.literal("Terrain scan started: " + total + " samples over "
+        tell(source, Text.literal("Terrain scan started: " + total + " samples over "
                         + (highX - lowX) + "×" + (highZ - lowZ) + " blocks (margin " + margin + ").")
-                .formatted(Formatting.AQUA), true);
+                .formatted(Formatting.AQUA), false);
     }
 
     /** Everything sampled: trace, simplify, publish, save, tell the caller. */
@@ -363,8 +424,22 @@ public final class TerrainScanner {
 
     /** A command source can be gone by the time a long scan lands; never let that throw. */
     private static void report(Scan scan, Text text, boolean error) {
-        ServerCommandSource source = scan.source;
+        tell(scan.source, text, error);
+    }
+
+    /**
+     * One message to whoever asked for the scan. A manual scan has a command source and
+     * gets chat (broadcast to ops, as before); the automatic pass has NONE — its source
+     * is null and the server log is the only audience, at info for progress and warn for
+     * refusals.
+     */
+    private static void tell(ServerCommandSource source, Text text, boolean error) {
         if (source == null) {
+            if (error) {
+                StationAnnouncer.LOGGER.warn("Terrain auto-scan: {}", text.getString());
+            } else {
+                StationAnnouncer.LOGGER.info("Terrain auto-scan: {}", text.getString());
+            }
             return;
         }
         try {
@@ -378,6 +453,126 @@ public final class TerrainScanner {
         }
     }
 
+    // ------------------------------------------------------- the automatic pass
+
+    /**
+     * Queues the once-per-launch automatic check: every dimension MTR is simulating gets
+     * its network measured and, if the cached water polygons do not already cover it,
+     * re-scanned. Called from {@link com.stationannouncer.mtraddon.AddonInit} a few
+     * seconds after SERVER_STARTED; the work itself happens in {@link #pumpAuto}, one
+     * dimension at a time, so the tick budget is never more than one scan's worth.
+     */
+    public static void autoScan() {
+        MinecraftServer minecraftServer = server;
+        if (minecraftServer == null || autoActive) {
+            return;
+        }
+        ObjectImmutableList<Simulator> simulators = MtrSimulators.get();
+        if (simulators == null || simulators.isEmpty()) {
+            StationAnnouncer.LOGGER.info("Terrain auto-scan: MTR has no running simulations, nothing to check");
+            return;
+        }
+        AUTO_QUEUE.clear();
+        for (Simulator simulator : simulators) {
+            AUTO_QUEUE.add(simulator.dimension);
+        }
+        autoActive = true;
+    }
+
+    /**
+     * Server thread, one dimension per call, only while nothing else is running. Takes
+     * the next queued dimension and measures it; the decision lands in
+     * {@link #autoDecide} once the simulator answers.
+     */
+    private static void pumpAuto() {
+        MinecraftServer minecraftServer = server;
+        String dimension = AUTO_QUEUE.poll();
+        if (minecraftServer == null || dimension == null) {
+            autoActive = false;
+            AUTO_QUEUE.clear();
+            if (minecraftServer != null) {
+                StationAnnouncer.LOGGER.info("Terrain auto-scan pass finished");
+            }
+            return;
+        }
+        Simulator simulator = null;
+        ObjectImmutableList<Simulator> simulators = MtrSimulators.get();
+        if (simulators != null) {
+            for (Simulator candidate : simulators) {
+                if (dimension.equals(candidate.dimension)) {
+                    simulator = candidate;
+                    break;
+                }
+            }
+        }
+        ServerWorld world = worldFor(minecraftServer, dimension);
+        if (simulator == null || world == null) {
+            StationAnnouncer.LOGGER.info("Terrain auto-scan: no simulator/world pair for {}, skipping", dimension);
+            return; // the next tick pumps the next dimension
+        }
+        measure(minecraftServer, simulator, (any, minX, minZ, maxX, maxZ) ->
+                autoDecide(world, dimension, any, minX, minZ, maxX, maxZ));
+    }
+
+    /**
+     * Server thread: scan this dimension, or skip it because the cache already covers it.
+     *
+     * <p>The cached {@code bbox} is the box that scan actually walked (its snapped
+     * corners). If it CONTAINS the box the network needs now, every polygon the map
+     * would draw is already in the cache and the scan is skipped. Otherwise the whole
+     * dimension is re-scanned over the new box: traced polygons are not mergeable across
+     * scans (a ring that crossed the old edge would have been closed against it), and at
+     * the {@value #GRID}-block grid a full re-trace is cheap.</p>
+     */
+    private static void autoDecide(ServerWorld world, String dimension, boolean any,
+                                   long minX, long minZ, long maxX, long maxZ) {
+        if (!any) {
+            StationAnnouncer.LOGGER.info("Terrain auto-scan: no rails or stations in {} yet, skipping", dimension);
+            return;
+        }
+        long lowX = snapDown(minX - AUTO_MARGIN);
+        long lowZ = snapDown(minZ - AUTO_MARGIN);
+        long highX = snapUp(maxX + AUTO_MARGIN);
+        long highZ = snapUp(maxZ + AUTO_MARGIN);
+        Terrain cached = terrain.get(dimension);
+        if (cached != null && covers(cached.bbox(), lowX, lowZ, highX, highZ)) {
+            long[] bbox = cached.bbox();
+            StationAnnouncer.LOGGER.info("Terrain cache covers the network in {} (cached {},{}..{},{} contains"
+                            + " needed {},{}..{},{}) — skipping the automatic scan",
+                    dimension, bbox[0], bbox[1], bbox[2], bbox[3], lowX, lowZ, highX, highZ);
+            return;
+        }
+        if (cached == null) {
+            StationAnnouncer.LOGGER.info("Terrain auto-scan: {} has no cached water polygons — scanning"
+                    + " {},{}..{},{}", dimension, lowX, lowZ, highX, highZ);
+        } else {
+            long[] bbox = cached.bbox();
+            StationAnnouncer.LOGGER.info("Terrain auto-scan: the network in {} has grown outside the cached box"
+                            + " ({},{}..{},{} → {},{}..{},{}) — re-scanning",
+                    dimension, bbox[0], bbox[1], bbox[2], bbox[3], lowX, lowZ, highX, highZ);
+        }
+        beginScan(null, world, dimension, true, minX, minZ, maxX, maxZ, AUTO_MARGIN);
+    }
+
+    /** True when the cached scanned box encloses the box the network needs now. */
+    private static boolean covers(long[] bbox, long lowX, long lowZ, long highX, long highZ) {
+        // An all-zero bbox is a pre-bbox cache file (or a damaged one): treat as no cover.
+        if (bbox == null || bbox.length != 4 || (bbox[0] == 0 && bbox[1] == 0 && bbox[2] == 0 && bbox[3] == 0)) {
+            return false;
+        }
+        return bbox[0] <= lowX && bbox[1] <= lowZ && bbox[2] >= highX && bbox[3] >= highZ;
+    }
+
+    /** The ServerWorld whose MTR dimension id is {@code dimension}, or null. */
+    private static ServerWorld worldFor(MinecraftServer minecraftServer, String dimension) {
+        for (ServerWorld world : minecraftServer.getWorlds()) {
+            if (dimension.equals(worldId(world))) {
+                return world;
+            }
+        }
+        return null;
+    }
+
     /** Human-readable state for {@code /dispatch terrain status}. */
     public static String status() {
         Scan scan = active;
@@ -389,6 +584,9 @@ public final class TerrainScanner {
         }
         if (pending) {
             return "measuring the network…";
+        }
+        if (autoActive) {
+            return "automatic pass running (" + AUTO_QUEUE.size() + " dimension(s) left to check)";
         }
         Map<String, Terrain> snapshot = terrain;
         if (snapshot.isEmpty()) {

@@ -213,6 +213,23 @@ public class AddonServerConfig {
 
         /** Maximum simultaneously connected SSE stream clients; excess connections get HTTP 503. */
         public int maxClients = 8;
+
+        /**
+         * Scan the dispatch map's basemaps (water terrain, then the satellite raster)
+         * automatically, once per server launch, a few seconds after start.
+         *
+         * <p>Both passes skip whatever is already cached: terrain is re-scanned only when
+         * the network has grown outside the box the cache was taken over, and the
+         * satellite scan only samples the map tiles that do not exist yet. On a settled
+         * world the whole thing is two log lines and no chunk loads at all. The manual
+         * {@code /dispatch terrain scan} / {@code /dispatch satellite scan} commands are
+         * unaffected by this flag and always do a full re-scan.</p>
+         *
+         * <p>Turn it off on a world where generating the chunks around the network is
+         * unwelcome (the scan loads — and, off the beaten track, generates — every chunk
+         * it samples).</p>
+         */
+        public boolean autoScan = true;
     }
 
     public static class Analytics {
@@ -347,6 +364,9 @@ public class AddonServerConfig {
         doorObstruction.maxSeconds = Math.max(doorObstruction.minSeconds, Math.min(120, doorObstruction.maxSeconds));
         dispatch.updateMillis = Math.max(100, Math.min(5_000, dispatch.updateMillis));
         dispatch.maxClients = Math.max(1, Math.min(64, dispatch.maxClients));
+        // dispatch.autoScan is a boolean: the section null-guard above is its whole
+        // sanitize, and a config written before it existed loads as the field default
+        // (true) — the same migration every other flag in this file gets.
         analytics.retentionDays = Math.max(1, Math.min(365, analytics.retentionDays));
         analytics.aggregateSeconds = Math.max(5, Math.min(600, analytics.aggregateSeconds));
         analytics.onTimeToleranceSeconds = Math.max(1, Math.min(3_600, analytics.onTimeToleranceSeconds));
