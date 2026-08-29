@@ -28,22 +28,62 @@ const API = "api";
 const DEMO = new URLSearchParams(location.search).get("demo") === "1";
 const PREFS_KEY = "sa_mapplus_prefs";
 
-/* palette (mirrors map.css so the canvas and the DOM agree) */
-const PAPER = "#f6f3ec";
-const WATER_FILL = "#bcd6ea";
-const WATER_STROKE = "#a3c2da";
-const INK = "#1c1f23";
-const INK2 = "#5b6470";
-const INK3 = "#8a929c";
-const ACCENT = "#1a73e8";
-const PIN_RED = "#d93025";
-const LIVE_GREEN = "#0f9d58";
+/**
+ * PALETTES. The canvas cannot read CSS custom properties, so every colour the 2D
+ * context uses lives here and the SAME values are mirrored in map.css as vars on
+ * :root / :root[data-theme="dark"]. Switching the theme swaps this object and
+ * invalidates the static layer; the DOM follows through the data-theme attribute.
+ *
+ * `dim` is the alpha the rest of the network fades to while a journey is selected —
+ * higher in dark mode, because a 15 % white line on near-black disappears.
+ */
+const THEMES = {
+	light: {
+		paper: "#f6f3ec", water: "#bcd6ea", waterStroke: "#a3c2da",
+		ink: "#1c1f23", ink2: "#5b6470", ink3: "#8a929c",
+		accent: "#1a73e8", pin: "#d93025", live: "#0f9d58",
+		chip: "#ffffff", chipInk: "#3c434b", chipShadow: "rgba(20,28,40,0.22)",
+		glyphFill: "#ffffff", glyphStroke: "#1c1f23",
+		leader: "#9aa2ab", rawRail: "#9aa2ab", dim: 0.15,
+	},
+	dark: {
+		paper: "#101014", water: "#1b2a38", waterStroke: "#24384a",
+		ink: "#f2f3f5", ink2: "#aab3bf", ink3: "#79838f",
+		accent: "#6aa8ff", pin: "#ff5f52", live: "#3ddc84",
+		chip: "#1a1b20", chipInk: "#dfe3e8", chipShadow: "rgba(0,0,0,0.55)",
+		glyphFill: "#ffffff", glyphStroke: "#0b0b0f",
+		leader: "#5c6672", rawRail: "#5c6672", dim: 0.22,
+	},
+};
+let PALETTE = THEMES.light;
 
-/** Alpha the rest of the network fades to while a journey is selected. */
-const DIM_ALPHA = 0.15;
 /** Walking speed used for transfer/walk timings (m/s) + a fixed platform-change buffer. */
 const WALK_SPEED = 1.4;
 const WALK_BUFFER_S = 30;
+
+/* ---- schematic drawing constants (section 5) ---- */
+/** Points every drawn segment is resampled to (pair averaging is pointwise). */
+const SEG_SAMPLES = 32;
+/** Blocks. "These two polylines run in the same corridor." Used by both the express
+ *  coverage test and cross-colour bundling. */
+const CORRIDOR_TOL = 14;
+/** Fraction of an express segment that must be covered by the line's own shorter
+ *  segments before it is suppressed. */
+const COVER_FRACTION = 0.85;
+/** Fraction of the SHORTER segment's samples that must sit inside CORRIDOR_TOL of the
+ *  other before two different-colour segments count as bundle companions. */
+const COMPANION_FRACTION = 0.6;
+/** Blocks between the samples used for coverage / companion tests. */
+const SAMPLE_STEP = 8;
+/** Uniform spatial grid cell for the companion broad phase. */
+const GRID_CELL = 16;
+/** A drawn train is snapped onto its line's nearest schematic segment within this. */
+const VEHICLE_SNAP = 24;
+/** Bullets a single interlining chip will draw. */
+const MAX_CHIP_BULLETS = 4;
+/** Line-thickness multiplier bounds (the settings slider). */
+const LINE_SCALE_MIN = 0.6;
+const LINE_SCALE_MAX = 1.6;
 
 const state = {
 	/* --- server / dimension --- */
@@ -73,7 +113,11 @@ const state = {
 
 	/* --- derived drawing geometry (rebuilt by prepareGeometry) --- */
 	legs: new Map(),               // "routeId|i" -> {routeId, i, from, to, pts, rails, straight, meters, seconds}
-	ribbons: [],                   // [{key, pts, hex, idx, count, mode, routes:[], bbox}]
+	parts: new Map(),              // partId -> {part, station}
+	lines: new Map(),              // hex -> {hex, colorInt, routeIds:[], serviceLabels:[], modes:Set}
+	ribbons: [],                   // DRAWN schematic segments (see buildSegments)
+	segByPair: new Map(),          // "hex|partA>partB" -> segment (drawn OR suppressed)
+	segsByColor: new Map(),        // hex -> [drawn segment]
 	bundles: [],                   // interlining chips: [{x, z, nx, nz, colors:[{hex, numbers:[]}]}]
 	glyphs: [],                    // [{stationId, partId, x, z, colors:[hex], capsule, dir, accessible, weight}]
 	walks: [],                     // [{ax, az, bx, bz, dist}]
@@ -100,7 +144,12 @@ const state = {
 		graph: null,
 	},
 
-	prefs: { showHidden: false },
+	prefs: {
+		showHidden: false,
+		theme: "light",            // light | dark  (settings menu)
+		lineScale: 1,              // ribbon width multiplier, LINE_SCALE_MIN..MAX
+		hiddenModes: [],           // transport modes switched off in the Layers list
+	},
 };
 
 /* ============================================================================
@@ -188,10 +237,10 @@ function drawIcon(g, path, x, y, size, color) {
 /** White rounded chip with the mock's soft drop shadow. */
 function chipRect(g, x, y, w, h, r) {
 	g.save();
-	g.shadowColor = "rgba(20,28,40,0.22)";
+	g.shadowColor = PALETTE.chipShadow;
 	g.shadowBlur = 6;
 	g.shadowOffsetY = 2;
-	g.fillStyle = "#fff";
+	g.fillStyle = PALETTE.chip;
 	g.beginPath();
 	g.roundRect(x, y, w, h, r);
 	g.fill();
@@ -204,6 +253,7 @@ function chipRect(g, x, y, w, h, r) {
 
 async function boot() {
 	loadPrefs();
+	initSettings();          // theme first: applied before anything paints
 	initUi();
 	initPlanner();
 	if (DEMO) { bootDemo(); return; }
@@ -410,14 +460,36 @@ function applyTerrain(t) {
 
 function prepareGeometry() {
 	ensureParts();
+	indexParts();
 	buildLegs();
-	buildRibbons();
+	buildLines();
+	buildSegments();
 	buildGlyphs();
 	buildWalks();
 	state.plan.graph = null;
 	rebuildSearchIndex();
+	renderLayerList();
 	invalidateStatic();
 }
+
+/** partId -> {part, station}, so segment building can reach a part centroid by id. */
+function indexParts() {
+	state.parts = new Map();
+	for (const st of state.stations.values()) {
+		for (const p of st.parts) state.parts.set(p.id, { part: p, station: st });
+	}
+}
+
+function partCentroid(partId) {
+	const rec = state.parts.get(partId);
+	return rec ? [rec.part.x, rec.part.z] : null;
+}
+function partOfPlatform(platformId) {
+	const pl = state.platforms.get(platformId);
+	return pl ? pl.partId : null;
+}
+/** Canonical (order-independent) key for the pair of station parts a leg connects. */
+function pairKeyOf(a, b) { return a < b ? a + ">" + b : b + ">" + a; }
 
 /** Every station needs at least one part; stations without mapdata get one from bounds. */
 function ensureParts() {
@@ -542,8 +614,21 @@ function buildLegs() {
 	}
 }
 
-/** Routes we actually paint (hidden ones only when the pref is on). */
+/** Routes we actually paint (hidden ones only when the pref is on, modes the Layers
+ *  list has switched off never). */
 function visibleRoutes() {
+	const out = [];
+	for (const rt of state.routes.values()) {
+		if (rt.hidden && !state.prefs.showHidden) continue;
+		if (!rt.platforms || rt.platforms.length < 2) continue;
+		if (!modeVisible(rt.mode || "train")) continue;
+		out.push(rt);
+	}
+	return out;
+}
+
+/** Routes that exist for the rider, ignoring the Layers filter (lines, mode list). */
+function candidateRoutes() {
 	const out = [];
 	for (const rt of state.routes.values()) {
 		if (rt.hidden && !state.prefs.showHidden) continue;
@@ -553,112 +638,566 @@ function visibleRoutes() {
 	return out;
 }
 
-/**
- * INTERLINING. Every drawn polyline is keyed by the rail it belongs to (straight
- * fallbacks by their platform pair). All routes on that key are grouped by COLOR:
- * routes sharing a colour merge into ONE ribbon, distinct colours become parallel
- * ribbons. The parallel offset itself is applied in SCREEN space at draw time
- * (offsetPolyline) so the hairline gap between bundled lines is zoom-independent.
- */
-function buildRibbons() {
-	const groups = new Map();   // key -> {pts, mode, colors: Map hex -> {routes:[], hidden}}
-	const add = (key, pts, rt) => {
-		let g = groups.get(key);
-		if (!g) { g = { key, pts, mode: rt.mode || "train", colors: new Map() }; groups.set(key, g); }
-		let c = g.colors.get(rt.hex);
-		if (!c) { c = { routes: [], hidden: true }; g.colors.set(rt.hex, c); }
-		c.routes.push(rt);
-		if (!rt.hidden) c.hidden = false;
-		if (rt.mode === "boat") g.mode = "boat";
-	};
+function modeVisible(mode) { return !(state.prefs.hiddenModes || []).includes(mode || "train"); }
 
+/** Every transport mode the loaded network actually contains (drives the Layers list). */
+function modesPresent() {
+	const s = new Set();
+	for (const rt of candidateRoutes()) s.add(rt.mode || "train");
+	return [...s].sort();
+}
+
+/* ----------------------------------------------------------------------------
+ * 5a. THE LINE MODEL — colour alone defines a line
+ * --------------------------------------------------------------------------
+ * Every MTR route is DIRECTIONAL, so one real line is two routes (often four, with
+ * express services) on two or more parallel tracks. Drawing per route produced the
+ * braided ribbons and the "IN"/"OU" bullets Thomas saw. So: all routes sharing a
+ * colour ARE one line, and a line's bullets are the distinct NORMALISED service
+ * labels of its routes — "4 IN" and "4 OU" both read "4".
+ * ------------------------------------------------------------------------- */
+
+/** Standalone words that only ever say which way a service runs. */
+const DIRECTION_TOKENS = new Set([
+	"IN", "OUT", "OU", "IB", "OB", "NB", "SB", "EB", "WB", "UP", "DN", "DOWN",
+	"INBOUND", "OUTBOUND", "NORTHBOUND", "SOUTHBOUND", "EASTBOUND", "WESTBOUND",
+	"CW", "CCW",
+]);
+/** Arrow glyphs (and the fullwidth variants) MTR operators use as direction marks. */
+const DIRECTION_ARROWS = /[←-⇿⬀-⬑⟵-⟺]/g;
+const LABEL_SEPARATORS = /[\s\-‐-―_/\\|·,.:;()\[\]{}]+/;
+
+/**
+ * Strip direction tokens from a service label.
+ *
+ * Only WHOLE words are stripped, case-insensitively ("2 IN" -> "2", "A Inbound" -> "A"),
+ * never substrings ("Ba" stays "Ba"). If stripping empties the label the original is
+ * kept ("OU" alone is somebody's actual route number, not a direction suffix).
+ */
+function normalizeServiceLabel(raw) {
+	const src = String(raw == null ? "" : raw).trim();
+	if (!src) return "";
+	const words = src.replace(DIRECTION_ARROWS, " ").split(LABEL_SEPARATORS).filter(Boolean);
+	const kept = words.filter((w) => !DIRECTION_TOKENS.has(w.toUpperCase()));
+	const out = kept.join(" ").replace(/^[\s\-‐-―_/\\|·,.:;]+|[\s\-‐-―_/\\|·,.:;]+$/g, "").trim();
+	return out || src;
+}
+
+/** The bullet text for one route: its number, else the first two letters of its name. */
+function routeServiceLabel(rt) {
+	const num = rt && rt.number != null ? String(rt.number).trim() : "";
+	if (num) return normalizeServiceLabel(num);
+	const name = (rt && (rt.display || rt.name)) || "";
+	return normalizeServiceLabel(name).slice(0, 2);
+}
+
+function buildLines() {
+	state.lines = new Map();
+	for (const rt of candidateRoutes()) {
+		let line = state.lines.get(rt.hex);
+		if (!line) {
+			line = { hex: rt.hex, colorInt: (rt.color || 0) & 0xFFFFFF, routeIds: [], serviceLabels: [], modes: new Set() };
+			state.lines.set(rt.hex, line);
+		}
+		line.routeIds.push(rt.id);
+		line.modes.add(rt.mode || "train");
+		const label = routeServiceLabel(rt);
+		if (label && !line.serviceLabels.some((l) => l.toLowerCase() === label.toLowerCase())) {
+			line.serviceLabels.push(label);
+		}
+	}
+	return state.lines;
+}
+
+/** The bullets a chip draws for one colour. */
+function lineLabels(hex) {
+	const line = state.lines.get(hex);
+	return line ? line.serviceLabels.slice(0, MAX_CHIP_BULLETS) : [];
+}
+
+/* ----------------------------------------------------------------------------
+ * 5b. polyline maths used by the schematic build
+ * ------------------------------------------------------------------------- */
+
+/** Even-arc-length resample to exactly n points (endpoints preserved). */
+function resamplePolyline(pts, n) {
+	const clean = [];
+	for (const p of pts) {
+		if (!clean.length || dist(clean[clean.length - 1], p) > 1e-9) clean.push([p[0], p[1]]);
+	}
+	if (!clean.length) return [];
+	if (clean.length === 1) clean.push(clean[0].slice());
+	const cum = [0];
+	for (let i = 1; i < clean.length; i++) cum.push(cum[i - 1] + dist(clean[i - 1], clean[i]));
+	const total = cum[cum.length - 1];
+	const out = [];
+	if (total <= 1e-9) {
+		for (let i = 0; i < n; i++) out.push(clean[0].slice());
+		return out;
+	}
+	let j = 1;
+	for (let i = 0; i < n; i++) {
+		const target = total * i / (n - 1);
+		while (j < cum.length - 1 && cum[j] < target) j++;
+		const span = cum[j] - cum[j - 1] || 1;
+		const f = clamp((target - cum[j - 1]) / span, 0, 1);
+		out.push([
+			clean[j - 1][0] + (clean[j][0] - clean[j - 1][0]) * f,
+			clean[j - 1][1] + (clean[j][1] - clean[j - 1][1]) * f,
+		]);
+	}
+	return out;
+}
+
+/** Samples every ~`step` blocks along a polyline (coverage + companion tests). */
+function sampleAlong(pts, step) {
+	const len = polylineLength(pts);
+	return resamplePolyline(pts, Math.max(2, Math.round(len / step) + 1));
+}
+
+function pointSegmentDist(p, a, b) {
+	const vx = b[0] - a[0], vz = b[1] - a[1];
+	const l2 = vx * vx + vz * vz;
+	if (l2 <= 1e-12) return Math.hypot(p[0] - a[0], p[1] - a[1]);
+	const t = clamp(((p[0] - a[0]) * vx + (p[1] - a[1]) * vz) / l2, 0, 1);
+	return Math.hypot(p[0] - (a[0] + vx * t), p[1] - (a[1] + vz * t));
+}
+
+/** Nearest point on a polyline, with its distance. */
+function nearestOnPolyline(p, pts) {
+	let best = null, bestD = Infinity;
+	for (let i = 1; i < pts.length; i++) {
+		const a = pts[i - 1], b = pts[i];
+		const vx = b[0] - a[0], vz = b[1] - a[1];
+		const l2 = vx * vx + vz * vz;
+		const t = l2 <= 1e-12 ? 0 : clamp(((p[0] - a[0]) * vx + (p[1] - a[1]) * vz) / l2, 0, 1);
+		const q = [a[0] + vx * t, a[1] + vz * t];
+		const d = Math.hypot(p[0] - q[0], p[1] - q[1]);
+		if (d < bestD) { bestD = d; best = q; }
+	}
+	return { point: best, dist: bestD };
+}
+
+function pointPolylineDist(p, pts) {
+	let best = Infinity;
+	for (let i = 1; i < pts.length; i++) {
+		const d = pointSegmentDist(p, pts[i - 1], pts[i]);
+		if (d < best) best = d;
+		if (best === 0) break;
+	}
+	return best;
+}
+
+function bboxOf(pts) {
+	let a = Infinity, b = Infinity, c = -Infinity, d = -Infinity;
+	for (const p of pts) {
+		a = Math.min(a, p[0]); c = Math.max(c, p[0]);
+		b = Math.min(b, p[1]); d = Math.max(d, p[1]);
+	}
+	return [a, b, c, d];
+}
+
+/**
+ * Average N equally-sampled polylines pointwise. Each is first oriented to agree with
+ * the first one — the in/out tracks of a line are usually stored in opposite
+ * directions, and averaging them unflipped would fold the pair into a bowtie.
+ */
+function averagePolylines(list) {
+	const ref = list[0];
+	const n = ref.length;
+	const acc = ref.map((p) => [p[0], p[1]]);
+	for (let k = 1; k < list.length; k++) {
+		let o = list[k];
+		if (dist(ref[0], o[0]) + dist(ref[n - 1], o[n - 1]) > dist(ref[0], o[n - 1]) + dist(ref[n - 1], o[0])) {
+			o = o.slice().reverse();
+		}
+		for (let i = 0; i < n; i++) { acc[i][0] += o[i][0]; acc[i][1] += o[i][1]; }
+	}
+	for (const p of acc) { p[0] /= list.length; p[1] /= list.length; }
+	return acc;
+}
+
+/** Light 1-2-1 smoothing; endpoints are never moved. */
+function smoothLightly(pts, passes = 1) {
+	let cur = pts;
+	for (let k = 0; k < passes; k++) {
+		if (cur.length < 3) break;
+		const out = [cur[0].slice()];
+		for (let i = 1; i < cur.length - 1; i++) {
+			out.push([
+				(cur[i - 1][0] + 2 * cur[i][0] + cur[i + 1][0]) / 4,
+				(cur[i - 1][1] + 2 * cur[i][1] + cur[i + 1][1]) / 4,
+			]);
+		}
+		out.push(cur[cur.length - 1].slice());
+		cur = out;
+	}
+	return cur;
+}
+
+/**
+ * Pull the two ends of a segment onto the station-part centroids they connect. The
+ * terminal samples are BLENDED rather than moved wholesale, so the segment bends into
+ * the station instead of kinking; this is what turns a big throat (many same-colour
+ * tracks fanning out across a station) into lines that meet at one point.
+ */
+const SNAP_WEIGHTS = [1, 0.55, 0.2];
+function snapEnds(pts, a, b) {
+	const n = pts.length;
+	if (a) for (let i = 0; i < SNAP_WEIGHTS.length && i < n; i++) {
+		const w = SNAP_WEIGHTS[i];
+		pts[i][0] += (a[0] - pts[i][0]) * w;
+		pts[i][1] += (a[1] - pts[i][1]) * w;
+	}
+	if (b) for (let i = 0; i < SNAP_WEIGHTS.length && i < n; i++) {
+		const j = n - 1 - i, w = SNAP_WEIGHTS[i];
+		if (j < 0) break;
+		pts[j][0] += (b[0] - pts[j][0]) * w;
+		pts[j][1] += (b[1] - pts[j][1]) * w;
+	}
+	return pts;
+}
+
+/* ----------------------------------------------------------------------------
+ * 5c. SCHEMATIC SEGMENTS — one line per colour per corridor, everywhere
+ * --------------------------------------------------------------------------
+ * The drawing is no longer per rail. A drawn SEGMENT is (colour, unordered pair of
+ * station parts):
+ *
+ *   1. PAIR AVERAGING. Every same-colour leg between the same two parts (the in/out
+ *      track pair, plus any duplicate services) is resampled to SEG_SAMPLES points,
+ *      oriented consistently and averaged pointwise into ONE centreline. Same-colour
+ *      lines can therefore never braid, because there is only ever one of them.
+ *   2. EXPRESS COVERAGE. A segment that spans several parts (an express A->D where the
+ *      line also runs A-B-C-D) is suppressed when COVER_FRACTION of its samples sit
+ *      within CORRIDOR_TOL of the line's other, shorter segments — unless dropping it
+ *      would disconnect its two parts. It keeps `coveredBy`, so a journey riding the
+ *      express still lights the chain underneath it.
+ *   3. CROSS-COLOUR BUNDLING. Segments of DIFFERENT colours that share a corridor
+ *      become companions; the sorted companion colour set gives each segment its
+ *      (idx, count) for the screen-space parallel offset. Same-colour segments never
+ *      offset against each other — that was the braiding bug.
+ *   4. Z-ORDER. Drawn sorted by colour int, so overlap order never flickers.
+ *
+ * The raw per-leg polylines in state.legs are untouched: the planner and the vehicle
+ * interpolation keep using REAL rail geometry. Only the drawing is schematic.
+ * ------------------------------------------------------------------------- */
+
+function buildSegments() {
+	state.ribbons = [];
+	state.bundles = [];
+	state.segByPair = new Map();
+	state.segsByColor = new Map();
+
+	/* --- 1. collect legs per (colour, part pair) --- */
+	const buckets = new Map();
 	for (const rt of visibleRoutes()) {
+		const line = state.lines.get(rt.hex);
 		for (let i = 0; i < (rt.platforms || []).length - 1; i++) {
 			const leg = state.legs.get(rt.id + "|" + i);
 			if (!leg) continue;
-			if (leg.rails.length) {
-				for (const rid of leg.rails) {
-					const r = state.rails.get(rid);
-					if (r) add(rid, r.pts, rt);
-				}
-			} else {
-				add("leg:" + [leg.from, leg.to].sort().join(">"), leg.pts, rt);
+			const a = partOfPlatform(leg.from), b = partOfPlatform(leg.to);
+			if (!a || !b || a === b) continue;          // nothing to draw inside one part
+			const key = pairKeyOf(a, b);
+			const id = rt.hex + "|" + key;
+			let bk = buckets.get(id);
+			if (!bk) {
+				bk = {
+					id, key, hex: rt.hex, colorInt: line ? line.colorInt : ((rt.color || 0) & 0xFFFFFF),
+					partA: a < b ? a : b, partB: a < b ? b : a,
+					polys: [], routes: [], modes: new Set(), hidden: true, straight: true,
+				};
+				buckets.set(id, bk);
+			}
+			bk.polys.push(resamplePolyline(leg.pts, SEG_SAMPLES));
+			if (!bk.routes.includes(rt)) bk.routes.push(rt);
+			bk.modes.add(rt.mode || "train");
+			if (!rt.hidden) bk.hidden = false;
+			if (!leg.straight) bk.straight = false;
+		}
+	}
+
+	/* --- 2. average each pair into one centreline, then snap it to the centroids --- */
+	const all = [];
+	for (const bk of buckets.values()) {
+		if (!bk.polys.length) continue;
+		let pts = bk.polys.length > 1
+			? averagePolylines(bk.polys)
+			: smoothLightly(bk.polys[0].map((p) => p.slice()), 1);
+		const ca = partCentroid(bk.partA), cb = partCentroid(bk.partB);
+		if (ca && cb && dist(pts[0], ca) + dist(pts[pts.length - 1], cb)
+			> dist(pts[0], cb) + dist(pts[pts.length - 1], ca)) pts.reverse();
+		snapEnds(pts, ca, cb);
+		all.push({
+			id: bk.id, key: bk.key, hex: bk.hex, colorInt: bk.colorInt,
+			partA: bk.partA, partB: bk.partB,
+			pts, samples: sampleAlong(pts, SAMPLE_STEP), len: polylineLength(pts), bbox: bboxOf(pts),
+			mode: bk.modes.has("boat") ? "boat" : [...bk.modes][0] || "train",
+			modes: [...bk.modes], routes: bk.routes, hidden: bk.hidden, straight: bk.straight,
+			sourceCount: bk.polys.length,
+			idx: 0, count: 1, companions: [bk.hex], companionSegs: [],
+			suppressed: false, coveredBy: [],
+		});
+	}
+
+	/* --- 3. express coverage --- */
+	const byColor = new Map();
+	for (const s of all) {
+		if (!byColor.has(s.hex)) byColor.set(s.hex, []);
+		byColor.get(s.hex).push(s);
+		state.segByPair.set(s.id, s);
+	}
+	for (const segs of byColor.values()) suppressCoveredSegments(segs);
+
+	/* --- 4. cross-colour bundling over what survives --- */
+	const drawn = all.filter((s) => !s.suppressed);
+	bundleCompanions(drawn);
+	for (const s of drawn) {
+		const colors = new Map([[s.hex, s.colorInt]]);
+		for (const o of s.companionSegs) colors.set(o.hex, o.colorInt);
+		const list = [...colors.keys()].sort((x, y) => colors.get(x) - colors.get(y) || (x < y ? -1 : 1));
+		s.companions = list;
+		s.count = list.length;
+		s.idx = list.indexOf(s.hex);
+	}
+
+	/* --- 5. stable paint order + per-colour index for the vehicle snap --- */
+	drawn.sort((a, b) => a.colorInt - b.colorInt || (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
+	state.ribbons = drawn;
+	for (const s of drawn) {
+		if (!state.segsByColor.has(s.hex)) state.segsByColor.set(s.hex, []);
+		state.segsByColor.get(s.hex).push(s);
+	}
+	buildBundleChips(drawn);
+}
+
+/**
+ * Suppress the express segments of ONE line. Candidates are tested longest first, and
+ * only STRICTLY SHORTER segments of the same line may cover them, so a chain can never
+ * be swallowed by the express it covers. A segment is kept regardless if removing it
+ * would leave its two parts with no other path through the line's own segments — a
+ * lone long link is the connection, not a duplicate of one.
+ */
+function suppressCoveredSegments(segs) {
+	const order = segs.slice().sort((a, b) => b.len - a.len);
+	for (const s of order) {
+		const bb = s.bbox;
+		const others = segs.filter((o) => o !== s && !o.suppressed && o.len < s.len - 1e-6
+			// a shorter segment can only cover part of `s` if their bboxes come within TOL
+			&& o.bbox[2] >= bb[0] - CORRIDOR_TOL && o.bbox[0] <= bb[2] + CORRIDOR_TOL
+			&& o.bbox[3] >= bb[1] - CORRIDOR_TOL && o.bbox[1] <= bb[3] + CORRIDOR_TOL);
+		if (!others.length) continue;
+		let covered = 0;
+		const by = new Set();
+		for (const p of s.samples) {
+			let bestD = Infinity, bestSeg = null;
+			for (const o of others) {
+				const ob = o.bbox;
+				if (p[0] < ob[0] - CORRIDOR_TOL || p[0] > ob[2] + CORRIDOR_TOL
+					|| p[1] < ob[1] - CORRIDOR_TOL || p[1] > ob[3] + CORRIDOR_TOL) continue;
+				const d = pointPolylineDist(p, o.pts);
+				if (d < bestD) { bestD = d; bestSeg = o; }
+				if (bestD <= 0.5) break;                     // already sitting on top of it
+			}
+			if (bestD <= CORRIDOR_TOL) { covered++; if (bestSeg) by.add(bestSeg.id); }
+		}
+		if (covered / s.samples.length < COVER_FRACTION) continue;
+		if (!partsConnectedWithout(segs, s)) continue;
+		s.suppressed = true;
+		s.coveredBy = coveringChain(segs.filter((o) => by.has(o.id)), s.partA, s.partB, [...by]);
+	}
+}
+
+/**
+ * The nearest-segment scan can pick up a neighbour that merely converges on the same
+ * station (it is nearest for the samples right at the end). Reduce `by` to the actual
+ * chain of parts from A to B, so highlighting an express lights exactly the stops it
+ * runs over and nothing hanging off them.
+ */
+function coveringChain(members, partA, partB, fallback) {
+	const adj = new Map();
+	for (const s of members) {
+		if (!adj.has(s.partA)) adj.set(s.partA, []);
+		if (!adj.has(s.partB)) adj.set(s.partB, []);
+		adj.get(s.partA).push({ to: s.partB, seg: s });
+		adj.get(s.partB).push({ to: s.partA, seg: s });
+	}
+	const prev = new Map([[partA, null]]);
+	const queue = [partA];
+	while (queue.length) {
+		const cur = queue.shift();
+		if (cur === partB) {
+			const out = [];
+			for (let p = partB; prev.get(p); p = prev.get(p).from) out.push(prev.get(p).seg.id);
+			return out.sort();
+		}
+		for (const e of adj.get(cur) || []) {
+			if (prev.has(e.to)) continue;
+			prev.set(e.to, { from: cur, seg: e.seg });
+			queue.push(e.to);
+		}
+	}
+	return fallback.slice().sort();
+}
+
+/** Are `skip`'s two parts still joined by the rest of this line's live segments? */
+function partsConnectedWithout(segs, skip) {
+	const adj = new Map();
+	const link = (a, b) => {
+		if (!adj.has(a)) adj.set(a, []);
+		adj.get(a).push(b);
+	};
+	for (const s of segs) {
+		if (s === skip || s.suppressed) continue;
+		link(s.partA, s.partB);
+		link(s.partB, s.partA);
+	}
+	const seen = new Set([skip.partA]);
+	const queue = [skip.partA];
+	while (queue.length) {
+		const cur = queue.shift();
+		if (cur === skip.partB) return true;
+		for (const nx of adj.get(cur) || []) if (!seen.has(nx)) { seen.add(nx); queue.push(nx); }
+	}
+	return false;
+}
+
+/**
+ * Companion detection. A uniform spatial grid (cell GRID_CELL) over every segment's
+ * ~SAMPLE_STEP-spaced samples is the broad phase; the narrow phase is an exact
+ * point-to-polyline distance. Two different-colour segments are companions when
+ * COMPANION_FRACTION of the SHORTER one's samples lie within CORRIDOR_TOL of the other.
+ */
+function bundleCompanions(drawn) {
+	const grid = new Map();
+	const cellOf = (x, z) => Math.floor(x / GRID_CELL) + "," + Math.floor(z / GRID_CELL);
+	for (const s of drawn) {
+		for (const p of s.samples) {
+			const k = cellOf(p[0], p[1]);
+			let cell = grid.get(k);
+			if (!cell) { cell = new Set(); grid.set(k, cell); }
+			cell.add(s);
+		}
+	}
+	// a sample can be CORRIDOR_TOL away and still land up to SAMPLE_STEP further along
+	const reach = Math.ceil((CORRIDOR_TOL + SAMPLE_STEP) / GRID_CELL);
+	const hits = new Map();          // segment -> Map(other -> samples of `segment` near `other`)
+	for (const s of drawn) {
+		let mine = hits.get(s);
+		if (!mine) { mine = new Map(); hits.set(s, mine); }
+		for (const p of s.samples) {
+			const cx = Math.floor(p[0] / GRID_CELL), cz = Math.floor(p[1] / GRID_CELL);
+			const cands = new Set();
+			for (let i = -reach; i <= reach; i++) for (let j = -reach; j <= reach; j++) {
+				const cell = grid.get((cx + i) + "," + (cz + j));
+				if (cell) for (const o of cell) cands.add(o);
+			}
+			for (const o of cands) {
+				if (o === s || o.hex === s.hex) continue;      // NEVER offset a colour against itself
+				if (pointPolylineDist(p, o.pts) <= CORRIDOR_TOL) mine.set(o, (mine.get(o) || 0) + 1);
 			}
 		}
 	}
-
-	state.ribbons = [];
-	state.bundles = [];
-	for (const g of groups.values()) {
-		const hexes = [...g.colors.keys()].sort();
-		let bMinX = Infinity, bMinZ = Infinity, bMaxX = -Infinity, bMaxZ = -Infinity;
-		for (const p of g.pts) {
-			bMinX = Math.min(bMinX, p[0]); bMaxX = Math.max(bMaxX, p[0]);
-			bMinZ = Math.min(bMinZ, p[1]); bMaxZ = Math.max(bMaxZ, p[1]);
-		}
-		hexes.forEach((hex, idx) => {
-			const c = g.colors.get(hex);
-			state.ribbons.push({
-				key: g.key, id: g.key + "|" + hex, pts: g.pts, hex, idx, count: hexes.length,
-				mode: g.mode, routes: c.routes, hidden: c.hidden,
-				bbox: [bMinX, bMinZ, bMaxX, bMaxZ], len: polylineLength(g.pts),
-			});
-		});
-		if (hexes.length >= 2) {
-			g.hexes = hexes;
-			g.len = polylineLength(g.pts);
-			g.sig = hexes.join(",");
-			bundleCandidate(g);
+	const done = new Set();
+	for (const [s, mine] of hits) {
+		for (const o of mine.keys()) {
+			const key = s.id < o.id ? s.id + "~" + o.id : o.id + "~" + s.id;
+			if (done.has(key)) continue;
+			done.add(key);
+			// the SHORTER segment's own coverage decides — a short link inside a long
+			// corridor is a companion of it, but not the other way round
+			const shorter = s.len <= o.len ? s : o;
+			const longer = shorter === s ? o : s;
+			const near = (hits.get(shorter) || new Map()).get(longer) || 0;
+			if (near / shorter.samples.length < COMPANION_FRACTION) continue;
+			s.companionSegs.push(o);
+			o.companionSegs.push(s);
 		}
 	}
-	finishBundles();
 }
 
-/* Interlining chips: one chip per distinct colour-signature, anchored on the longest
- * run carrying that signature, so a shared trunk gets ONE bullet cluster rather than a
- * chip per rail. */
-let bundleBest = new Map();
-function bundleCandidate(g) {
-	const prev = bundleBest.get(g.sig);
-	if (!prev || g.len > prev.len) bundleBest.set(g.sig, g);
-}
-function finishBundles() {
+/**
+ * Interlining chips: one chip per distinct companion-colour signature, hung off the
+ * longest segment carrying it, showing each line's NORMALISED service labels (so a
+ * directional pair contributes one bullet, not "IN" and "OU").
+ */
+function buildBundleChips(drawn) {
+	const best = new Map();
+	for (const s of drawn) {
+		if (s.count < 2) continue;
+		const sig = s.companions.join(",");
+		const prev = best.get(sig);
+		if (!prev || s.len > prev.len) best.set(sig, s);
+	}
 	state.bundles = [];
-	for (const g of bundleBest.values()) {
-		const pts = g.pts;
-		const mid = pts[Math.floor(pts.length / 2)];
-		const a = pts[Math.max(0, Math.floor(pts.length / 2) - 1)];
-		const b = pts[Math.min(pts.length - 1, Math.floor(pts.length / 2) + 1)];
+	for (const s of best.values()) {
+		const pts = s.pts;
+		const m = Math.floor(pts.length / 2);
+		const a = pts[Math.max(0, m - 1)], b = pts[Math.min(pts.length - 1, m + 1)];
 		const dx = b[0] - a[0], dz = b[1] - a[1];
 		const l = Math.hypot(dx, dz) || 1;
 		state.bundles.push({
-			x: mid[0], z: mid[1],
+			x: pts[m][0], z: pts[m][1],
 			nx: -dz / l, nz: dx / l,            // unit normal: where the chip hangs
-			colors: g.hexes.map((hex) => ({
-				hex,
-				numbers: g.colors.get(hex).routes.map((r) => r.number || r.display.slice(0, 2)).filter((v, i, arr) => arr.indexOf(v) === i),
-			})),
+			colors: s.companions.map((hex) => ({ hex, numbers: lineLabels(hex) })),
 		});
 	}
-	bundleBest = new Map();
+}
+
+/**
+ * The AXIS the drawn lines run along at one station part — what the interchange capsule
+ * has to be perpendicular to.
+ *
+ * Averaged in DOUBLE ANGLE. The two segments of a through station leave it in opposite
+ * directions, and a plain vector mean of those (however you fold them into a
+ * half-plane) cancels to nothing or, worse, to the perpendicular; doubling the angle
+ * first is the standard way to average undirected axes, and it makes a north-south
+ * trunk read north-south.
+ */
+function segmentDirAtPart(partId) {
+	let sx = 0, sz = 0, n = 0;
+	for (const s of state.ribbons) {
+		let a = null, b = null;
+		// measured past SNAP_WEIGHTS' reach, or the blend into the centroid would read as
+		// a sideways kink rather than the direction the line actually leaves the station
+		const span = Math.min(4, s.pts.length - 1);
+		if (s.partA === partId) { a = s.pts[0]; b = s.pts[span]; }
+		else if (s.partB === partId) { a = s.pts[s.pts.length - 1]; b = s.pts[s.pts.length - 1 - span]; }
+		else continue;
+		const vx = b[0] - a[0], vz = b[1] - a[1];
+		const l = Math.hypot(vx, vz);
+		if (l < 0.01) continue;
+		const c = vx / l, s2 = vz / l;
+		sx += c * c - s2 * s2;          // cos 2t
+		sz += 2 * c * s2;               // sin 2t
+		n++;
+	}
+	if (!n || Math.hypot(sx, sz) < 1e-6) return null;
+	const t = Math.atan2(sz, sx) / 2;
+	const dx = Math.cos(t), dz = Math.sin(t);
+	return dx < 0 || (dx === 0 && dz < 0) ? [-dx, -dz] : [dx, dz];
 }
 
 /** Station part glyphs: dot, or capsule when the part serves two or more ribbon colours. */
 function buildGlyphs() {
 	const shown = new Set(visibleRoutes().map((r) => r.id));
+	const known = new Set(candidateRoutes().map((r) => r.id));
 	state.glyphs = [];
 	for (const st of state.stations.values()) {
 		for (const part of st.parts) {
 			const colors = new Set();
 			let accessible = false;
 			let dx = 0, dz = 0, n = 0;
+			let servedAtAll = false;
 			for (const pid of part.platforms.length ? part.platforms : st.platformIds) {
 				const pl = state.platforms.get(pid);
 				if (!pl) continue;
 				if (pl.accessible) accessible = true;
 				for (const rid of pl.routeIds) {
 					const rt = state.routes.get(rid);
-					if (rt && shown.has(rid)) colors.add(rt.hex);
+					if (!rt) continue;
+					if (known.has(rid)) servedAtAll = true;
+					if (shown.has(rid)) colors.add(rt.hex);
 				}
 				// dominant track direction, folded to a half-plane so opposite platform
 				// vectors reinforce instead of cancelling
@@ -670,13 +1209,18 @@ function buildGlyphs() {
 				}
 			}
 			if (!colors.size && !part.platforms.length) continue;
+			// a part served ONLY by modes the Layers list has switched off goes away;
+			// one shared with a visible mode stays
+			if (servedAtAll && !colors.size) continue;
 			const dl = Math.hypot(dx, dz);
 			state.glyphs.push({
 				stationId: st.id, partId: part.id,
 				x: part.x, z: part.z,
 				colors: [...colors],
 				capsule: colors.size >= 2,
-				dir: n && dl > 0.05 ? [dx / dl, dz / dl] : [1, 0],
+				// the capsule spans the bundle, so it must follow the SCHEMATIC line's
+				// direction here, not the raw platform vectors
+				dir: segmentDirAtPart(part.id) || (n && dl > 0.05 ? [dx / dl, dz / dl] : [1, 0]),
 				accessible: accessible || (!!st.accessible && part.id === st.mainPartId),
 				main: part.id === st.mainPartId,
 				weight: (part.platforms.length || st.platformIds.length || 1),
@@ -804,10 +1348,14 @@ function offsetPolyline(pts, d) {
 	return out;
 }
 
-/** Ribbon stroke width: ~4.5 px at the reference zoom, clamped at both extremes. */
+/**
+ * Ribbon stroke width: ~4.5 px at the reference zoom, clamped at both extremes, then
+ * multiplied by the settings slider (0.6x - 1.6x).
+ */
 function ribbonWidth() {
 	const z = Math.max(0.05, state.view.scale);
-	return clamp(4.5 * uiScale() * Math.pow(z / 0.6, 0.3), 2.6, 9);
+	const scale = clamp(state.prefs.lineScale || 1, LINE_SCALE_MIN, LINE_SCALE_MAX);
+	return clamp(4.5 * uiScale() * Math.pow(z / 0.6, 0.3), 2.6, 9) * scale;
 }
 
 function strokePath(g, pts) {
@@ -835,7 +1383,7 @@ function drawStatic(dpr) {
 	labelObstacles = [];
 
 	// 1. land
-	g.fillStyle = PAPER;
+	g.fillStyle = PALETTE.paper;
 	g.fillRect(0, 0, W, H);
 
 	// world-space viewport + 25 % margin (the pan fast path blits this cache offset)
@@ -852,12 +1400,12 @@ function drawStatic(dpr) {
 	const journeyKeys = sel ? sel.ribbonKeys : null;
 
 	// 3. route ribbons (journey members are skipped here and drawn in the overlay)
-	drawRibbons(g, vp, journeyKeys, sel ? DIM_ALPHA : 1);
+	drawRibbons(g, vp, journeyKeys, sel ? PALETTE.dim : 1);
 
 	// no mapdata at all: fall back to raw rails so the page still shows the network
 	if (!state.ribbons.length) {
-		g.globalAlpha = sel ? DIM_ALPHA : 1;
-		g.strokeStyle = "#9aa2ab";
+		g.globalAlpha = sel ? PALETTE.dim : 1;
+		g.strokeStyle = PALETTE.rawRail;
 		g.lineWidth = 2;
 		g.lineCap = "round";
 		for (const r of state.rails.values()) {
@@ -869,13 +1417,13 @@ function drawStatic(dpr) {
 	}
 
 	// 4. walk connectors between split-station parts
-	drawWalks(g, vp, sel ? DIM_ALPHA : 1);
+	drawWalks(g, vp, sel ? PALETTE.dim : 1);
 
 	// 5. station glyphs
 	drawGlyphs(g, vp, sel);
 
 	// interlining bullet clusters (only worth drawing once lines are separable)
-	if (v.scale > 0.35) drawBundleChips(g, vp, sel ? DIM_ALPHA : 1);
+	if (v.scale > 0.35) drawBundleChips(g, vp, sel ? PALETTE.dim : 1);
 
 	// journey overlay: glow + full-strength ribbons, walks, glyphs, origin/destination
 	if (sel) drawJourneyOverlay(g, vp);
@@ -895,9 +1443,9 @@ function drawWater(g) {
 		for (let i = 1; i < pts.length; i++) g.lineTo(pts[i][0], pts[i][1]);
 		g.closePath();
 	}
-	g.fillStyle = WATER_FILL;
+	g.fillStyle = PALETTE.water;
 	g.fill("evenodd");             // holes and islands come free from even-odd
-	g.strokeStyle = WATER_STROKE;
+	g.strokeStyle = PALETTE.waterStroke;
 	g.lineWidth = 2;
 	g.lineJoin = "round";
 	g.stroke();
@@ -935,7 +1483,7 @@ function drawWalks(g, vp, alpha) {
 		if (Math.max(w.ax, w.bx) < vp.l || Math.min(w.ax, w.bx) > vp.r) continue;
 		if (Math.max(w.az, w.bz) < vp.t || Math.min(w.az, w.bz) > vp.b) continue;
 		const a = worldToScreen(w.ax, w.az), b = worldToScreen(w.bx, w.bz);
-		g.strokeStyle = INK2;
+		g.strokeStyle = PALETTE.ink2;
 		g.lineWidth = 3 * s * 0.8;
 		g.lineCap = "round";
 		g.setLineDash([1.5, 7]);
@@ -955,8 +1503,8 @@ function drawWalkChip(g, cx, cy, text) {
 	const x = cx - w / 2, y = cy - h / 2;
 	labelObstacles.push([x - 2, y - 2, x + w + 2, y + h + 2]);
 	chipRect(g, x, y, w, h, h / 2);
-	drawIcon(g, P_WALK, x + 8 * s + 7 * s, y + h / 2, 14 * s, INK2);
-	g.fillStyle = "#3c434b";
+	drawIcon(g, P_WALK, x + 8 * s + 7 * s, y + h / 2, 14 * s, PALETTE.ink2);
+	g.fillStyle = PALETTE.chipInk;
 	g.textAlign = "left";
 	g.textBaseline = "middle";
 	g.fillText(text, x + 8 * s + 14 * s + 4 * s, y + h / 2 + 0.5);
@@ -970,7 +1518,7 @@ function drawGlyphs(g, vp, sel) {
 		if (gl.x < vp.l || gl.x > vp.r || gl.z < vp.t || gl.z > vp.b) continue;
 		const inJourney = sel && sel.partIds.has(gl.partId);
 		if (sel && inJourney) continue;             // drawn full-strength in the overlay
-		g.globalAlpha = sel ? DIM_ALPHA : 1;
+		g.globalAlpha = sel ? PALETTE.dim : 1;
 		drawGlyph(g, gl, s, w);
 		g.globalAlpha = 1;
 	}
@@ -979,8 +1527,8 @@ function drawGlyphs(g, vp, sel) {
 function drawGlyph(g, gl, s, w) {
 	const [sx, sy] = worldToScreen(gl.x, gl.z);
 	const r = (gl.main ? 6 : 5.2) * s * (gl.weight > 3 ? 1.12 : 1);
-	g.fillStyle = "#fff";
-	g.strokeStyle = INK;
+	g.fillStyle = PALETTE.glyphFill;
+	g.strokeStyle = PALETTE.glyphStroke;
 	g.lineWidth = (gl.main ? 3 : 2.5) * s;
 	g.lineJoin = "round";
 	if (gl.capsule) {
@@ -1012,14 +1560,14 @@ function drawBundleChips(g, vp, alpha) {
 		const bullets = [];
 		for (const c of b.colors) for (const n of c.numbers) bullets.push({ hex: c.hex, n });
 		if (bullets.length < 2) continue;
-		const shown = bullets.slice(0, 6);
+		const shown = bullets.slice(0, MAX_CHIP_BULLETS);
 		const [ax, ay] = worldToScreen(b.x, b.z);
 		const R = 8.5 * s, pitch = 23 * s, h = 28 * s;
 		const w = pitch * (shown.length - 1) + R * 2 + 17 * s;
 		// hang the chip off the bundle on its normal side, with a short leader line
 		const lead = 18 * s;
 		const cx = ax + b.nx * (lead + w / 2), cy = ay + b.nz * (lead + h / 2);
-		g.strokeStyle = "#9aa2ab";
+		g.strokeStyle = PALETTE.leader;
 		g.lineWidth = 1.5;
 		g.beginPath();
 		g.moveTo(ax + b.nx * 6 * s, ay + b.nz * 6 * s);
@@ -1034,7 +1582,7 @@ function drawBundleChips(g, vp, alpha) {
 			const bx = cx - w / 2 + 8.5 * s + R + i * pitch;
 			g.fillStyle = bl.hex;
 			g.beginPath(); g.arc(bx, cy, R, 0, Math.PI * 2); g.fill();
-			g.fillStyle = "#fff";
+			g.fillStyle = "#fff";      // bullets are always white-on-colour
 			g.fillText(String(bl.n).slice(0, 2), bx, cy + 0.5);
 		});
 		g.textBaseline = "alphabetic";
@@ -1045,6 +1593,13 @@ function drawBundleChips(g, vp, alpha) {
 /* ---- labels: greedy decluttering with per-label alignment candidates ---- */
 
 const FONT = '"Helvetica Neue", Helvetica, Arial, sans-serif';
+
+/**
+ * While a journey is selected ONLY its own stations keep their name (and sub-label);
+ * every other station stays as a dim dot. Thomas's play-test: a highlighted journey
+ * across a busy network was unreadable under the full label set.
+ */
+function labelVisibleFor(gl, sel) { return !sel || sel.partIds.has(gl.partId); }
 
 function drawLabels(g, vp, sel) {
 	const s = uiScale();
@@ -1059,6 +1614,7 @@ function drawLabels(g, vp, sel) {
 	});
 
 	for (const gl of order) {
+		if (!labelVisibleFor(gl, sel)) continue;
 		if (gl.x < vp.l || gl.x > vp.r || gl.z < vp.t || gl.z > vp.b) continue;
 		const [sx, sy] = worldToScreen(gl.x, gl.z);
 		if (sx < -80 || sy < -40 || sx > canvas.clientWidth + 80 || sy > canvas.clientHeight + 40) continue;
@@ -1104,14 +1660,14 @@ function drawLabels(g, vp, sel) {
 		if (!chosen) continue;               // no room at this zoom — drop the label
 		placed.push(chosen.box);
 
-		g.globalAlpha = sel ? (inJourney ? 1 : DIM_ALPHA) : 1;
+		g.globalAlpha = sel ? (inJourney ? 1 : PALETTE.dim) : 1;
 		g.textAlign = chosen.c.align;
 		g.lineJoin = "round";
 		g.miterLimit = 2;
 		g.lineWidth = 4 * s;
-		g.strokeStyle = PAPER;                // halo, so labels survive over ribbons
+		g.strokeStyle = PALETTE.paper;                // halo, so labels survive over ribbons
 		g.strokeText(text, chosen.c.x, chosen.c.y);
-		g.fillStyle = gl.main ? INK : INK2;
+		g.fillStyle = gl.main ? PALETTE.ink : PALETTE.ink2;
 		g.fillText(text, chosen.c.x, chosen.c.y);
 
 		// secondary parts of a split station also name themselves faintly
@@ -1120,7 +1676,7 @@ function drawLabels(g, vp, sel) {
 			g.font = "500 " + s2.toFixed(1) + "px " + FONT;
 			g.lineWidth = 3.5 * s;
 			g.strokeText(gl.sub, chosen.c.x, chosen.c.y + s2 * 1.25);
-			g.fillStyle = INK2;
+			g.fillStyle = PALETTE.ink2;
 			g.fillText(gl.sub, chosen.c.x, chosen.c.y + s2 * 1.25);
 		}
 		g.globalAlpha = 1;
@@ -1165,10 +1721,21 @@ function drawJourneyOverlay(g, vp) {
 		}
 	}
 
+	// ride legs with no schematic segment at all (a stop pair the network never joins,
+	// e.g. a route whose mapdata dropped a leg): the straight dashed fallback
+	for (const fb of sel.fallbacks || []) {
+		const a = worldToScreen(fb.ax, fb.az), b = worldToScreen(fb.bx, fb.bz);
+		g.strokeStyle = fb.hex;
+		g.lineWidth = w * 0.8;
+		g.setLineDash([w * 1.4, w * 1.4]);
+		g.beginPath(); g.moveTo(a[0], a[1]); g.lineTo(b[0], b[1]); g.stroke();
+		g.setLineDash([]);
+	}
+
 	// journey walks (part-to-part links used by the itinerary)
 	for (const wk of sel.walks) {
 		const a = worldToScreen(wk.ax, wk.az), b = worldToScreen(wk.bx, wk.bz);
-		g.strokeStyle = INK2;
+		g.strokeStyle = PALETTE.ink2;
 		g.lineWidth = 3 * s;
 		g.setLineDash([1.5, 7]);
 		g.beginPath(); g.moveTo(a[0], a[1]); g.lineTo(b[0], b[1]); g.stroke();
@@ -1187,7 +1754,7 @@ function drawJourneyOverlay(g, vp) {
 		const [ox, oy] = worldToScreen(sel.origin[0], sel.origin[1]);
 		g.beginPath();
 		g.arc(ox, oy, 13 * s, 0, Math.PI * 2);
-		g.strokeStyle = ACCENT;
+		g.strokeStyle = PALETTE.accent;
 		g.globalAlpha = 0.55;
 		g.lineWidth = 2 * s;
 		g.stroke();
@@ -1198,11 +1765,11 @@ function drawJourneyOverlay(g, vp) {
 		const [dx, dy] = worldToScreen(sel.dest[0], sel.dest[1]);
 		labelObstacles.push([dx - 15 * s, dy - 31 * s, dx + 15 * s, dy + 4 * s]);
 		g.save();
-		g.shadowColor = "rgba(20,28,40,0.22)";
+		g.shadowColor = PALETTE.chipShadow;
 		g.shadowBlur = 6; g.shadowOffsetY = 2;
 		g.translate(dx, dy);
 		g.scale(s, s);
-		g.fillStyle = PIN_RED;
+		g.fillStyle = PALETTE.pin;
 		g.fill(P_PIN);
 		g.shadowColor = "transparent";
 		g.fillStyle = "#fff";
@@ -1238,7 +1805,7 @@ function frame() {
 		const f = state.view.scale / sv.scale;
 		const cx = canvas.width / 2, cy = canvas.height / 2;
 		ctx.save();
-		ctx.fillStyle = PAPER;
+		ctx.fillStyle = PALETTE.paper;
 		ctx.fillRect(0, 0, canvas.width, canvas.height);
 		ctx.translate(cx + (sv.x - state.view.x) * state.view.scale * dpr,
 			cy + (sv.z - state.view.z) * state.view.scale * dpr);
@@ -1271,6 +1838,7 @@ function drawVehicles() {
 
 	const callouts = [];
 	for (const [id, rec] of state.vehicles) {
+		if (!modeVisible(rec.mode || "train")) { rec.screen = null; continue; }
 		const p = vehiclePos(rec, renderTime);
 		if (!p) { rec.screen = null; continue; }
 		if (!rec.disp || Math.hypot(p.x - rec.disp.x, p.z - rec.disp.z) > 64) rec.disp = { x: p.x, z: p.z };
@@ -1278,20 +1846,25 @@ function drawVehicles() {
 			rec.disp.x += (p.x - rec.disp.x) * smoothing;
 			rec.disp.z += (p.z - rec.disp.z) * smoothing;
 		}
-		rec.screen = worldToScreen(rec.disp.x, rec.disp.z);
+		// interpolation runs on the REAL rails, so where the tracks spread the train
+		// sits beside the schematic line: pull the puck onto its own line's nearest
+		// drawn segment, but only when one is genuinely close (a depot move keeps its
+		// true position rather than being yanked onto the nearest passenger line).
+		const ride = snapToLine(rec.route ? colorHex(rec.route.color) : null, rec.disp.x, rec.disp.z, VEHICLE_SNAP);
+		rec.screen = ride ? worldToScreen(ride[0], ride[1]) : worldToScreen(rec.disp.x, rec.disp.z);
 		const [sx, sy] = rec.screen;
 		if (sx < -60 || sy < -60 || sx > canvas.clientWidth + 60 || sy > canvas.clientHeight + 60) continue;
 
-		const color = rec.route ? colorHex(rec.route.color) : INK2;
+		const color = rec.route ? colorHex(rec.route.color) : PALETTE.ink2;
 		const onJourney = sel && rec.route && sel.routeIds.has(rec.route.id);
 		ctx.globalAlpha = sel && !onJourney ? 0.2 : 1;
 
 		const r = 11 * s;
 		ctx.save();
-		ctx.shadowColor = "rgba(20,28,40,0.22)";
+		ctx.shadowColor = PALETTE.chipShadow;
 		ctx.shadowBlur = 6; ctx.shadowOffsetY = 2;
 		ctx.beginPath(); ctx.arc(sx, sy, r, 0, Math.PI * 2);
-		ctx.fillStyle = "#fff"; ctx.fill();
+		ctx.fillStyle = PALETTE.chip; ctx.fill();
 		ctx.restore();
 		ctx.lineWidth = 3.2 * s;
 		ctx.strokeStyle = color;
@@ -1301,11 +1874,32 @@ function drawVehicles() {
 
 		// "due in N min" callout when this train is the one the journey boards
 		if (sel && sel.boardPlatform && rec.data.nPlat === sel.boardPlatform) {
-			callouts.push({ sx, sy, color, text: (rec.route && rec.route.number ? rec.route.number : "Train") + " · due in " + etaMinutes(rec, sel.boardPlatform) + " min" });
+			const lbl = rec.route ? routeServiceLabel({
+				number: rec.route.number, display: routeBase(rec.route.name), name: rec.route.name,
+			}) : "";
+			callouts.push({ sx, sy, color, text: (lbl || "Train") + " · due in " + etaMinutes(rec, sel.boardPlatform) + " min" });
 		}
 	}
 
 	for (const c of callouts) drawCallout(ctx, c.sx + 21 * s, c.sy - 13 * s, c.text);
+}
+
+/**
+ * Nearest point of `hex`'s nearest drawn segment, or null when nothing of that colour
+ * is within `maxDist` blocks.
+ */
+function snapToLine(hex, x, z, maxDist) {
+	if (!hex) return null;
+	const segs = state.segsByColor.get(hex);
+	if (!segs || !segs.length) return null;
+	let best = null, bestD = maxDist;
+	for (const s of segs) {
+		const bb = s.bbox;
+		if (x < bb[0] - maxDist || x > bb[2] + maxDist || z < bb[1] - maxDist || z > bb[3] + maxDist) continue;
+		const r = nearestOnPolyline([x, z], s.pts);
+		if (r.point && r.dist < bestD) { bestD = r.dist; best = r.point; }
+	}
+	return best;
 }
 
 /** Rough ETA: straight-line distance to the platform at the train's current speed. */
@@ -1326,10 +1920,10 @@ function drawCallout(g, x, y, text) {
 	chipRect(g, x, y, w, h, h / 2);
 	const pulse = 0.55 + 0.45 * Math.sin(now() / 320);
 	g.globalAlpha = pulse;
-	g.fillStyle = LIVE_GREEN;
+	g.fillStyle = PALETTE.live;
 	g.beginPath(); g.arc(x + 14 * s, y + h / 2, 4 * s, 0, Math.PI * 2); g.fill();
 	g.globalAlpha = 1;
-	g.fillStyle = INK;
+	g.fillStyle = PALETTE.ink;
 	g.textAlign = "left";
 	g.textBaseline = "middle";
 	g.fillText(text, x + 25 * s, y + h / 2 + 0.5);
@@ -1523,8 +2117,9 @@ function hoverAt(sx, sy) {
 	let html;
 	if (t) {
 		const r = t.rec.route;
-		const color = r ? colorHex(r.color) : INK2;
-		const label = r ? (r.number ? r.number + " · " : "") + (routeBase(r.name) || "Train") : "Train";
+		const color = r ? colorHex(r.color) : PALETTE.ink2;
+		const lbl = r ? routeServiceLabel({ number: r.number, display: routeBase(r.name), name: r.name }) : "";
+		const label = r ? (lbl ? lbl + " · " : "") + (routeBase(r.name) || "Train") : "Train";
 		const dest = r && (r.dest || routeDest(r.name));
 		html = `<span class="swatch" style="background:${color}"></span>${esc(label)}${dest ? ' <span style="color:#8a929c">to ' + esc(firstLang(dest)) + "</span>" : ""}`;
 	} else {
@@ -1786,11 +2381,16 @@ function renderOptions() {
 	}
 }
 
+/** The bullet a planner row shows for a ride leg: normalised, direction stripped. */
+function legLabel(leg) {
+	return routeServiceLabel({ number: leg.number, display: leg.routeName, name: leg.routeName });
+}
+
 function optionCard(j, selected) {
 	const seq = [];
 	for (const leg of j.legs) {
 		if (leg.kind === "ride") {
-			seq.push(`<span class="bullet" style="background:${leg.color}">${esc(leg.number || "")}</span>`);
+			seq.push(`<span class="bullet" style="background:${leg.color}">${esc(legLabel(leg))}</span>`);
 		} else {
 			const icon = leg.mode === "boat" ? "i-boat" : "i-walk";
 			seq.push(`<span class="modechip"><svg class="icon sm"><use href="#${icon}"/></svg>${esc(fmtMeters(leg.meters))}</span>`);
@@ -1806,7 +2406,7 @@ function optionCard(j, selected) {
 			<span class="opt-dur">${fmtMin(j.durationMs / 1000)}</span>
 		</div>
 		<div class="opt-route">${seq.join(chev)}</div>
-		${first ? `<div class="opt-live"><span class="dot pulse"></span>${esc(first.number || first.routeName)} departs ${liveMin <= 0 ? "now" : "in " + liveMin + " min"}</div>` : ""}
+		${first ? `<div class="opt-live"><span class="dot pulse"></span>${esc(legLabel(first) || first.routeName)} departs ${liveMin <= 0 ? "now" : "in " + liveMin + " min"}</div>` : ""}
 		${j.tags && j.tags.length ? `<div class="opt-sub">${j.accessible ? ACCESS_IMG : ""}${esc(j.tags.join(" · "))}</div>` : ""}
 		${selected ? itineraryHtml(j) : ""}
 	</div>`;
@@ -1825,8 +2425,8 @@ function itineraryHtml(j) {
 			const from = state.platforms.get(leg.fromPlatform);
 			const badge = from && from.accessible ? ACCESS_IMG : "";
 			const sub = pendingWalk
-				? `<span class="livegreen">${esc(leg.number || leg.routeName)} departs ${fmtTime(leg.depMs)}</span>· Platform ${esc(from ? from.name || "—" : "—")} ${badge}`
-				: `Board <b>${esc(leg.number || leg.routeName)}</b>${leg.headsign ? " toward " + esc(leg.headsign) : ""} · Platform ${esc(from ? from.name || "—" : "—")} ${badge}`;
+				? `<span class="livegreen">${esc(legLabel(leg) || leg.routeName)} departs ${fmtTime(leg.depMs)}</span>· Platform ${esc(from ? from.name || "—" : "—")} ${badge}`
+				: `Board <b>${esc(legLabel(leg) || leg.routeName)}</b>${leg.headsign ? " toward " + esc(leg.headsign) : ""} · Platform ${esc(from ? from.name || "—" : "—")} ${badge}`;
 			rows.push(`
 				<div class="t">${fmtTime(leg.depMs)}</div>
 				<div class="n"><span class="node" style="border-color:${leg.color}"></span><span class="rail" style="background:${leg.color}"></span></div>
@@ -1842,7 +2442,7 @@ function itineraryHtml(j) {
 			if (next && next.kind === "ride") { pendingWalk = leg; return; }
 			rows.push(`
 				<div class="t">${fmtTime(leg.depMs)}</div>
-				<div class="n"><span class="node" style="border-color:${INK2}"></span><span class="rail walk"></span></div>
+				<div class="n"><span class="node" style="border-color:${PALETTE.ink2}"></span><span class="rail walk"></span></div>
 				<div class="c">
 					<div class="stop-name">${esc(stationLabel(leg.fromStation, leg.fromPart))}</div>
 					${walkChipHtml(leg, false)}
@@ -1890,6 +2490,7 @@ function selectJourney(journey) {
 	const partIds = new Set();
 	const routeIds = new Set();
 	const walks = [];
+	const fallbacks = [];
 	let origin = null, dest = null, boardPlatform = null;
 
 	const partOf = (platformId) => {
@@ -1911,8 +2512,10 @@ function selectJourney(journey) {
 			const rt = state.routes.get(leg.routeId);
 			if (rt) routeIds.add(rt.id);
 			if (!boardPlatform) boardPlatform = leg.fromPlatform;
-			// every ribbon the ride's legs traverse, in this route's colour
-			for (const key of legRibbonKeys(leg)) ribbonKeys.add(key);
+			// every schematic segment the ride's legs traverse, in this line's colour
+			const covered = legSegmentIds(leg);
+			for (const key of covered.ids) ribbonKeys.add(key);
+			for (const fb of covered.fallbacks) fallbacks.push(fb);
 			for (const pid of leg.stops || [leg.fromPlatform, leg.toPlatform]) {
 				const p = partOf(pid);
 				if (p) partIds.add(p);
@@ -1934,16 +2537,23 @@ function selectJourney(journey) {
 	if (firstLeg) origin = posOf(firstLeg.fromPlatform, firstLeg.fromPart);
 	if (lastLeg) dest = posOf(lastLeg.toPlatform, lastLeg.toPart);
 
-	state.selection = { journey, ribbonKeys, partIds, routeIds, walks, origin, dest, boardPlatform };
+	state.selection = { journey, ribbonKeys, partIds, routeIds, walks, fallbacks, origin, dest, boardPlatform };
 	invalidateStatic();
 }
 
-/** Ribbon ids (rail key + route colour) covered by one ride leg. */
-function legRibbonKeys(leg) {
+/**
+ * The DRAWN segments one ride leg runs over, plus the straight fallbacks for stop pairs
+ * that have no segment at all.
+ *
+ * Every stop pair maps to a (colour, part-pair) segment. A pair whose segment was
+ * suppressed as an express lights the CHAIN underneath it instead (`coveredBy`), so a
+ * rider on the express still sees a continuous highlighted line through the stations
+ * the express skips.
+ */
+function legSegmentIds(leg) {
 	const rt = state.routes.get(leg.routeId);
-	if (!rt) return [];
-	const hex = rt.hex;
-	const out = [];
+	if (!rt) return { ids: [], fallbacks: [] };
+	const ids = [], fallbacks = [];
 	const plats = rt.platforms || [];
 	const fromIdx = plats.indexOf(leg.fromPlatform);
 	const toIdx = plats.indexOf(leg.toPlatform);
@@ -1952,10 +2562,14 @@ function legRibbonKeys(leg) {
 	for (let i = lo; i < hi; i++) {
 		const lg = state.legs.get(rt.id + "|" + i);
 		if (!lg) continue;
-		if (lg.rails.length) for (const rid of lg.rails) out.push(rid + "|" + hex);
-		else out.push("leg:" + [lg.from, lg.to].sort().join(">") + "|" + hex);
+		const a = partOfPlatform(lg.from), b = partOfPlatform(lg.to);
+		const seg = a && b && a !== b ? state.segByPair.get(rt.hex + "|" + pairKeyOf(a, b)) : null;
+		if (seg && !seg.suppressed) { ids.push(seg.id); continue; }
+		if (seg && seg.suppressed && seg.coveredBy.length) { ids.push(...seg.coveredBy); continue; }
+		const pa = state.platforms.get(lg.from), pb = state.platforms.get(lg.to);
+		if (pa && pb) fallbacks.push({ ax: pa.xz[0], az: pa.xz[1], bx: pb.xz[0], bz: pb.xz[1], hex: rt.hex });
 	}
-	return out;
+	return { ids, fallbacks };
 }
 
 function clearSelection() {
@@ -2003,6 +2617,9 @@ function savePrefs() {
 			showHidden: !!state.prefs.showHidden,
 			dim: state.prefs.dim | 0,
 			planPrefs: state.plan.prefs,
+			theme: state.prefs.theme === "dark" ? "dark" : "light",
+			lineScale: clamp(state.prefs.lineScale || 1, LINE_SCALE_MIN, LINE_SCALE_MAX),
+			hiddenModes: (state.prefs.hiddenModes || []).slice(),
 		}));
 	} catch (e) { /* storage unavailable — prefs just don't persist */ }
 }
@@ -2013,6 +2630,111 @@ function loadPrefs() {
 	state.prefs.showHidden = !!p.showHidden;
 	state.prefs.dim = p.dim | 0;
 	if (p.planPrefs) Object.assign(state.plan.prefs, p.planPrefs);
+	state.prefs.theme = p.theme === "dark" ? "dark" : "light";
+	state.prefs.lineScale = Number.isFinite(p.lineScale)
+		? clamp(p.lineScale, LINE_SCALE_MIN, LINE_SCALE_MAX) : 1;
+	state.prefs.hiddenModes = Array.isArray(p.hiddenModes) ? p.hiddenModes.filter((m) => typeof m === "string") : [];
+}
+
+/* ---------------------------------------------------------------------------- 
+ * 11a. settings menu (theme / line thickness / layers)
+ * -------------------------------------------------------------------------- */
+
+/** Human name for a transport mode, for the Layers list. */
+function modeLabel(mode) {
+	const known = { train: "Trains", boat: "Boats", airplane: "Planes", plane: "Planes", cable_car: "Cable cars" };
+	if (known[mode]) return known[mode];
+	const words = String(mode || "train").split(/[_\s-]+/).filter(Boolean)
+		.map((w) => w.charAt(0).toUpperCase() + w.slice(1));
+	const out = words.join(" ");
+	return out ? (out.endsWith("s") ? out : out + "s") : "Other";
+}
+
+/**
+ * Swap the canvas palette AND the DOM theme. The canvas cannot read CSS custom
+ * properties, so the two live side by side: PALETTE here, :root[data-theme] in
+ * map.css. The static layer is fully repainted, since every cached pixel is stale.
+ */
+function applyTheme(name) {
+	const theme = name === "dark" ? "dark" : "light";
+	state.prefs.theme = theme;
+	PALETTE = THEMES[theme];
+	const root = (typeof document !== "undefined" && (document.documentElement || document.body)) || null;
+	if (root) {
+		if (typeof root.setAttribute === "function") root.setAttribute("data-theme", theme);
+		else if (root.dataset) root.dataset.theme = theme;
+	}
+	invalidateStatic();
+	// the itinerary bakes two colours into its markup at render time
+	if (state.plan.journeys.length) renderOptions();
+	return PALETTE;
+}
+
+/** Layers list: switch one transport mode on or off and rebuild the geometry. */
+function setModeVisible(mode, on) {
+	const list = state.prefs.hiddenModes || (state.prefs.hiddenModes = []);
+	const i = list.indexOf(mode);
+	if (on && i >= 0) list.splice(i, 1);
+	else if (!on && i < 0) list.push(mode);
+	savePrefs();
+	prepareGeometry();
+}
+
+function setLineScale(v) {
+	state.prefs.lineScale = clamp(Number(v) || 1, LINE_SCALE_MIN, LINE_SCALE_MAX);
+	savePrefs();
+	invalidateStatic();
+}
+
+/** One checkbox per mode the network actually contains. Rebuilt with the geometry. */
+function renderLayerList() {
+	const box = $("layerList");
+	if (!box) return;
+	const modes = modesPresent();
+	box.innerHTML = modes.map((m) => `
+		<label class="layer"><input type="checkbox" data-mode="${esc(m)}"${modeVisible(m) ? " checked" : ""}>
+		<span>${esc(modeLabel(m))}</span></label>`).join("")
+		|| '<div class="set-hint">No routes loaded yet.</div>';
+	for (const el of box.querySelectorAll("input[type=checkbox]")) {
+		el.onchange = () => setModeVisible(el.dataset.mode, !!el.checked);
+	}
+}
+
+function syncSettingsUi() {
+	for (const b of document.querySelectorAll("#themeSeg button")) {
+		b.classList.toggle("on", b.dataset.theme === state.prefs.theme);
+	}
+	const sl = $("lineScale");
+	if (sl) sl.value = String(state.prefs.lineScale || 1);
+	const out = $("lineScaleOut");
+	if (out) out.textContent = (state.prefs.lineScale || 1).toFixed(2).replace(/0$/, "") + "x";
+}
+
+function initSettings() {
+	applyTheme(state.prefs.theme);
+	const panel = $("settings"), btn = $("gearBtn");
+	const open = (on) => { if (panel && panel.classList) panel.classList.toggle("hidden", !on); };
+	if (btn) btn.onclick = (e) => {
+		if (e && e.stopPropagation) e.stopPropagation();
+		open(panel && panel.classList ? panel.classList.contains("hidden") : true);
+	};
+	document.addEventListener("click", (e) => {
+		if (!panel || !panel.contains || panel.contains(e.target) || e.target === btn) return;
+		if (btn && btn.contains && btn.contains(e.target)) return;
+		open(false);
+	});
+	for (const b of document.querySelectorAll("#themeSeg button")) {
+		b.onclick = () => { applyTheme(b.dataset.theme); savePrefs(); syncSettingsUi(); };
+	}
+	const sl = $("lineScale");
+	if (sl) {
+		sl.min = String(LINE_SCALE_MIN);
+		sl.max = String(LINE_SCALE_MAX);
+		sl.step = "0.05";
+		sl.oninput = () => { setLineScale(sl.value); syncSettingsUi(); };
+	}
+	syncSettingsUi();
+	renderLayerList();
 }
 
 /* ============================================================================
@@ -2640,9 +3362,13 @@ function bootDemo() {
 	// three synthetic trains, no SSE — the same handleFrame() the real stream feeds
 	const runs = [
 		{ id: "v1", rails: ["cor_1", "cor_2", "cor_3"], t: 0.25, step: 0.010, kmh: 52, nPlat: "mh_g",
-			route: { id: "r4", name: "Baker Line||Bayfront", number: "4", color: 0x00933C, dest: "Bayfront" } },
+			route: { id: "r4", name: "Baker Line||Bayfront", number: "4 IN", color: 0x00933C, dest: "Bayfront" } },
+		// the outbound working: it runs on the OTHER green track, and the drawn puck is
+		// snapped onto the one line both directions share
+		{ id: "v4", rails: ["cor_2o", "cor_1o", "cor_0o"], t: 0.6, step: 0.009, kmh: 50, nPlat: "gf_g",
+			route: { id: "r4o", name: "Baker Line||Northgate", number: "4 OU", color: 0x00933C, dest: "Northgate" } },
 		{ id: "v2", rails: ["blu_1", "blu_2"], t: 0.4, step: 0.006, kmh: 78, nPlat: "hv_b",
-			route: { id: "rA", name: "Airport Express||Airport", number: "A", color: 0x0039A6, dest: "Airport" } },
+			route: { id: "rA", name: "Airport Express||Airport", number: "A IN", color: 0x0039A6, dest: "Airport" } },
 		{ id: "v3", rails: ["red_1", "red_2"], t: 0.1, step: 0.008, kmh: 46, nPlat: "fd_r",
 			route: { id: "rR", name: "Ridge Line||South Yards", number: "1", color: 0xEE352E, dest: "South Yards" } },
 	];
@@ -2670,11 +3396,16 @@ function bootDemo() {
 }
 
 /**
- * A small synthetic city, laid out in the proportions of the approved mock:
+ * A small synthetic city, laid out in the proportions of the approved mock, and built
+ * to exercise the SCHEMATIC line model the way a real MTR network does:
  *   - a river + harbor (organic water polygon) with an island (even-odd hole)
- *   - a green trunk with TWO same-colour services (4 and 5 — they merge into one
- *     ribbon) bundled beside a BLUE pair (A and C) on the same rails: the corridor
- *     therefore renders as two parallel ribbons with a hairline gap
+ *   - a green trunk that is FOUR routes on FOUR tracks — the local pair "4 IN"/"4 OU"
+ *     and the express pair "5 IN"/"5 OU" — plus a BLUE trunk ("A IN"/"A OU", "C IN")
+ *     on its own track in the same corridor. What must come out of that:
+ *       * one green centreline and one blue centreline, no same-colour doubling
+ *       * the express ng->bc suppressed, because the local chain covers it
+ *       * bullets reading "4", "5", "A", "C" — never "IN" or "OU"
+ *       * green and blue bundled side by side with one hairline gap
  *   - an orange crosstown, a red north-south line, a boat ferry (dashed)
  *   - a purple shuttle whose only leg has NO rails, exercising the straight-line
  *     fallback, and a hidden depot move (only drawn with the show-hidden pref)
@@ -2693,18 +3424,40 @@ function buildDemoCity() {
 		});
 	};
 
-	// shared trunk: green AND blue run over these rails (the interlining test)
-	R("cor_0", [[640, 70], [638, 110], [636, 150]]);
-	R("cor_1", [[636, 150], [634, 205], [633, 260]]);
-	R("cor_2", [[633, 260], [633, 312], [634, 365]]);
-	R("cor_3", [[634, 365], [637, 415], [640, 468]]);
-	// green branch south
-	R("grn_0", [[640, 468], [641, 530], [650, 601]]);
-	R("grn_1", [[650, 601], [690, 690], [720, 780], [748, 880]]);
-	// blue branch east, over the river
-	R("blu_0", [[640, 468], [710, 520], [810, 555]]);
+	/* THE CORRIDOR, one track pitch (6 blocks) per track.
+	 *   -12/-6 : blue trunk            (btr_*)
+	 *      0/+6 : green local pair      (cor_*, cor_*o)
+	 *    +12/+18: green express pair    (exp_0, exp_0o)
+	 * The `o` rails are authored in the OPPOSITE direction, exactly like a real MTR
+	 * outbound route's rails, so chainRails has to flip them and pair-averaging has to
+	 * re-orient them. */
+	const shift = (a, dx, dz) => a.map((p) => [p[0] + dx, p[1] + dz]);
+	const rev = (a) => a.slice().reverse();
+	const cor = [
+		[[640, 70], [638, 110], [636, 150]],
+		[[636, 150], [634, 205], [633, 260]],
+		[[633, 260], [633, 312], [634, 365]],
+		[[634, 365], [637, 415], [640, 468]],
+	];
+	const grn0 = [[640, 468], [641, 530], [650, 601]];
+	const grn1 = [[650, 601], [690, 690], [720, 780], [748, 880]];
+	cor.forEach((a, i) => R("cor_" + i, a));                       // green local, inbound
+	cor.forEach((a, i) => R("cor_" + i + "o", rev(shift(a, 6, 0))));  // green local, outbound
+	R("grn_0", grn0); R("grn_1", grn1);
+	R("grn_0o", rev(shift(grn0, 6, 0))); R("grn_1o", rev(shift(grn1, 6, 0)));
+	// green EXPRESS pair: Northgate -> Baker City Central, skipping Maple Heights,
+	// Garfield Av and Museum, on its own track pair further out
+	const exp = [[652, 70], [650, 110], [648, 150], [646, 205], [645, 260],
+		[645, 312], [646, 365], [649, 415], [652, 468]];
+	R("exp_0", exp); R("exp_0o", rev(shift(exp, 6, 0)));
+	// blue trunk: the same corridor, its own track, one pitch west
+	cor.forEach((a, i) => R("btr_" + i, shift(a, -6, 0)));
+	// blue branch east, over the river (the outbound short-turns at Riverside)
+	R("blu_0", [[634, 468], [710, 520], [810, 555]]);
 	R("blu_1", [[810, 555], [960, 578], [1080, 596], [1210, 626]]);
 	R("blu_2", [[1210, 626], [1275, 648], [1332, 668]]);
+	R("blu_1o", rev(shift([[810, 555], [960, 578], [1080, 596], [1210, 626]], 0, 6)));
+	R("blu_2o", rev(shift([[1210, 626], [1275, 648], [1332, 668]], 0, 6)));
 	// orange crosstown, terminating at the airport terminal
 	R("org_0", [[470, 215], [610, 206], [760, 199]]);
 	R("org_1", [[760, 199], [980, 190], [1180, 184]]);
@@ -2723,11 +3476,11 @@ function buildDemoCity() {
 		mid: [x, 64, z], routeIds: [], accessible: !!accessible,
 	});
 	const platforms = [
-		P("ng_g", "1", "ng", 636, 70, 0, 1, true), P("ng_b", "2", "ng", 645, 70, 0, 1, true),
+		P("ng_g", "1", "ng", 636, 70, 0, 1, true), P("ng_b", "2", "ng", 634, 70, 0, 1, true),
 		P("mh_g", "1", "mh", 636, 150, 0, 1, true),
 		P("gf_g", "1", "gf", 633, 260, 0, 1, false),
 		P("mu_g", "1", "mu", 634, 365, 0, 1, false),
-		P("bc_g", "1", "bc", 636, 468, 0, 1, true), P("bc_b", "3", "bc", 645, 468, 0, 1, true),
+		P("bc_g", "1", "bc", 636, 468, 0, 1, true), P("bc_b", "3", "bc", 634, 468, 0, 1, true),
 		P("sp_g", "1", "sp", 650, 601, 0.4, 1, false),
 		P("bf_g", "1", "bf", 748, 880, 0.3, 1, true), P("bf_f", "F", "bf", 756, 884, 1, 0.2, true),
 		P("rs_b", "2", "rs", 810, 555, 1, 0.2, false),
@@ -2770,11 +3523,16 @@ function buildDemoCity() {
 	];
 
 	const RT = (id, name, number, color, hidden) => ({ id, name, number, color, hidden: !!hidden });
+	// Route NUMBERS carry MTR-style direction suffixes; the map must normalise them
+	// away ("4 IN" and "4 OU" are both the "4"), and colour alone is the line.
 	const routes = [
-		RT("r4", "Baker Line||Bayfront", "4", 0x00933C),
-		RT("r5", "Baker Local||Southport", "5", 0x00933C),
-		RT("rA", "Airport Express||Airport", "A", 0x0039A6),
-		RT("rC", "City Connector||Airport", "C", 0x0039A6),
+		RT("r4", "Baker Line||Bayfront", "4 IN", 0x00933C),
+		RT("r4o", "Baker Line||Northgate", "4 OU", 0x00933C),
+		RT("r5", "Baker Express||Baker City Central", "5 IN", 0x00933C),
+		RT("r5o", "Baker Express||Northgate", "5 OU", 0x00933C),
+		RT("rA", "Airport Express||Airport", "A IN", 0x0039A6),
+		RT("rAo", "Airport Express||Riverside", "A OU", 0x0039A6),
+		RT("rC", "City Connector||Airport", "C IN", 0x0039A6),
 		RT("rO", "Crosstown||Airport Terminal", "7", 0xFF6319),
 		RT("rR", "Ridge Line||South Yards", "1", 0xEE352E),
 		RT("rF", "Harbor Ferry||Airport", "F", 0x3F7FA8),
@@ -2784,21 +3542,37 @@ function buildDemoCity() {
 
 	const leg = (...rails) => ({ rails });
 	const mdRoutes = [
-		{ id: "r4", name: "Baker Line||Bayfront", number: "4", color: 0x00933C, hidden: false, mode: "train",
+		// GREEN LOCAL, both directions on their own tracks: pair-averaging must fold the
+		// two into one drawn centreline instead of two braided ribbons.
+		{ id: "r4", name: "Baker Line||Bayfront", number: "4 IN", color: 0x00933C, hidden: false, mode: "train",
 			platforms: ["ng_g", "mh_g", "gf_g", "mu_g", "bc_g", "sp_g", "bf_g"],
 			legs: [leg("cor_0"), leg("cor_1"), leg("cor_2"), leg("cor_3"), leg("grn_0"), leg("grn_1")],
 			durations: [140000, 165000, 160000, 155000, 190000, 300000], durationsValid: true, headwayMs: 300000 },
-		{ id: "r5", name: "Baker Local||Southport", number: "5", color: 0x00933C, hidden: false, mode: "train",
-			platforms: ["ng_g", "mh_g", "mu_g", "bc_g", "sp_g"],
-			legs: [leg("cor_0"), leg("cor_1", "cor_2"), leg("cor_3"), leg("grn_0")],
-			durations: [140000, 300000, 155000, 190000], durationsValid: true, headwayMs: 420000 },
-		{ id: "rA", name: "Airport Express||Airport", number: "A", color: 0x0039A6, hidden: false, mode: "train",
+		{ id: "r4o", name: "Baker Line||Northgate", number: "4 OU", color: 0x00933C, hidden: false, mode: "train",
+			platforms: ["bf_g", "sp_g", "bc_g", "mu_g", "gf_g", "mh_g", "ng_g"],
+			legs: [leg("grn_1o"), leg("grn_0o"), leg("cor_3o"), leg("cor_2o"), leg("cor_1o"), leg("cor_0o")],
+			durations: [300000, 190000, 155000, 160000, 165000, 140000], durationsValid: true, headwayMs: 300000 },
+		// GREEN EXPRESS, both directions: one long ng->bc segment the local chain covers,
+		// so the drawn map suppresses it (and a journey on it lights the chain instead).
+		{ id: "r5", name: "Baker Express||Baker City Central", number: "5 IN", color: 0x00933C, hidden: false, mode: "train",
+			platforms: ["ng_g", "bc_g"], legs: [leg("exp_0")],
+			durations: [420000], durationsValid: true, headwayMs: 900000 },
+		{ id: "r5o", name: "Baker Express||Northgate", number: "5 OU", color: 0x00933C, hidden: false, mode: "train",
+			platforms: ["bc_g", "ng_g"], legs: [leg("exp_0o")],
+			durations: [420000], durationsValid: true, headwayMs: 900000 },
+		{ id: "rA", name: "Airport Express||Airport", number: "A IN", color: 0x0039A6, hidden: false, mode: "train",
 			platforms: ["ng_b", "bc_b", "rs_b", "hv_b", "ap_b"],
-			legs: [leg("cor_0", "cor_1", "cor_2", "cor_3"), leg("blu_0"), leg("blu_1"), leg("blu_2")],
+			legs: [leg("btr_0", "btr_1", "btr_2", "btr_3"), leg("blu_0"), leg("blu_1"), leg("blu_2")],
 			durations: [560000, 210000, 380000, 150000], durationsValid: true, headwayMs: 360000 },
-		{ id: "rC", name: "City Connector||Airport", number: "C", color: 0x0039A6, hidden: false, mode: "train",
+		// the blue outbound short-turns at Riverside — the demo deliberately keeps the
+		// network directed so "travel backwards" still has no path (see planner.mjs)
+		{ id: "rAo", name: "Airport Express||Riverside", number: "A OU", color: 0x0039A6, hidden: false, mode: "train",
+			platforms: ["ap_b", "hv_b", "rs_b"],
+			legs: [leg("blu_2o"), leg("blu_1o")],
+			durations: [150000, 380000], durationsValid: true, headwayMs: 360000 },
+		{ id: "rC", name: "City Connector||Airport", number: "C IN", color: 0x0039A6, hidden: false, mode: "train",
 			platforms: ["ng_b", "bc_b", "rs_b", "ap_b"],
-			legs: [leg("cor_0", "cor_1", "cor_2", "cor_3"), leg("blu_0"), leg("blu_1", "blu_2")],
+			legs: [leg("btr_0", "btr_1", "btr_2", "btr_3"), leg("blu_0"), leg("blu_1", "blu_2")],
 			durations: [560000, 210000, 520000], durationsValid: true, headwayMs: 600000 },
 		// durationsValid FALSE with durations.length === platforms.length: leg i's time
 		// lives at i+1 (the depot-inbound-leg quirk documented in the brief)

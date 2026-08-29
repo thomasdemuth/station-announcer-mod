@@ -4,6 +4,14 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>System Map+</title>
+<!-- Theme before the first paint: map.js runs at the end of <body>, which would show a
+     frame of the light page to a dark-mode rider. Same key and shape map.js persists. -->
+<script>
+try {
+	var _p = JSON.parse(localStorage.getItem("sa_mapplus_prefs") || "{}");
+	document.documentElement.setAttribute("data-theme", _p && _p.theme === "dark" ? "dark" : "light");
+} catch (e) { /* storage unavailable — the light default stands */ }
+</script>
 <link rel="stylesheet" href="map.css">
 </head>
 <body>
@@ -20,6 +28,7 @@
 	<symbol id="i-chev" viewBox="0 0 24 24"><path d="M10 6 8.59 7.41 13.17 12l-4.58 4.59L10 18l6-6z"/></symbol>
 	<symbol id="i-swap" viewBox="0 0 24 24"><path d="M16 17.01V10h-2v7.01h-3L15 21l4-3.99h-3zM9 3 5 6.99h3V14h2V6.99h3L9 3z"/></symbol>
 	<symbol id="i-locate" viewBox="0 0 24 24"><path d="M12 2 4.5 20.29l.71.71L12 18l6.79 3 .71-.71z"/></symbol>
+	<symbol id="i-gear" viewBox="0 0 24 24"><path d="M19.14 12.94c.04-.3.06-.61.06-.94 0-.32-.02-.64-.07-.94l2.03-1.58a.49.49 0 0 0 .12-.61l-1.92-3.32a.49.49 0 0 0-.59-.22l-2.39.96c-.5-.38-1.03-.7-1.62-.94l-.36-2.54a.48.48 0 0 0-.48-.41h-3.84a.48.48 0 0 0-.47.41l-.36 2.54c-.59.24-1.13.57-1.62.94l-2.39-.96a.48.48 0 0 0-.59.22L2.74 8.87a.48.48 0 0 0 .12.61l2.03 1.58c-.05.3-.09.63-.09.94s.02.64.07.94l-2.03 1.58a.49.49 0 0 0-.12.61l1.92 3.32c.12.22.37.29.59.22l2.39-.96c.5.38 1.03.7 1.62.94l.36 2.54c.05.24.24.41.48.41h3.84c.24 0 .44-.17.47-.41l.36-2.54c.59-.24 1.13-.56 1.62-.94l2.39.96c.22.08.47 0 .59-.22l1.92-3.32a.49.49 0 0 0-.12-.61l-2.01-1.58zM12 15.6A3.6 3.6 0 1 1 12 8.4a3.6 3.6 0 0 1 0 7.2z"/></symbol>
 	<symbol id="i-pin" viewBox="0 0 24 24"><path d="M12 2C8.1 2 5 5.1 5 9c0 5.2 7 13 7 13s7-7.8 7-13c0-3.9-3.1-7-7-7zm0 9.5A2.5 2.5 0 1 1 12 6.5a2.5 2.5 0 0 1 0 5z"/></symbol>
 	<!-- accessibility badge, inlined from dispatch/access_badge.svg -->
 	<symbol id="i-badge" viewBox="0 0 150 150">
@@ -87,6 +96,35 @@
 	<div id="options"></div>
 	<div id="plannerHint" class="hint">Pick a start and a destination — or click two stations on the map.</div>
 </aside>
+
+<!-- map settings: theme, line thickness, mode layers -->
+<button id="gearBtn" class="gear" title="Map settings" aria-label="Map settings">
+	<svg class="icon" viewBox="0 0 24 24"><use href="#i-gear"/></svg>
+</button>
+<div id="settings" class="setcard hidden">
+	<div class="set-title">Map settings</div>
+
+	<div class="set-row">
+		<label>Theme</label>
+		<div class="seg" id="themeSeg">
+			<button type="button" data-theme="light">Light</button>
+			<button type="button" data-theme="dark">Dark</button>
+		</div>
+	</div>
+
+	<div class="set-row">
+		<label>Line thickness</label>
+		<div class="set-slider">
+			<input id="lineScale" type="range" min="0.6" max="1.6" step="0.05" value="1">
+			<span id="lineScaleOut" class="set-out">1x</span>
+		</div>
+	</div>
+
+	<div class="set-row col">
+		<label>Layers</label>
+		<div id="layerList" class="layers"></div>
+	</div>
+</div>
 
 <div id="zoomer">
 	<button id="zIn" title="Zoom in">+</button>

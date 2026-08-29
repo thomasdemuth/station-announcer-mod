@@ -2913,3 +2913,30 @@ Dispatch / Map+, falls back to two-way when cramped); dispatch UI topbar "Map+"
 link. NOT in-game tested: everything (buttons, real-network mapdata joins,
 terrain scan on Baker City, live journeys); browser-verified in ?demo=1 at
 1680×1000 incl. planner options, selection states, zoom/pan, label declutter.
+
+## System Map+ round 2 — schematic lines, settings (2026-08-29, Thomas's feedback)
+
+Thomas's decisions (do not re-ask): COLOUR ALONE defines a line; ALWAYS
+schematic (no true-track toggle on this page); journey-selected = only journey
+stations keep labels; dark mode = MTA-Live style. Root cause of his screenshots:
+MTR routes are directional, so every line was drawn once per route per track —
+doubling, braided gaps (opposite-direction legs offset to opposite sides),
+express weaves, station-throat yarn balls, and "IN"/"OU" bullets (direction
+suffixes in route numbers).
+
+map.js rework: state.lines (colour → services); normalizeServiceLabel strips
+direction tokens (IN/OU/…BOUND/arrows) with un-stripped fallback; drawn
+segments are (colour, station-part pair) — same-colour legs on a pair get
+resampled to 32 pts and AVERAGED into a centreline, ends blend-snapped to part
+centroids ([1,.55,.2] over 3 samples — this un-knots throats); longer
+same-colour segments ≥85% within 14 blocks of the shorter chain are SUPPRESSED
+as express duplicates (coveredBy pruned to the real A→B chain, connectivity
+BFS guard); cross-colour companions via sample grid (≥60% of the shorter
+within 14) give stable side-by-side offsets — same colour NEVER offsets
+against itself (the braid fix). Planner + vehicle interpolation still use raw
+rails; drawn pucks snap ≤24 blocks onto their line's segment. Settings gear:
+Light/Dark (JS palette + CSS vars, pre-paint theme apply), thickness 0.6–1.6×,
+per-mode layer toggles; persisted. Demo upgraded to directional pairs at
+6-block pitch + a green express pair, proving all of it; harness 102 + planner
+55 green. Browser-verified both themes at 1680×1000. 2.4.33. NOT in-game
+tested on Baker City.
