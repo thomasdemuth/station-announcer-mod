@@ -295,7 +295,50 @@ Four fixes/features from Thomas's feedback round (his answers, do not re-ask):
   model rebuild (tripod look, reader heads, pictogram plates day+night,
   HEET comb/lintel, signboard straps).
 
-### SYSTEM MAP+ (2026-08-29) — geographic map + journey planner, SHIPPED 2.4.32; NOT in-game tested
+### SYSTEM MAP+ (2026-08-29) — SHIPPED 2.4.37 after four feedback rounds; NOT in-game tested
+
+**Rounds 2–4 (read PROGRESS.md "System Map+" entries for the detail).** Thomas's
+play-test feedback drove three reworks. THE RULES HE SET (do not re-ask): COLOUR
+ALONE defines a line; ALWAYS schematic (tracks are reference, not truth); a
+selected journey hides every other station's label; dark mode is MTA-Live; walk
+speed is Minecraft's (4.3 m/s default, slider); a better route during tracking is
+OFFERED in a popup, never auto-switched; scans cover the WHOLE GENERATED WORLD.
+
+- **Schematic engine** (map.js): drawn segment = (colour, station-part pair);
+  same-colour legs AVERAGE into one centreline; `truncateApproaches` cuts balloon
+  turning loops BEFORE averaging (else the pair folds into a bowtie);
+  `alignEndTangents` gives every arrival at a part a shared axis via rigid
+  rotation (fixes the "line folds back on itself" hooks); express duplicates
+  suppressed at 24 blocks/0.8; PARALLEL-OF-REFERENCE bundling — companions redraw
+  as the reference's shape at their own lateral offset (literal collapse was tried
+  and REJECTED: it dog-legs at stations only one line serves); `canonicalOffsetSign`
+  pins a colour to one side; shade-drift merging (per-channel ≤16 → one line);
+  service labels normalise number→name→raw ("IN"+"Kransfield Loop" → "Kra").
+- **Whole-world scans** (Dynmap technique): chunk existence from REGION-FILE
+  HEADERS (first 4 KiB, 256 B/region bitmaps, background thread) — discovery loads
+  nothing, sampling never generates. Auto-runs 300 ticks after SERVER_STARTED
+  (`dispatch.autoScan`), terrain then satellite, sequential; terrain skips on bbox
+  containment (+64 slack), satellite diffs missing TILES only and publishes every
+  64 so long scans show progress and resume across restarts. Manual
+  `/dispatch satellite scan` stays a FULL refresh. Nether uses a ceiling probe.
+- **Planner**: time-dependent multi-criteria label-correcting search, states are
+  (platform, routeAboard); `throughRuns` (server-emitted from depot.routes order)
+  lets a rider stay seated across a collapsed terminus — no wait, no transfer;
+  street transfers between stations ≤120 blocks EXCLUDING adjacent-stop pairs
+  (else it tells riders to walk the trunk); point-to-point via a copy-on-write
+  graph overlay; step-free is a hard constraint on board/alight/transfer.
+- **Live journey tracking**: `trackReduce` pure reducer + vehicle correlation
+  (12→24 block hysteresis, two-tick confirm), guidance banner, loud alight alert,
+  faster-route popup. GPS = player positions in the SSE frames (4 Hz);
+  `?player=<name>` from the dashboard button picks the self dot.
+- **Test rigs**: `scratchpad/harness.mjs` (417 checks) + `planner.mjs` (81) run
+  map.js in a vm with a stub DOM — RECREATE THESE for any map work; also
+  `scratchpad/render_scene.py` rasterises screen-space polylines exported from the
+  live page, which is how the geometry was verified without a browser.
+- **Browser-pane gotcha**: a hidden pane composites ONE FRAME LATE — a "blank"
+  screenshot is stale, not a bug. Take two, or verify numerically.
+
+### SYSTEM MAP+ v1 (2026-08-29) — the original five phases, SHIPPED 2.4.32
 
 All five phases done in one day (read PROGRESS.md "System Map+" for details).
 Mock v2 approved by Thomas (tools/nextmap_mock/, :8792) → server data
