@@ -1,0 +1,477 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>System Map+ · mock v2 (selected journey)</title>
+<style>
+  :root {
+    --font: "Helvetica Neue", Helvetica, Arial, sans-serif;
+    --ink: #1c1f23;
+    --ink-2: #5b6470;
+    --ink-3: #8a929c;
+    --accent: #1a73e8;
+    --live: #0f9d58;
+    --g45: #00933C;   /* 4/5 green */
+    --bAC: #0039A6;   /* A/C blue  */
+    --card: #ffffff;
+    --field: #f1f3f5;
+    --hair: #e4e7ea;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body { height: 100%; overflow: hidden; }
+  body { font-family: var(--font); color: var(--ink); background: #f6f3ec; }
+
+  #map { position: absolute; inset: 0; width: 100%; height: 100%; display: block; cursor: grab; touch-action: none; }
+  #map.dragging { cursor: grabbing; }
+  #map text { font-family: var(--font); }
+
+  .pulse { animation: pulse 1.6s ease-in-out infinite; transform-box: fill-box; transform-origin: center; }
+  @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: .35; } }
+
+  /* ------------- planner card ------------- */
+  #planner {
+    position: absolute; top: 16px; left: 16px; width: 396px;
+    max-height: calc(100% - 32px); overflow-y: auto;
+    background: var(--card); border-radius: 14px;
+    box-shadow: 0 10px 34px rgba(20, 28, 40, .20), 0 1px 3px rgba(20,28,40,.10);
+    padding: 18px 18px 14px;
+  }
+  #planner::-webkit-scrollbar { width: 0; }
+
+  .brand { display: flex; align-items: baseline; gap: 8px; margin-bottom: 14px; }
+  .brand b { font-size: 16px; letter-spacing: .2px; font-weight: 700; }
+  .brand span { font-size: 11.5px; color: var(--ink-3); letter-spacing: .4px; }
+
+  .search { display: grid; grid-template-columns: 18px 1fr 30px; column-gap: 10px; align-items: center; }
+  .rail-col { grid-column: 1; display: flex; flex-direction: column; align-items: center; align-self: stretch; padding: 14px 0; }
+  .fields-col { grid-column: 2; min-width: 0; }
+  .rail-o { width: 9px; height: 9px; border: 2.5px solid #5f6a76; border-radius: 50%; background: #fff; }
+  .rail-dots { flex: 1; width: 0; border-left: 2px dotted #c3c9d0; margin: 4px 0; }
+  .field { background: var(--field); border-radius: 9px; height: 40px; display: flex; align-items: center;
+           padding: 0 12px; font-size: 14px; font-weight: 500; }
+  .field + .field { margin-top: 8px; }
+  .field .ph { color: var(--ink-2); font-weight: 400; }
+  .swap { grid-column: 3; align-self: center; justify-self: center;
+          width: 30px; height: 30px; border-radius: 50%; border: 1px solid var(--hair);
+          display: flex; align-items: center; justify-content: center; background: #fff; color: var(--ink-2);
+          box-shadow: 0 1px 2px rgba(0,0,0,.06); }
+  .icon { width: 16px; height: 16px; fill: currentColor; display: block; }
+  .icon.sm { width: 13px; height: 13px; }
+
+  .timebar { display: flex; gap: 8px; margin-top: 12px; align-items: center; }
+  .timebar .now {
+    display: inline-flex; align-items: center; gap: 7px; padding: 7px 12px;
+    border: 1px solid var(--hair); border-radius: 999px; font-size: 13px; font-weight: 600;
+    box-shadow: 0 1px 2px rgba(0,0,0,.05); color: var(--ink);
+  }
+  .timebar .at { font-size: 13px; color: var(--accent); font-weight: 600; padding: 7px 6px; }
+
+  .prefs { display: flex; gap: 5px; margin-top: 10px; flex-wrap: nowrap; }
+  .chip { font-size: 11.5px; font-weight: 600; padding: 5px 10px; border-radius: 999px;
+          border: 1px solid var(--hair); color: var(--ink-2); white-space: nowrap;
+          display: inline-flex; align-items: center; gap: 5px; }
+  .chip.on { background: var(--ink); border-color: var(--ink); color: #fff; }
+  .chip img, .chip svg { display: block; }
+
+  .liverow { display: flex; align-items: center; gap: 7px; margin: 16px 2px 8px;
+             font-size: 10.5px; font-weight: 700; letter-spacing: 1.1px; color: var(--ink-3); }
+  .liverow .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--live); }
+  .liverow em { font-style: normal; color: var(--live); }
+
+  /* ------------- option cards ------------- */
+  .opt { border: 1px solid var(--hair); border-radius: 12px; padding: 12px 14px; margin-top: 8px; }
+  .opt.sel { border: 2px solid var(--accent); padding: 11px 13px; box-shadow: 0 4px 14px rgba(26,115,232,.10); }
+  .opt-head { display: flex; align-items: baseline; justify-content: space-between; }
+  .opt-times { font-size: 14.5px; font-weight: 700; letter-spacing: .1px; }
+  .opt-dur { font-size: 14.5px; font-weight: 700; }
+  .opt-route { display: flex; align-items: center; gap: 6px; margin-top: 8px; }
+  .bullet { width: 21px; height: 21px; border-radius: 50%; color: #fff; font-size: 12.5px; font-weight: 700;
+            display: inline-flex; align-items: center; justify-content: center; flex: none; }
+  .b-g { background: var(--g45); } .b-b { background: var(--bAC); }
+  .sep { color: #c3c9d0; display: flex; }
+  .modechip { display: inline-flex; align-items: center; gap: 5px; font-size: 12px; font-weight: 600;
+              color: var(--ink-2); border: 1px solid var(--hair); border-radius: 999px; padding: 3px 9px; }
+  .opt-live { margin-top: 8px; font-size: 12.5px; font-weight: 600; color: var(--live);
+              display: flex; align-items: center; gap: 6px; }
+  .opt-live .dot { width: 6px; height: 6px; border-radius: 50%; background: var(--live); }
+  .opt-sub { margin-top: 6px; font-size: 12px; color: var(--ink-3); display: flex; align-items: center; gap: 5px; }
+
+  /* itinerary inside selected card */
+  .itin { margin-top: 12px; border-top: 1px solid var(--hair); padding-top: 12px;
+          display: grid; grid-template-columns: 40px 22px 1fr; }
+  .itin .t  { grid-column: 1; font-size: 12px; font-weight: 600; color: var(--ink-2); padding-top: 1px; }
+  .itin .n  { grid-column: 2; position: relative; display: flex; justify-content: center; }
+  .itin .c  { grid-column: 3; padding-bottom: 14px; }
+  .itin .c:last-child { padding-bottom: 2px; }
+  .node { width: 11px; height: 11px; border-radius: 50%; background: #fff; border: 3px solid var(--ink); margin-top: 2px; z-index: 1; }
+  .node.g { border-color: var(--g45); } .node.b { border-color: var(--bAC); }
+  .node.pin { border-color: #d93025; background: #d93025; }
+  .rail { position: absolute; top: 12px; bottom: -2px; width: 4px; border-radius: 2px; }
+  .rail.g { background: var(--g45); } .rail.b { background: var(--bAC); }
+  .rail.walk { width: 0; border-left: 3px dotted #b9c0c8; }
+  .stop-name { font-size: 13.5px; font-weight: 700; }
+  .stop-sub { font-size: 12px; color: var(--ink-2); margin-top: 2px; display: flex; align-items: center; gap: 5px; flex-wrap: wrap; }
+  .ride { font-size: 12px; color: var(--ink-3); margin: 4px 0 12px; }
+  .tchip { display: inline-flex; align-items: center; gap: 6px; background: var(--field); border-radius: 8px;
+           padding: 5px 9px; font-size: 12px; font-weight: 600; color: var(--ink-2); margin-top: 6px; }
+  .tchip .icon { width: 13px; height: 13px; }
+  .badge-14 { width: 14px; height: 14px; border-radius: 3.5px; display: block; }
+  .livegreen { color: var(--live); font-weight: 700; }
+
+  /* ------------- map chrome ------------- */
+  #zoomer { position: absolute; right: 18px; bottom: 26px; width: 42px; background: #fff; border-radius: 10px;
+            box-shadow: 0 4px 14px rgba(20,28,40,.18); overflow: hidden; }
+  #zoomer button { width: 100%; height: 40px; border: 0; background: #fff; font-size: 20px; color: #3c4043;
+                   cursor: pointer; display: flex; align-items: center; justify-content: center; }
+  #zoomer button + button { border-top: 1px solid var(--hair); }
+  #attrib { position: absolute; right: 18px; bottom: 6px; font-size: 10px; color: #9aa2ab; letter-spacing: .3px; }
+</style>
+</head>
+<body>
+
+<svg id="map" viewBox="0 0 1600 1000" preserveAspectRatio="xMidYMid slice" aria-label="System map">
+  <defs>
+    <symbol id="i-walk" viewBox="0 0 24 24"><path d="M13.5 5.5c1.1 0 2-.9 2-2s-.9-2-2-2-2 .9-2 2 .9 2 2 2zM9.8 8.9 7 23h2.1l1.8-8 2.1 2v6h2v-7.5l-2.1-2 .6-3C12.8 12 14.8 13 17 13v-2c-1.9 0-3.5-1-4.3-2.4l-1-1.6c-.4-.6-1-1-1.7-1-.3 0-.5.1-.8.1L4 8.3V13h2V9.6l1.8-.7"/></symbol>
+    <symbol id="i-train" viewBox="0 0 24 24"><path d="M12 2c-4 0-8 .5-8 4v9.5C4 17.43 5.57 19 7.5 19L6 20.5v.5h2.23l2-2H14l2 2H18v-.5L16.5 19c1.93 0 3.5-1.57 3.5-3.5V6c0-3.5-4-4-8-4zm-5.5 15c-.83 0-1.5-.67-1.5-1.5S5.67 14 6.5 14s1.5.67 1.5 1.5S7.33 17 6.5 17zm4.5-7H6V6h5v4zm2 0V6h5v4h-5zm4.5 7c-.83 0-1.5-.67-1.5-1.5s.67-1.5 1.5-1.5 1.5.67 1.5 1.5-.67 1.5-1.5 1.5z"/></symbol>
+    <symbol id="i-boat" viewBox="0 0 24 24"><path d="M20 21c-1.39 0-2.78-.47-4-1.32-2.44 1.71-5.56 1.71-8 0C6.78 20.53 5.39 21 4 21H2v2h2c1.38 0 2.74-.35 4-.99 2.52 1.29 5.48 1.29 8 0 1.26.65 2.62.99 4 .99h2v-2h-2zM3.95 19H4c1.6 0 3.02-.88 4-2 .98 1.12 2.4 2 4 2s3.02-.88 4-2c.98 1.12 2.4 2 4 2h.05l1.89-6.68c.08-.26.06-.54-.06-.78s-.34-.42-.6-.5L20 10.62V6c0-1.1-.9-2-2-2h-3V1H9v3H6c-1.1 0-2 .9-2 2v4.62l-1.29.42c-.26.08-.48.26-.6.5s-.15.52-.06.78L3.95 19zM6 6h12v3.97L12 8 6 9.97V6z"/></symbol>
+    <symbol id="i-clock" viewBox="0 0 24 24"><path d="M11.99 2C6.47 2 2 6.48 2 12s4.47 10 9.99 10C17.52 22 22 17.52 22 12S17.52 2 11.99 2zM12 20c-4.42 0-8-3.58-8-8s3.58-8 8-8 8 3.58 8 8-3.58 8-8 8zm.5-13H11v6l5.25 3.15.75-1.23-4.5-2.67z"/></symbol>
+    <symbol id="i-caret" viewBox="0 0 24 24"><path d="M7 10l5 5 5-5z"/></symbol>
+    <symbol id="i-chev" viewBox="0 0 24 24"><path d="M10 6 8.59 7.41 13.17 12l-4.58 4.59L10 18l6-6z"/></symbol>
+    <symbol id="i-swap" viewBox="0 0 24 24"><path d="M16 17.01V10h-2v7.01h-3L15 21l4-3.99h-3zM9 3 5 6.99h3V14h2V6.99h3L9 3z"/></symbol>
+    <symbol id="i-locate" viewBox="0 0 24 24"><path d="M12 2 4.5 20.29l.71.71L12 18l6.79 3 .71-.71z"/></symbol>
+    <!-- accessibility badge (from dispatch/access_badge.svg) -->
+    <symbol id="i-badge" viewBox="0 0 150 150">
+      <rect x="0" y="0" width="150" height="150" rx="30" ry="30" fill="#157ac0"/>
+      <circle cx="62.71" cy="27.036" r="10.659" fill="#fff"/>
+      <path d="M102.482,65.992h-26.943c-11.211,0-20.332-9.116-20.332-20.322h15c0,2.935,2.393,5.322,5.332,5.322h26.943v15Z" fill="#fff"/>
+      <path d="M119.543,117.349l-18.115-18.11c-5.762-5.767-13.74-9.072-21.895-9.072h-24.326v-42.334h15v27.334h9.326c12.1,0,23.945,4.907,32.5,13.467l18.115,18.11-10.605,10.605Z" fill="#fff"/>
+      <path d="M71.681,128.409c-20.557,0-37.285-16.724-37.285-37.285,0-17.397,11.807-32.319,28.711-36.299l1.719,7.305c-13.506,3.174-22.93,15.098-22.93,28.994,0,16.426,13.359,29.785,29.785,29.785s29.785-13.359,29.785-29.785h7.5c0,20.562-16.729,37.285-37.285,37.285Z" fill="#fff"/>
+    </symbol>
+    <filter id="soft" x="-40%" y="-40%" width="180%" height="180%">
+      <feDropShadow dx="0" dy="2" stdDeviation="3" flood-color="#141c28" flood-opacity="0.22"/>
+    </filter>
+    <filter id="glow" x="-60%" y="-60%" width="220%" height="220%">
+      <feGaussianBlur stdDeviation="7"/>
+    </filter>
+  </defs>
+
+  <!-- ====================== TERRAIN ====================== -->
+  <rect x="0" y="0" width="1600" height="1000" fill="#f6f3ec"/>
+  <!-- soft land tints (very subtle relief, no grid) -->
+  <path d="M0,0 H620 C560,180 600,420 520,640 C470,780 300,900 0,940 Z" fill="#f2eee5" opacity=".7"/>
+  <path d="M1600,0 H1060 C1090,120 1120,260 1240,340 C1380,432 1520,420 1600,410 Z" fill="#f1ede3" opacity=".6"/>
+
+  <!-- river + harbor: one organic water body, two banks -->
+  <path id="water" fill="#bcd6ea" stroke="#a3c2da" stroke-width="2.5" stroke-linejoin="round" d="
+      M 880,0
+      C 868,90 890,180 908,260
+      C 925,340 908,420 916,500
+      C 924,570 946,630 995,680
+      C 1048,733 1120,772 1195,808
+      C 1268,842 1320,880 1345,940
+      C 1355,965 1358,985 1360,1000
+      L 1600,1000
+      L 1600,852
+      C 1580,850 1550,845 1520,838
+      C 1445,820 1370,796 1295,762
+      C 1225,730 1150,695 1100,648
+      C 1056,606 1032,552 1024,488
+      C 1016,415 1030,338 1015,262
+      C 998,185 975,95 985,0
+      Z"/>
+  <!-- harbor island -->
+  <path d="M 1445,912 C 1465,896 1503,894 1520,908 C 1535,920 1531,940 1511,948 C 1485,958 1453,952 1443,936 C 1437,926 1437,918 1445,912 Z"
+        fill="#eee9dd" stroke="#a3c2da" stroke-width="2"/>
+  <text x="958" y="320" font-size="15" font-style="italic" fill="#7ba2c0" transform="rotate(82 958 320)" letter-spacing="2">Baker River</text>
+  <text x="1385" y="985" font-size="15" font-style="italic" fill="#7ba2c0" letter-spacing="3">BAKER HARBOR</text>
+
+  <!-- ====================== FADED NETWORK (journey selected ⇒ 15%) ====================== -->
+  <g opacity="0.15">
+    <!-- red line, west -->
+    <path d="M 520,40 C 505,200 535,380 520,520 C 508,660 540,800 530,960" fill="none" stroke="#EE352E" stroke-width="7" stroke-linecap="round"/>
+    <g fill="#fff" stroke="#1c1f23" stroke-width="2.5">
+      <circle cx="518" cy="320" r="5.5"/><circle cx="522" cy="600" r="5.5"/><circle cx="531" cy="830" r="5.5"/>
+    </g>
+    <g font-size="14" font-weight="500" fill="#1c1f23" paint-order="stroke" stroke="#f6f3ec" stroke-width="3.5">
+      <text x="534" y="325">Westgate</text><text x="538" y="605">Foundry</text><text x="547" y="835">South Yards</text>
+    </g>
+
+    <!-- orange crosstown -->
+    <path d="M 470,215 C 700,193 900,203 1100,188 C 1250,177 1420,188 1600,176" fill="none" stroke="#FF6319" stroke-width="7" stroke-linecap="round"/>
+    <g fill="#fff" stroke="#1c1f23" stroke-width="2.5">
+      <circle cx="760" cy="199" r="5.5"/><circle cx="1180" cy="184" r="5.5"/>
+    </g>
+    <g font-size="14" font-weight="500" fill="#1c1f23" paint-order="stroke" stroke="#f6f3ec" stroke-width="3.5">
+      <text x="748" y="222">Fairgrounds</text><text x="1168" y="207">East Meadow</text>
+    </g>
+
+    <!-- A·C blue ribbon of the corridor bundle, north of Central (not part of journey) -->
+    <path d="M 644.5,70 C 644.5,200 636.5,280 644.5,360 L 644.5,462" fill="none" stroke="#0039A6" stroke-width="7" stroke-linecap="round"/>
+    <!-- 4·5 green continuing north past the origin -->
+    <path d="M 635.5,70 L 635.5,144" fill="none" stroke="#00933C" stroke-width="7" stroke-linecap="round"/>
+    <!-- 4·5 green continuing south past Central (not part of journey) -->
+    <path d="M 638,478 C 630,560 658,640 698,695 C 733,742 746,800 748,880" fill="none" stroke="#00933C" stroke-width="7" stroke-linecap="round"/>
+    <g fill="#fff" stroke="#1c1f23" stroke-width="2.5">
+      <circle cx="650" cy="601" r="5.5"/><circle cx="741" cy="772" r="5.5"/>
+    </g>
+    <g font-size="14" font-weight="500" fill="#1c1f23" paint-order="stroke" stroke="#f6f3ec" stroke-width="3.5">
+      <text x="666" y="606">Southport</text><text x="757" y="777">Bayfront</text>
+    </g>
+
+    <!-- harbor ferry (dashed) -->
+    <path d="M 950,656 C 1005,722 1068,788 1145,836 C 1230,888 1330,870 1388,812" fill="none" stroke="#3f7fa8" stroke-width="3.5" stroke-dasharray="2 9" stroke-linecap="round"/>
+    <use href="#i-boat" x="1140" y="822" width="20" height="20" fill="#3f7fa8"/>
+    <circle cx="946" cy="651" r="4.5" fill="#fff" stroke="#3f7fa8" stroke-width="2.5"/>
+    <circle cx="1392" cy="806" r="4.5" fill="#fff" stroke="#3f7fa8" stroke-width="2.5"/>
+    <text x="932" y="644" font-size="13" font-weight="500" fill="#1c1f23" paint-order="stroke" stroke="#f6f3ec" stroke-width="3.5" text-anchor="end">Ferry Pier</text>
+
+    <!-- faded second train somewhere on red -->
+    <g transform="translate(524,690)">
+      <circle r="10" fill="#fff" stroke="#EE352E" stroke-width="3"/>
+      <use href="#i-train" x="-6" y="-6" width="12" height="12" fill="#EE352E"/>
+    </g>
+  </g>
+
+  <!-- ====================== SELECTED JOURNEY ====================== -->
+  <!-- soft under-glow (Transit-App style) -->
+  <g filter="url(#glow)" opacity="0.30">
+    <path d="M 635.5,150 C 635.5,225 629,290 635.5,360 L 635.5,462" fill="none" stroke="#00933C" stroke-width="17" stroke-linecap="round"/>
+    <path d="M 640,474 C 650,525 700,548 770,552 C 815,555 860,560 905,568 C 960,579 1008,586 1062,592 C 1128,600 1170,611 1210,626 C 1256,643 1302,655 1332,668" fill="none" stroke="#0039A6" stroke-width="17" stroke-linecap="round"/>
+  </g>
+
+  <!-- bridge casing where the A crosses the river -->
+  <path d="M 902,567 C 955,578 1002,585 1068,593" fill="none" stroke="#c8cdd4" stroke-width="15" stroke-linecap="round"/>
+  <path d="M 902,567 C 955,578 1002,585 1068,593" fill="none" stroke="#ffffff" stroke-width="10" stroke-linecap="round"/>
+
+  <!-- strong ribbons -->
+  <path d="M 635.5,150 C 635.5,225 629,290 635.5,360 L 635.5,462" fill="none" stroke="#00933C" stroke-width="7" stroke-linecap="round"/>
+  <path d="M 640,474 C 650,525 700,548 770,552 C 815,555 860,560 905,568 C 960,579 1008,586 1062,592 C 1128,600 1170,611 1210,626 C 1256,643 1302,655 1332,668" fill="none" stroke="#0039A6" stroke-width="7" stroke-linecap="round"/>
+
+  <!-- split-station walk connector (Airport) -->
+  <path d="M 1338,662 L 1394,621" fill="none" stroke="#5b6470" stroke-width="3" stroke-dasharray="1.5 7" stroke-linecap="round"/>
+
+  <!-- journey stations -->
+  <g>
+    <!-- intermediate stops on the 4 -->
+    <circle cx="633" cy="260" r="5.5" fill="#fff" stroke="#1c1f23" stroke-width="2.5"/>
+    <circle cx="633.6" cy="365" r="5.5" fill="#fff" stroke="#1c1f23" stroke-width="2.5"/>
+    <!-- origin -->
+    <circle cx="635.5" cy="150" r="8" fill="#fff" stroke="#1c1f23" stroke-width="3.5"/>
+    <!-- Baker City Central: capsule spanning the bundle -->
+    <rect x="626" y="460" width="28" height="16" rx="8" fill="#fff" stroke="#1c1f23" stroke-width="3"/>
+    <!-- blue stops -->
+    <circle cx="810" cy="555" r="5.5" fill="#fff" stroke="#1c1f23" stroke-width="2.5"/>
+    <circle cx="1210" cy="626" r="5.5" fill="#fff" stroke="#1c1f23" stroke-width="2.5"/>
+    <!-- Airport parts -->
+    <circle cx="1332" cy="668" r="7" fill="#fff" stroke="#1c1f23" stroke-width="3"/>
+    <circle cx="1400" cy="616" r="7" fill="#fff" stroke="#1c1f23" stroke-width="3"/>
+    <!-- accessibility badges at step-free journey stations -->
+    <use href="#i-badge" x="614" y="143.5" width="13" height="13"/>
+    <use href="#i-badge" x="660" y="461.5" width="13" height="13"/>
+    <use href="#i-badge" x="1322" y="681" width="13" height="13"/>
+  </g>
+
+  <!-- journey labels -->
+  <g font-weight="500" fill="#1c1f23" paint-order="stroke" stroke="#f6f3ec" stroke-width="4">
+    <text x="652" y="155" font-size="16" font-weight="700">Maple Heights</text>
+    <text x="647" y="265" font-size="14">Garfield Av</text>
+    <text x="648" y="370" font-size="14">Museum</text>
+    <text x="680" y="473.5" font-size="16" font-weight="700">Baker City Central</text>
+    <text x="800" y="537" font-size="14">Riverside</text>
+    <text x="1196" y="641" font-size="14" text-anchor="end">Harborview</text>
+    <text x="1422" y="622" font-size="17" font-weight="700">Airport</text>
+  </g>
+  <!-- split-part sub-label + walk chip -->
+  <text x="1339" y="692" font-size="12.5" fill="#5b6470" paint-order="stroke" stroke="#f6f3ec" stroke-width="3.5">Lower concourse · −14 blocks</text>
+  <g transform="translate(1300,596)" filter="url(#soft)">
+    <rect x="0" y="0" width="60" height="24" rx="12" fill="#fff"/>
+    <use href="#i-walk" x="8" y="5" width="14" height="14" fill="#5b6470"/>
+    <text x="26" y="16.5" font-size="12.5" font-weight="600" fill="#3c434b">90 m</text>
+  </g>
+
+  <!-- origin / destination pins -->
+  <g transform="translate(635.5,150)">
+    <circle r="13" fill="none" stroke="#1a73e8" stroke-width="2" opacity=".55"/>
+  </g>
+  <g transform="translate(1400,616)" filter="url(#soft)">
+    <path d="M0,-30 C-9,-30 -15,-23.5 -15,-15.5 C-15,-6.5 0,4 0,4 C0,4 15,-6.5 15,-15.5 C15,-23.5 9,-30 0,-30 Z" fill="#d93025"/>
+    <circle cx="0" cy="-15.5" r="5" fill="#fff"/>
+  </g>
+
+  <!-- interlining bullet-cluster chip on the corridor -->
+  <path d="M 651,318 L 668,318" stroke="#9aa2ab" stroke-width="1.5"/>
+  <g transform="translate(668,304)" filter="url(#soft)">
+    <rect x="0" y="0" width="108" height="28" rx="14" fill="#fff"/>
+    <g font-size="12" font-weight="700" fill="#fff" text-anchor="middle">
+      <circle cx="17" cy="14" r="8.5" fill="#00933C"/><text x="17" y="18.2">4</text>
+      <circle cx="40" cy="14" r="8.5" fill="#00933C"/><text x="40" y="18.2">5</text>
+      <circle cx="63" cy="14" r="8.5" fill="#0039A6"/><text x="63" y="18.2">A</text>
+      <circle cx="86" cy="14" r="8.5" fill="#0039A6"/><text x="86" y="18.2">C</text>
+    </g>
+  </g>
+
+  <!-- live train marker + callout -->
+  <g transform="translate(634.8,198)" filter="url(#soft)">
+    <circle r="11.5" fill="#fff" stroke="#00933C" stroke-width="3.5"/>
+    <use href="#i-train" x="-7" y="-7" width="14" height="14" fill="#00933C"/>
+  </g>
+  <g transform="translate(656,184)" filter="url(#soft)">
+    <rect x="0" y="0" width="128" height="27" rx="13.5" fill="#fff"/>
+    <circle class="pulse" cx="14" cy="13.5" r="4" fill="#0f9d58"/>
+    <text x="25" y="18" font-size="13" font-weight="600" fill="#1c1f23">4 · due in 2 min</text>
+  </g>
+</svg>
+
+<!-- ====================== PLANNER ====================== -->
+<aside id="planner">
+  <div class="brand"><b>System Map+</b><span>BAKER CITY TRANSIT</span></div>
+
+  <div class="search">
+    <div class="rail-col">
+      <span class="rail-o"></span>
+      <span class="rail-dots"></span>
+      <svg class="icon" viewBox="0 0 24 24" style="width:13px;height:13px;color:#d93025"><path d="M12 2C8.1 2 5 5.1 5 9c0 5.2 7 13 7 13s7-7.8 7-13c0-3.9-3.1-7-7-7zm0 9.5A2.5 2.5 0 1 1 12 6.5a2.5 2.5 0 0 1 0 5z" fill="currentColor"/></svg>
+    </div>
+    <div class="fields-col">
+      <div class="field">Maple Heights</div>
+      <div class="field">Airport · Terminal</div>
+    </div>
+    <button class="swap" title="Swap"><svg class="icon"><use href="#i-swap"/></svg></button>
+  </div>
+
+  <div class="timebar">
+    <span class="now"><svg class="icon sm"><use href="#i-clock"/></svg>Leave now<svg class="icon sm" style="margin:0 -4px"><use href="#i-caret"/></svg></span>
+    <span class="at">Leave at…</span>
+  </div>
+
+  <div class="prefs">
+    <span class="chip on">Fastest</span>
+    <span class="chip">Fewest transfers</span>
+    <span class="chip">Least walking</span>
+    <span class="chip"><svg class="badge-14"><use href="#i-badge"/></svg>Step-free</span>
+  </div>
+
+  <div class="liverow"><span class="dot pulse"></span><em>LIVE</em><span>·</span><span>3 OPTIONS</span><span>·</span><span>UPDATED 4S AGO</span></div>
+
+  <!-- option 1 (selected) -->
+  <div class="opt sel">
+    <div class="opt-head"><span class="opt-times">6:33 – 7:01</span><span class="opt-dur">28 min</span></div>
+    <div class="opt-route">
+      <span class="bullet b-g">4</span>
+      <span class="sep"><svg class="icon sm"><use href="#i-chev"/></svg></span>
+      <span class="bullet b-b">A</span>
+      <span class="sep"><svg class="icon sm"><use href="#i-chev"/></svg></span>
+      <span class="modechip"><svg class="icon sm"><use href="#i-walk"/></svg>90 m</span>
+    </div>
+    <div class="opt-live"><span class="dot pulse"></span>4 departs in 2 min</div>
+
+    <div class="itin">
+      <div class="t">6:33</div>
+      <div class="n"><span class="node g"></span><span class="rail g"></span></div>
+      <div class="c">
+        <div class="stop-name">Maple Heights</div>
+        <div class="stop-sub">Board <b>4</b> toward Bayfront · Platform 1 <svg class="badge-14"><use href="#i-badge"/></svg></div>
+        <div class="ride">3 stops · 9 min</div>
+      </div>
+
+      <div class="t">6:42</div>
+      <div class="n"><span class="node b"></span><span class="rail b"></span></div>
+      <div class="c">
+        <div class="stop-name">Baker City Central</div>
+        <div class="tchip"><svg class="icon"><use href="#i-walk"/></svg>Transfer · 15 m · 1 min<svg class="badge-14"><use href="#i-badge"/></svg></div>
+        <div class="stop-sub"><span class="livegreen">A departs 6:45</span>· Platform 3</div>
+        <div class="ride">4 stops · 12 min</div>
+      </div>
+
+      <div class="t">6:57</div>
+      <div class="n"><span class="node b"></span><span class="rail walk"></span></div>
+      <div class="c">
+        <div class="stop-name">Airport · Lower Concourse</div>
+        <div class="tchip"><svg class="icon"><use href="#i-walk"/></svg>Walk 90 m · 2 min · concourse link</div>
+        <div class="stop-sub">Up 14 blocks to Terminal <svg class="badge-14"><use href="#i-badge"/></svg></div>
+      </div>
+
+      <div class="t">7:01</div>
+      <div class="n"><span class="node pin"></span></div>
+      <div class="c"><div class="stop-name">Airport · Terminal</div></div>
+    </div>
+  </div>
+
+  <!-- option 2 -->
+  <div class="opt">
+    <div class="opt-head"><span class="opt-times">6:38 – 7:09</span><span class="opt-dur">31 min</span></div>
+    <div class="opt-route">
+      <span class="bullet b-g">5</span>
+      <span class="sep"><svg class="icon sm"><use href="#i-chev"/></svg></span>
+      <span class="bullet b-b">C</span>
+      <span class="sep"><svg class="icon sm"><use href="#i-chev"/></svg></span>
+      <span class="modechip"><svg class="icon sm"><use href="#i-walk"/></svg>40 m</span>
+    </div>
+    <div class="opt-live"><span class="dot pulse"></span>5 departs in 7 min</div>
+    <div class="opt-sub"><svg class="badge-14"><use href="#i-badge"/></svg>Step-free · least walking</div>
+  </div>
+
+  <!-- option 3 -->
+  <div class="opt">
+    <div class="opt-head"><span class="opt-times">6:35 – 7:14</span><span class="opt-dur">39 min</span></div>
+    <div class="opt-route">
+      <span class="bullet b-g">4</span>
+      <span class="sep"><svg class="icon sm"><use href="#i-chev"/></svg></span>
+      <span class="modechip"><svg class="icon sm"><use href="#i-boat"/></svg>Harbor Ferry</span>
+    </div>
+    <div class="opt-sub">Ferry departs 6:51 · scenic via Baker Harbor</div>
+  </div>
+</aside>
+
+<div id="zoomer">
+  <button id="z-in" title="Zoom in">+</button>
+  <button id="z-out" title="Zoom out">−</button>
+  <button id="z-home" title="Recenter"><svg class="icon" style="width:15px;height:15px;color:#3c4043"><use href="#i-locate"/></svg></button>
+</div>
+<div id="attrib">System Map+ · style mock v2 · not to scale</div>
+
+<script>
+  // Pan/zoom on the SVG viewBox. getScreenCTM handles the slice fitting, so the
+  // cursor stays anchored while zooming regardless of window aspect.
+  const svg = document.getElementById("map");
+  const HOME = { x: 0, y: 0, w: 1600, h: 1000 };
+  let vb = { ...HOME };
+  const apply = () => svg.setAttribute("viewBox", `${vb.x} ${vb.y} ${vb.w} ${vb.h}`);
+  const toMap = (cx, cy) => new DOMPoint(cx, cy).matrixTransform(svg.getScreenCTM().inverse());
+
+  function zoomAt(cx, cy, factor) {
+    factor = Math.min(3200, Math.max(200, vb.w * factor)) / vb.w; // clamp 0.5x .. 8x
+    const p = toMap(cx, cy);
+    vb = { x: p.x - (p.x - vb.x) * factor, y: p.y - (p.y - vb.y) * factor, w: vb.w * factor, h: vb.h * factor };
+    apply();
+  }
+
+  svg.addEventListener("wheel", e => {
+    e.preventDefault();
+    zoomAt(e.clientX, e.clientY, Math.exp(e.deltaY * 0.0016));
+  }, { passive: false });
+
+  let drag = null;
+  svg.addEventListener("pointerdown", e => {
+    drag = { x: e.clientX, y: e.clientY };
+    svg.setPointerCapture(e.pointerId);
+    svg.classList.add("dragging");
+  });
+  svg.addEventListener("pointermove", e => {
+    if (!drag) return;
+    const m = svg.getScreenCTM();
+    vb.x -= (e.clientX - drag.x) / m.a;
+    vb.y -= (e.clientY - drag.y) / m.d;
+    drag = { x: e.clientX, y: e.clientY };
+    apply();
+  });
+  addEventListener("pointerup", () => { drag = null; svg.classList.remove("dragging"); });
+
+  const center = () => [innerWidth / 2, innerHeight / 2];
+  document.getElementById("z-in").onclick = () => zoomAt(...center(), 1 / 1.4);
+  document.getElementById("z-out").onclick = () => zoomAt(...center(), 1.4);
+  document.getElementById("z-home").onclick = () => { vb = { ...HOME }; apply(); };
+</script>
+</body>
+</html>

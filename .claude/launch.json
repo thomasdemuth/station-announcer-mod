@@ -4,8 +4,18 @@
 		{
 			"name": "dispatch-static",
 			"runtimeExecutable": "node",
-			"runtimeArgs": ["tools/dispatch_dev_server.mjs"],
+			"runtimeArgs": [
+				"tools/dispatch_dev_server.mjs"
+			],
 			"port": 8781
+		},
+		{
+			"name": "nextmap-mock",
+			"runtimeExecutable": "node",
+			"runtimeArgs": [
+				"tools/nextmap_mock_server.mjs"
+			],
+			"port": 8792
 		}
 	]
 }
