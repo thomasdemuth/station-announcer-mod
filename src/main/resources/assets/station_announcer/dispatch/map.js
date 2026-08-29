@@ -935,6 +935,11 @@ function buildSegments() {
 			mode: bk.modes.has("boat") ? "boat" : [...bk.modes][0] || "train",
 			modes: [...bk.modes], routes: bk.routes, hidden: bk.hidden, straight: bk.straight,
 			sourceCount: bk.polys.length,
+			// Offset side must not depend on which part happened to sort first: the
+			// polyline's direction is canonicalized by its dominant axis, so every
+			// companion in a corridor offsets to the SAME side and a colour never
+			// switches sides from one station-to-station segment to the next.
+			offSign: canonicalOffsetSign(pts),
 			idx: 0, count: 1, companions: [bk.hex], companionSegs: [],
 			suppressed: false, coveredBy: [],
 		});
@@ -1317,6 +1322,18 @@ function toScreenPath(pts) {
  * its two adjacent segments, lengthened by the miter factor 1/cos(θ/2) (capped) so a
  * bundle keeps a constant gap around corners instead of pinching.
  */
+/**
+ * +1 / −1 by the polyline's dominant-axis direction. Companion segments in a
+ * corridor run near-parallel, so they share a dominant axis and get the same
+ * sign — which is what pins each colour to one side of the bundle regardless of
+ * which station-part happened to sort first into the pair key.
+ */
+function canonicalOffsetSign(pts) {
+	const dx = pts[pts.length - 1][0] - pts[0][0];
+	const dz = pts[pts.length - 1][1] - pts[0][1];
+	return (Math.abs(dx) >= Math.abs(dz) ? dx : dz) >= 0 ? 1 : -1;
+}
+
 function offsetPolyline(pts, d) {
 	if (!d || pts.length < 2) return pts;
 	const out = [];
@@ -1463,7 +1480,7 @@ function drawRibbons(g, vp, skipKeys, alpha) {
 		if (bb[2] < vp.l || bb[0] > vp.r || bb[3] < vp.t || bb[1] > vp.b) continue;
 		const pts = toScreenPath(rb.pts);
 		if (pts.length < 2) continue;
-		const off = (rb.idx - (rb.count - 1) / 2) * (w + gap);
+		const off = (rb.idx - (rb.count - 1) / 2) * (w + gap) * (rb.offSign || 1);
 		const line = offsetPolyline(pts, off);
 		g.globalAlpha = alpha * (rb.hidden ? 0.35 : 1);
 		g.strokeStyle = rb.hex;
@@ -1546,10 +1563,9 @@ function drawGlyph(g, gl, s, w) {
 		g.arc(sx, sy, r, 0, Math.PI * 2);
 		g.fill(); g.stroke();
 	}
-	if (gl.accessible && ACCESS_ICON.complete && ACCESS_ICON.naturalWidth > 0 && state.view.scale > 0.28) {
-		const b = 13 * s;
-		g.drawImage(ACCESS_ICON, sx - b / 2 - 10 * s, sy + r + 2 * s, b, b);
-	}
+	// NOTE: the accessibility badge is drawn by drawLabels, inline after the
+	// station name — anchoring it to the dot while the label floats produced
+	// misaligned orphan badges (play-test feedback).
 }
 
 function drawBundleChips(g, vp, alpha) {
@@ -1628,6 +1644,12 @@ function drawLabels(g, vp, sel) {
 		const th = size * 1.05;
 		const pad = 7 * s;
 		const r = 7 * s;
+		// Accessibility badge rides INLINE after the name (mock style) so it can
+		// never detach from a decluttered label; its width counts toward collision.
+		const withBadge = gl.accessible && ACCESS_ICON.complete && ACCESS_ICON.naturalWidth > 0
+			&& state.view.scale > 0.28;
+		const bw = withBadge ? size * 0.92 : 0;
+		const fullW = tw + (withBadge ? bw + 4 * s : 0);
 
 		// Candidate anchors. Order depends on the local track direction so the text
 		// starts on the side the ribbon does NOT run through: a vertical trunk gets
@@ -1650,10 +1672,10 @@ function drawLabels(g, vp, sel) {
 		})));
 		let chosen = null;
 		for (const c of cands) {
-			const x0 = c.align === "left" ? c.x : c.align === "right" ? c.x - tw : c.x - tw / 2;
-			const box = [x0 - 2, c.y - th, x0 + tw + 2, c.y + th * 0.3];
+			const x0 = c.align === "left" ? c.x : c.align === "right" ? c.x - fullW : c.x - fullW / 2;
+			const box = [x0 - 2, c.y - th, x0 + fullW + 2, c.y + th * 0.3];
 			if (!placed.some((p) => box[0] < p[2] && box[2] > p[0] && box[1] < p[3] && box[3] > p[1])) {
-				chosen = { c, box };
+				chosen = { c, box, x0 };
 				break;
 			}
 		}
@@ -1661,23 +1683,27 @@ function drawLabels(g, vp, sel) {
 		placed.push(chosen.box);
 
 		g.globalAlpha = sel ? (inJourney ? 1 : PALETTE.dim) : 1;
-		g.textAlign = chosen.c.align;
+		g.textAlign = "left";                 // chosen.x0 already encodes the alignment
 		g.lineJoin = "round";
 		g.miterLimit = 2;
 		g.lineWidth = 4 * s;
 		g.strokeStyle = PALETTE.paper;                // halo, so labels survive over ribbons
-		g.strokeText(text, chosen.c.x, chosen.c.y);
+		g.strokeText(text, chosen.x0, chosen.c.y);
 		g.fillStyle = gl.main ? PALETTE.ink : PALETTE.ink2;
-		g.fillText(text, chosen.c.x, chosen.c.y);
+		g.fillText(text, chosen.x0, chosen.c.y);
+		if (withBadge) {
+			// inline after the name, centred on its cap height — never orphaned
+			g.drawImage(ACCESS_ICON, chosen.x0 + tw + 4 * s, chosen.c.y - size * 0.36 - bw / 2, bw, bw);
+		}
 
 		// secondary parts of a split station also name themselves faintly
 		if (gl.main && gl.sub) {
 			const s2 = size * 0.82;
 			g.font = "500 " + s2.toFixed(1) + "px " + FONT;
 			g.lineWidth = 3.5 * s;
-			g.strokeText(gl.sub, chosen.c.x, chosen.c.y + s2 * 1.25);
+			g.strokeText(gl.sub, chosen.x0, chosen.c.y + s2 * 1.25);
 			g.fillStyle = PALETTE.ink2;
-			g.fillText(gl.sub, chosen.c.x, chosen.c.y + s2 * 1.25);
+			g.fillText(gl.sub, chosen.x0, chosen.c.y + s2 * 1.25);
 		}
 		g.globalAlpha = 1;
 	}
@@ -1700,7 +1726,7 @@ function drawJourneyOverlay(g, vp) {
 			if (!sel.ribbonKeys.has(rb.id)) continue;
 			const pts = toScreenPath(rb.pts);
 			if (pts.length < 2) continue;
-			const line = offsetPolyline(pts, (rb.idx - (rb.count - 1) / 2) * (w + gap));
+			const line = offsetPolyline(pts, (rb.idx - (rb.count - 1) / 2) * (w + gap) * (rb.offSign || 1));
 			if (pass === 0) {
 				g.save();
 				g.globalAlpha = 0.3;

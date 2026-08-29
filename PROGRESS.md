@@ -2940,3 +2940,17 @@ per-mode layer toggles; persisted. Demo upgraded to directional pairs at
 6-block pitch + a green express pair, proving all of it; harness 102 + planner
 55 green. Browser-verified both themes at 1680×1000. 2.4.33. NOT in-game
 tested on Baker City.
+
+## System Map+ round 2b — badge inline, offset side pinned (2026-08-29)
+
+Two preview-feedback fixes: (1) the accessibility badge is now drawn BY
+drawLabels, inline after the station name (width counts toward declutter
+collision; centred on cap height) — the old drawGlyph badge anchored to the DOT
+while the label floated, producing orphaned/misaligned badges; glyphs without a
+visible label show no badge. (2) Bundle offsets get canonicalOffsetSign():
+±1 from the polyline's dominant-axis direction, multiplied into the offset in
+both drawRibbons and the journey overlay — segment orientation follows the
+part-pair SORT order, which is arbitrary vs geography, so colours flipped sides
+at station boundaries ("switch sides over and over"). Numerically verified in
+the browser: every green trunk segment displaces the same world side (−5 px at
+a 10 px test offset), blue mirrored. Harness + planner suites green. 2.4.34.
