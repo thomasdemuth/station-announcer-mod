@@ -76,6 +76,30 @@ public class AddonClientConfig {
     /** Panel distance from the screen edges, in GUI pixels (clamped 0–64). */
     public int hudMargin = 6;
 
+    // ---- Journey directions (client half of in-game navigation) ----
+
+    /** Master toggle for the journey card. */
+    public boolean navHudEnabled = true;
+
+    /**
+     * Journey card corner: top_left, top_right, bottom_left or bottom_right.
+     * Defaults away from {@link #hudCorner} so the two panels do not stack by
+     * default; when they do share a corner the card offsets itself.
+     */
+    public String navHudCorner = "top_right";
+
+    /** Draw the in-world marker at the current navigation target. */
+    public boolean navWaypointEnabled = true;
+
+    /** Print the itinerary to chat when a journey arrives. */
+    public boolean navChatEnabled = true;
+
+    /** Title/subtitle alerts for "get off next stop" and "departs in 1 min". */
+    public boolean navAlertsEnabled = true;
+
+    /** Play a chime alongside those alerts. */
+    public boolean navSoundEnabled = true;
+
     /** Writes the current settings to disk (used by the HUD settings screen's Done button). */
     public static synchronized void persist() {
         get().save(configPath());

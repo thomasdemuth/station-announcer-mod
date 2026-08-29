@@ -303,6 +303,26 @@ body {
 .opt-start:hover { filter: brightness(1.06); }
 .opt-start.on { background: var(--card); color: var(--accent); border: 1px solid var(--accent); }
 
+/* the selected card's button row: Start (map guidance) beside Send (in-game HUD).
+   With no self player to follow there is no Start, and Send takes the whole width. */
+.opt-actions { display: flex; gap: 8px; margin-top: 12px; }
+.opt-actions .opt-start { margin-top: 0; flex: 1 1 0; width: auto; }
+.opt-send {
+	flex: 1 1 0; padding: 9px 10px; border-radius: 999px;
+	border: 1px solid var(--hair); background: var(--card); color: var(--ink);
+	font-family: var(--font); font-size: 13px; font-weight: 700; cursor: pointer;
+	display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+}
+.opt-send:hover { background: var(--field); border-color: var(--ink-3); }
+.opt-send:disabled { opacity: .55; cursor: default; }
+.opt-send.sent { color: var(--live); border-color: var(--live); }
+/* the "already in the game" marker on the card itself — quiet, and it survives the
+   rider expanding a different option */
+.opt-ingame {
+	margin-top: 6px; font-size: 12px; font-weight: 600; color: var(--live);
+	display: flex; align-items: center; gap: 5px;
+}
+
 /* ---------------- line view (map.js section 11c) ----------------
    Takes the option list over while a line is open: bullets + name + frequency, the
    service chips, and the stop list in order. A stop the line's own express runs past
@@ -474,6 +494,83 @@ body {
 }
 .to-switch { background: var(--accent) !important; border-color: var(--accent) !important; color: #fff !important; }
 .to-keep:hover { background: var(--field); }
+
+/* ---------------- send to game (map.js section 10e) ----------------
+   The pairing card wears the re-plan popup's clothes — same card, same hairline, same
+   pill buttons — but it is genuinely modal, so it sits on a scrim in the middle. */
+
+.navmodal {
+	position: absolute; inset: 0; z-index: 60;
+	display: flex; align-items: center; justify-content: center;
+	background: rgba(16, 20, 26, .34);
+}
+:root[data-theme="dark"] .navmodal { background: rgba(0, 0, 0, .58); }
+.nm-card {
+	width: 340px; max-width: calc(100% - 32px);
+	background: var(--card); color: var(--ink);
+	border: 1px solid var(--hair); border-radius: 14px;
+	box-shadow: 0 18px 48px var(--shadow), 0 1px 3px var(--shadow-soft);
+	padding: 16px 18px 14px;
+}
+.nm-title { font-size: 14.5px; font-weight: 700; }
+.nm-body { font-size: 12.5px; color: var(--ink-2); margin-top: 6px; line-height: 1.45; }
+.nm-body b { font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace; font-weight: 700; color: var(--ink); }
+.nm-meta { font-size: 11.5px; color: var(--ink-3); margin-top: 6px; }
+.nm-code {
+	display: block; width: 100%; margin-top: 12px;
+	font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+	font-size: 20px; font-weight: 700; letter-spacing: 6px; text-align: center;
+	text-transform: uppercase;
+	padding: 10px 8px; border-radius: 10px;
+	border: 1px solid var(--hair); background: var(--field); color: var(--ink);
+}
+.nm-code:focus { outline: 0; box-shadow: inset 0 0 0 2px var(--accent); }
+.nm-code::placeholder { color: var(--ink-3); letter-spacing: 6px; font-weight: 600; }
+.nm-error {
+	margin-top: 10px; font-size: 12px; font-weight: 600; color: var(--pin);
+	line-height: 1.4;
+}
+.nm-actions { display: flex; gap: 8px; margin-top: 13px; }
+.nm-actions button {
+	flex: 1; padding: 8px 10px; border-radius: 999px;
+	font-family: var(--font); font-size: 12.5px; font-weight: 700; cursor: pointer;
+	border: 1px solid var(--hair); background: var(--card); color: var(--ink);
+}
+.nm-cancel:hover, .nm-done:hover, .nm-unpair:hover { background: var(--field); }
+.nm-unpair { color: var(--pin); }
+.nm-pair, .nm-done { background: var(--accent); border-color: var(--accent); color: #fff; }
+.nm-pair:hover, .nm-done:hover { filter: brightness(1.06); background: var(--accent); }
+.nm-pair:disabled { opacity: .45; cursor: default; filter: none; }
+
+/* the result of a send: one line, bottom centre, gone in a few seconds */
+.navtoast {
+	/* clear of both map pills (34 px and 78 px) so a send result never lands on top of
+	   the "click the map" hint */
+	position: absolute; left: 50%; bottom: 118px; transform: translateX(-50%); z-index: 45;
+	display: flex; align-items: center; gap: 8px;
+	max-width: min(420px, calc(100% - 32px));
+	padding: 9px 15px; border-radius: 999px; border: 1px solid var(--hair);
+	background: var(--card); color: var(--ink);
+	font-size: 12.5px; font-weight: 600;
+	box-shadow: 0 6px 20px var(--shadow-soft);
+	pointer-events: none;
+}
+.navtoast .icon { color: var(--live); flex: none; }
+.navtoast.err { border-color: var(--pin); }
+.navtoast.err .icon { color: var(--pin); }
+
+/* Me > Game HUD */
+.pairctl { display: flex; align-items: center; gap: 8px; }
+.pair-who { display: inline-flex; align-items: center; gap: 6px; font-size: 12.5px; font-weight: 700; }
+.pair-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--live); flex: none; }
+.pair-dot.off { background: var(--pin); }
+.pair-dot.unknown { background: var(--ink-3); }
+.pair-btn {
+	font-family: var(--font); font-size: 11.5px; font-weight: 600;
+	border: 1px solid var(--hair); border-radius: 999px; padding: 4px 10px;
+	background: var(--card); color: var(--ink); cursor: pointer;
+}
+.pair-btn:hover { background: var(--field); border-color: var(--ink-3); }
 
 /* ---------------- station panel (map.js section 10b) ---------------- */
 
@@ -664,4 +761,10 @@ body {
 	}
 	.trackbanner:not(.hidden) ~ .followpill { top: 16px; }
 	.trackoffer { top: auto; bottom: 132px; }
+	/* the planner sheet owns the top; keep the pairing card clear of it */
+	.navmodal { align-items: flex-end; padding-bottom: 24px; }
+	.navtoast { bottom: 168px; }
+	/* the button row stacks rather than squeezing two pills into a phone-width card */
+	.opt-actions { flex-wrap: wrap; }
+	.opt-actions .opt-start, .opt-send { flex: 1 1 130px; }
 }

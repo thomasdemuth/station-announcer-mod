@@ -1,21 +1,37 @@
 package com.stationannouncer.mtraddon.dispatch;
 
+import com.stationannouncer.StationAnnouncer;
 import com.stationannouncer.mtraddon.AddonServerConfig;
 import com.stationannouncer.mtraddon.analytics.AnalyticsAggregator;
+import com.stationannouncer.mtraddon.nav.NavNetworking;
+import com.stationannouncer.mtraddon.nav.NavPlanner;
+import com.stationannouncer.mtraddon.nav.NavStore;
+import net.minecraft.server.MinecraftServer;
+import net.minecraft.server.network.ServerPlayerEntity;
 import org.mtr.core.integration.Response;
 import org.mtr.core.serializer.JsonReader;
 import org.mtr.core.servlet.CachedResponse;
 import org.mtr.core.servlet.ServletBase;
 import org.mtr.core.simulation.Simulator;
+import org.mtr.libraries.com.google.gson.JsonArray;
+import org.mtr.libraries.com.google.gson.JsonElement;
 import org.mtr.libraries.com.google.gson.JsonObject;
+import org.mtr.libraries.com.google.gson.JsonParser;
 import org.mtr.libraries.it.unimi.dsi.fastutil.objects.Object2ObjectAVLTreeMap;
 import org.mtr.libraries.it.unimi.dsi.fastutil.objects.ObjectImmutableList;
 import org.mtr.libraries.javax.servlet.http.HttpServletRequest;
 import org.mtr.libraries.javax.servlet.http.HttpServletResponse;
 
 import java.io.IOException;
+import java.io.InputStream;
+import java.nio.charset.StandardCharsets;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.TimeUnit;
 import java.util.function.Consumer;
+import java.util.function.Supplier;
 
 /**
  * The JSON data endpoints at {@code /dispatch/api/*}, built on MTR's own
@@ -77,7 +93,7 @@ public final class DispatchApiServlet extends ServletBase {
     @Override
     protected void doGet(HttpServletRequest request, HttpServletResponse response) {
         if (unavailable(response) || handleAnalytics(request, response) || handleAlerts(request, response)
-                || handleSatTile(request, response)) {
+                || handleSatTile(request, response) || handleNav(request, response)) {
             return;
         }
         super.doGet(request, response);
@@ -90,7 +106,7 @@ public final class DispatchApiServlet extends ServletBase {
     @Override
     protected void doPost(HttpServletRequest request, HttpServletResponse response) {
         if (unavailable(response) || handleAnalytics(request, response) || handleAlerts(request, response)
-                || handleSatTile(request, response)) {
+                || handleSatTile(request, response) || handleNav(request, response)) {
             return;
         }
         super.doPost(request, response);
@@ -143,6 +159,365 @@ public final class DispatchApiServlet extends ServletBase {
             // Client went away mid-reply; nothing to clean up for a sync response.
         }
         return true;
+    }
+
+    // ------------------------------------------------------------ nav endpoints
+
+    /** Bodies bigger than this are refused unread; a journey is a few hundred bytes. */
+    private static final int MAX_NAV_BODY_BYTES = 16 * 1024;
+    /**
+     * How long a nav request will wait for its hop onto the server thread. Bounded, and
+     * only reached when that thread is already badly behind — the reply then says so
+     * instead of pinning a Jetty worker.
+     */
+    private static final long SERVER_HOP_TIMEOUT_MILLIS = 2_000;
+
+    /**
+     * The three journey-directions endpoints, answered SYNCHRONOUSLY on the Jetty worker
+     * beside {@code sattile}: they touch {@link NavStore} (its own monitor-guarded state)
+     * and then hop onto the SERVER thread for anything that reads or writes Minecraft
+     * state. No simulator is involved at all, so they work whether or not one exists.
+     *
+     * <ul>
+     *   <li>{@code POST pair} — {@code {"code":"ABC123","label":"Chrome on Mac"}} →
+     *       {@code {"ok":true,"token":"<32 hex>","player":"Thomas"}}. The code is consumed
+     *       on success; a bad or expired one answers
+     *       {@code {"ok":false,"error":"invalid or expired code"}}.</li>
+     *   <li>{@code POST navigate} — {@code {"token":"…","journey":{…}}}, the journey
+     *       mirroring {@link NavNetworking}'s packet with every id as a DECIMAL STRING
+     *       (JavaScript cannot hold MTR's random longs exactly). Rate limited to one
+     *       accepted send per {@link NavStore#SEND_COOLDOWN_MILLIS} ms per token AND per
+     *       target player.</li>
+     *   <li>{@code GET navstatus?token=…} → {@code {"ok":true,"player":"…","online":true}}.</li>
+     * </ul>
+     *
+     * @return true when the request was handled here
+     */
+    private static boolean handleNav(HttpServletRequest request, HttpServletResponse response) {
+        String segment = firstSegment(request);
+        boolean pair = "pair".equals(segment);
+        boolean navigate = "navigate".equals(segment);
+        boolean status = "navstatus".equals(segment);
+        if (!pair && !navigate && !status) {
+            return false;
+        }
+        try {
+            if (pair) {
+                handlePair(request, response);
+            } else if (navigate) {
+                handleNavigate(request, response);
+            } else {
+                handleNavStatus(request, response);
+            }
+        } catch (Throwable throwable) {
+            // Never let a browser take a Jetty worker (or the endpoint) down with it.
+            StationAnnouncer.LOGGER.warn("Nav endpoint /{} failed ({})", segment, throwable.toString());
+            sendNavError(response, "internal error");
+        }
+        return true;
+    }
+
+    private static void handlePair(HttpServletRequest request, HttpServletResponse response) {
+        JsonObject body = readJsonBody(request);
+        if (body == null) {
+            sendNavError(response, "malformed request body");
+            return;
+        }
+        NavStore.Redemption redemption = NavStore.redeem(string(body, "code", 64), string(body, "label", 128));
+        if (!redemption.ok()) {
+            sendNavError(response, redemption.error());
+            return;
+        }
+        JsonObject reply = new JsonObject();
+        reply.addProperty("ok", true);
+        reply.addProperty("token", redemption.token());
+        reply.addProperty("player", redemption.playerName());
+        sendNavJson(response, reply);
+    }
+
+    private static void handleNavStatus(HttpServletRequest request, HttpServletResponse response) {
+        String rawToken = request.getParameter("token");
+        NavStore.Token token = NavStore.peek(rawToken);
+        if (token == null) {
+            sendNavError(response, "unknown token");
+            return;
+        }
+        MinecraftServer server = NavStore.server();
+        // The player list belongs to the server thread, so ask it rather than reading the
+        // PlayerManager's maps from a Jetty worker.
+        Boolean online = server == null ? null : awaitOnServer(server,
+                () -> server.getPlayerManager().getPlayer(token.playerId()) != null, null);
+        JsonObject reply = new JsonObject();
+        reply.addProperty("ok", true);
+        reply.addProperty("player", token.playerName());
+        reply.addProperty("online", online != null && online);
+        if (online == null) {
+            // Distinguish "definitely offline" from "could not ask in time".
+            reply.addProperty("stale", true);
+        }
+        sendNavJson(response, reply);
+    }
+
+    private static void handleNavigate(HttpServletRequest request, HttpServletResponse response) {
+        JsonObject body = readJsonBody(request);
+        if (body == null) {
+            sendNavError(response, "malformed request body");
+            return;
+        }
+        NavStore.Token token = NavStore.use(string(body, "token", 64));
+        if (token == null) {
+            sendNavError(response, "unknown or expired token");
+            return;
+        }
+        JsonElement journeyElement = body.get("journey");
+        if (journeyElement == null || !journeyElement.isJsonObject()) {
+            sendNavError(response, "malformed journey");
+            return;
+        }
+        NavPlanner.Journey journey;
+        try {
+            journey = parseJourney(journeyElement.getAsJsonObject());
+        } catch (IllegalArgumentException e) {
+            sendNavError(response, "malformed journey: " + e.getMessage());
+            return;
+        }
+        if (!NavStore.allowSend(token.token(), token.playerId())) {
+            sendNavError(response, "rate limited — one send every "
+                    + (NavStore.SEND_COOLDOWN_MILLIS / 1000) + " s");
+            return;
+        }
+        MinecraftServer server = NavStore.server();
+        if (server == null) {
+            sendNavError(response, "server unavailable");
+            return;
+        }
+        Boolean sent = awaitOnServer(server, () -> {
+            ServerPlayerEntity player = server.getPlayerManager().getPlayer(token.playerId());
+            if (player == null) {
+                return Boolean.FALSE;
+            }
+            if (journey.legs().isEmpty()) {
+                NavNetworking.clear(player);
+            } else {
+                NavNetworking.send(player, journey);
+            }
+            return Boolean.TRUE;
+        }, null);
+        if (sent == null) {
+            sendNavError(response, "server busy, try again");
+            return;
+        }
+        if (!sent) {
+            sendNavError(response, "player offline");
+            return;
+        }
+        JsonObject reply = new JsonObject();
+        reply.addProperty("ok", true);
+        sendNavJson(response, reply);
+    }
+
+    /**
+     * The JSON mirror of {@link NavNetworking}'s packet. Ids arrive as DECIMAL STRINGS
+     * and anything unparseable is rejected outright rather than silently becoming 0 — a
+     * journey pointing at platform 0 would draw nonsense on the HUD.
+     *
+     * @throws IllegalArgumentException with a browser-readable reason
+     */
+    private static NavPlanner.Journey parseJourney(JsonObject journeyJson) {
+        String destination = string(journeyJson, "destination", NavNetworking.MAX_DESTINATION_LENGTH);
+        long plannedArriveMs = 0;
+        JsonElement arrive = journeyJson.get("plannedArriveMs");
+        if (arrive != null && arrive.isJsonPrimitive()) {
+            try {
+                plannedArriveMs = Math.max(0, arrive.getAsLong());
+            } catch (RuntimeException ignored) {
+                plannedArriveMs = 0;
+            }
+        }
+        JsonElement legsElement = journeyJson.get("legs");
+        if (legsElement == null || !legsElement.isJsonArray()) {
+            throw new IllegalArgumentException("legs must be an array");
+        }
+        JsonArray legsJson = legsElement.getAsJsonArray();
+        if (legsJson.size() > NavNetworking.MAX_LEGS) {
+            throw new IllegalArgumentException("at most " + NavNetworking.MAX_LEGS + " legs");
+        }
+        List<NavPlanner.Leg> legs = new ArrayList<>(legsJson.size());
+        for (int i = 0; i < legsJson.size(); i++) {
+            JsonElement element = legsJson.get(i);
+            if (element == null || !element.isJsonObject()) {
+                throw new IllegalArgumentException("leg " + i + " is not an object");
+            }
+            legs.add(parseLeg(element.getAsJsonObject(), i));
+        }
+        return new NavPlanner.Journey(destination, List.copyOf(legs), plannedArriveMs, 0);
+    }
+
+    private static NavPlanner.Leg parseLeg(JsonObject legJson, int index) {
+        String type = string(legJson, "type", 16).toLowerCase(java.util.Locale.ROOT);
+        return switch (type) {
+            case "walk" -> new NavPlanner.WalkLeg(parsePoint(legJson.get("from"), index, "from"),
+                    parsePoint(legJson.get("to"), index, "to"), metres(legJson));
+            case "ride" -> {
+                List<NavPlanner.Via> via = new ArrayList<>();
+                JsonElement viaElement = legJson.get("via");
+                if (viaElement != null && viaElement.isJsonArray()) {
+                    JsonArray viaJson = viaElement.getAsJsonArray();
+                    if (viaJson.size() > NavNetworking.MAX_VIA) {
+                        throw new IllegalArgumentException("leg " + index + ": at most "
+                                + NavNetworking.MAX_VIA + " via entries");
+                    }
+                    for (int v = 0; v < viaJson.size(); v++) {
+                        if (!viaJson.get(v).isJsonObject()) {
+                            throw new IllegalArgumentException("leg " + index + ": via " + v + " is not an object");
+                        }
+                        JsonObject entry = viaJson.get(v).getAsJsonObject();
+                        via.add(new NavPlanner.Via(id(entry, "route", index), id(entry, "at", index)));
+                    }
+                }
+                int stops = 0;
+                JsonElement stopsElement = legJson.get("stops");
+                if (stopsElement != null && stopsElement.isJsonPrimitive()) {
+                    try {
+                        stops = Math.max(0, Math.min(1024, stopsElement.getAsInt()));
+                    } catch (RuntimeException ignored) {
+                        stops = 0;
+                    }
+                }
+                yield new NavPlanner.RideLeg(id(legJson, "route", index), id(legJson, "board", index),
+                        id(legJson, "alight", index), stops, List.copyOf(via));
+            }
+            case "transfer" -> new NavPlanner.TransferLeg(id(legJson, "from", index),
+                    id(legJson, "to", index), metres(legJson));
+            default -> throw new IllegalArgumentException("leg " + index + " has unknown type \"" + type + "\"");
+        };
+    }
+
+    /** {@code {"x":…,"y":…,"z":…}} or {@code {"platform":"<decimal id>"}}. */
+    private static NavPlanner.Point parsePoint(JsonElement element, int index, String field) {
+        if (element == null || !element.isJsonObject()) {
+            throw new IllegalArgumentException("leg " + index + ": " + field + " is not an object");
+        }
+        JsonObject point = element.getAsJsonObject();
+        if (point.has("platform")) {
+            return NavPlanner.Point.ofPlatform(id(point, "platform", index));
+        }
+        try {
+            return NavPlanner.Point.ofCoords(point.get("x").getAsDouble(),
+                    point.get("y").getAsDouble(), point.get("z").getAsDouble());
+        } catch (RuntimeException e) {
+            throw new IllegalArgumentException("leg " + index + ": " + field + " needs x/y/z or platform");
+        }
+    }
+
+    private static int metres(JsonObject legJson) {
+        JsonElement element = legJson.get("meters");
+        if (element == null) {
+            element = legJson.get("metres");
+        }
+        if (element == null || !element.isJsonPrimitive()) {
+            return 0;
+        }
+        try {
+            return Math.max(0, Math.min(1_000_000, (int) Math.round(element.getAsDouble())));
+        } catch (RuntimeException ignored) {
+            return 0;
+        }
+    }
+
+    /** A decimal-string (or numeric) MTR id. Rejects anything that is not a long. */
+    private static long id(JsonObject object, String key, int index) {
+        JsonElement element = object.get(key);
+        if (element == null || !element.isJsonPrimitive()) {
+            throw new IllegalArgumentException("leg " + index + ": missing \"" + key + "\"");
+        }
+        try {
+            return Long.parseLong(element.getAsString().trim());
+        } catch (RuntimeException e) {
+            throw new IllegalArgumentException("leg " + index + ": \"" + key + "\" is not a decimal id");
+        }
+    }
+
+    /** A capped, never-null string field. */
+    private static String string(JsonObject object, String key, int maxLength) {
+        JsonElement element = object.get(key);
+        if (element == null || !element.isJsonPrimitive()) {
+            return "";
+        }
+        try {
+            String value = element.getAsString();
+            return value.length() <= maxLength ? value : value.substring(0, maxLength);
+        } catch (RuntimeException ignored) {
+            return "";
+        }
+    }
+
+    /**
+     * Reads at most {@value #MAX_NAV_BODY_BYTES} bytes of request body and parses it as a
+     * JSON object; null on anything else (oversize, unreadable, not an object). Bounded
+     * by construction — one byte past the cap aborts rather than buffering.
+     */
+    private static JsonObject readJsonBody(HttpServletRequest request) {
+        try {
+            long declared = request.getContentLengthLong();
+            if (declared > MAX_NAV_BODY_BYTES) {
+                return null;
+            }
+            byte[] buffer = new byte[MAX_NAV_BODY_BYTES + 1];
+            int total = 0;
+            try (InputStream stream = request.getInputStream()) {
+                while (total < buffer.length) {
+                    int read = stream.read(buffer, total, buffer.length - total);
+                    if (read < 0) {
+                        break;
+                    }
+                    total += read;
+                }
+            }
+            if (total > MAX_NAV_BODY_BYTES || total == 0) {
+                return null;
+            }
+            JsonElement parsed = JsonParser.parseString(new String(buffer, 0, total, StandardCharsets.UTF_8));
+            return parsed != null && parsed.isJsonObject() ? parsed.getAsJsonObject() : null;
+        } catch (Throwable ignored) {
+            return null;
+        }
+    }
+
+    /**
+     * Runs {@code supplier} on the SERVER thread and waits at most
+     * {@value #SERVER_HOP_TIMEOUT_MILLIS} ms for it. Returns {@code fallback} on timeout,
+     * interruption or failure — the caller turns that into an honest "server busy".
+     */
+    private static <T> T awaitOnServer(MinecraftServer server, Supplier<T> supplier, T fallback) {
+        CompletableFuture<T> future = new CompletableFuture<>();
+        try {
+            server.execute(() -> {
+                try {
+                    future.complete(supplier.get());
+                } catch (Throwable throwable) {
+                    future.completeExceptionally(throwable);
+                }
+            });
+            return future.get(SERVER_HOP_TIMEOUT_MILLIS, TimeUnit.MILLISECONDS);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            return fallback;
+        } catch (Throwable throwable) {
+            return fallback;
+        }
+    }
+
+    private static void sendNavJson(HttpServletResponse response, JsonObject payload) {
+        DispatchStaticServlet.sendText(response, 200, "application/json;charset=utf-8", payload.toString());
+    }
+
+    private static void sendNavError(HttpServletResponse response, String error) {
+        JsonObject payload = new JsonObject();
+        payload.addProperty("ok", false);
+        payload.addProperty("error", error == null ? "unknown error" : error);
+        // 200 with ok:false, like the rest of this surface: the browser reads the body.
+        DispatchStaticServlet.sendText(response, 200, "application/json;charset=utf-8", payload.toString());
     }
 
     /** A tolerant int query parameter, matching ServletBase's parse-or-default behaviour. */

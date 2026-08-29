@@ -1,6 +1,7 @@
 package com.stationannouncer.client.mtraddon;
 
 import com.stationannouncer.StationAnnouncer;
+import com.stationannouncer.client.mtraddon.nav.ClientNav;
 import com.stationannouncer.mtraddon.AddonNetworking;
 import com.stationannouncer.mtraddon.DepotGroupNetworking;
 import com.stationannouncer.mtraddon.LiftDoorSides;
@@ -125,6 +126,7 @@ public final class AddonClientInit {
             ClientDisruptions.clear();
             ClientStopChanges.clear();
             ClientDepotGroups.clear();
+            ClientNav.stop();
         });
 
         // Server → client dispatch-availability sync (join only; one int).
@@ -150,6 +152,9 @@ public final class AddonClientInit {
         registerDepotGroupSync();
         registerToolsDashboardButton();
         DrivingHud.register(); // Feature 4 — driving HUD (registers its own disconnect cleanup)
+        // Journey directions: the addon_navigate receiver, the 4 Hz progress
+        // tracker, the journey card and the in-world waypoint marker.
+        ClientNav.register();
 
         ScreenEvents.AFTER_INIT.register((client, screen, scaledWidth, scaledHeight) -> {
             if (!(screen instanceof PlatformScreen) || !AddonClientConfig.get().showHoldRulesButton) {

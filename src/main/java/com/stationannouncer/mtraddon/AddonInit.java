@@ -13,6 +13,8 @@ import com.stationannouncer.mtraddon.disruption.DisruptionBroadcaster;
 import com.stationannouncer.mtraddon.disruption.DisruptionNetworking;
 import com.stationannouncer.mtraddon.disruption.MtrSimulators;
 import com.stationannouncer.mtraddon.disruption.StopOverlayEngine;
+import com.stationannouncer.mtraddon.nav.NavCommand;
+import com.stationannouncer.mtraddon.nav.NavStore;
 import net.fabricmc.fabric.api.event.lifecycle.v1.ServerLifecycleEvents;
 import net.fabricmc.fabric.api.event.lifecycle.v1.ServerTickEvents;
 import net.fabricmc.fabric.api.networking.v1.ServerPlayConnectionEvents;
@@ -64,10 +66,18 @@ public final class AddonInit {
         DisruptionNetworking.registerServerReceivers();
         DepotGroupNetworking.registerServerReceivers();
         AnalyticsCommand.register();
+        // Journey directions: /nav and /navpair. Registered AFTER AnalyticsCommand on
+        // purpose — see NavCommand's javadoc for why pairing gets its own ungated root
+        // instead of merging into the op-gated /dispatch tree.
+        NavCommand.register();
 
         ServerLifecycleEvents.SERVER_STARTED.register(server -> {
             AddonServerConfig.get(); // load (and cache) the config before any simulator asks for it
             AddonStore.load(server);
+            // Journey directions: reads nav-tokens.json and captures the addon's single
+            // MinecraftServer reference for the /dispatch/api/pair|navigate|navstatus
+            // endpoints (Jetty workers have no other way to reach the server).
+            NavStore.load(server);
             // Dispatch-map terrain: retains the server (nothing else in the addon does)
             // and reads whatever water polygons a previous /dispatch terrain scan cached.
             TerrainScanner.onServerStarted(server);
@@ -94,6 +104,10 @@ public final class AddonInit {
         });
         ServerLifecycleEvents.SERVER_STOPPING.register(server -> {
             AddonStore.flush();
+            // Write the paired-browser tokens and drop the server reference the nav
+            // endpoints hold, so a late Jetty request answers "server unavailable"
+            // instead of touching a stopping server.
+            NavStore.stop();
             // Flush the queued analytics events and stop the writer before the simulators go.
             AnalyticsRecorder.stop();
             // Join any in-flight terrain.json write and drop the retained server/world refs.

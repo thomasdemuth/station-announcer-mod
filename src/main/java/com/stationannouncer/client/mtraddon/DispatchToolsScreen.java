@@ -1,5 +1,6 @@
 package com.stationannouncer.client.mtraddon;
 
+import com.stationannouncer.client.mtraddon.nav.NavSettingsScreen;
 import net.fabricmc.api.EnvType;
 import net.fabricmc.api.Environment;
 import net.minecraft.client.gui.DrawContext;
@@ -16,7 +17,9 @@ import net.minecraft.text.Text;
  *   <li><b>Duplicate line…</b> — clone a route so the copy can be pointed at another
  *       platform ({@link DuplicateLineScreen});</li>
  *   <li><b>Depot groups…</b> — group depots so they stagger their departures instead of
- *       dispatching together ({@link DepotGroupsScreen}).</li>
+ *       dispatching together ({@link DepotGroupsScreen});</li>
+ *   <li><b>Journey directions…</b> — the per-player settings for the in-game navigation
+ *       card, world marker and alerts ({@link NavSettingsScreen}).</li>
  * </ul>
  *
  * <p>One button rather than two keeps MTR's dashboard layout intact: the addon's
@@ -41,7 +44,7 @@ public class DispatchToolsScreen extends Screen {
     @Override
     protected void init() {
         int left = (width - PANEL_WIDTH) / 2;
-        int content = WIDGET_HEIGHT * 3 + GAP * 2 + 26;
+        int content = WIDGET_HEIGHT * 4 + GAP * 3 + 26;
         int y = Math.max(28, (height - content) / 2);
         titleY = y - 16;
 
@@ -60,6 +63,16 @@ public class DispatchToolsScreen extends Screen {
                         button -> {
                             if (client != null) {
                                 client.setScreen(new DepotGroupsScreen(this));
+                            }
+                        })
+                .dimensions(left, y, PANEL_WIDTH, WIDGET_HEIGHT).build());
+        y += WIDGET_HEIGHT + GAP;
+
+        addDrawableChild(ButtonWidget.builder(
+                        Text.translatable("gui.station_announcer.nav.button"),
+                        button -> {
+                            if (client != null) {
+                                client.setScreen(new NavSettingsScreen(this));
                             }
                         })
                 .dimensions(left, y, PANEL_WIDTH, WIDGET_HEIGHT).build());

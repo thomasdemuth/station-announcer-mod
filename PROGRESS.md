@@ -3127,3 +3127,68 @@ stop, three vehicles × three continuous cycles with a never-resetting stop inde
 off-axis yard stop mid-cycle — i.e. all three trace pathologies in one selectable badge.
 Browser-verified at `?demo=1` (wide + 620 px, line mode, loop mode, segment mode from
 the right gutter, zero console errors). NOT in-game tested.
+
+## IN-GAME JOURNEY DIRECTIONS (2026-08-29 late) — /navpair, /nav, HUD, waypoint; 2.4.39
+
+Thomas's choices (do not re-ask): ALL four display surfaces with per-user
+toggles; PAIRING CODE authorisation; HUD top-right by default, corner
+configurable; plus a `/nav` command so directions work without the website.
+
+**Design rule that shapes everything: the packet carries IDS, not text.** The
+client resolves route names/colours, platform names and LIVE departure
+countdowns itself from MTR's client data (`platformIdMap`, `simplifiedRoutes`,
+`ArrivalsCacheClient`) — so the payload is tiny AND guidance keeps working with
+the browser closed.
+
+SERVER (`mtraddon/nav/`): NavStore (6-char codes from an unambiguous alphabet,
+10 min TTL, one live code per player, clickable COPY_TO_CLIPBOARD; codes trade
+once for 32-hex tokens bound to UUID+name, ≤16 per player, 30-day idle expiry,
+owner-only revoke, persisted to `<save>/station-announcer-addon/nav-tokens.json`
+with AddonStore's debounced pattern; rate limit 1 send / 3 s per token AND per
+target). NavPlanner — the FIRST server-side planner (the other one is browser
+JS): two-layer state space A(route,stopIndex)/F(platform) over flat arrays,
+boarding is the only edge that pays a wait, through-runs free, optional
+`stepfree` gating board/alight/transfer via AddonStore.accessibilityView();
+fallbacks for invalid durations (12 m/s estimate) and unknown headways (flat
+300 s); 200k-label cap. NavNetworking (the wire contract, documented in its
+javadoc). NavCommand: `/nav [stepfree] <station…>`, `/nav stop`.
+
+**`/navpair` is its own root, NOT `/dispatch pair`** — brigadier's
+`CommandNode.addChild` keeps the FIRST-registered node and copies only the
+incoming node's children and `command`, never its `requirement`, so grafting
+onto the op-gated `/dispatch` root would have made pairing op-only (or stripped
+the op gate off stats/terrain/satellite). Bytecode-verified; do not "fix" it.
+
+Endpoints (synchronous Jetty pre-empts, no simulator needed): POST api/pair,
+POST api/navigate, GET api/navstatus. Player resolution needs the server thread
+but the HTTP reply needs the answer, so it uses a bounded server.execute +
+CompletableFuture.get(2 s); a timeout answers "server busy" and navstatus adds
+`"stale":true` (the UI treats that as UNKNOWN, not offline).
+
+CLIENT (`client/mtraddon/nav/`): ClientNav (4 Hz snapshot like DrivingHud,
+never per frame; monotonic legIndex/passedIndex; aboard = speed > 8 blocks/s or
+hasVehicle; ride legs expand to a platform sequence from SimplifiedRoute so
+stop counts are real; through-run segments swap the bullet mid-leg). NavHud
+(DrivingHud's exact visual language; top-right default, offsets only when it
+would collide with a driving HUD in the same corner). NavWaypointRenderer —
+in-world diamond + beam + distance. **A custom RenderLayer is IMPOSSIBLE from a
+mod: `RenderLayer.MultiPhaseParameters` is protected** (the agent's javap read
+missed the access modifier and it failed to compile) — so it reuses
+`getDebugQuads()` and brackets an EXPLICIT flush with
+RenderSystem.disableDepthTest/enable; the flush must be inside that window
+because quads only rasterise at draw(). Chat itinerary + title/sound alerts
+fire once per occurrence. Six settings in AddonClientConfig, screen reachable
+from DispatchToolsScreen.
+
+FRONTEND (map.js §10e): "Send to game" beside Start on the selected card,
+pairing modal, token in `sa_mapplus_prefs`, boot re-validation via navstatus,
+toast, per-card "In <player>'s game" marker, Settings→Me pairing row. Payload
+mapper handles every leg type incl. through-run `via` (≤4) and point/GPS
+coordinate endpoints with a y fallback chain; 24-leg clamp drops the leading
+walk first. Demo stubs all three endpoints (code DEMO23).
+
+VERIFIED headless: compile green; all three endpoints return the exact error
+strings the UI parses; `/navpair` and `/nav` register and refuse the console
+cleanly. harness.mjs 512 + planner.mjs 81 green — **both harnesses now live in
+`tools/` instead of the scratchpad** so they survive sessions. NOT tested in
+game: pairing round trip, HUD/waypoint rendering, alerts, /nav planning quality.

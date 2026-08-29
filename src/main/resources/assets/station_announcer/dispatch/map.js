@@ -293,6 +293,22 @@ const state = {
 		graph: null,
 	},
 
+	/* --- "Send to game" (section 10e): this browser paired to one in-game player --- */
+	nav: {
+		token: "",                 // 32 hex from api/pair, persisted in sa_mapplus_prefs
+		player: "",                // the paired player's name
+		label: "",                 // what this browser called itself when it paired
+		online: null,              // api/navstatus: true | false | null (not asked yet)
+		checking: false,           // a navstatus request is in flight
+		modal: null,               // {code, error, busy} while the pairing card is open
+		sending: false,            // a navigate POST is in flight (the button is disabled)
+		lastSendAt: 0,             // client-side mirror of the server's 1-per-3-s limit
+		sentSig: "",               // signature of the journey last accepted by the HUD
+		toast: null,               // {text, kind:"ok"|"err", at}
+		demoOffline: false,        // ?demo=1 only: flips the stubbed player offline
+		demoLastAt: 0,             // ?demo=1 only: the stub's own rate-limit clock
+	},
+
 	prefs: {
 		showHidden: false,
 		theme: "light",            // light | dark  (settings menu)
@@ -414,6 +430,7 @@ async function boot() {
 	initSettings();          // theme first: applied before anything paints
 	initUi();
 	initPlanner();
+	navBoot();               // paint the pairing controls; re-validate a stored token
 	if (DEMO) { bootDemo(); return; }
 	try {
 		const ping = await (await fetch(`${API}/ping`)).json();
@@ -3639,6 +3656,8 @@ function clearPlanField(which) {
 /** Esc unwinds the overlays one keystroke at a time, then the selection. */
 function escapePressed() {
 	let handled = false;
+	// the pairing card is modal: while it is up Esc means "close it", nothing else
+	if (state.nav.modal) { closeNavModal(); return; }
 	// an armed map pick is the most transient thing on screen: it goes first
 	if (state.mapPick) { disarmMapPick(); handled = true; }
 	// the re-plan question is next: Esc means "keep what I am on"
@@ -4611,6 +4630,628 @@ function refuseTrackOffer() {
 }
 
 /* ============================================================================
+ * 10e. send to game — pairing + navigate
+ * ==========================================================================
+ * The rider plans on the map and pushes the result into the game: the selected option
+ * card grows a "Send to game" button, and the in-game HUD walks them through it.
+ *
+ * The browser has no idea who the player is, so it PAIRS first: the player runs
+ * `/navpair` in game (its own root, NOT a `/dispatch` subcommand — brigadier's same-root
+ * merge keeps the first registration's permission predicate, which would have made
+ * pairing op-only), the server prints a six-character code, and this page trades
+ * that code for a token it keeps in the same prefs blob as everything else. Nothing but
+ * {token, player, label} is stored — the token IS the identity, so a stale one is
+ * dropped silently the moment api/navstatus says it is unknown.
+ *
+ *   POST api/pair       {code, label}      -> {ok, token, player} | {ok:false, error}
+ *   GET  api/navstatus  ?token=            -> {ok, player, online} | {ok:false, error}
+ *   POST api/navigate   {token, journey}   -> {ok} | {ok:false, error}
+ *
+ * The journey wire shape is deliberately NOT this file's Journey object: the HUD needs
+ * ids and metres, not display strings, so journeyPayload() flattens it (see there for
+ * the leg-by-leg mapping and the caps the server enforces).
+ *
+ * The whole section is stubbed in ?demo=1 (demoNav), so the modal, a successful pairing
+ * with the code DEMO23, the send flow and the toast are all exercisable with no server.
+ * ------------------------------------------------------------------------- */
+
+/**
+ * The unambiguous code alphabet — A–Z without I or O, plus 2–9 (no 0 or 1 either).
+ *
+ * This MIRRORS `NavStore.CODE_ALPHABET` on the server, which is what actually generates
+ * the codes: a sanitiser narrower than the generator would silently eat characters out of
+ * a perfectly good code, so if that constant ever changes, change this one with it.
+ */
+const PAIR_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+const PAIR_CODE_LEN = 6;
+/** Caps the server enforces — mirrored here so a body is never sent that it will reject. */
+const NAV_MAX_LEGS = 24;
+const NAV_MAX_VIA = 4;
+const NAV_DEST_MAX = 64;
+const NAV_MAX_BODY = 16 * 1024;
+/** The server allows one send per 3 s; the button holds the same line locally. */
+const NAV_SEND_COOLDOWN_MS = 3000;
+const NAV_TOAST_MS = 4200;
+/** A walk endpoint with no y anywhere to borrow: sea level, the same default the HUD uses. */
+const NAV_DEFAULT_Y = 64;
+/**
+ * ?demo=1 fixtures. The demo code spells a word, so it contains an O — a letter the real
+ * alphabet deliberately excludes. Demo mode therefore widens the ACCEPTED set by exactly
+ * the two excluded letters so the code can be typed; the production sanitiser
+ * (sanitiseWithAlphabet over PAIR_ALPHABET) is untouched.
+ */
+const DEMO_PAIR_CODE = "DEMO23";
+const DEMO_NAV_TOKEN = "deadbeefdeadbeefdeadbeefdeadbeef";
+const codeAlphabet = () => (DEMO ? PAIR_ALPHABET + "IO" : PAIR_ALPHABET);
+
+const round2 = (v) => Math.round((Number(v) || 0) * 100) / 100;
+
+/* ---- code + token hygiene (pure) ---- */
+
+/**
+ * Paste-friendly code sanitiser: upper-cases, throws away everything outside the
+ * alphabet (spaces, dashes, the "code:" a rider pastes with it, and the ambiguous
+ * letters the alphabet deliberately excludes) and stops at six characters.
+ */
+function sanitiseWithAlphabet(alphabet, raw) {
+	const s = String(raw == null ? "" : raw).toUpperCase();
+	let out = "";
+	for (const ch of s) {
+		if (alphabet.indexOf(ch) >= 0) out += ch;
+		if (out.length === PAIR_CODE_LEN) break;
+	}
+	return out;
+}
+
+function sanitisePairCode(raw) { return sanitiseWithAlphabet(codeAlphabet(), raw); }
+
+function pairCodeValid(code) {
+	return sanitisePairCode(code).length === PAIR_CODE_LEN
+		&& String(code || "").toUpperCase().replace(/[^A-Z0-9]/g, "").length === PAIR_CODE_LEN;
+}
+
+/** A token is only worth storing if it looks like the 32 hex the server hands out. */
+function navTokenValid(token) {
+	return /^[0-9a-f]{32}$/i.test(String(token || ""));
+}
+
+/** Best-effort name for this browser, for the player's "paired devices" list. */
+function browserLabel() {
+	let ua = "";
+	try { ua = String((typeof navigator !== "undefined" && navigator.userAgent) || ""); } catch (e) { /* no DOM */ }
+	const browser = /Edg\//.test(ua) ? "Edge" : /OPR\/|Opera/.test(ua) ? "Opera"
+		: /Firefox\//.test(ua) ? "Firefox" : /Chrome\//.test(ua) ? "Chrome"
+			: /Safari\//.test(ua) ? "Safari" : "Browser";
+	const os = /Mac OS X|Macintosh/.test(ua) ? "Mac" : /Windows/.test(ua) ? "Windows"
+		: /Android/.test(ua) ? "Android" : /iPhone|iPad|iPod/.test(ua) ? "iOS"
+			: /Linux/.test(ua) ? "Linux" : "";
+	return os ? browser + " on " + os : browser;
+}
+
+/* ---- journey -> wire payload (pure) ---- */
+
+/**
+ * A walk leg is a TRANSFER when both its ends are real platforms of the SAME station —
+ * exactly the walks the itinerary folds into the next boarding row as a transfer chip.
+ * A walk between two different stations is still a walk (it happens on the street), and
+ * so is anything touching a dropped pin or the live GPS origin.
+ */
+function navIsTransferLeg(leg) {
+	return !!(leg && leg.kind === "walk" && !leg.fromPoint && !leg.toPoint
+		&& leg.fromStation && leg.fromStation === leg.toStation);
+}
+
+/** Where a virtual point node actually is — the live plan first, the selection as backup. */
+function navPointOf(pointId) {
+	const pt = state.pointNodes.get(pointId);
+	if (pt && pt.xz) return { xz: pt.xz, y: pt.y };
+	const sel = pointId === POINT_TO ? state.plan.to : state.plan.from;
+	if (sel && sel.point) return { xz: sel.point, y: sel.y };
+	return null;
+}
+
+/**
+ * One end of a walk leg on the wire: `{platform:id}` for a real platform, world
+ * coordinates for a dropped pin / the live GPS origin. A point carries no height of its
+ * own unless it came from a player, so the y is borrowed from the platform at the OTHER
+ * end of the same walk, and only then falls back to 64.
+ */
+function navEndpoint(leg, which) {
+	const point = which === "to" ? leg.toPoint : leg.fromPoint;
+	const id = which === "to" ? leg.toPlatform : leg.fromPlatform;
+	if (!point) return { platform: String(id) };
+	const pt = navPointOf(point) || navPointOf(id);
+	const xz = (pt && pt.xz) || [0, 0];
+	const other = state.platforms.get(which === "to" ? leg.fromPlatform : leg.toPlatform);
+	const y = pt && Number.isFinite(pt.y) ? pt.y
+		: other && Number.isFinite(other.y) ? other.y : NAV_DEFAULT_Y;
+	return { x: round2(xz[0]), y: round2(y), z: round2(xz[1]) };
+}
+
+/** One leg on the wire. Ride / transfer / walk — the only three shapes the HUD reads. */
+function navLegPayload(leg) {
+	if (!leg) return null;
+	if (leg.kind === "ride") {
+		const out = {
+			type: "ride", route: String(leg.routeId),
+			board: String(leg.fromPlatform), alight: String(leg.toPlatform),
+			stops: Math.max(0, Math.round(leg.stopCount || 0)),
+		};
+		// a through run is the same train changing route under the rider: the HUD needs
+		// to know so it does not tell them to get off (capped at the server's 4)
+		const via = (leg.continuations || []).slice(0, NAV_MAX_VIA)
+			.map((c) => ({ route: String(c.routeId), at: String(c.platform) }));
+		if (via.length) out.via = via;
+		return out;
+	}
+	const meters = Math.max(0, Math.round(leg.meters || 0));
+	if (navIsTransferLeg(leg)) {
+		return { type: "transfer", from: String(leg.fromPlatform), to: String(leg.toPlatform), meters };
+	}
+	return { type: "walk", from: navEndpoint(leg, "from"), to: navEndpoint(leg, "to"), meters };
+}
+
+/** What the HUD calls the destination — the same string the itinerary's pin row shows. */
+function navDestinationLabel(journey) {
+	let s = journey && journey.toPoint
+		? (journey.toName || "Dropped pin")
+		: stationLabel(journey && journey.toStation, journey && journey.toPart);
+	s = String(s == null ? "" : s).trim() || "Destination";
+	if (s.length > NAV_DEST_MAX) s = s.slice(0, NAV_DEST_MAX - 1) + "…";
+	return s;
+}
+
+/**
+ * Flatten a Journey into the wire shape.
+ *
+ * @returns {{payload, notes:string[]}|null} `notes` records what had to give to fit the
+ *          server's 24-leg cap: the LEADING walk goes first (a rider standing at their
+ *          own start does not need to be told to walk out of their front door), and only
+ *          if that is still not enough is the tail truncated — which the caller says out
+ *          loud rather than pretending the whole journey went.
+ */
+function journeyPayload(journey) {
+	if (!journey || !journey.legs || !journey.legs.length) return null;
+	let legs = journey.legs.map(navLegPayload).filter(Boolean);
+	if (!legs.length) return null;
+	const notes = [];
+	while (legs.length > NAV_MAX_LEGS && legs[0].type === "walk") {
+		legs = legs.slice(1);
+		notes.push("dropped-lead-walk");
+	}
+	if (legs.length > NAV_MAX_LEGS) {
+		legs = legs.slice(0, NAV_MAX_LEGS);
+		notes.push("truncated");
+	}
+	return {
+		payload: {
+			destination: navDestinationLabel(journey),
+			plannedArriveMs: Math.round(journey.arriveMs) || 0,
+			legs,
+		},
+		notes,
+	};
+}
+
+/** The line the toast adds when the payload had to be trimmed. */
+function navNoticeText(notes) {
+	if (!notes || !notes.length) return "";
+	if (notes.indexOf("truncated") >= 0) return "Too long for the HUD — only the first " + NAV_MAX_LEGS + " steps were sent.";
+	if (notes.indexOf("dropped-lead-walk") >= 0) return "The opening walk was dropped to fit the HUD.";
+	return "";
+}
+
+/* ---- transport ---- */
+
+/** ?demo=1 has no server: these three stubs stand in for it, errors and all. */
+function demoNav(path, init) {
+	let body = {};
+	try { body = init && init.body ? JSON.parse(init.body) : {}; } catch (e) { body = {}; }
+	if (path.indexOf("pair") === 0) {
+		return Promise.resolve(sanitisePairCode(body.code) === DEMO_PAIR_CODE
+			? { ok: true, token: DEMO_NAV_TOKEN, player: "Demo" }
+			: { ok: false, error: "invalid or expired code" });
+	}
+	if (path.indexOf("navstatus") === 0) {
+		const token = (String(path).split("token=")[1] || "").split("&")[0];
+		return Promise.resolve(token === DEMO_NAV_TOKEN
+			? { ok: true, player: "Demo", online: !state.nav.demoOffline }
+			: { ok: false, error: "unknown token" });
+	}
+	if (path.indexOf("navigate") === 0) {
+		if (body.token !== DEMO_NAV_TOKEN) return Promise.resolve({ ok: false, error: "unknown token" });
+		if (state.nav.demoOffline) return Promise.resolve({ ok: false, error: "player offline" });
+		const j = body.journey;
+		if (!j || !Array.isArray(j.legs) || !j.legs.length || j.legs.length > NAV_MAX_LEGS) {
+			return Promise.resolve({ ok: false, error: "malformed journey" });
+		}
+		if (now() - (state.nav.demoLastAt || 0) < NAV_SEND_COOLDOWN_MS) {
+			return Promise.resolve({ ok: false, error: "rate limited — wait a moment" });
+		}
+		state.nav.demoLastAt = now();
+		return Promise.resolve({ ok: true });
+	}
+	return Promise.resolve({ ok: false, error: "unknown endpoint" });
+}
+
+/**
+ * One request. Never throws: a backend that has not shipped this feature (404, HTML,
+ * connection refused) comes back as a normal {ok:false, error} the modal can render.
+ */
+async function navHttp(path, init) {
+	try {
+		if (DEMO) return await demoNav(path, init);
+		const res = await fetch(`${API}/${path}`, init || undefined);
+		const body = await res.json();
+		const out = body && body.data ? body.data : body;
+		if (!out || typeof out !== "object") return { ok: false, error: "Unexpected reply from the server." };
+		return out;
+	} catch (e) {
+		return { ok: false, error: "Could not reach the dispatch server." };
+	}
+}
+
+const navJson = (obj) => ({
+	method: "POST",
+	headers: { "Content-Type": "application/json" },
+	body: JSON.stringify(obj),
+});
+
+/* ---- token lifecycle ---- */
+
+function navSetToken(token, player, label) {
+	state.nav.token = String(token || "");
+	state.nav.player = String(player || "");
+	state.nav.label = String(label || state.nav.label || "");
+	savePrefs();
+	return state.nav;
+}
+
+/** Forget the pairing. Called by Unpair AND by any server reply that disowns the token. */
+function navClearToken() {
+	state.nav.token = "";
+	state.nav.player = "";
+	state.nav.online = null;
+	state.nav.sentSig = "";
+	savePrefs();
+	return state.nav;
+}
+
+/**
+ * Fold an api/navstatus reply into state.
+ * @returns {"paired"|"offline"|"unknown"|"unreachable"}
+ */
+function navApplyStatus(res) {
+	if (!res || typeof res !== "object") return "unreachable";
+	if (res.ok === true) {
+		if (res.player) state.nav.player = String(res.player);
+		// `stale` means the server thread could not be asked in time — that is "we do not
+		// know", not "logged out", and the rider must not be told the wrong thing
+		if (res.stale) { state.nav.online = null; return "unknown-online"; }
+		state.nav.online = res.online !== false;
+		return state.nav.online ? "paired" : "offline";
+	}
+	// "unknown token" is the ONE error that means the pairing is gone: anything else
+	// (offline server, rate limit, a stray 500) leaves the token alone
+	if (/unknown token|invalid token|expired/i.test(String(res.error || ""))) {
+		navClearToken();
+		return "unknown";
+	}
+	return "unreachable";
+}
+
+/** Re-validate the stored token. Silent by design — it runs on every boot. */
+async function navCheckStatus() {
+	if (!state.nav.token) return "unpaired";
+	state.nav.checking = true;
+	const res = await navHttp("navstatus?token=" + encodeURIComponent(state.nav.token));
+	state.nav.checking = false;
+	const outcome = navApplyStatus(res);
+	renderPairRow();
+	renderNavModal();
+	renderOptions();
+	return outcome;
+}
+
+/** Trade a code for a token. Errors come back as strings for the modal, never thrown. */
+async function navPair(code) {
+	const clean = sanitisePairCode(code);
+	if (clean.length !== PAIR_CODE_LEN) return { ok: false, error: "Enter the six-character code the game showed you." };
+	const label = browserLabel();
+	const res = await navHttp("pair", navJson({ code: clean, label }));
+	if (res && res.ok === true && navTokenValid(res.token)) {
+		navSetToken(res.token, res.player, label);
+		state.nav.online = true;
+		return { ok: true, player: state.nav.player };
+	}
+	if (res && res.ok === true) return { ok: false, error: "The server sent back an unusable token." };
+	return { ok: false, error: String((res && res.error) || "Pairing failed.") };
+}
+
+/* ---- sending ---- */
+
+/**
+ * Push the selected journey at the paired player's HUD.
+ * @returns {{ok:boolean, error?:string, notice?:string}}
+ */
+async function navSend(journey) {
+	if (!journey) return { ok: false, error: "Nothing to send." };
+	if (!state.nav.token) return { ok: false, error: "unpaired" };
+	if (state.nav.sending) return { ok: false, error: "Already sending." };
+	const built = journeyPayload(journey);
+	if (!built) return { ok: false, error: "That journey has no steps to send." };
+	const since = now() - (state.nav.lastSendAt || 0);
+	if (state.nav.lastSendAt && since < NAV_SEND_COOLDOWN_MS) {
+		return { ok: false, error: "One send every " + (NAV_SEND_COOLDOWN_MS / 1000) + " seconds — try again in a moment." };
+	}
+	const init = navJson({ token: state.nav.token, journey: built.payload });
+	if (init.body.length > NAV_MAX_BODY) return { ok: false, error: "That journey is too large to send." };
+
+	state.nav.sending = true;
+	renderOptions();
+	const res = await navHttp("navigate", init);
+	state.nav.sending = false;
+
+	if (res && res.ok === true) {
+		state.nav.lastSendAt = now();
+		state.nav.online = true;
+		state.nav.sentSig = journey.signature || "";
+		const notice = navNoticeText(built.notes);
+		navShowToast("Sent to " + (state.nav.player || "your") + "’s HUD" + (notice ? " · " + notice : ""), "ok");
+		renderOptions();
+		renderPairRow();
+		return { ok: true, notice };
+	}
+	const error = String((res && res.error) || "The game did not accept the journey.");
+	if (/unknown token|invalid token|expired/i.test(error)) navClearToken();
+	if (/offline/i.test(error)) state.nav.online = false;
+	navShowToast(error, "err");
+	renderOptions();
+	renderPairRow();
+	return { ok: false, error };
+}
+
+/** The button's click: pair first if we have to, otherwise send. */
+function navSendPressed(journey) {
+	if (!state.nav.token) { openNavModal(journey); return null; }
+	return navSend(journey);
+}
+
+/* ---- toast ---- */
+
+let navToastTimer = 0;
+function navShowToast(text, kind) {
+	state.nav.toast = { text: String(text || ""), kind: kind === "err" ? "err" : "ok", at: now() };
+	renderNavToast();
+	if (navToastTimer) clearTimeout(navToastTimer);
+	navToastTimer = setTimeout(() => {
+		state.nav.toast = null;
+		navToastTimer = 0;
+		renderNavToast();
+	}, NAV_TOAST_MS);
+	return state.nav.toast;
+}
+
+let navToastKey = "";
+function renderNavToast() {
+	const el = $("navToast");
+	if (!el) return;
+	const t = state.nav.toast;
+	if (!t) {
+		navToastKey = "";
+		if (el.classList) el.classList.add("hidden");
+		return;
+	}
+	const html = `<svg class="icon sm"><use href="#${t.kind === "err" ? "i-alert" : "i-send"}"/></svg><span>${esc(t.text)}</span>`;
+	if (html !== navToastKey) { navToastKey = html; el.innerHTML = html; }
+	if (el.classList) {
+		el.classList.remove("hidden");
+		el.classList.toggle("err", t.kind === "err");
+	}
+}
+
+/* ---- the pairing modal ---- */
+
+function openNavModal(pending) {
+	state.nav.modal = { code: "", error: "", busy: false, pending: pending || null };
+	const set = $("settings");
+	if (set && set.classList) set.classList.add("hidden");
+	if (state.nav.token) navCheckStatus();
+	renderNavModal();
+	const input = $("navCode");
+	if (input && input.focus) input.focus();
+	return state.nav.modal;
+}
+
+function closeNavModal() {
+	state.nav.modal = null;
+	renderNavModal();
+	return null;
+}
+
+function navModalHtml(m) {
+	const paired = !!state.nav.token;
+	if (paired) {
+		const who = state.nav.player || "your player";
+		const status = state.nav.online === false
+			? esc(who) + " is offline right now — the directions will be refused until they log back in."
+			: state.nav.online === null
+				? "Checking the game connection…"
+				: "Directions you send land on their in-game HUD straight away.";
+		return `
+			<div class="nm-card" role="dialog" aria-modal="true" aria-label="Game pairing">
+				<div class="nm-title">Paired as ${esc(who)}</div>
+				<div class="nm-body">${esc(status)}</div>
+				${state.nav.label ? `<div class="nm-meta">This browser: ${esc(state.nav.label)}</div>` : ""}
+				${m.error ? `<div class="nm-error">${esc(m.error)}</div>` : ""}
+				<div class="nm-actions">
+					<button class="nm-unpair" type="button">Unpair</button>
+					<button class="nm-done" type="button">Done</button>
+				</div>
+			</div>`;
+	}
+	return `
+		<div class="nm-card" role="dialog" aria-modal="true" aria-label="Pair with the game">
+			<div class="nm-title">Send directions to your game</div>
+			<div class="nm-body">In Minecraft, run <b>/navpair</b>. The game answers with a six-character code — type it here and this browser can push journeys straight to your HUD. In game, <b>/navpair list</b> shows your paired browsers and <b>/navpair revoke &lt;n&gt;</b> removes one.</div>
+			${DEMO ? `<div class="nm-meta">Demo mode — there is no server; the code is <b>${DEMO_PAIR_CODE}</b>.</div>` : ""}
+			<input id="navCode" class="nm-code" type="text" maxlength="${PAIR_CODE_LEN}" placeholder="ABC234"
+				autocomplete="off" autocapitalize="characters" spellcheck="false" aria-label="Pairing code"
+				value="${esc(m.code || "")}">
+			${m.error ? `<div class="nm-error">${esc(m.error)}</div>` : ""}
+			<div class="nm-actions">
+				<button class="nm-cancel" type="button">Cancel</button>
+				<button class="nm-pair" type="button"${m.busy || !pairCodeValid(m.code) ? " disabled" : ""}>${m.busy ? "Pairing…" : "Pair"}</button>
+			</div>
+		</div>`;
+}
+
+let navModalKey = "";
+function renderNavModal() {
+	const el = $("navModal");
+	if (!el) return;
+	const m = state.nav.modal;
+	if (!m) {
+		navModalKey = "";
+		if (el.classList) el.classList.add("hidden");
+		return;
+	}
+	const html = navModalHtml(m);
+	if (html !== navModalKey) {
+		navModalKey = html;
+		el.innerHTML = html;
+		wireNavModal(el);
+	}
+	if (el.classList) el.classList.remove("hidden");
+}
+
+function wireNavModal(el) {
+	if (!el.querySelector) return;
+	const q = (sel) => el.querySelector(sel);
+	const cancel = q(".nm-cancel");
+	if (cancel) cancel.onclick = () => closeNavModal();
+	const done = q(".nm-done");
+	if (done) done.onclick = () => closeNavModal();
+	const unpair = q(".nm-unpair");
+	if (unpair) unpair.onclick = () => {
+		navClearToken();
+		navModalKey = "";           // paired -> unpaired is a different card entirely
+		renderNavModal();
+		renderPairRow();
+		renderOptions();
+	};
+	const pair = q(".nm-pair");
+	if (pair) pair.onclick = () => navModalSubmit();
+	const input = q("#navCode") || $("navCode");
+	if (input && input.addEventListener) {
+		input.addEventListener("input", () => {
+			const clean = sanitisePairCode(input.value);
+			input.value = clean;
+			navModalSetCode(clean);
+		});
+		input.addEventListener("keydown", (e) => {
+			if (!e) return;
+			if (e.key === "Enter") { if (e.preventDefault) e.preventDefault(); navModalSubmit(); }
+			else if (e.key === "Escape") { if (e.preventDefault) e.preventDefault(); closeNavModal(); }
+		});
+	}
+}
+
+/** Typing only re-renders the Pair button's enabled-ness, never the input under a caret. */
+function navModalSetCode(code) {
+	const m = state.nav.modal;
+	if (!m) return null;
+	m.code = code;
+	m.error = "";
+	const btn = $("navModal") && $("navModal").querySelector ? $("navModal").querySelector(".nm-pair") : null;
+	if (btn) btn.disabled = m.busy || !pairCodeValid(code);
+	const err = $("navModal") && $("navModal").querySelector ? $("navModal").querySelector(".nm-error") : null;
+	if (err && err.classList) err.classList.add("hidden");
+	return m;
+}
+
+async function navModalSubmit() {
+	const m = state.nav.modal;
+	if (!m || m.busy || state.nav.token) return null;
+	if (!pairCodeValid(m.code)) {
+		m.error = "Enter the six-character code the game showed you.";
+		navModalKey = "";
+		renderNavModal();
+		return m;
+	}
+	m.busy = true;
+	navModalKey = "";
+	renderNavModal();
+	const res = await navPair(m.code);
+	const still = state.nav.modal;
+	if (res.ok) {
+		const pending = still && still.pending;
+		if (still) { still.busy = false; still.error = ""; }
+		navModalKey = "";
+		renderNavModal();
+		renderPairRow();
+		renderOptions();
+		navShowToast("Paired as " + (state.nav.player || "your player"), "ok");
+		// the rider pressed "Send to game" and got a pairing card instead: finish the
+		// job they actually asked for
+		if (pending) { closeNavModal(); await navSend(pending); }
+		return res;
+	}
+	if (still) { still.busy = false; still.error = res.error; }
+	navModalKey = "";
+	renderNavModal();
+	return res;
+}
+
+/* ---- the settings row (Me > Game HUD) ---- */
+
+function pairRowHtml() {
+	if (!state.nav.token) {
+		return `<button class="pair-btn" type="button" data-act="pair">Pair with game</button>`;
+	}
+	const dotClass = state.nav.online === false ? "off" : state.nav.online === null ? "unknown" : "";
+	return `<span class="pair-who"><i class="pair-dot ${dotClass}"></i>${esc(state.nav.player || "Paired")}</span>`
+		+ `<button class="pair-btn" type="button" data-act="unpair">Unpair</button>`;
+}
+
+let pairRowKey = "";
+function renderPairRow() {
+	const el = $("pairCtl");
+	if (!el) return;
+	const html = pairRowHtml();
+	if (html === pairRowKey) return;
+	pairRowKey = html;
+	el.innerHTML = html;
+	const btns = el.querySelectorAll ? el.querySelectorAll(".pair-btn") : [];
+	for (const b of btns) {
+		b.onclick = (e) => {
+			if (e && e.stopPropagation) e.stopPropagation();
+			if (b.dataset.act === "unpair") {
+				navClearToken();
+				renderPairRow();
+				renderOptions();
+			} else {
+				openNavModal(null);
+			}
+		};
+	}
+}
+
+/** Boot: paint the pairing controls and quietly re-validate whatever token we kept. */
+function navBoot() {
+	renderPairRow();
+	renderNavToast();
+	renderNavModal();
+	// clicking the scrim (never the card on it) dismisses, the same as Esc
+	const el = $("navModal");
+	if (el && el.addEventListener) {
+		el.addEventListener("click", (e) => { if (e && e.target === el) closeNavModal(); });
+	}
+	if (state.nav.token) navCheckStatus();
+	return state.nav;
+}
+
+/* ============================================================================
  * 10b. station panel
  * ==========================================================================
  * Clicking a station glyph or its name opens the right-hand card: who serves it, when
@@ -5189,6 +5830,14 @@ function renderOptions() {
 				}
 			};
 		}
+		const send = card.querySelector ? card.querySelector(".opt-send") : null;
+		if (send) {
+			send.onclick = (e) => {
+				if (e && e.stopPropagation) e.stopPropagation();
+				const j = p.journeys[parseInt(card.dataset.i, 10)];
+				if (j) navSendPressed(j);
+			};
+		}
 	}
 }
 
@@ -5243,9 +5892,21 @@ function optionCard(j, selected) {
 		<div class="opt-route">${seq.join(chev)}</div>
 		${first ? `<div class="opt-live"><span class="dot pulse"></span>${esc(legLabel(first) || first.routeName)} departs ${liveMin <= 0 ? "now" : "in " + liveMin + " min"}</div>` : ""}
 		${j.tags && j.tags.length ? `<div class="opt-sub">${j.accessible ? ACCESS_IMG : ""}${esc(j.tags.join(" · "))}</div>` : ""}
+		${sentMarkHtml(j)}
 		${selected ? itineraryHtml(j) : ""}
-		${selected ? startButtonHtml(j) : ""}
+		${selected ? optionActionsHtml(j) : ""}
 	</div>`;
+}
+
+/**
+ * The "in game" marker (section 10e). It rides the CARD, not the button, so it is still
+ * there after the rider expands a different option — and it disappears on its own when
+ * the plan changes, because a new plan has new signatures and none of them match.
+ */
+function sentMarkHtml(j) {
+	if (!state.nav.sentSig || !j || j.signature !== state.nav.sentSig) return "";
+	return `<div class="opt-ingame"><svg class="icon sm"><use href="#i-send"/></svg>In ${
+		esc(state.nav.player ? state.nav.player + "’s" : "your")} game</div>`;
 }
 
 /**
@@ -5259,6 +5920,26 @@ function startButtonHtml(j) {
 		&& state.tracking.journey.signature === j.signature);
 	return `<button class="opt-start${tracked ? " on" : ""}" type="button">${
 		tracked ? "Stop guidance" : "Start"}</button>`;
+}
+
+/**
+ * "Send to game" (section 10e) sits BESIDE Start: tracking the journey on the map and
+ * being walked through it in game are complementary, so both are always available.
+ * Unpaired, the button opens the pairing card rather than hiding itself — the rider
+ * should be able to find the feature before they have set it up.
+ */
+function sendButtonHtml(j) {
+	const sent = !!state.nav.sentSig && j.signature === state.nav.sentSig;
+	const busy = !!state.nav.sending;
+	const label = busy ? "Sending…" : sent ? "Sent · send again" : "Send to game";
+	return `<button class="opt-send${sent ? " sent" : ""}" type="button"${busy ? " disabled" : ""}
+		title="${state.nav.token ? "Send these directions to " + esc(state.nav.player || "your game") : "Pair this browser with your game"}"
+		aria-label="Send directions to my game"><svg class="icon sm"><use href="#i-send"/></svg>${label}</button>`;
+}
+
+/** The selected card's button row. */
+function optionActionsHtml(j) {
+	return `<div class="opt-actions">${startButtonHtml(j)}${sendButtonHtml(j)}</div>`;
 }
 
 /**
@@ -5713,6 +6394,11 @@ function savePrefs() {
 			satBrightness: clamp(state.prefs.satBrightness || 1, SAT_BRIGHT_MIN, SAT_BRIGHT_MAX),
 			labelScale: labelScale(),
 			hideLabels: !!state.prefs.hideLabels,
+			// the game pairing (section 10e): the token IS the identity, so it is the one
+			// thing here worth keeping — nothing else about the player is stored
+			navToken: navTokenValid(state.nav.token) ? state.nav.token : "",
+			navPlayer: String(state.nav.player || ""),
+			navLabel: String(state.nav.label || ""),
 		}));
 	} catch (e) { /* storage unavailable — prefs just don't persist */ }
 }
@@ -5740,6 +6426,11 @@ function loadPrefs() {
 	state.prefs.labelScale = Number.isFinite(p.labelScale)
 		? clamp(p.labelScale, LABEL_SCALE_MIN, LABEL_SCALE_MAX) : 1;
 	state.prefs.hideLabels = !!p.hideLabels;
+	// a malformed token is no token: it would only earn an "unknown token" round trip
+	state.nav.token = navTokenValid(p.navToken) ? String(p.navToken) : "";
+	state.nav.player = state.nav.token && typeof p.navPlayer === "string" ? p.navPlayer : "";
+	state.nav.label = typeof p.navLabel === "string" ? p.navLabel : "";
+	state.nav.online = null;
 }
 
 /* ---------------------------------------------------------------------------- 
