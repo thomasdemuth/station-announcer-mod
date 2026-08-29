@@ -1,0 +1,100 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>System Map+</title>
+<link rel="stylesheet" href="map.css">
+</head>
+<body>
+
+<!-- Icon symbol sheet. The DOM (planner cards, chips, buttons) references these with
+     <use>; the canvas has its own Path2D copies in map.js because <symbol> cannot be
+     drawn into a 2D context. Keep the two in sync when changing a glyph. -->
+<svg id="icons" aria-hidden="true" focusable="false"><defs>
+	<symbol id="i-walk" viewBox="0 0 24 24"><path d="M13.5 5.5c1.1 0 2-.9 2-2s-.9-2-2-2-2 .9-2 2 .9 2 2 2zM9.8 8.9 7 23h2.1l1.8-8 2.1 2v6h2v-7.5l-2.1-2 .6-3C12.8 12 14.8 13 17 13v-2c-1.9 0-3.5-1-4.3-2.4l-1-1.6c-.4-.6-1-1-1.7-1-.3 0-.5.1-.8.1L4 8.3V13h2V9.6l1.8-.7"/></symbol>
+	<symbol id="i-train" viewBox="0 0 24 24"><path d="M12 2c-4 0-8 .5-8 4v9.5C4 17.43 5.57 19 7.5 19L6 20.5v.5h2.23l2-2H14l2 2H18v-.5L16.5 19c1.93 0 3.5-1.57 3.5-3.5V6c0-3.5-4-4-8-4zm-5.5 15c-.83 0-1.5-.67-1.5-1.5S5.67 14 6.5 14s1.5.67 1.5 1.5S7.33 17 6.5 17zm4.5-7H6V6h5v4zm2 0V6h5v4h-5zm4.5 7c-.83 0-1.5-.67-1.5-1.5s.67-1.5 1.5-1.5 1.5.67 1.5 1.5-.67 1.5-1.5 1.5z"/></symbol>
+	<symbol id="i-boat" viewBox="0 0 24 24"><path d="M20 21c-1.39 0-2.78-.47-4-1.32-2.44 1.71-5.56 1.71-8 0C6.78 20.53 5.39 21 4 21H2v2h2c1.38 0 2.74-.35 4-.99 2.52 1.29 5.48 1.29 8 0 1.26.65 2.62.99 4 .99h2v-2h-2zM3.95 19H4c1.6 0 3.02-.88 4-2 .98 1.12 2.4 2 4 2s3.02-.88 4-2c.98 1.12 2.4 2 4 2h.05l1.89-6.68c.08-.26.06-.54-.06-.78s-.34-.42-.6-.5L20 10.62V6c0-1.1-.9-2-2-2h-3V1H9v3H6c-1.1 0-2 .9-2 2v4.62l-1.29.42c-.26.08-.48.26-.6.5s-.15.52-.06.78L3.95 19zM6 6h12v3.97L12 8 6 9.97V6z"/></symbol>
+	<symbol id="i-clock" viewBox="0 0 24 24"><path d="M11.99 2C6.47 2 2 6.48 2 12s4.47 10 9.99 10C17.52 22 22 17.52 22 12S17.52 2 11.99 2zM12 20c-4.42 0-8-3.58-8-8s3.58-8 8-8 8 3.58 8 8-3.58 8-8 8zm.5-13H11v6l5.25 3.15.75-1.23-4.5-2.67z"/></symbol>
+	<symbol id="i-caret" viewBox="0 0 24 24"><path d="M7 10l5 5 5-5z"/></symbol>
+	<symbol id="i-chev" viewBox="0 0 24 24"><path d="M10 6 8.59 7.41 13.17 12l-4.58 4.59L10 18l6-6z"/></symbol>
+	<symbol id="i-swap" viewBox="0 0 24 24"><path d="M16 17.01V10h-2v7.01h-3L15 21l4-3.99h-3zM9 3 5 6.99h3V14h2V6.99h3L9 3z"/></symbol>
+	<symbol id="i-locate" viewBox="0 0 24 24"><path d="M12 2 4.5 20.29l.71.71L12 18l6.79 3 .71-.71z"/></symbol>
+	<symbol id="i-pin" viewBox="0 0 24 24"><path d="M12 2C8.1 2 5 5.1 5 9c0 5.2 7 13 7 13s7-7.8 7-13c0-3.9-3.1-7-7-7zm0 9.5A2.5 2.5 0 1 1 12 6.5a2.5 2.5 0 0 1 0 5z"/></symbol>
+	<!-- accessibility badge, inlined from dispatch/access_badge.svg -->
+	<symbol id="i-badge" viewBox="0 0 150 150">
+		<rect x="0" y="0" width="150" height="150" rx="30" ry="30" fill="#157ac0"/>
+		<circle cx="62.71" cy="27.036" r="10.659" fill="#fff"/>
+		<path d="M102.482,65.992h-26.943c-11.211,0-20.332-9.116-20.332-20.322h15c0,2.935,2.393,5.322,5.332,5.322h26.943v15Z" fill="#fff"/>
+		<path d="M119.543,117.349l-18.115-18.11c-5.762-5.767-13.74-9.072-21.895-9.072h-24.326v-42.334h15v27.334h9.326c12.1,0,23.945,4.907,32.5,13.467l18.115,18.11-10.605,10.605Z" fill="#fff"/>
+		<path d="M71.681,128.409c-20.557,0-37.285-16.724-37.285-37.285,0-17.397,11.807-32.319,28.711-36.299l1.719,7.305c-13.506,3.174-22.93,15.098-22.93,28.994,0,16.426,13.359,29.785,29.785,29.785s29.785-13.359,29.785-29.785h7.5c0,20.562-16.729,37.285-37.285,37.285Z" fill="#fff"/>
+	</symbol>
+</defs></svg>
+
+<canvas id="map"></canvas>
+<div id="mapTip" class="hidden"></div>
+<div id="banner" class="hidden"></div>
+
+<aside id="planner">
+	<div class="brand"><b>System Map+</b><span id="brandSub">BAKER CITY TRANSIT</span></div>
+
+	<div class="search">
+		<div class="rail-col">
+			<span class="rail-o"></span>
+			<span class="rail-dots"></span>
+			<svg class="icon pin" viewBox="0 0 24 24"><use href="#i-pin"/></svg>
+		</div>
+		<div class="fields-col">
+			<div class="fieldwrap">
+				<div class="field"><input id="inFrom" type="text" autocomplete="off" spellcheck="false" placeholder="Choose a start"></div>
+				<div id="acFrom" class="ac hidden"></div>
+			</div>
+			<div class="fieldwrap">
+				<div class="field"><input id="inTo" type="text" autocomplete="off" spellcheck="false" placeholder="Choose a destination"></div>
+				<div id="acTo" class="ac hidden"></div>
+			</div>
+		</div>
+		<button class="swap" id="swapBtn" title="Swap start and destination"><svg class="icon"><use href="#i-swap"/></svg></button>
+	</div>
+
+	<div class="timebar">
+		<button class="now" id="whenBtn" title="Departure time">
+			<svg class="icon sm"><use href="#i-clock"/></svg>
+			<span id="whenLabel">Leave now</span>
+			<svg class="icon sm caret"><use href="#i-caret"/></svg>
+		</button>
+		<button class="at" id="atBtn">Leave at…</button>
+		<div id="whenMenu" class="menu hidden">
+			<button type="button" data-when="now">Leave now</button>
+			<label>Leave at <input id="whenAt" type="time"></label>
+		</div>
+	</div>
+
+	<div class="prefs">
+		<button class="chip on" data-pref="fastest">Fastest</button>
+		<button class="chip" data-pref="transfers">Fewest transfers</button>
+		<button class="chip" data-pref="walking">Least walking</button>
+		<button class="chip" data-pref="stepfree"><svg class="badge-14"><use href="#i-badge"/></svg>Step-free</button>
+	</div>
+
+	<div class="liverow">
+		<span class="dot pulse" id="liveDot"></span>
+		<em id="liveWord">LIVE</em><span>·</span>
+		<span id="liveOpts">0 OPTIONS</span><span>·</span>
+		<span id="liveAge">UPDATED 0S AGO</span>
+	</div>
+
+	<div id="options"></div>
+	<div id="plannerHint" class="hint">Pick a start and a destination — or click two stations on the map.</div>
+</aside>
+
+<div id="zoomer">
+	<button id="zIn" title="Zoom in">+</button>
+	<button id="zOut" title="Zoom out">−</button>
+	<button id="zHome" title="Recenter"><svg class="icon locate"><use href="#i-locate"/></svg></button>
+</div>
+<div id="attrib">System Map+ · Station Announcer dispatch</div>
+
+<script src="map.js"></script>
+</body>
+</html>

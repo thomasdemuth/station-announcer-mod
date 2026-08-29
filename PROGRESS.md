@@ -2851,3 +2851,65 @@ Thomas wants the icon in-game too).
 
 Verified in ?demo=1 (screenshots): badge on the map label, panel title, green
 step-free line, platform row, search row; Harbor North stays icon-free.
+
+## System Map+ — geographic map + journey planner (2026-08-29)
+
+Mock-first per Thomas's rule: mock v2 approved (tools/nextmap_mock/index.html,
+served by tools/nextmap_mock_server.mjs on :8792 — now REPO-served, the v1
+scratchpad copy died with its session), with his two fixes applied (per-label
+alignment/overlap, live pan/zoom) before any engine work.
+
+SERVER (`/dispatch/api/mapdata`, `/dispatch/api/terrain` — both in
+DispatchApiServlet.getContent, mapdata behind a 30 s per-dimension
+CachedResponse):
+- DispatchMapData: per-route ordered platform ids, raw Route.durations +
+  durationsValid (platforms−1 when clean; a depot's later routes can carry an
+  extra inbound slot — client normalizes), scheduledHeadwayMillis (now public),
+  and per-leg rail hex chains. LEG EXTRACTION IS PAIR-BASED, not lockstep: the
+  baked pathMainRoute is a ROTATED cycle (dev-rig observed), so chains are
+  keyed by consecutive dwell-pair "<from>><to>" incl. the wrap seam; a missing
+  pair degrades ONE leg to empty rails (client straight-lines it) — the dev
+  rig's half-built Uptown route exercises exactly that. Station parts:
+  union-find, shared-route unions FIRST (absolute), then ≤40 horizontal AND
+  ≤12 vertical merges; partWalks = closest platform pair; full
+  platformDistances matrix (pruned >40 platforms).
+- TerrainScanner: /dispatch terrain scan [margin] (+ status) walks rails+station
+  bbox+margin on the SERVER thread, 2 ms/tick budget, 8-block grid,
+  MOTION_BLOCKING heightmap + FluidTags.WATER at the surface block
+  (sampleHeightmap already returns the top block's y), cell-edge tracing into
+  rings (islands = opposite-winding rings, client fills even-odd), DP simplify
+  tol 6, persisted <save>/station-announcer-addon/terrain.json. Verified live:
+  3111-sample scan ~3 s, 0 water on the (underground-network) dev world,
+  1 correct polygon after placing a surface pond. Map works with 0 polygons.
+
+FRONTEND (dispatch/map.html + map.js + map.css, shipped like the other statics):
+light-paper System Map+ page reusing app.js's engine patterns (cached static
+layer + rAF blit, SSE full/delta merge, interpolation). Ribbons: legs resolved
+against network rail polylines (endpoint-matching orientation), same-colour
+routes MERGE, distinct colours offset in screen space (constant hairline gap at
+every zoom); interlining bullet-cluster chips; straight-line fallback for
+empty-rail legs. Split stations: dot per part, dotted connector + walk chip.
+Labels: halo + greedy declutter, candidate order from the local track direction
+(vertical trunk → beside, horizontal/diagonal → above/below), chips/pins are
+obstacles, second further-out candidate ring so the destination station still
+names itself beside its pin. Journey selection fades the rest to 0.15 with a
+soft under-glow. ?demo=1 = full synthetic acceptance harness (also headless:
+scratchpad harness.mjs/planner.mjs, 43+55+32 assertions green).
+
+PLANNER (map.js): one time-dependent multi-criteria label-correcting search,
+state (platform, routeAboard) so staying aboard is free, labels
+(arrival, boardings, walkMeters) with 3-way pareto pruning (cap 8/state);
+fastest / fewest-transfers / least-walking read the same destination frontier;
+2–4 alternatives deduped by ride signature, truthful tags. Step-free is a HARD
+constraint on board/alight/transfer (riding through inaccessible platforms
+stays legal). nextDeparture: LIVE (streamed vehicle progress + remaining legs
++ dwells) → SCHEDULE (headway × stable hash phase, FIFO by construction) →
+flat 5 min estimate. Transfers = platformDistances × 1.4 m/s + 30 s. Worst
+query 1 ms on the demo graph. NOTE: ride edges are DIRECTED — a return journey
+needs the return route to exist (MTR routes are directional).
+
+ENTRY POINTS: dashboard row now splits three ways (Transport System Map /
+Dispatch / Map+, falls back to two-way when cramped); dispatch UI topbar "Map+"
+link. NOT in-game tested: everything (buttons, real-network mapdata joins,
+terrain scan on Baker City, live journeys); browser-verified in ?demo=1 at
+1680×1000 incl. planner options, selection states, zoom/pan, label declutter.

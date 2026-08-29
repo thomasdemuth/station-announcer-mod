@@ -90,6 +90,7 @@ body {
 	cursor: pointer;
 }
 .btn:hover { border-color: var(--accent); }
+a.btn { text-decoration: none; display: inline-block; }
 .btn.small { padding: 1px 7px; font-size: 12px; }
 .btn.active { background: var(--accent); color: #06111f; border-color: var(--accent); }
 

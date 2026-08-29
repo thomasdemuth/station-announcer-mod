@@ -200,16 +200,32 @@ public final class AddonClientInit {
             if (mapButton == null) {
                 return; // MTR layout changed — skip rather than overlap
             }
-            int dispatchWidth = Math.min(80, mapButton.getWidth() / 2);
+            int totalWidth = mapButton.getWidth();
+            int dispatchWidth = Math.min(80, totalWidth / 2);
             if (dispatchWidth < 40) {
                 return; // row too cramped to split
             }
-            mapButton.setWidth(mapButton.getWidth() - dispatchWidth - 2);
+            // With enough room, carve a third slot for System Map+ ("Map+"); otherwise
+            // fall back to the original two-way split so small layouts stay usable.
+            int mapPlusWidth = Math.min(44, totalWidth / 4);
+            boolean withMapPlus = mapPlusWidth >= 34;
+            if (withMapPlus) {
+                dispatchWidth = Math.min(64, (totalWidth - mapPlusWidth) / 2);
+            }
+            mapButton.setWidth(totalWidth - dispatchWidth - 2 - (withMapPlus ? mapPlusWidth + 2 : 0));
             Screens.getButtons(screen).add(ButtonWidget.builder(
                             Text.translatable("gui.station_announcer.dispatch.button"),
                             button -> Util.getOperatingSystem().open(URI.create(ClientDispatchInfo.url())))
                     .dimensions(mapButton.getX() + mapButton.getWidth() + 2, mapButton.getY(), dispatchWidth, mapButton.getHeight())
                     .build());
+            if (withMapPlus) {
+                Screens.getButtons(screen).add(ButtonWidget.builder(
+                                Text.translatable("gui.station_announcer.mapplus.button"),
+                                button -> Util.getOperatingSystem().open(URI.create(ClientDispatchInfo.url() + "map.html")))
+                        .dimensions(mapButton.getX() + mapButton.getWidth() + 2 + dispatchWidth + 2, mapButton.getY(),
+                                mapPlusWidth, mapButton.getHeight())
+                        .build());
+            }
         });
     }
 

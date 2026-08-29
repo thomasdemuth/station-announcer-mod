@@ -291,6 +291,7 @@
   "gui.station_announcer.hold_rules.transfer_seconds": "Keep holding after arrival: %ss",
   "gui.station_announcer.hold_rules.transfer_seconds.off": "Keep holding after arrival: Off",
   "gui.station_announcer.dispatch.button": "Dispatch",
+  "gui.station_announcer.mapplus.button": "Map+",
   "gui.station_announcer.disruptions.button": "Disruptions",
   "gui.station_announcer.disruptions.title": "Service Disruptions",
   "gui.station_announcer.disruptions.new_title": "New Disruption",
