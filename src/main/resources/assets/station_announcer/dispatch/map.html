@@ -54,9 +54,15 @@ try {
      #trainCard    the card anchored beside a clicked train puck (section 10a)
      #followPill   top-centre "Following … · tap to stop" while the camera rides a train
      #stationPanel the right-hand station card: departures, exits, accessibility (10b) -->
+<!-- #trackBanner is the live-guidance banner (map.js section 10d). It sits where the
+     follow pill sits and pushes it down while it is up — hence the sibling order. -->
+<div id="trackBanner" class="trackbanner hidden"></div>
 <div id="trainCard" class="floatcard hidden"></div>
 <button id="followPill" class="followpill hidden" type="button"></button>
 <aside id="stationPanel" class="stpanel hidden"></aside>
+<!-- the re-plan question: shown ONLY when a better/valid route exists, never acted on
+     without the rider pressing a button -->
+<div id="trackOffer" class="trackoffer hidden"></div>
 
 <aside id="planner">
 	<div class="brand"><b>System Map+</b><span id="brandSub">BAKER CITY TRANSIT</span></div>
@@ -118,6 +124,9 @@ try {
 <div id="settings" class="setcard hidden">
 	<div class="set-title">Map settings</div>
 
+	<!-- APPEARANCE -->
+	<div class="set-group">Appearance</div>
+
 	<div class="set-row">
 		<label>Theme</label>
 		<div class="seg" id="themeSeg">
@@ -134,10 +143,12 @@ try {
 		</div>
 	</div>
 
-	<!-- shown only once the stream carries players (map.js: syncSelfUi) -->
-	<div class="set-row hidden" id="selfRow">
-		<label for="selfSel">I am</label>
-		<select id="selfSel" class="set-select"><option value="">Nobody</option></select>
+	<div class="set-row">
+		<label>Satellite brightness</label>
+		<div class="set-slider">
+			<input id="satBright" type="range" min="0.3" max="1" step="0.05" value="1">
+			<span id="satBrightOut" class="set-out">100%</span>
+		</div>
 	</div>
 
 	<div class="set-row">
@@ -148,9 +159,41 @@ try {
 		</div>
 	</div>
 
+	<div class="set-row">
+		<label>Station labels</label>
+		<div class="set-slider">
+			<input id="labelScale" type="range" min="0.8" max="1.3" step="0.05" value="1">
+			<span id="labelScaleOut" class="set-out">1x</span>
+		</div>
+	</div>
+
+	<!-- LAYERS (map.js: renderLayerList fills it — one row per mode, plus the toggles) -->
+	<div class="set-group">Layers</div>
 	<div class="set-row col">
-		<label>Layers</label>
 		<div id="layerList" class="layers"></div>
+	</div>
+
+	<!-- PLANNER -->
+	<div class="set-group">Planner</div>
+	<div class="set-row">
+		<label>Walk speed</label>
+		<div class="set-slider">
+			<input id="walkSpeed" type="range" min="2" max="5.6" step="0.1" value="4.3">
+			<span id="walkSpeedOut" class="set-out">4.3 m/s</span>
+		</div>
+	</div>
+
+	<!-- ME -->
+	<div class="set-group">Me</div>
+	<!-- shown only once the stream carries players (map.js: syncSelfUi) -->
+	<div class="set-row hidden" id="selfRow">
+		<label for="selfSel">I am</label>
+		<select id="selfSel" class="set-select"><option value="">Nobody</option></select>
+	</div>
+	<!-- shown only when the server publishes more than one dimension (map.js: syncDimUi) -->
+	<div class="set-row hidden" id="dimRow">
+		<label for="dimSel">World</label>
+		<select id="dimSel" class="set-select"></select>
 	</div>
 </div>
 

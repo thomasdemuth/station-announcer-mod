@@ -281,6 +281,28 @@ body {
 .badge-14 { width: 14px; height: 14px; border-radius: 3.5px; display: block; flex: none; }
 .livegreen { color: var(--live); font-weight: 700; }
 
+/* THROUGH RUNNING (map.js feature 7): the train changes identity, the rider does not
+   move — so this is a note INSIDE the boarding row, never a transfer chip. */
+.thru {
+	display: flex; align-items: center; gap: 6px; flex-wrap: wrap;
+	margin-top: 6px; font-size: 12px; font-weight: 600; color: var(--ink-2);
+	border-left: 3px solid var(--hair); padding: 2px 0 2px 8px;
+}
+.thru-key { color: var(--ink-3); font-weight: 700; }
+.thru-at { color: var(--ink-3); font-weight: 500; }
+.thru .bullet.sm { margin-top: 0; }
+/* the same idea on the option card's route sequence: a hairline join, not a chevron */
+.thru-join { color: var(--ink-3); font-weight: 700; }
+
+/* "Start" turns the selected option into live guidance (map.js section 10d) */
+.opt-start {
+	margin-top: 12px; width: 100%; padding: 9px 10px; border-radius: 999px;
+	border: 0; background: var(--accent); color: #fff;
+	font-family: var(--font); font-size: 13px; font-weight: 700; cursor: pointer;
+}
+.opt-start:hover { filter: brightness(1.06); }
+.opt-start.on { background: var(--card); color: var(--accent); border: 1px solid var(--accent); }
+
 /* ---------------- line view (map.js section 11c) ----------------
    Takes the option list over while a line is open: bullets + name + frequency, the
    service chips, and the stop list in order. A stop the line's own express runs past
@@ -396,6 +418,63 @@ body {
 .followpill.fading { opacity: .35; }
 .fp-dot { width: 9px; height: 9px; border-radius: 50%; flex: none; }
 
+/* ---------------- live journey guidance (map.js section 10d) ----------------
+   The banner takes the top-centre slot the follow pill uses; while it is up the pill
+   drops below it (they are siblings, banner first, in map.html). */
+
+.trackbanner {
+	position: absolute; top: 16px; left: 50%; transform: translateX(-50%); z-index: 19;
+	display: flex; align-items: center; gap: 10px; max-width: min(560px, calc(100% - 420px));
+	padding: 9px 10px 9px 16px; border-radius: 999px; border: 1px solid var(--hair);
+	background: var(--card); color: var(--ink);
+	font-family: var(--font); font-size: 13.5px; font-weight: 700;
+	box-shadow: 0 8px 26px var(--shadow);
+	transition: background .2s ease, color .2s ease;
+}
+.trackbanner .tb-body { display: flex; align-items: center; gap: 7px; min-width: 0; }
+.trackbanner .bullet.sm { margin-top: 0; }
+.tb-detail { font-weight: 600; color: var(--ink-2); }
+.tb-detail::before { content: "·"; margin-right: 7px; color: var(--ink-3); }
+.tb-close {
+	border: 0; background: none; cursor: pointer; color: var(--ink-3);
+	font-family: var(--font); font-size: 19px; line-height: 1; padding: 0 4px;
+}
+.tb-close:hover { color: var(--ink); }
+/* LOUD: get off at the next stop / your train is about to go */
+.trackbanner.alert {
+	background: var(--accent); border-color: var(--accent); color: #fff;
+	animation: tb-pulse 1.1s ease-in-out infinite;
+}
+.trackbanner.alert .tb-detail, .trackbanner.alert .tb-close { color: rgba(255, 255, 255, .85); }
+.trackbanner.alert .tb-detail::before { color: rgba(255, 255, 255, .55); }
+.trackbanner.degraded { border-style: dashed; }
+@keyframes tb-pulse {
+	0%, 100% { box-shadow: 0 8px 26px var(--shadow); }
+	50% { box-shadow: 0 8px 30px var(--shadow), 0 0 0 6px rgba(26, 115, 232, .18); }
+}
+@media (prefers-reduced-motion: reduce) { .trackbanner.alert { animation: none; } }
+.trackbanner:not(.hidden) ~ .followpill { top: 74px; }
+
+/* the re-plan question — a small card, deliberately not a browser alert */
+.trackoffer {
+	position: absolute; top: 78px; left: 50%; transform: translateX(-50%); z-index: 21;
+	width: 320px; max-width: calc(100% - 32px);
+	background: var(--card); color: var(--ink);
+	border: 1px solid var(--hair); border-radius: 14px;
+	box-shadow: 0 14px 40px var(--shadow), 0 1px 3px var(--shadow-soft);
+	padding: 14px 16px 13px;
+}
+.to-title { font-size: 14.5px; font-weight: 700; }
+.to-body { font-size: 12.5px; color: var(--ink-2); margin-top: 6px; line-height: 1.4; }
+.to-actions { display: flex; gap: 8px; margin-top: 12px; }
+.to-actions button {
+	flex: 1; padding: 8px 10px; border-radius: 999px;
+	font-family: var(--font); font-size: 12.5px; font-weight: 700; cursor: pointer;
+	border: 1px solid var(--hair); background: var(--card); color: var(--ink);
+}
+.to-switch { background: var(--accent) !important; border-color: var(--accent) !important; color: #fff !important; }
+.to-keep:hover { background: var(--field); }
+
 /* ---------------- station panel (map.js section 10b) ---------------- */
 
 .stpanel {
@@ -510,11 +589,22 @@ body {
 	border: 1px solid var(--hair); border-radius: 12px;
 	box-shadow: 0 10px 34px var(--shadow), 0 1px 3px var(--shadow-soft);
 	padding: 12px 14px 13px;
+	/* four groups of controls: on a short window the card scrolls rather than
+	   running off the bottom of the map */
+	max-height: calc(100% - 96px); overflow-y: auto;
 }
+.setcard::-webkit-scrollbar { width: 0; }
 .set-title {
 	font-size: 10.5px; font-weight: 700; letter-spacing: 1.1px;
 	color: var(--ink-3); text-transform: uppercase; margin-bottom: 10px;
 }
+/* the card is grouped (Appearance / Layers / Planner / Me) so it stays scannable as
+   the settings list grows */
+.set-group {
+	font-size: 10.5px; font-weight: 700; letter-spacing: 1px; text-transform: uppercase;
+	color: var(--ink-3); margin-top: 14px; padding-top: 9px; border-top: 1px solid var(--hair);
+}
+.set-title + .set-group { margin-top: 0; padding-top: 0; border-top: 0; }
 .set-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-top: 10px; }
 .set-row.col { display: block; }
 .set-row > label { font-size: 12.5px; font-weight: 600; color: var(--ink-2); }
@@ -567,4 +657,11 @@ body {
 	.stpanel:not(.hidden) ~ #zoomer { bottom: calc(46% + 34px); }
 	.floatcard { width: 210px; }
 	.followpill { font-size: 12px; padding: 7px 13px; }
+	/* the planner sheet owns the top-left, so guidance moves to the BOTTOM of the map */
+	.trackbanner {
+		top: auto; bottom: 78px; max-width: calc(100% - 32px); font-size: 12.5px;
+		padding: 8px 8px 8px 13px;
+	}
+	.trackbanner:not(.hidden) ~ .followpill { top: 16px; }
+	.trackoffer { top: auto; bottom: 132px; }
 }

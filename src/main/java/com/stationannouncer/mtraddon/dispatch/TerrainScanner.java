@@ -10,14 +10,18 @@ import net.minecraft.server.world.ServerWorld;
 import net.minecraft.text.Text;
 import net.minecraft.util.Formatting;
 import net.minecraft.util.WorldSavePath;
+import net.minecraft.util.math.BlockPos;
 import net.minecraft.world.Heightmap;
 import net.minecraft.world.chunk.WorldChunk;
+import net.minecraft.world.dimension.DimensionType;
 import org.mtr.core.data.Rail;
 import org.mtr.core.data.RailMath;
 import org.mtr.core.data.Station;
 import org.mtr.core.simulation.Simulator;
 import org.mtr.libraries.it.unimi.dsi.fastutil.objects.ObjectImmutableList;
 
+import java.io.IOException;
+import java.io.InputStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
@@ -25,36 +29,39 @@ import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.function.Consumer;
+import java.util.stream.Stream;
 
 /**
  * Water-polygon terrain for the dispatch map, scanned on demand by
- * {@code /dispatch terrain scan [marginBlocks]}.
+ * {@code /dispatch terrain scan} or by the automatic once-per-launch pass.
  *
- * <p>The scan walks the railway network's bounding box (union of every valid rail's
- * {@link RailMath} extents and every station's {@code AreaBase} corners) plus a margin,
- * samples the surface block on an {@value #GRID}-block grid, marks the ones standing in
- * water, traces the resulting mask into closed rings and simplifies them. The polygons
- * are cached to {@code <save>/station-announcer-addon/terrain.json} so the (expensive,
- * chunk-loading) scan is a one-off per world.</p>
+ * <p><b>Scope: the whole generated world, Dynmap-style.</b> The scan no longer walks a
+ * box derived from the railway — it walks the bounding box of every chunk that ALREADY
+ * EXISTS ON DISK, and it never asks the game to make a chunk that does not. Existence is
+ * decided by {@link ChunkIndex}, read straight out of the dimension's {@code region/*.mca}
+ * headers on a background thread before the scan starts; a sample whose chunk is not in
+ * that set is answered "not water" without touching {@code world.getChunk} at all. What
+ * remains is a surface sample on an {@value #GRID}-block grid, a water mask, and a ring
+ * trace simplified into polygons, cached to
+ * {@code <save>/station-announcer-addon/terrain.json}.</p>
  *
- * <p><b>Threading.</b> Everything except {@link #terrainJson(String)} runs on the SERVER
- * thread: the sampler must read chunks, so it cannot live on a simulator thread, and it
- * is spread over ticks in {@value #TICK_BUDGET_MILLIS} ms slices from
- * {@link com.stationannouncer.mtraddon.AddonInit}'s tick handler. Only the bounding-box
- * question is asked of MTR, on the owning simulator's thread, and hops straight back
- * through {@code server.execute} carrying plain longs — the same shape
- * {@code DisruptionBroadcaster.requestScan} uses. {@link #terrainJson(String)} is called
- * from the simulator thread by the dispatch servlet and only reads one volatile
- * reference to an immutable snapshot.</p>
+ * <p><b>Threading.</b> Sampling runs on the SERVER thread (it reads chunks) in
+ * {@value #TICK_BUDGET_MILLIS} ms slices from {@link com.stationannouncer.mtraddon.AddonInit}'s
+ * tick handler. The region-header enumeration is file IO and runs on a daemon thread,
+ * handing its immutable {@link ChunkIndex} back through {@code server.execute}. The
+ * bounding-box question is asked of MTR on the owning simulator's thread and hops back
+ * the same way, carrying plain longs. {@link #terrainJson(String)} is called from the
+ * simulator thread by the dispatch servlet and only reads one volatile reference to an
+ * immutable snapshot.</p>
  *
  * <p><b>Automatic pass.</b> With {@code dispatch.autoScan} on (the default),
- * {@link com.stationannouncer.mtraddon.AddonInit} calls {@link #autoScan()} a few
- * seconds after the server starts. It walks every simulated dimension one at a time and
- * scans only where the cached {@code bbox} does NOT already contain the box the network
- * needs — on a settled world that is one log line per dimension and no chunk loads at
- * all. Auto scans reuse this class's machinery verbatim, with a null command source, so
- * their feedback goes to the log and {@code /dispatch terrain status} reports them
- * exactly like a manual scan.</p>
+ * {@link com.stationannouncer.mtraddon.AddonInit} calls {@link #autoScan()} a few seconds
+ * after the server starts. It walks every simulated dimension one at a time and scans
+ * only where the cached {@code bbox} does not already contain the generated world — with
+ * {@value #CONTAIN_SLACK} blocks of hysteresis on every side, so the handful of chunks a
+ * play session generates at the edge of the map does not force a full re-scan every
+ * launch. Dimensions MTR is not simulating (no rails, no stations) are skipped as before.</p>
  *
  * <p>Nothing here is required for the map to work: with no scan ever run, the getter
  * answers with an empty polygon list.</p>
@@ -69,9 +76,14 @@ public final class TerrainScanner {
     private static final long TICK_BUDGET_MILLIS = 2;
     private static final long TICK_BUDGET_NANOS = TICK_BUDGET_MILLIS * 1_000_000L;
     /** Check the clock this often (in samples) while the chunk cache is hitting. */
-    private static final int BUDGET_CHECK_MASK = 7;
-    /** Refuse anything bigger — a stray rail at extreme coordinates would scan forever. */
-    private static final int MAX_SAMPLES = 4_000_000;
+    private static final int BUDGET_CHECK_MASK = 63;
+    /**
+     * Sanity guard, not a coverage cap: the grid is bounded by what exists on disk, and
+     * this only exists so a corrupt region name at an absurd coordinate cannot ask for a
+     * mask the heap cannot hold. 134 M samples is a 92 000-block square (a 5 800-chunk
+     * square) and a 16 MB mask.
+     */
+    private static final int MAX_SAMPLES = 134_217_728;
     /** Douglas-Peucker tolerance, blocks. */
     private static final double SIMPLIFY_TOLERANCE = 6;
     /** Rings smaller than this (blocks²) are puddles, not map features. */
@@ -82,6 +94,19 @@ public final class TerrainScanner {
     private static final long POLYGONIZE_WARN_MILLIS = 50;
     /** Vanilla's world border cap; beyond it the int grid arithmetic would overflow. */
     private static final long WORLD_LIMIT = 30_000_000L;
+    /**
+     * Hysteresis on the automatic containment check, blocks. The generated world grows by
+     * a chunk or two whenever anybody walks anywhere; without slack every launch would
+     * re-scan the entire map to pick up 16 blocks of new coastline.
+     */
+    private static final int CONTAIN_SLACK = 64;
+
+    /** How far the ceiling-dimension probe descends before giving up on a column. */
+    private static final int MAX_CEILING_DESCENT = 96;
+    /** A ceiling dimension's probe starts this far below its logical roof. */
+    private static final int CEILING_HEADROOM = 8;
+    /** "No surface here" from {@link #surfaceY}. */
+    private static final int NO_SURFACE = Integer.MIN_VALUE;
 
     /** The only reference to the server anywhere in the addon; set on SERVER_STARTED. */
     private static volatile MinecraftServer server;
@@ -93,12 +118,15 @@ public final class TerrainScanner {
     private static volatile Scan active;
     /** Set between the command and the simulator round-trip so two clicks cannot both start. */
     private static volatile boolean pending;
+    /** Set while a background thread is reading the dimension's region headers. */
+    private static volatile boolean enumerating;
     /** The last background save, joined at shutdown. */
     private static volatile Thread writer;
 
     /**
-     * The margin the automatic pass uses — the manual command's own default, so an
-     * auto-scanned cache is exactly what {@code /dispatch terrain scan} would produce.
+     * Accepted and reported for compatibility with {@code /dispatch terrain scan [margin]},
+     * but the scan's SCOPE is now the generated world; the margin only pads the box a
+     * little past the outermost existing chunk.
      */
     private static final int AUTO_MARGIN = 128;
     /** Dimensions the once-per-launch auto pass still has to check. Server thread only. */
@@ -116,6 +144,7 @@ public final class TerrainScanner {
         server = minecraftServer;
         active = null;
         pending = false;
+        enumerating = false;
         autoActive = false;
         AUTO_QUEUE.clear();
         Path path = minecraftServer.getSavePath(WorldSavePath.ROOT)
@@ -145,6 +174,9 @@ public final class TerrainScanner {
         writer = null;
         active = null;
         pending = false;
+        // An enumeration thread may still be walking region headers; it publishes only
+        // through server.execute, which will not run again, so abandoning it is safe.
+        enumerating = false;
         autoActive = false;
         AUTO_QUEUE.clear();
         terrain = Map.of();
@@ -153,12 +185,13 @@ public final class TerrainScanner {
     }
 
     /**
-     * Nothing running: no scan, no simulator round-trip in flight and no auto pass left
-     * to walk. The satellite auto-scan waits on this so the two never sample in the same
-     * tick, and {@link com.stationannouncer.mtraddon.AddonInit} polls it once a tick.
+     * Nothing running: no scan, no simulator round-trip, no region enumeration in flight
+     * and no auto pass left to walk. The satellite auto-scan waits on this so the two
+     * never sample in the same tick, and
+     * {@link com.stationannouncer.mtraddon.AddonInit} polls it once a tick.
      */
     public static boolean isIdle() {
-        return active == null && !pending && !autoActive;
+        return active == null && !pending && !enumerating && !autoActive;
     }
 
     // ------------------------------------------------------------- the ticker
@@ -173,7 +206,7 @@ public final class TerrainScanner {
             // The auto pass is pumped from here rather than chained off finish(): waiting
             // for "nothing is running" each tick is what lets a manual scan cut in front
             // of it without either one having to know about the other.
-            if (autoActive && !pending) {
+            if (autoActive && !pending && !enumerating) {
                 pumpAuto();
             }
             return;
@@ -192,8 +225,10 @@ public final class TerrainScanner {
                 return;
             }
             scan.index++;
-            // A cache miss just paid for a (possibly generating) chunk load, so re-check
-            // the clock immediately rather than after another seven cheap samples.
+            // A cache miss just paid for a chunk load off disk, so re-check the clock
+            // immediately rather than after another run of cheap samples. Samples over
+            // chunks that do not exist never load anything and are the fast path — hence
+            // the wide check mask, which whole-world scanning made worth widening.
             if ((loadedChunk || (scan.index & BUDGET_CHECK_MASK) == 0) && System.nanoTime() >= deadline) {
                 return;
             }
@@ -210,22 +245,30 @@ public final class TerrainScanner {
         int z = scan.originZ + gz * GRID;
         int chunkX = x >> 4;
         int chunkZ = z >> 4;
+        if (!scan.chunks.has(chunkX, chunkZ)) {
+            // Ungenerated: transparent, and — the whole point of the existence index —
+            // NEVER handed to world.getChunk, which would generate it.
+            return false;
+        }
         boolean loaded = false;
         if (scan.chunk == null || chunkX != scan.chunkX || chunkZ != scan.chunkZ) {
-            // Full, synchronous load (generating the chunk if need be). Deliberate: this
-            // is an explicit operator command and the tick budget is what pays for it.
+            // The chunk is on disk, so this is a load, not a generation. Vanilla's
+            // "unknown" ticket expires after a tick, so the scan does not pin the world
+            // in memory as it walks it.
+            // CAVEAT (inherent to the region-header technique): a chunk saved at a
+            // PARTIAL status — the thin ring of proto-chunks vanilla writes around any
+            // explored area — has a nonzero header entry too, and getChunk(FULL)
+            // finishes generating that one. It is a perimeter-sized minority and it is
+            // work vanilla would do the moment anybody walked there; deciding otherwise
+            // would mean decompressing every chunk's NBT just to read its status.
             scan.chunk = scan.world.getChunk(chunkX, chunkZ);
             scan.chunkX = chunkX;
             scan.chunkZ = chunkZ;
             loaded = true;
         }
         WorldChunk chunk = scan.chunk;
-        // sampleHeightmap returns Heightmap.get() - 1, i.e. the y of the topmost block
-        // that MOTION_BLOCKING accepts — and that predicate accepts any non-empty fluid
-        // state, so for open water the answer IS the surface water block (bytecode-checked
-        // against 1.20.4). Test that block, not the one below it.
-        int surfaceY = chunk.sampleHeightmap(Heightmap.Type.MOTION_BLOCKING, x, z);
-        if (surfaceY >= scan.world.getBottomY()) {
+        int surfaceY = surfaceY(scan, chunk, x, z);
+        if (surfaceY != NO_SURFACE) {
             // Fluid state rather than block state: catches source, flowing and waterlogged
             // surfaces (a fence or slab standing in water) in one test.
             FluidState fluid = chunk.getFluidState(x, surfaceY, z);
@@ -238,11 +281,48 @@ public final class TerrainScanner {
         return loaded;
     }
 
+    /**
+     * The y of the block a map would draw for this column, or {@link #NO_SURFACE}.
+     *
+     * <p>In an ordinary dimension that is the {@code MOTION_BLOCKING} heightmap: its
+     * predicate accepts any non-empty fluid state, so for open water the answer IS the
+     * surface water block (bytecode-checked against 1.20.4).</p>
+     *
+     * <p>In a CEILING dimension (the nether) the heightmap answers the bedrock roof, so
+     * this uses Dynmap's technique instead: start just under the logical roof, descend to
+     * the first air block, then keep descending to the first non-air below it — the floor
+     * a player would be standing on. A column with no air (or no floor under the air)
+     * within {@value #MAX_CEILING_DESCENT} steps is left transparent rather than painted
+     * as roof.</p>
+     */
+    private static int surfaceY(Scan scan, WorldChunk chunk, int x, int z) {
+        int heightmapY = chunk.sampleHeightmap(Heightmap.Type.MOTION_BLOCKING, x, z);
+        if (!scan.hasCeiling) {
+            return heightmapY < scan.bottomY ? NO_SURFACE : heightmapY;
+        }
+        int y = Math.min(heightmapY, scan.ceilingStartY);
+        int steps = 0;
+        while (steps < MAX_CEILING_DESCENT && y > scan.bottomY
+                && !chunk.getBlockState(scan.cursor.set(x, y, z)).isAir()) {
+            y--;
+            steps++;
+        }
+        if (steps >= MAX_CEILING_DESCENT || y <= scan.bottomY) {
+            return NO_SURFACE; // solid all the way down: no cavern to draw
+        }
+        while (steps < MAX_CEILING_DESCENT && y > scan.bottomY
+                && chunk.getBlockState(scan.cursor.set(x, y, z)).isAir()) {
+            y--;
+            steps++;
+        }
+        return steps >= MAX_CEILING_DESCENT || y <= scan.bottomY ? NO_SURFACE : y;
+    }
+
     // ------------------------------------------------------------ start a scan
 
     /**
-     * {@code /dispatch terrain scan}. Asks the caller's dimension's simulator for the
-     * network extents on its own thread, then hops back to begin sampling.
+     * {@code /dispatch terrain scan}. Confirms MTR is simulating the caller's dimension,
+     * then enumerates the chunks that exist on disk and scans all of them.
      */
     public static int startScan(ServerCommandSource source, int marginBlocks) {
         MinecraftServer minecraftServer = server;
@@ -250,7 +330,7 @@ public final class TerrainScanner {
             source.sendError(Text.literal("The terrain scanner is not ready yet."));
             return 0;
         }
-        if (active != null || pending) {
+        if (active != null || pending || enumerating) {
             source.sendError(Text.literal("A terrain scan is already running — " + status()));
             return 0;
         }
@@ -282,8 +362,16 @@ public final class TerrainScanner {
         int margin = Math.max(0, Math.min(1024, marginBlocks));
         source.sendFeedback(() -> Text.literal("Measuring the network in " + dimension + "…")
                 .formatted(Formatting.GRAY), false);
-        measure(minecraftServer, target, (any, minX, minZ, maxX, maxZ) ->
-                beginScan(source, world, dimension, any, minX, minZ, maxX, maxZ, margin));
+        measure(minecraftServer, target, (any, minX, minZ, maxX, maxZ) -> {
+            if (!any) {
+                tell(source, Text.literal("No rails or stations in " + dimension + " yet — nothing to scan."), true);
+                return;
+            }
+            tell(source, Text.literal("Reading the region files of " + dimension + "…")
+                    .formatted(Formatting.GRAY), false);
+            enumerateThen(world, dimension, chunks ->
+                    beginScan(source, world, dimension, chunks, margin));
+        });
         return 1;
     }
 
@@ -295,9 +383,10 @@ public final class TerrainScanner {
 
     /**
      * The network's extents, asked of MTR on the owning simulator's thread and handed
-     * back on the server thread. Shared by the command and the automatic pass — the
-     * {@link #pending} flag is held across the hop, so neither can start while the other
-     * is still measuring.
+     * back on the server thread. The box itself is no longer the scan's scope — only the
+     * {@code any} flag still matters, as the "is anything railway-shaped here at all"
+     * gate — but the round-trip is kept because it is also what proves the simulator is
+     * alive and answering.
      */
     private static void measure(MinecraftServer minecraftServer, Simulator simulator, BoundsHandler handler) {
         pending = true;
@@ -345,48 +434,82 @@ public final class TerrainScanner {
     }
 
     /**
-     * Server thread: turn the network extents into a grid and arm the ticker.
+     * Reads the dimension's region-file headers on a daemon thread and hands the result
+     * back on the SERVER thread. File IO for a big world is thousands of 4 KiB reads —
+     * milliseconds of wall clock, but not something to spend a tick on.
+     */
+    static void enumerateThen(ServerWorld world, String dimension, Consumer<ChunkIndex> handler) {
+        MinecraftServer minecraftServer = server;
+        if (minecraftServer == null) {
+            return;
+        }
+        enumerating = true;
+        Thread thread = new Thread(() -> {
+            ChunkIndex chunks;
+            try {
+                chunks = enumerateExistingChunks(minecraftServer, world);
+            } catch (Throwable t) {
+                StationAnnouncer.LOGGER.warn("Could not enumerate the region files of {}", dimension, t);
+                chunks = ChunkIndex.empty();
+            }
+            ChunkIndex result = chunks;
+            try {
+                minecraftServer.execute(() -> {
+                    enumerating = false;
+                    handler.accept(result);
+                });
+            } catch (Throwable t) {
+                // The server is going away; nothing to publish to.
+                enumerating = false;
+            }
+        }, "station-announcer-terrain-regions");
+        thread.setDaemon(true);
+        thread.start();
+    }
+
+    /**
+     * Server thread: turn the generated world into a grid and arm the ticker.
      *
      * <p>{@code source} is null for the automatic pass — every message then goes to the
      * log instead of a chat window (see {@link #tell}).</p>
      */
     private static void beginScan(ServerCommandSource source, ServerWorld world, String dimension,
-                                  boolean any, long minX, long minZ, long maxX, long maxZ, int margin) {
+                                  ChunkIndex chunks, int margin) {
         if (active != null) {
             tell(source, Text.literal("A terrain scan started in the meantime — " + status()), true);
             return;
         }
-        if (!any) {
-            tell(source, Text.literal("No rails or stations in " + dimension + " yet — nothing to scan."), true);
+        if (chunks == null || chunks.isEmpty()) {
+            tell(source, Text.literal("No generated chunks on disk for " + dimension + " — nothing to scan."), true);
             return;
         }
-        long lowX = snapDown(minX - margin);
-        long lowZ = snapDown(minZ - margin);
-        long highX = snapUp(maxX + margin);
-        long highZ = snapUp(maxZ + margin);
-        // MTR positions are longs; block coordinates outside the vanilla world border
+        long lowX = snapDown(chunks.minBlockX() - margin);
+        long lowZ = snapDown(chunks.minBlockZ() - margin);
+        long highX = snapUp(chunks.maxBlockX() + margin);
+        long highZ = snapUp(chunks.maxBlockZ() + margin);
+        // Region file names are parsed off disk; a corrupt one at an absurd coordinate
         // would overflow the int grid arithmetic below, so refuse rather than wrap.
         if (Math.abs(lowX) > WORLD_LIMIT || Math.abs(lowZ) > WORLD_LIMIT
                 || Math.abs(highX) > WORLD_LIMIT || Math.abs(highZ) > WORLD_LIMIT) {
-            tell(source, Text.literal("The network extends past the world limit ("
-                    + lowX + "," + lowZ + " to " + highX + "," + highZ + ") — check for a stray rail."), true);
+            tell(source, Text.literal("The generated world of " + dimension + " reaches past the world limit ("
+                    + lowX + "," + lowZ + " to " + highX + "," + highZ + ") — check for a stray region file."), true);
             return;
         }
         long width = (highX - lowX) / GRID + 1;
         long height = (highZ - lowZ) / GRID + 1;
         long total = width * height;
         if (total > MAX_SAMPLES) {
-            tell(source, Text.literal("That would be " + total + " samples (" + width + "×" + height
-                    + " on a " + GRID + "-block grid), over the " + MAX_SAMPLES + " cap. Reduce the margin"
-                    + " — or check for a stray rail far from the network."), true);
+            tell(source, Text.literal("The generated world of " + dimension + " spans " + width + "×" + height
+                    + " samples on a " + GRID + "-block grid, past the " + MAX_SAMPLES + " sanity guard."
+                    + " Check for a stray region file far from everything else."), true);
             return;
         }
 
-        Scan scan = new Scan(world, dimension, source, (int) lowX, (int) lowZ, (int) width, (int) height,
-                lowX, lowZ, highX, highZ);
+        Scan scan = new Scan(world, dimension, source, chunks, (int) lowX, (int) lowZ,
+                (int) width, (int) height, lowX, lowZ, highX, highZ);
         active = scan;
-        tell(source, Text.literal("Terrain scan started: " + total + " samples over "
-                        + (highX - lowX) + "×" + (highZ - lowZ) + " blocks (margin " + margin + ").")
+        tell(source, Text.literal("Terrain scan started: " + chunks.count() + " generated chunk(s), "
+                        + total + " samples over " + (highX - lowX) + "×" + (highZ - lowZ) + " blocks.")
                 .formatted(Formatting.AQUA), false);
     }
 
@@ -457,8 +580,8 @@ public final class TerrainScanner {
 
     /**
      * Queues the once-per-launch automatic check: every dimension MTR is simulating gets
-     * its network measured and, if the cached water polygons do not already cover it,
-     * re-scanned. Called from {@link com.stationannouncer.mtraddon.AddonInit} a few
+     * its generated world measured and, if the cached water polygons do not already cover
+     * it, re-scanned. Called from {@link com.stationannouncer.mtraddon.AddonInit} a few
      * seconds after SERVER_STARTED; the work itself happens in {@link #pumpAuto}, one
      * dimension at a time, so the tick budget is never more than one scan's worth.
      */
@@ -482,7 +605,7 @@ public final class TerrainScanner {
     /**
      * Server thread, one dimension per call, only while nothing else is running. Takes
      * the next queued dimension and measures it; the decision lands in
-     * {@link #autoDecide} once the simulator answers.
+     * {@link #autoDecide} once the simulator and the region files have both answered.
      */
     private static void pumpAuto() {
         MinecraftServer minecraftServer = server;
@@ -510,57 +633,68 @@ public final class TerrainScanner {
             StationAnnouncer.LOGGER.info("Terrain auto-scan: no simulator/world pair for {}, skipping", dimension);
             return; // the next tick pumps the next dimension
         }
-        measure(minecraftServer, simulator, (any, minX, minZ, maxX, maxZ) ->
-                autoDecide(world, dimension, any, minX, minZ, maxX, maxZ));
+        measure(minecraftServer, simulator, (any, minX, minZ, maxX, maxZ) -> {
+            if (!any) {
+                // Unchanged rule: a dimension MTR simulates but nothing runs in is skipped
+                // outright, however much of it happens to be generated.
+                StationAnnouncer.LOGGER.info("Terrain auto-scan: no rails or stations in {} yet, skipping", dimension);
+                return;
+            }
+            enumerateThen(world, dimension, chunks -> autoDecide(world, dimension, chunks));
+        });
     }
 
     /**
-     * Server thread: scan this dimension, or skip it because the cache already covers it.
+     * Server thread: scan this dimension, or skip it because the cache already covers the
+     * generated world.
      *
-     * <p>The cached {@code bbox} is the box that scan actually walked (its snapped
-     * corners). If it CONTAINS the box the network needs now, every polygon the map
-     * would draw is already in the cache and the scan is skipped. Otherwise the whole
-     * dimension is re-scanned over the new box: traced polygons are not mergeable across
-     * scans (a ring that crossed the old edge would have been closed against it), and at
-     * the {@value #GRID}-block grid a full re-trace is cheap.</p>
+     * <p>The cached {@code bbox} is the box that scan actually walked. If it contains the
+     * box the generated world needs now — allowing {@value #CONTAIN_SLACK} blocks of
+     * slack on every side, so ordinary play at the edge of the map does not trigger a
+     * full re-scan — every polygon the map would draw is already cached. Otherwise the
+     * whole dimension is re-scanned: traced polygons are not mergeable across scans (a
+     * ring that crossed the old edge would have been closed against it).</p>
      */
-    private static void autoDecide(ServerWorld world, String dimension, boolean any,
-                                   long minX, long minZ, long maxX, long maxZ) {
-        if (!any) {
-            StationAnnouncer.LOGGER.info("Terrain auto-scan: no rails or stations in {} yet, skipping", dimension);
+    private static void autoDecide(ServerWorld world, String dimension, ChunkIndex chunks) {
+        if (chunks == null || chunks.isEmpty()) {
+            StationAnnouncer.LOGGER.info("Terrain auto-scan: no generated chunks on disk for {}, skipping", dimension);
             return;
         }
-        long lowX = snapDown(minX - AUTO_MARGIN);
-        long lowZ = snapDown(minZ - AUTO_MARGIN);
-        long highX = snapUp(maxX + AUTO_MARGIN);
-        long highZ = snapUp(maxZ + AUTO_MARGIN);
+        long lowX = snapDown(chunks.minBlockX() - AUTO_MARGIN);
+        long lowZ = snapDown(chunks.minBlockZ() - AUTO_MARGIN);
+        long highX = snapUp(chunks.maxBlockX() + AUTO_MARGIN);
+        long highZ = snapUp(chunks.maxBlockZ() + AUTO_MARGIN);
         Terrain cached = terrain.get(dimension);
         if (cached != null && covers(cached.bbox(), lowX, lowZ, highX, highZ)) {
             long[] bbox = cached.bbox();
-            StationAnnouncer.LOGGER.info("Terrain cache covers the network in {} (cached {},{}..{},{} contains"
-                            + " needed {},{}..{},{}) — skipping the automatic scan",
-                    dimension, bbox[0], bbox[1], bbox[2], bbox[3], lowX, lowZ, highX, highZ);
+            StationAnnouncer.LOGGER.info("Terrain cache covers the generated world of {} (cached {},{}..{},{}"
+                            + " contains needed {},{}..{},{} within {} blocks) — skipping the automatic scan",
+                    dimension, bbox[0], bbox[1], bbox[2], bbox[3], lowX, lowZ, highX, highZ, CONTAIN_SLACK);
             return;
         }
         if (cached == null) {
             StationAnnouncer.LOGGER.info("Terrain auto-scan: {} has no cached water polygons — scanning"
-                    + " {},{}..{},{}", dimension, lowX, lowZ, highX, highZ);
+                    + " {} chunk(s) over {},{}..{},{}", dimension, chunks.count(), lowX, lowZ, highX, highZ);
         } else {
             long[] bbox = cached.bbox();
-            StationAnnouncer.LOGGER.info("Terrain auto-scan: the network in {} has grown outside the cached box"
-                            + " ({},{}..{},{} → {},{}..{},{}) — re-scanning",
-                    dimension, bbox[0], bbox[1], bbox[2], bbox[3], lowX, lowZ, highX, highZ);
+            StationAnnouncer.LOGGER.info("Terrain auto-scan: the generated world of {} has grown outside the"
+                            + " cached box ({},{}..{},{} → {},{}..{},{}) — re-scanning {} chunk(s)",
+                    dimension, bbox[0], bbox[1], bbox[2], bbox[3], lowX, lowZ, highX, highZ, chunks.count());
         }
-        beginScan(null, world, dimension, true, minX, minZ, maxX, maxZ, AUTO_MARGIN);
+        beginScan(null, world, dimension, chunks, AUTO_MARGIN);
     }
 
-    /** True when the cached scanned box encloses the box the network needs now. */
+    /**
+     * True when the cached scanned box encloses the box the generated world needs now,
+     * to within {@value #CONTAIN_SLACK} blocks on every side.
+     */
     private static boolean covers(long[] bbox, long lowX, long lowZ, long highX, long highZ) {
         // An all-zero bbox is a pre-bbox cache file (or a damaged one): treat as no cover.
         if (bbox == null || bbox.length != 4 || (bbox[0] == 0 && bbox[1] == 0 && bbox[2] == 0 && bbox[3] == 0)) {
             return false;
         }
-        return bbox[0] <= lowX && bbox[1] <= lowZ && bbox[2] >= highX && bbox[3] >= highZ;
+        return bbox[0] - CONTAIN_SLACK <= lowX && bbox[1] - CONTAIN_SLACK <= lowZ
+                && bbox[2] + CONTAIN_SLACK >= highX && bbox[3] + CONTAIN_SLACK >= highZ;
     }
 
     /** The ServerWorld whose MTR dimension id is {@code dimension}, or null. */
@@ -584,6 +718,9 @@ public final class TerrainScanner {
         }
         if (pending) {
             return "measuring the network…";
+        }
+        if (enumerating) {
+            return "reading region files…";
         }
         if (autoActive) {
             return "automatic pass running (" + AUTO_QUEUE.size() + " dimension(s) left to check)";
@@ -630,6 +767,251 @@ public final class TerrainScanner {
         }
         root.add("polygons", polygons);
         return root;
+    }
+
+    // ------------------------------------------------- existing-chunk enumeration
+
+    /**
+     * Which chunks a dimension has ON DISK, read out of its region files' headers.
+     *
+     * <p>A region file's first 4 KiB is the locations table: 1024 big-endian ints, one
+     * per chunk of the 32x32 region, in {@code (localZ * 32 + localX)} order. A nonzero
+     * entry means that chunk has been written. That is the whole of Dynmap's
+     * "what exists" question, and it costs one 4 KiB read per region — no NBT, no
+     * decompression, and above all no chunk generation.</p>
+     *
+     * <p>Storage is one {@code long[32]} per region — a bitmap row per local z — in a
+     * hash map keyed by region coordinate. 256 bytes per fully-populated region, so a
+     * million-chunk world (≈1 000 regions) costs about a quarter of a megabyte plus map
+     * overhead. Reads go through a one-entry region cache because the scanners walk in
+     * row-major order and stay inside one region for 32 chunks at a time.</p>
+     *
+     * <p>Built on a background thread, then read ONLY from the server thread during a
+     * scan (the cache field is why: it is deliberately not synchronized).</p>
+     */
+    public static final class ChunkIndex {
+        private static final ChunkIndex EMPTY =
+                new ChunkIndex(Map.of(), 0, 0, -1, -1, 0);
+
+        private final Map<Long, long[]> regions;
+        private final int minChunkX;
+        private final int minChunkZ;
+        private final int maxChunkX;
+        private final int maxChunkZ;
+        private final int count;
+
+        /** One-entry region cache. Server thread only. */
+        private long[] cachedBits;
+        private int cachedRegionX;
+        private int cachedRegionZ;
+        private boolean cachedValid;
+
+        private ChunkIndex(Map<Long, long[]> regions, int minChunkX, int minChunkZ,
+                           int maxChunkX, int maxChunkZ, int count) {
+            this.regions = regions;
+            this.minChunkX = minChunkX;
+            this.minChunkZ = minChunkZ;
+            this.maxChunkX = maxChunkX;
+            this.maxChunkZ = maxChunkZ;
+            this.count = count;
+        }
+
+        public static ChunkIndex empty() {
+            return EMPTY;
+        }
+
+        public boolean isEmpty() {
+            return count == 0;
+        }
+
+        /** How many chunks exist on disk. */
+        public int count() {
+            return count;
+        }
+
+        public int minBlockX() {
+            return minChunkX << 4;
+        }
+
+        public int minBlockZ() {
+            return minChunkZ << 4;
+        }
+
+        public int maxBlockX() {
+            return (maxChunkX << 4) + 15;
+        }
+
+        public int maxBlockZ() {
+            return (maxChunkZ << 4) + 15;
+        }
+
+        /** Does this chunk exist on disk? Server thread only (see the one-entry cache). */
+        public boolean has(int chunkX, int chunkZ) {
+            if (count == 0 || chunkX < minChunkX || chunkX > maxChunkX
+                    || chunkZ < minChunkZ || chunkZ > maxChunkZ) {
+                return false;
+            }
+            int regionX = chunkX >> 5;
+            int regionZ = chunkZ >> 5;
+            if (!cachedValid || regionX != cachedRegionX || regionZ != cachedRegionZ) {
+                cachedBits = regions.get(regionKey(regionX, regionZ));
+                cachedRegionX = regionX;
+                cachedRegionZ = regionZ;
+                cachedValid = true;
+            }
+            long[] bits = cachedBits;
+            return bits != null && ((bits[chunkZ - (regionZ << 5)] >>> (chunkX - (regionX << 5))) & 1L) != 0;
+        }
+
+        /** Does ANY chunk in this inclusive chunk rectangle exist? Used to skip empty tiles. */
+        public boolean anyIn(int chunkX0, int chunkZ0, int chunkX1, int chunkZ1) {
+            if (count == 0 || chunkX1 < minChunkX || chunkX0 > maxChunkX
+                    || chunkZ1 < minChunkZ || chunkZ0 > maxChunkZ) {
+                return false;
+            }
+            int x0 = Math.max(chunkX0, minChunkX);
+            int z0 = Math.max(chunkZ0, minChunkZ);
+            int x1 = Math.min(chunkX1, maxChunkX);
+            int z1 = Math.min(chunkZ1, maxChunkZ);
+            for (int regionZ = z0 >> 5; regionZ <= (z1 >> 5); regionZ++) {
+                int baseZ = regionZ << 5;
+                int localZ0 = Math.max(z0, baseZ) - baseZ;
+                int localZ1 = Math.min(z1, baseZ + 31) - baseZ;
+                for (int regionX = x0 >> 5; regionX <= (x1 >> 5); regionX++) {
+                    long[] bits = regions.get(regionKey(regionX, regionZ));
+                    if (bits == null) {
+                        continue;
+                    }
+                    int baseX = regionX << 5;
+                    int localX0 = Math.max(x0, baseX) - baseX;
+                    int localX1 = Math.min(x1, baseX + 31) - baseX;
+                    // Width 32 shifts by 32, which is legal on a long, so no special case.
+                    long mask = ((1L << (localX1 - localX0 + 1)) - 1) << localX0;
+                    for (int localZ = localZ0; localZ <= localZ1; localZ++) {
+                        if ((bits[localZ] & mask) != 0) {
+                            return true;
+                        }
+                    }
+                }
+            }
+            return false;
+        }
+
+        private static long regionKey(int regionX, int regionZ) {
+            return (((long) regionX) << 32) | (regionZ & 0xFFFFFFFFL);
+        }
+    }
+
+    /**
+     * Background thread: {@code <dimension folder>/region/r.X.Z.mca} → {@link ChunkIndex}.
+     *
+     * <p>The dimension folder is
+     * {@code DimensionType.getSaveDirectory(world.getRegistryKey(), <save root>)}
+     * (bytecode-verified on 1.20.4: overworld = the save root itself, nether =
+     * {@code DIM-1}, end = {@code DIM1}, anything else =
+     * {@code dimensions/<namespace>/<path>}).</p>
+     */
+    static ChunkIndex enumerateExistingChunks(MinecraftServer minecraftServer, ServerWorld world) {
+        Path regionDir = DimensionType
+                .getSaveDirectory(world.getRegistryKey(), minecraftServer.getSavePath(WorldSavePath.ROOT))
+                .resolve("region").normalize();
+        if (!Files.isDirectory(regionDir)) {
+            return ChunkIndex.empty();
+        }
+        Map<Long, long[]> regions = new HashMap<>();
+        int minChunkX = Integer.MAX_VALUE;
+        int minChunkZ = Integer.MAX_VALUE;
+        int maxChunkX = Integer.MIN_VALUE;
+        int maxChunkZ = Integer.MIN_VALUE;
+        int count = 0;
+        byte[] header = new byte[4096];
+        List<Path> files;
+        try (Stream<Path> stream = Files.list(regionDir)) {
+            files = stream.toList();
+        } catch (IOException e) {
+            StationAnnouncer.LOGGER.warn("Could not list {}", regionDir, e);
+            return ChunkIndex.empty();
+        }
+        for (Path file : files) {
+            String name = file.getFileName().toString();
+            if (!name.startsWith("r.") || !name.endsWith(".mca")) {
+                continue;
+            }
+            String[] parts = name.split("\\.");
+            if (parts.length != 4) {
+                continue;
+            }
+            int regionX;
+            int regionZ;
+            try {
+                regionX = Integer.parseInt(parts[1]);
+                regionZ = Integer.parseInt(parts[2]);
+            } catch (NumberFormatException e) {
+                continue;
+            }
+            if (!readHeader(file, header)) {
+                continue;
+            }
+            long[] bits = new long[32];
+            int present = 0;
+            for (int i = 0; i < 1024; i++) {
+                int at = i << 2;
+                // Three-byte sector offset plus a one-byte sector count; any nonzero
+                // entry means the chunk has been written to this region.
+                if ((header[at] | header[at + 1] | header[at + 2] | header[at + 3]) == 0) {
+                    continue;
+                }
+                int localX = i & 31;
+                int localZ = i >> 5;
+                bits[localZ] |= 1L << localX;
+                present++;
+                int chunkX = (regionX << 5) + localX;
+                int chunkZ = (regionZ << 5) + localZ;
+                if (chunkX < minChunkX) {
+                    minChunkX = chunkX;
+                }
+                if (chunkX > maxChunkX) {
+                    maxChunkX = chunkX;
+                }
+                if (chunkZ < minChunkZ) {
+                    minChunkZ = chunkZ;
+                }
+                if (chunkZ > maxChunkZ) {
+                    maxChunkZ = chunkZ;
+                }
+            }
+            if (present > 0) {
+                regions.put(ChunkIndex.regionKey(regionX, regionZ), bits);
+                count += present;
+            }
+        }
+        if (count == 0) {
+            return ChunkIndex.empty();
+        }
+        return new ChunkIndex(regions, minChunkX, minChunkZ, maxChunkX, maxChunkZ, count);
+    }
+
+    /** Reads exactly the 4 KiB locations table; a short or unreadable file is skipped. */
+    private static boolean readHeader(Path file, byte[] header) {
+        try (InputStream in = Files.newInputStream(file)) {
+            int read = 0;
+            while (read < header.length) {
+                int got = in.read(header, read, header.length - read);
+                if (got < 0) {
+                    break;
+                }
+                read += got;
+            }
+            if (read < header.length) {
+                // An empty (0-byte) region file is ordinary; anything shorter than a full
+                // header has no chunks we can name.
+                return false;
+            }
+            return true;
+        } catch (IOException e) {
+            StationAnnouncer.LOGGER.warn("Could not read the header of {}", file, e);
+            return false;
+        }
     }
 
     // -------------------------------------------------------------- geometry
@@ -1009,6 +1391,8 @@ public final class TerrainScanner {
         private final ServerWorld world;
         private final String dimension;
         private final ServerCommandSource source;
+        /** Which chunks exist on disk; samples outside it never touch the world. */
+        private final ChunkIndex chunks;
         private final int originX;
         private final int originZ;
         private final int width;
@@ -1018,17 +1402,24 @@ public final class TerrainScanner {
         private final long maxX;
         private final long maxZ;
         private final long[] mask;
+        private final int bottomY;
+        /** Nether-style roof: the heightmap is useless, so probe down (see surfaceY). */
+        private final boolean hasCeiling;
+        private final int ceilingStartY;
+        private final BlockPos.Mutable cursor = new BlockPos.Mutable();
         private int index;
         private int water;
         private WorldChunk chunk;
         private int chunkX = Integer.MIN_VALUE;
         private int chunkZ = Integer.MIN_VALUE;
 
-        private Scan(ServerWorld world, String dimension, ServerCommandSource source, int originX, int originZ,
-                     int width, int height, long minX, long minZ, long maxX, long maxZ) {
+        private Scan(ServerWorld world, String dimension, ServerCommandSource source, ChunkIndex chunks,
+                     int originX, int originZ, int width, int height,
+                     long minX, long minZ, long maxX, long maxZ) {
             this.world = world;
             this.dimension = dimension;
             this.source = source;
+            this.chunks = chunks;
             this.originX = originX;
             this.originZ = originZ;
             this.width = width;
@@ -1038,6 +1429,10 @@ public final class TerrainScanner {
             this.maxX = maxX;
             this.maxZ = maxZ;
             this.mask = new long[(width * height + 63) >> 6];
+            this.bottomY = world.getBottomY();
+            DimensionType type = world.getDimension();
+            this.hasCeiling = type.hasCeiling();
+            this.ceilingStartY = this.bottomY + Math.max(1, type.logicalHeight() - CEILING_HEADROOM);
         }
     }
 }

@@ -22,9 +22,11 @@ import org.mtr.libraries.it.unimi.dsi.fastutil.objects.ObjectArrayList;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Set;
 
 /**
  * Builds the journey-planner payload for GET {@code /dispatch/api/mapdata?dimension=N}:
@@ -55,6 +57,9 @@ import java.util.Map;
  *       (real-time timetables, continuous movement, no frequency set).</li>
  *   <li><b>legs</b> — walked out of a depot's baked {@code Siding.pathMainRoute} (see
  *       {@link #depotPairChains}).</li>
+ *   <li><b>throughRuns</b> — top-level {@code [{from, to, platform}]}: the route-to-route
+ *       continuations a rider can stay seated through, read off {@code depot.routes}
+ *       order (see {@link #buildThroughRuns}).</li>
  * </ul>
  */
 public final class DispatchMapData {
@@ -76,7 +81,85 @@ public final class DispatchMapData {
         root.addProperty("dimension", simulator.dimension);
         root.add("routes", buildRoutes(simulator));
         root.add("stations", buildStations(simulator));
+        root.add("throughRuns", buildThroughRuns(simulator));
         return root;
+    }
+
+    // ------------------------------------------------------------- through runs
+
+    /**
+     * Where a rider can STAY SEATED across a route boundary: {@code [{from, to, platform}]},
+     * route ids and a platform id, all as decimal strings.
+     *
+     * <p>A depot runs its routes back to back, in {@code depot.routes} order and then
+     * round again, as ONE physical vehicle cycle. Where route N's last stop and route
+     * N+1's first stop are the SAME platform, that stop is a collapsed terminus: the
+     * train arrives on route N, changes its destination sign and leaves on route N+1
+     * without anybody getting off. The journey planner needs that to avoid charging a
+     * transfer penalty (or an interchange walk) for a change that does not happen.</p>
+     *
+     * <p>The walk includes the wrap from the last route back to the first, which is what
+     * closes an out-and-back pair into a loop. Identical {@code (from, to, platform)}
+     * triples are emitted once however many depots produce them, and a depot with fewer
+     * than two routes contributes nothing (a single route wrapping onto itself would only
+     * ever say "this circular route continues", which the platform list already says).
+     * Every depot is walked inside its own try/catch, and any failure at all leaves an
+     * empty array rather than breaking the payload.</p>
+     */
+    private static JsonArray buildThroughRuns(Simulator simulator) {
+        JsonArray throughRuns = new JsonArray();
+        try {
+            Set<String> seen = new LinkedHashSet<>();
+            for (Depot depot : simulator.depots) {
+                if (depot == null) {
+                    continue;
+                }
+                try {
+                    ObjectArrayList<Route> routes = depot.routes;
+                    int count = routes == null ? 0 : routes.size();
+                    if (count < 2) {
+                        continue;
+                    }
+                    for (int i = 0; i < count; i++) {
+                        Route from = routes.get(i);
+                        Route to = routes.get((i + 1) % count);
+                        if (from == null || to == null) {
+                            continue;
+                        }
+                        long arrival = edgePlatformId(from, true);
+                        long departure = edgePlatformId(to, false);
+                        if (arrival == 0 || departure == 0 || arrival != departure) {
+                            continue;
+                        }
+                        if (!seen.add(from.getId() + ">" + to.getId() + "@" + arrival)) {
+                            continue;
+                        }
+                        JsonObject entry = new JsonObject();
+                        entry.addProperty("from", String.valueOf(from.getId()));
+                        entry.addProperty("to", String.valueOf(to.getId()));
+                        entry.addProperty("platform", String.valueOf(arrival));
+                        throughRuns.add(entry);
+                    }
+                } catch (Throwable throwable) {
+                    StationAnnouncer.LOGGER.warn("Dispatch map data: through-run walk failed for depot {} ({})",
+                            depot.getId(), throwable.toString());
+                }
+            }
+        } catch (Throwable throwable) {
+            StationAnnouncer.LOGGER.warn("Dispatch map data: through runs unavailable ({})", throwable.toString());
+            return new JsonArray();
+        }
+        return throughRuns;
+    }
+
+    /** The route's last ({@code last=true}) or first platform id, or 0 when unresolved. */
+    private static long edgePlatformId(Route route, boolean last) {
+        ObjectArrayList<RoutePlatformData> routePlatforms = route.getRoutePlatforms();
+        if (routePlatforms == null || routePlatforms.isEmpty()) {
+            return 0;
+        }
+        RoutePlatformData edge = routePlatforms.get(last ? routePlatforms.size() - 1 : 0);
+        return edge == null || edge.platform == null ? 0 : edge.platform.getId();
     }
 
     // ------------------------------------------------------------------ routes

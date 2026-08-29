@@ -15,6 +15,7 @@ import net.minecraft.util.WorldSavePath;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.world.Heightmap;
 import net.minecraft.world.chunk.WorldChunk;
+import net.minecraft.world.dimension.DimensionType;
 import org.mtr.core.data.Rail;
 import org.mtr.core.data.RailMath;
 import org.mtr.core.data.Station;
@@ -35,50 +36,69 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
+import java.util.function.Consumer;
 import java.util.stream.Stream;
 
 /**
- * The dispatch map's satellite basemap: a vanilla-held-map-style raster of the railway's
- * surroundings, scanned by {@code /dispatch satellite scan [marginBlocks]} or by the
- * automatic once-per-launch pass, and served as 256x256-sample PNG tiles.
+ * The dispatch map's satellite basemap: a vanilla-held-map-style raster of the WHOLE
+ * GENERATED WORLD, scanned by {@code /dispatch satellite scan} or by the automatic
+ * once-per-launch pass, and served as 256x256-sample PNG tiles.
  *
  * <p>This is {@link TerrainScanner}'s architecture a second time over, deliberately
  * duplicated rather than shared: a completely separate state machine (its own
  * {@link #active} scan, its own budget, its own save directory, its own auto queue) so
  * both can be running in the same session without either one's progress, cache or
- * command feedback touching the other. Only the bounding-box derivation is identical —
- * the union of every valid rail's {@link RailMath} extents and every station's
- * {@code AreaBase} corners plus a margin, asked of MTR on the owning simulator's thread
- * and carried back as plain longs.</p>
+ * command feedback touching the other. The one thing it borrows is
+ * {@link TerrainScanner.ChunkIndex} — the region-header read that decides which chunks
+ * exist on disk, which there is no reason to implement twice.</p>
  *
- * <p><b>Sampling.</b> One sample per {@value #SCALE} blocks (16x denser than the terrain
- * scan's 8-block grid, hence its own, much larger, sample cap). Per sample: the surface
- * from the chunk's {@code MOTION_BLOCKING} heightmap, that block's
- * {@link BlockState#getMapColor} and its height. Shading is vanilla's: compare the
- * height with the sample one step NORTH — higher is {@link MapColor.Brightness#HIGH},
- * equal {@code NORMAL}, lower {@code LOW} — except on water, which is banded by depth
- * like a real map (shallow bright, deep dark). Missing/void samples and
- * {@link MapColor#CLEAR} are transparent.</p>
+ * <p><b>Scope: what exists, never what could exist.</b> The scan covers the bounding box
+ * of every chunk the dimension has on disk. A sample whose chunk is not in the existence
+ * index is transparent and NEVER handed to {@code world.getChunk} — the scanner cannot
+ * generate terrain, only photograph it. Tiles that contain no existing chunk at all are
+ * skipped outright: they are neither sampled nor written nor indexed, so a sparse world
+ * costs a sparse basemap.</p>
+ *
+ * <p><b>Sampling.</b> One sample per {@value #SCALE} blocks. Per sample: the surface from
+ * the chunk's {@code MOTION_BLOCKING} heightmap (or, in a CEILING dimension like the
+ * nether, a downward probe — see {@link #surfaceY}), that block's
+ * {@link BlockState#getMapColor} and its height. Shading is vanilla's: compare the height
+ * with the sample one step NORTH — higher is {@link MapColor.Brightness#HIGH}, equal
+ * {@code NORMAL}, lower {@code LOW} — except on water, which is banded by depth like a
+ * real map (shallow bright, deep dark). Missing/void samples and {@link MapColor#CLEAR}
+ * are transparent.</p>
+ *
+ * <p><b>One tile at a time.</b> Sampling walks the wanted tiles in order and keeps only
+ * ONE tile's buffers (two 64 KB arrays) alive — a whole-world scan cannot afford the
+ * single big raster the railway-sized scan used. Each tile is preceded by a one-row
+ * "seed" pass over the strip immediately north of it, so the north-shading of a tile's
+ * top row is continuous with its neighbour instead of showing a seam.</p>
  *
  * <p><b>A stable tile grid.</b> The origin is established by the FIRST scan of a
  * dimension and then kept forever: every later scan measures its tiles from that same
  * corner, so tile (0,0) always names the same 512 blocks and existing tiles stay valid.
- * A network that grows toward -x/-z therefore produces NEGATIVE tile indices — legal
+ * A world that grows toward -x/-z therefore produces NEGATIVE tile indices — legal
  * everywhere: in the file names ({@code -1_2.png}), the index, {@code satmeta} and the
  * {@code sattile} endpoint.</p>
  *
- * <p><b>Full refresh vs incremental.</b> The manual command always does a FULL refresh:
- * every tile of the needed box is re-sampled and the dimension's directory is wiped
- * first, so stale tiles from a bigger previous scan cannot survive. The automatic pass
- * is INCREMENTAL: it samples only tiles that do not exist yet, merges them into the
- * index and never deletes anything.</p>
+ * <p><b>Full refresh vs incremental, and resuming.</b> The manual command always does a
+ * FULL refresh: every tile with chunks under it is re-sampled and the dimension's
+ * directory is wiped first, so stale tiles from a bigger previous scan cannot survive.
+ * The automatic pass is INCREMENTAL: it samples only tiles that do not exist yet, merges
+ * them into the index and never deletes anything. That is also the resume story — a scan
+ * interrupted by a server stop leaves every completed tile in the index, and the next
+ * launch's diff simply asks for the rest. To make that true of a multi-hour first scan as
+ * well, finished tiles are encoded and PUBLISHED IN BATCHES of {@value #FLUSH_TILES}
+ * during the scan rather than only at the end, so the live map fills in as it goes.</p>
  *
  * <p><b>Threading.</b> Everything except {@link #satelliteJson(String)} and
  * {@link #tile(String, int, int)} runs on the SERVER thread, in
  * {@value #TICK_BUDGET_MILLIS} ms slices from
  * {@link com.stationannouncer.mtraddon.AddonInit}'s tick handler (the sampler reads
- * chunks, so it cannot live on a simulator thread). PNG encoding happens once, at the
- * end of a scan, on a daemon thread over arrays nothing will touch again. The two
+ * chunks, so it cannot live on a simulator thread). Region-header enumeration and PNG
+ * encoding happen on daemon threads; a batch handed to the encoder is a fresh list of
+ * arrays the server thread will never touch again, and only one encode runs at a time
+ * ({@link #encoding}), which is what keeps the published index single-writer. The two
  * getters are called from Jetty workers and only read one volatile reference to an
  * immutable snapshot (plus, for tiles, an immutable file on disk).</p>
  *
@@ -92,6 +112,8 @@ public final class SatelliteScanner {
     public static final int TILE_SAMPLES = 256;
     /** Tile edge in blocks. Scan bounds always land on tile boundaries. */
     public static final int TILE_BLOCKS = TILE_SAMPLES * SCALE;
+    /** Tile edge in chunks; used to ask the existence index whether a tile is worth drawing. */
+    private static final int TILE_CHUNKS = TILE_BLOCKS / 16;
 
     /** Per-tick sampling budget. Two milliseconds of a fifty-millisecond tick. */
     private static final long TICK_BUDGET_MILLIS = 2;
@@ -99,20 +121,29 @@ public final class SatelliteScanner {
     /** Check the clock this often (in samples) while the chunk cache is hitting. */
     private static final int BUDGET_CHECK_MASK = 15;
     /**
-     * Refuse anything bigger. 9 M samples is 6000x6000 blocks at {@value #SCALE}-block
-     * spacing, ~18 MB of scan arrays and ~140 tiles — the point past which this stops
-     * being a basemap and starts being a mapping project.
+     * Sanity guard on the tile rectangle the diff walks, not a coverage cap: coverage is
+     * bounded by what exists on disk. A million tiles is a 512 000-block square.
      */
-    private static final int MAX_SAMPLES = 9_000_000;
-    /** Bound on the tile rectangle the diff walks, so a stray rail cannot spin the loop. */
-    private static final int MAX_TILE_RECT = 65_536;
+    private static final int MAX_TILE_RECT = 1_048_576;
+    /** Encode and publish after this many finished tiles, so a long scan shows progress. */
+    private static final int FLUSH_TILES = 64;
     /** How far below the surface the water-depth probe looks before calling it "deep". */
     private static final int MAX_WATER_PROBE = 8;
     /** A CLEAR surface (glass, a torch on a roof) looks this far down for real colour. */
     private static final int MAX_CLEAR_DESCENT = 4;
+    /** How far the ceiling-dimension probe descends before giving up on a column. */
+    private static final int MAX_CEILING_DESCENT = 96;
+    /** A ceiling dimension's probe starts this far below its logical roof. */
+    private static final int CEILING_HEADROOM = 8;
+    /** "No surface here" from {@link #surfaceY}. */
+    private static final int NO_SURFACE = Integer.MIN_VALUE;
     /** Vanilla's world border cap; beyond it the int grid arithmetic would overflow. */
     private static final long WORLD_LIMIT = 30_000_000L;
-    /** The margin the automatic pass uses — the manual command's own default. */
+    /**
+     * Accepted and reported for compatibility with {@code /dispatch satellite scan
+     * [margin]}, but the scan's SCOPE is now the generated world; the margin only pads
+     * the box a little past the outermost existing chunk.
+     */
     private static final int AUTO_MARGIN = 128;
 
     /** Shade codes stored per sample; index into {@link #BRIGHTNESSES}. */
@@ -138,7 +169,9 @@ public final class SatelliteScanner {
     private static volatile Scan active;
     /** Set between the command and the simulator round-trip so two clicks cannot both start. */
     private static volatile boolean pending;
-    /** True while the writer thread is turning a finished scan into PNGs. */
+    /** Set while a background thread is reading the dimension's region headers. */
+    private static volatile boolean enumerating;
+    /** True while the writer thread is turning a batch of finished tiles into PNGs. */
     private static volatile boolean encoding;
     /** The last background encode, joined at shutdown. */
     private static volatile Thread writer;
@@ -157,6 +190,7 @@ public final class SatelliteScanner {
         server = minecraftServer;
         active = null;
         pending = false;
+        enumerating = false;
         encoding = false;
         autoActive = false;
         AUTO_QUEUE.clear();
@@ -181,9 +215,10 @@ public final class SatelliteScanner {
         Thread pendingWrite = writer;
         if (pendingWrite != null) {
             try {
-                // Encoding a full basemap can take a few seconds; a half-written tile set
-                // is still consistent (tiles are moved into place atomically, and the
-                // index is written last), so this join is a courtesy, not a requirement.
+                // A batch is at most FLUSH_TILES PNGs, so this is a short wait. Tiles are
+                // moved into place atomically and the index is written last, so a batch
+                // that does not finish simply is not published — the next launch's diff
+                // asks for those tiles again.
                 pendingWrite.join(10_000);
             } catch (InterruptedException e) {
                 Thread.currentThread().interrupt();
@@ -192,6 +227,9 @@ public final class SatelliteScanner {
         writer = null;
         active = null;
         pending = false;
+        // An enumeration thread may still be walking region headers; it publishes only
+        // through server.execute, which will not run again, so abandoning it is safe.
+        enumerating = false;
         encoding = false;
         autoActive = false;
         AUTO_QUEUE.clear();
@@ -201,13 +239,14 @@ public final class SatelliteScanner {
     }
 
     /**
-     * Nothing running: no scan, no simulator round-trip, no tile encode and no auto pass
-     * left to walk. {@link com.stationannouncer.mtraddon.AddonInit} waits on the TERRAIN
-     * scanner's version of this before kicking our automatic pass, so the two never
-     * sample in the same tick.
+     * Nothing running: no scan, no simulator round-trip, no region enumeration, no tile
+     * encode and no auto pass left to walk.
+     * {@link com.stationannouncer.mtraddon.AddonInit} waits on the TERRAIN scanner's
+     * version of this before kicking our automatic pass, so the two never sample in the
+     * same tick.
      */
     public static boolean isIdle() {
-        return active == null && !pending && !encoding && !autoActive;
+        return active == null && !pending && !enumerating && !encoding && !autoActive;
     }
 
     // ------------------------------------------------------------- the ticker
@@ -222,14 +261,17 @@ public final class SatelliteScanner {
             // The auto pass is pumped from here rather than chained off finish(): waiting
             // for "nothing is running" each tick is what lets a manual scan cut in front
             // of it without either one having to know about the other.
-            if (autoActive && !pending && !encoding) {
+            if (autoActive && !pending && !enumerating && !encoding) {
                 pumpAuto();
             }
             return;
         }
+        if (scan.tileIndex >= scan.tiles.size()) {
+            drain(scan);
+            return;
+        }
         long deadline = System.nanoTime() + TICK_BUDGET_NANOS;
-        int total = scan.width * scan.height;
-        while (scan.index < total) {
+        while (scan.tileIndex < scan.tiles.size()) {
             boolean loadedChunk;
             try {
                 loadedChunk = sample(scan);
@@ -241,60 +283,91 @@ public final class SatelliteScanner {
                 return;
             }
             scan.index++;
-            // A cache miss just paid for a (possibly generating) chunk load, so re-check
-            // the clock immediately rather than after another fifteen cheap samples.
+            scan.sampled++;
+            if (scan.index >= Scan.SAMPLES_PER_TILE) {
+                completeTile(scan);
+                if (scan.ready.size() >= FLUSH_TILES) {
+                    flush(scan, false);
+                }
+                return; // one tile boundary per tick keeps the batching predictable
+            }
+            // A cache miss just paid for a chunk load off disk, so re-check the clock
+            // immediately rather than after another fifteen cheap samples.
             if ((loadedChunk || (scan.index & BUDGET_CHECK_MASK) == 0) && System.nanoTime() >= deadline) {
                 return;
             }
         }
+        drain(scan);
+    }
+
+    /**
+     * Sampling is done: push whatever is still buffered at the encoder, one batch a tick,
+     * and only retire the scan once the last batch has actually been written.
+     */
+    private static void drain(Scan scan) {
+        if (!scan.ready.isEmpty()) {
+            flush(scan, true);
+            return;
+        }
+        if (encoding) {
+            return; // the last batch is still being written
+        }
         active = null;
-        finish(scan);
+        report(scan, Text.literal("Satellite scan complete: " + scan.tiles.size() + " tile(s), "
+                + scan.sampled + " samples (" + scan.water + " water).").formatted(Formatting.GREEN), false);
+        StationAnnouncer.LOGGER.info("Satellite scan of {} complete: {} tile(s), {} samples ({} water)",
+                scan.dimension, scan.tiles.size(), scan.sampled, scan.water);
     }
 
     /** @return true when this sample had to fetch a new chunk. */
     private static boolean sample(Scan scan) {
-        int gx = scan.index % scan.width;
-        int gz = scan.index / scan.width;
-        if (gx == 0 && scan.index > 0) {
+        int[] tile = scan.tiles.get(scan.tileIndex);
+        int row = scan.index / TILE_SAMPLES;
+        int column = scan.index % TILE_SAMPLES;
+        if (column == 0 && row > 0) {
             // New row: the row just finished becomes the north neighbours. Only two rows
-            // are ever kept, which is what lets the shading be decided during the scan
-            // and the (9 M-entry) height grid never exist at all.
+            // are ever kept — row 0 of every tile is the SEED row, sampled one step north
+            // of the tile so its top edge shades against its neighbour, not against void.
             short[] finished = scan.curRow;
             scan.curRow = scan.prevRow;
             scan.prevRow = finished;
         }
-        if (!scan.wanted[(gz / TILE_SAMPLES) * scan.tilesX + gx / TILE_SAMPLES]) {
-            // A tile this scan is not producing (it already exists on disk). Bail BEFORE
-            // touching a chunk: chunk load/generation is the entire cost of a scan, and
-            // an incremental pass over a grown network is mostly this branch.
-            scan.colors[scan.index] = 0;
-            scan.shade[scan.index] = SHADE_NONE;
-            scan.curRow[gx] = NO_HEIGHT;
-            return false;
-        }
-        int x = scan.originX + gx * SCALE;
-        int z = scan.originZ + gz * SCALE;
+        int x = scan.stableOriginX + tile[0] * TILE_BLOCKS + column * SCALE;
+        int z = scan.stableOriginZ + tile[1] * TILE_BLOCKS + (row - 1) * SCALE;
+        int out = row == 0 ? -1 : (row - 1) * TILE_SAMPLES + column;
         int chunkX = x >> 4;
         int chunkZ = z >> 4;
+        if (!scan.chunks.has(chunkX, chunkZ)) {
+            // Ungenerated: transparent, and — the whole point of the existence index —
+            // NEVER handed to world.getChunk, which would generate it.
+            if (out >= 0) {
+                scan.colors[out] = 0;
+                scan.shade[out] = SHADE_NONE;
+            }
+            scan.curRow[column] = NO_HEIGHT;
+            return false;
+        }
         boolean loaded = false;
         if (scan.chunk == null || chunkX != scan.chunkX || chunkZ != scan.chunkZ) {
-            // Full, synchronous load (generating the chunk if need be). Deliberate: this
-            // is an explicit operator command and the tick budget is what pays for it.
+            // The chunk is on disk, so this is a load, not a generation. Vanilla's
+            // "unknown" ticket expires after a tick, so the scan does not pin the world
+            // in memory as it walks it. (Same caveat as the terrain scanner: a chunk
+            // saved at a PARTIAL status still has a nonzero header entry, and this call
+            // finishes that one. It is a perimeter-sized minority.)
             scan.chunk = scan.world.getChunk(chunkX, chunkZ);
             scan.chunkX = chunkX;
             scan.chunkZ = chunkZ;
             loaded = true;
         }
         WorldChunk chunk = scan.chunk;
-        int bottomY = scan.world.getBottomY();
-        // sampleHeightmap returns Heightmap.get() - 1, i.e. the y of the topmost block
-        // that MOTION_BLOCKING accepts — and that predicate accepts any non-empty fluid
-        // state, so for open water the answer IS the surface water block.
-        int surfaceY = chunk.sampleHeightmap(Heightmap.Type.MOTION_BLOCKING, x, z);
-        if (surfaceY < bottomY) {
-            scan.colors[scan.index] = 0;
-            scan.shade[scan.index] = SHADE_NONE;
-            scan.curRow[gx] = NO_HEIGHT;
+        int bottomY = scan.bottomY;
+        int surfaceY = surfaceY(scan, chunk, x, z);
+        if (surfaceY == NO_SURFACE) {
+            if (out >= 0) {
+                scan.colors[out] = 0;
+                scan.shade[out] = SHADE_NONE;
+            }
+            scan.curRow[column] = NO_HEIGHT;
             return loaded;
         }
 
@@ -314,9 +387,11 @@ public final class SatelliteScanner {
             color = state.getMapColor(scan.world, scan.cursor);
         }
         if (color == null || color == MapColor.CLEAR) {
-            scan.colors[scan.index] = 0;
-            scan.shade[scan.index] = SHADE_NONE;
-            scan.curRow[gx] = NO_HEIGHT;
+            if (out >= 0) {
+                scan.colors[out] = 0;
+                scan.shade[out] = SHADE_NONE;
+            }
+            scan.curRow[column] = NO_HEIGHT;
             return loaded;
         }
 
@@ -334,26 +409,114 @@ public final class SatelliteScanner {
             }
             int depth = surfaceY - probeY; // blocks of water, surface block included
             shade = depth <= 2 ? SHADE_HIGH : depth <= 5 ? SHADE_NORMAL : SHADE_LOW;
-            scan.water++;
+            if (out >= 0) {
+                scan.water++;
+            }
         } else {
-            short north = scan.prevRow[gx];
+            short north = scan.prevRow[column];
             shade = north == NO_HEIGHT || y == north ? SHADE_NORMAL : y > north ? SHADE_HIGH : SHADE_LOW;
         }
-        scan.colors[scan.index] = (byte) color.id;
-        scan.shade[scan.index] = shade;
-        scan.curRow[gx] = (short) y;
+        if (out >= 0) {
+            scan.colors[out] = (byte) color.id;
+            scan.shade[out] = shade;
+        }
+        scan.curRow[column] = (short) y;
         return loaded;
+    }
+
+    /**
+     * The y of the block a map would draw for this column, or {@link #NO_SURFACE}.
+     *
+     * <p>In an ordinary dimension that is the {@code MOTION_BLOCKING} heightmap: its
+     * predicate accepts any non-empty fluid state, so for open water the answer IS the
+     * surface water block (bytecode-checked against 1.20.4).</p>
+     *
+     * <p>In a CEILING dimension (the nether) the heightmap answers the bedrock roof, so
+     * this uses Dynmap's technique instead: start just under the logical roof, descend to
+     * the first air block, then keep descending to the first non-air below it — the floor
+     * a player would be standing on. A column with no air (or no floor under the air)
+     * within {@value #MAX_CEILING_DESCENT} steps is left transparent rather than painted
+     * as roof.</p>
+     */
+    private static int surfaceY(Scan scan, WorldChunk chunk, int x, int z) {
+        int heightmapY = chunk.sampleHeightmap(Heightmap.Type.MOTION_BLOCKING, x, z);
+        if (!scan.hasCeiling) {
+            return heightmapY < scan.bottomY ? NO_SURFACE : heightmapY;
+        }
+        int y = Math.min(heightmapY, scan.ceilingStartY);
+        int steps = 0;
+        while (steps < MAX_CEILING_DESCENT && y > scan.bottomY
+                && !chunk.getBlockState(scan.cursor.set(x, y, z)).isAir()) {
+            y--;
+            steps++;
+        }
+        if (steps >= MAX_CEILING_DESCENT || y <= scan.bottomY) {
+            return NO_SURFACE; // solid all the way down: no cavern to draw
+        }
+        while (steps < MAX_CEILING_DESCENT && y > scan.bottomY
+                && chunk.getBlockState(scan.cursor.set(x, y, z)).isAir()) {
+            y--;
+            steps++;
+        }
+        return steps >= MAX_CEILING_DESCENT || y <= scan.bottomY ? NO_SURFACE : y;
+    }
+
+    /** Server thread: hand the finished tile to the pending batch and start the next one. */
+    private static void completeTile(Scan scan) {
+        int[] tile = scan.tiles.get(scan.tileIndex);
+        scan.ready.add(new Ready(tile[0], tile[1], scan.colors, scan.shade));
+        // Fresh buffers: the encoder owns the ones just handed over.
+        scan.colors = new byte[TILE_SAMPLES * TILE_SAMPLES];
+        scan.shade = new byte[TILE_SAMPLES * TILE_SAMPLES];
+        java.util.Arrays.fill(scan.prevRow, NO_HEIGHT);
+        java.util.Arrays.fill(scan.curRow, NO_HEIGHT);
+        scan.tileIndex++;
+        scan.index = 0;
+    }
+
+    /**
+     * Server thread: hand the buffered tiles to the encoder, unless one batch is still in
+     * flight — in which case the tiles simply stay buffered and the next boundary (or the
+     * next tick, once sampling is done) tries again. Never blocks the tick.
+     */
+    private static void flush(Scan scan, boolean last) {
+        if (encoding || scan.ready.isEmpty()) {
+            return;
+        }
+        Path base = root;
+        if (base == null) {
+            scan.ready.clear();
+            return;
+        }
+        List<Ready> batch = scan.ready;
+        scan.ready = new ArrayList<>();
+        boolean wipe = scan.needsWipe;
+        scan.needsWipe = false;
+        long scannedAt = System.currentTimeMillis();
+        String dimension = scan.dimension;
+        int originX = scan.stableOriginX;
+        int originZ = scan.stableOriginZ;
+        long[] bbox = {scan.bboxMinX, scan.bboxMinZ, scan.bboxMaxX, scan.bboxMaxZ};
+        int done = scan.tileIndex;
+        int total = scan.tiles.size();
+        encoding = true;
+        Thread thread = new Thread(() -> encode(dimension, scannedAt, originX, originZ, batch, wipe,
+                bbox, done, total, last), "station-announcer-satellite-encode");
+        thread.setDaemon(true);
+        writer = thread;
+        thread.start();
     }
 
     // ------------------------------------------------------------ start a scan
 
     /**
-     * {@code /dispatch satellite scan}. Asks the caller's dimension's simulator for the
-     * network extents on its own thread, then hops back to begin sampling.
+     * {@code /dispatch satellite scan}. Confirms MTR is simulating the caller's dimension,
+     * then enumerates the chunks that exist on disk and rasters all of them.
      *
-     * <p>Always a FULL refresh: every tile of the needed box is re-sampled and the
-     * dimension's tile directory is wiped first. That is the point of the command —
-     * "the world changed, redraw it". The automatic pass is the incremental one.</p>
+     * <p>Always a FULL refresh: every tile with chunks under it is re-sampled and the
+     * dimension's tile directory is wiped (at the first batch) before anything new lands.
+     * That is the point of the command — "the world changed, redraw it". The automatic
+     * pass is the incremental one.</p>
      */
     public static int startScan(ServerCommandSource source, int marginBlocks) {
         MinecraftServer minecraftServer = server;
@@ -361,7 +524,7 @@ public final class SatelliteScanner {
             source.sendError(Text.literal("The satellite scanner is not ready yet."));
             return 0;
         }
-        if (active != null || pending || encoding) {
+        if (active != null || pending || enumerating || encoding) {
             source.sendError(Text.literal("A satellite scan is already running — " + status()));
             return 0;
         }
@@ -384,8 +547,16 @@ public final class SatelliteScanner {
         int margin = Math.max(0, Math.min(1024, marginBlocks));
         source.sendFeedback(() -> Text.literal("Measuring the network in " + dimension + "…")
                 .formatted(Formatting.GRAY), false);
-        measure(minecraftServer, target, (any, minX, minZ, maxX, maxZ) ->
-                beginScan(source, world, dimension, any, minX, minZ, maxX, maxZ, margin, false));
+        measure(minecraftServer, target, (any, minX, minZ, maxX, maxZ) -> {
+            if (!any) {
+                tell(source, Text.literal("No rails or stations in " + dimension + " yet — nothing to scan."), true);
+                return;
+            }
+            tell(source, Text.literal("Reading the region files of " + dimension + "…")
+                    .formatted(Formatting.GRAY), false);
+            enumerateThen(world, dimension, chunks ->
+                    beginScan(source, world, dimension, chunks, margin, false));
+        });
         return 1;
     }
 
@@ -397,9 +568,10 @@ public final class SatelliteScanner {
 
     /**
      * The network's extents, asked of MTR on the owning simulator's thread and handed
-     * back on the server thread. Shared by the command and the automatic pass — the
-     * {@link #pending} flag is held across the hop, so neither can start while the other
-     * is still measuring.
+     * back on the server thread. The box itself is no longer the scan's scope — only the
+     * {@code any} flag still matters, as the "is anything railway-shaped here at all"
+     * gate — but the round-trip is kept because it is also what proves the simulator is
+     * alive and answering.
      */
     private static void measure(MinecraftServer minecraftServer, Simulator simulator, BoundsHandler handler) {
         pending = true;
@@ -448,23 +620,59 @@ public final class SatelliteScanner {
     }
 
     /**
-     * Server thread: turn the network extents into a tile set and arm the ticker.
+     * Reads the dimension's region-file headers on a daemon thread and hands the result
+     * back on the SERVER thread. The reader itself lives in {@link TerrainScanner} —
+     * there is exactly one right way to ask "which chunks exist" and no reason to write
+     * it twice — but the thread and the {@link #enumerating} flag are ours, so both
+     * scanners can be enumerating different dimensions at once without interfering.
+     */
+    private static void enumerateThen(ServerWorld world, String dimension,
+                                      Consumer<TerrainScanner.ChunkIndex> handler) {
+        MinecraftServer minecraftServer = server;
+        if (minecraftServer == null) {
+            return;
+        }
+        enumerating = true;
+        Thread thread = new Thread(() -> {
+            TerrainScanner.ChunkIndex chunks;
+            try {
+                chunks = TerrainScanner.enumerateExistingChunks(minecraftServer, world);
+            } catch (Throwable t) {
+                StationAnnouncer.LOGGER.warn("Could not enumerate the region files of {}", dimension, t);
+                chunks = TerrainScanner.ChunkIndex.empty();
+            }
+            TerrainScanner.ChunkIndex result = chunks;
+            try {
+                minecraftServer.execute(() -> {
+                    enumerating = false;
+                    handler.accept(result);
+                });
+            } catch (Throwable t) {
+                // The server is going away; nothing to publish to.
+                enumerating = false;
+            }
+        }, "station-announcer-satellite-regions");
+        thread.setDaemon(true);
+        thread.start();
+    }
+
+    /**
+     * Server thread: turn the generated world into a tile list and arm the ticker.
      *
      * <p>{@code source} is null for the automatic pass — every message then goes to the
-     * log instead of a chat window (see {@link #tell}). {@code incremental} picks the
-     * two behaviours that differ: which tiles are sampled (missing ones only, versus all
-     * of them) and what happens to the tiles already on disk (kept and merged, versus
+     * log instead of a chat window (see {@link #tell}). {@code incremental} picks the two
+     * behaviours that differ: which tiles are sampled (missing ones only, versus all of
+     * them) and what happens to the tiles already on disk (kept and merged, versus
      * deleted for a clean full refresh).</p>
      */
     private static void beginScan(ServerCommandSource source, ServerWorld world, String dimension,
-                                  boolean any, long minX, long minZ, long maxX, long maxZ, int margin,
-                                  boolean incremental) {
+                                  TerrainScanner.ChunkIndex chunks, int margin, boolean incremental) {
         if (active != null || encoding) {
             tell(source, Text.literal("A satellite scan started in the meantime — " + status()), true);
             return;
         }
-        if (!any) {
-            tell(source, Text.literal("No rails or stations in " + dimension + " yet — nothing to scan."), true);
+        if (chunks == null || chunks.isEmpty()) {
+            tell(source, Text.literal("No generated chunks on disk for " + dimension + " — nothing to scan."), true);
             return;
         }
         Satellite cached = index.get(directoryName(dimension));
@@ -474,80 +682,75 @@ public final class SatelliteScanner {
                             + " (now {} / {}) — starting again from a fresh origin",
                     dimension, cached.scale(), cached.tileSamples(), SCALE, TILE_SAMPLES);
         }
+        long lowX = chunks.minBlockX() - margin;
+        long lowZ = chunks.minBlockZ() - margin;
+        long highX = chunks.maxBlockX() + margin;
+        long highZ = chunks.maxBlockZ() + margin;
         // THE ORIGIN IS ESTABLISHED ONCE AND KEPT FOREVER. Re-deriving it from a grown
-        // network would shift every tile boundary and silently invalidate every PNG on
-        // disk; keeping it means a network that grew toward -x/-z simply produces
-        // NEGATIVE tile indices, which everything downstream accepts.
-        long originX = reuse ? cached.originX() : snapDown(minX - margin);
-        long originZ = reuse ? cached.originZ() : snapDown(minZ - margin);
+        // world would shift every tile boundary and silently invalidate every PNG on
+        // disk; keeping it means a world that grew toward -x/-z simply produces NEGATIVE
+        // tile indices, which everything downstream accepts.
+        long originX = reuse ? cached.originX() : snapDown(lowX);
+        long originZ = reuse ? cached.originZ() : snapDown(lowZ);
 
-        long tileX0 = Math.floorDiv(minX - margin - originX, TILE_BLOCKS);
-        long tileZ0 = Math.floorDiv(minZ - margin - originZ, TILE_BLOCKS);
-        long tileX1 = Math.floorDiv(maxX + margin - originX, TILE_BLOCKS);
-        long tileZ1 = Math.floorDiv(maxZ + margin - originZ, TILE_BLOCKS);
+        long tileX0 = Math.floorDiv(lowX - originX, TILE_BLOCKS);
+        long tileZ0 = Math.floorDiv(lowZ - originZ, TILE_BLOCKS);
+        long tileX1 = Math.floorDiv(highX - originX, TILE_BLOCKS);
+        long tileZ1 = Math.floorDiv(highZ - originZ, TILE_BLOCKS);
         long neededLowX = originX + tileX0 * TILE_BLOCKS;
         long neededLowZ = originZ + tileZ0 * TILE_BLOCKS;
         long neededHighX = originX + (tileX1 + 1) * TILE_BLOCKS;
         long neededHighZ = originZ + (tileZ1 + 1) * TILE_BLOCKS;
-        // MTR positions are longs; block coordinates outside the vanilla world border
+        // Region file names are parsed off disk; a corrupt one at an absurd coordinate
         // would overflow the int grid arithmetic below, so refuse rather than wrap.
         if (Math.abs(neededLowX) > WORLD_LIMIT || Math.abs(neededLowZ) > WORLD_LIMIT
                 || Math.abs(neededHighX) > WORLD_LIMIT || Math.abs(neededHighZ) > WORLD_LIMIT) {
-            tell(source, Text.literal("The network extends past the world limit (" + neededLowX + ","
-                    + neededLowZ + " to " + neededHighX + "," + neededHighZ + ") — check for a stray rail."), true);
+            tell(source, Text.literal("The generated world of " + dimension + " reaches past the world limit ("
+                    + neededLowX + "," + neededLowZ + " to " + neededHighX + "," + neededHighZ
+                    + ") — check for a stray region file."), true);
             return;
         }
         long rectTiles = (tileX1 - tileX0 + 1) * (tileZ1 - tileZ0 + 1);
         if (rectTiles > MAX_TILE_RECT) {
             tell(source, Text.literal("That box spans " + rectTiles + " tiles of " + TILE_BLOCKS
-                    + " blocks — far past anything worth rastering. Check for a stray rail far from"
-                    + " the network."), true);
+                    + " blocks, past the " + MAX_TILE_RECT + " sanity guard. Check for a stray region file"
+                    + " far from everything else."), true);
             return;
         }
 
         // The tile diff. An incremental pass keeps whatever the index already lists; a
-        // full refresh wants every tile of the box regardless of what is on disk.
-        List<int[]> missing = new ArrayList<>();
-        int keepMinX = Integer.MAX_VALUE;
-        int keepMinZ = Integer.MAX_VALUE;
-        int keepMaxX = Integer.MIN_VALUE;
-        int keepMaxZ = Integer.MIN_VALUE;
+        // full refresh wants every tile of the box regardless of what is on disk. Either
+        // way, a tile with NO existing chunk under it is skipped entirely — never
+        // sampled, never written, never indexed — which is what keeps a sparse world's
+        // basemap sparse instead of thousands of transparent PNGs.
+        List<int[]> wanted = new ArrayList<>();
+        int skippedEmpty = 0;
         for (long tz = tileZ0; tz <= tileZ1; tz++) {
             for (long tx = tileX0; tx <= tileX1; tx++) {
                 if (incremental && reuse && cached.has((int) tx, (int) tz)) {
                     continue;
                 }
-                missing.add(new int[]{(int) tx, (int) tz});
-                keepMinX = Math.min(keepMinX, (int) tx);
-                keepMaxX = Math.max(keepMaxX, (int) tx);
-                keepMinZ = Math.min(keepMinZ, (int) tz);
-                keepMaxZ = Math.max(keepMaxZ, (int) tz);
+                long blockX = originX + tx * TILE_BLOCKS;
+                long blockZ = originZ + tz * TILE_BLOCKS;
+                int chunkX0 = (int) (blockX >> 4);
+                int chunkZ0 = (int) (blockZ >> 4);
+                if (!chunks.anyIn(chunkX0, chunkZ0, chunkX0 + TILE_CHUNKS - 1, chunkZ0 + TILE_CHUNKS - 1)) {
+                    skippedEmpty++;
+                    continue;
+                }
+                wanted.add(new int[]{(int) tx, (int) tz});
             }
         }
-        if (missing.isEmpty()) {
-            // Only reachable on an incremental pass over a cache that already has every
-            // tile of the box — the whole point of the automatic scan.
-            tell(source, Text.literal("The satellite basemap for " + dimension + " already covers the network ("
-                    + (cached == null ? 0 : cached.tiles().size()) + " tiles) — nothing to scan."), false);
+        if (wanted.isEmpty()) {
+            // Reachable on an incremental pass over a cache that already has every tile
+            // of the generated world — the whole point of the automatic scan — and on a
+            // dimension whose region files hold nothing worth drawing.
+            tell(source, Text.literal("The satellite basemap for " + dimension + " already covers the generated"
+                    + " world (" + (cached == null ? 0 : cached.tiles().size()) + " tiles) — nothing to scan."),
+                    false);
             return;
         }
 
-        // Sample only the bounding rectangle of the MISSING tiles, not the whole box.
-        int tilesX = keepMaxX - keepMinX + 1;
-        int tilesZ = keepMaxZ - keepMinZ + 1;
-        long width = (long) tilesX * TILE_SAMPLES;
-        long height = (long) tilesZ * TILE_SAMPLES;
-        long total = width * height;
-        if (total > MAX_SAMPLES) {
-            tell(source, Text.literal("That would be " + total + " samples (" + width + "×" + height
-                    + " at one sample per " + SCALE + " blocks), over the " + MAX_SAMPLES + " cap."
-                    + " Reduce the margin — or check for a stray rail far from the network."), true);
-            return;
-        }
-        boolean[] wanted = new boolean[tilesX * tilesZ];
-        for (int[] tile : missing) {
-            wanted[(tile[1] - keepMinZ) * tilesX + (tile[0] - keepMinX)] = true;
-        }
         // Published bbox: the box the map now covers. An incremental pass unions it with
         // whatever the previous scans covered, since their tiles are still there.
         long bboxMinX = neededLowX;
@@ -561,31 +764,17 @@ public final class SatelliteScanner {
             bboxMaxZ = Math.max(bboxMaxZ, cached.bbox()[3]);
         }
 
-        Scan scan = new Scan(world, dimension, source, incremental,
-                (int) originX, (int) originZ, keepMinX, keepMinZ, tilesX, tilesZ, wanted,
-                bboxMinX, bboxMinZ, bboxMaxX, bboxMaxZ);
+        Scan scan = new Scan(world, dimension, source, incremental, chunks,
+                (int) originX, (int) originZ, wanted, bboxMinX, bboxMinZ, bboxMaxX, bboxMaxZ);
         active = scan;
-        int newTiles = missing.size();
         int keptTiles = incremental && reuse ? cached.tiles().size() : 0;
-        tell(source, Text.literal("Satellite scan started: " + newTiles + " tile(s) to draw"
-                        + (keptTiles > 0 ? " (" + keptTiles + " kept)" : "") + ", " + total + " samples over "
-                        + (tilesX * TILE_BLOCKS) + "×" + (tilesZ * TILE_BLOCKS) + " blocks (margin " + margin
-                        + (incremental ? ", incremental)." : ", full refresh)."))
+        long samples = (long) wanted.size() * Scan.SAMPLES_PER_TILE;
+        tell(source, Text.literal("Satellite scan started: " + wanted.size() + " tile(s) to draw"
+                        + (keptTiles > 0 ? " (" + keptTiles + " kept)" : "")
+                        + (skippedEmpty > 0 ? ", " + skippedEmpty + " empty tile(s) skipped" : "")
+                        + ", " + samples + " samples over " + chunks.count() + " generated chunk(s) ("
+                        + (incremental ? "incremental" : "full refresh") + ").")
                 .formatted(Formatting.AQUA), false);
-    }
-
-    /** Everything sampled: hand the arrays to the encoder thread. */
-    private static void finish(Scan scan) {
-        int samples = scan.width * scan.height;
-        long scannedAt = System.currentTimeMillis();
-        encoding = true;
-        report(scan, Text.literal("Satellite scan complete: " + samples + " samples ("
-                + scan.water + " water). Encoding tiles…").formatted(Formatting.AQUA), false);
-        // From here the arrays are read-only and belong to the writer thread.
-        Thread thread = new Thread(() -> encode(scan, scannedAt), "station-announcer-satellite-encode");
-        thread.setDaemon(true);
-        writer = thread;
-        thread.start();
     }
 
     /** A command source can be gone by the time a long scan lands; never let that throw. */
@@ -623,13 +812,16 @@ public final class SatelliteScanner {
     public static String status() {
         Scan scan = active;
         if (scan != null) {
-            int total = Math.max(1, scan.width * scan.height);
-            int percent = (int) (100L * scan.index / total);
-            return "scanning " + scan.dimension + ": " + percent + "% (" + scan.index + "/" + total
-                    + " samples, " + scan.water + " water so far)";
+            int total = Math.max(1, scan.tiles.size());
+            int percent = (int) (100L * scan.tileIndex / total);
+            return "scanning " + scan.dimension + ": " + percent + "% (" + scan.tileIndex + "/" + total
+                    + " tiles, " + scan.sampled + " samples, " + scan.water + " water so far)";
         }
         if (pending) {
             return "measuring the network…";
+        }
+        if (enumerating) {
+            return "reading region files…";
         }
         if (encoding) {
             return "encoding tiles…";
@@ -652,10 +844,10 @@ public final class SatelliteScanner {
 
     /**
      * Queues the once-per-launch automatic check: every dimension MTR is simulating gets
-     * its network measured and any basemap tile that does not exist yet is drawn. Called
-     * from {@link com.stationannouncer.mtraddon.AddonInit} once the terrain scanner is
-     * idle; the work happens in {@link #pumpAuto}, one dimension at a time, so the tick
-     * budget is never more than one scan's worth.
+     * its generated world enumerated and any basemap tile that does not exist yet is
+     * drawn. Called from {@link com.stationannouncer.mtraddon.AddonInit} once the terrain
+     * scanner is idle; the work happens in {@link #pumpAuto}, one dimension at a time, so
+     * the tick budget is never more than one scan's worth.
      */
     public static void autoScan() {
         MinecraftServer minecraftServer = server;
@@ -676,8 +868,8 @@ public final class SatelliteScanner {
 
     /**
      * Server thread, one dimension per call, only while nothing else is running. Takes
-     * the next queued dimension and measures it; {@link #beginScan} then decides whether
-     * anything is missing.
+     * the next queued dimension, measures it and enumerates its region files;
+     * {@link #beginScan} then decides whether anything is missing.
      */
     private static void pumpAuto() {
         MinecraftServer minecraftServer = server;
@@ -698,11 +890,14 @@ public final class SatelliteScanner {
         }
         measure(minecraftServer, simulator, (any, minX, minZ, maxX, maxZ) -> {
             if (!any) {
+                // Unchanged rule: a dimension MTR simulates but nothing runs in is skipped
+                // outright, however much of it happens to be generated.
                 StationAnnouncer.LOGGER.info("Satellite auto-scan: no rails or stations in {} yet, skipping",
                         dimension);
                 return;
             }
-            beginScan(null, world, dimension, true, minX, minZ, maxX, maxZ, AUTO_MARGIN, true);
+            enumerateThen(world, dimension, chunks ->
+                    beginScan(null, world, dimension, chunks, AUTO_MARGIN, true));
         });
     }
 
@@ -735,7 +930,9 @@ public final class SatelliteScanner {
      * from any thread — one volatile read of an immutable snapshot — and always answers,
      * {@code available:false} when that dimension was never scanned.
      *
-     * <p>Tile indices are relative to the (permanent) origin and may be NEGATIVE.</p>
+     * <p>Tile indices are relative to the (permanent) origin and may be NEGATIVE. During
+     * a long first scan this grows every {@value #FLUSH_TILES} tiles, so a client that
+     * re-fetches it watches the map fill in.</p>
      */
     public static org.mtr.libraries.com.google.gson.JsonObject satelliteJson(String dimension) {
         org.mtr.libraries.com.google.gson.JsonObject json = new org.mtr.libraries.com.google.gson.JsonObject();
@@ -804,78 +1001,70 @@ public final class SatelliteScanner {
     // ------------------------------------------------------------- tile encoding
 
     /**
-     * Writer thread. Turns the finished scan into PNG tiles, updates the dimension's tile
-     * set, writes the index and publishes the new snapshot.
+     * Writer thread. Turns ONE BATCH of finished tiles into PNGs, merges them into the
+     * dimension's tile set, writes the index and publishes the new snapshot. Only one of
+     * these runs at a time ({@link #encoding}), so it is the single writer of
+     * {@link #index} apart from the load at server start.
      *
-     * <p>Order matters: for a FULL REFRESH the stale tiles are deleted first (so a
-     * smaller re-scan cannot leave orphans behind); an INCREMENTAL pass deletes nothing
-     * and merges its new tiles into the existing list. Either way every tile is written
-     * to a temp file and moved into place, and the index — the only thing {@link #tile}
-     * will serve from — is written last.</p>
+     * <p>Order matters: a FULL REFRESH's FIRST batch unpublishes the dimension and
+     * deletes the stale tiles (so a smaller re-scan cannot leave orphans behind); every
+     * later batch — and every batch of an incremental pass — deletes nothing and merges.
+     * Either way every tile is written to a temp file and moved into place, and the index
+     * — the only thing {@link #tile} will serve from — is written last.</p>
      *
      * <p>Every wanted tile is written even when it is fully transparent: the index is the
-     * record of what has been SCANNED, so an empty tile must exist or every automatic
-     * pass would rescan it forever. A transparent tile is a few hundred bytes.</p>
+     * record of what has been SCANNED, so a tile that turned out to be all void must
+     * exist or every automatic pass would rescan it forever. (Tiles with no chunks under
+     * them at all never get this far — {@link #beginScan} drops them.)</p>
      */
-    private static void encode(Scan scan, long scannedAt) {
+    private static void encode(String dimension, long scannedAt, int originX, int originZ,
+                               List<Ready> batch, boolean wipe, long[] bbox,
+                               int tilesDone, int tilesTotal, boolean last) {
         Path base = root;
         if (base == null) {
             encoding = false;
             return;
         }
-        String directory = directoryName(scan.dimension);
+        String directory = directoryName(dimension);
         Path dir = base.resolve(directory);
-        Satellite previous = index.get(directory);
         int written = 0;
         try {
             Files.createDirectories(dir);
-            if (!scan.incremental) {
-                // Unpublish this dimension BEFORE the old tiles go: for the few seconds
-                // the rewrite takes, the map is honestly "not scanned" rather than
+            if (wipe) {
+                // Unpublish this dimension BEFORE the old tiles go: for the moment the
+                // rewrite takes, the map is honestly "not scanned" rather than
                 // advertising tiles that have just been deleted.
                 Map<String, Satellite> without = new LinkedHashMap<>(index);
                 if (without.remove(directory) != null) {
                     index = Map.copyOf(without);
                 }
                 clearDirectory(dir);
-                previous = null;
             }
+            Satellite previous = index.get(directory);
 
             int[] palette = palette();
-            List<int[]> tiles = new ArrayList<>();
+            List<int[]> tiles = new ArrayList<>(batch.size());
             int[] pixels = new int[TILE_SAMPLES * TILE_SAMPLES];
             BufferedImage image = new BufferedImage(TILE_SAMPLES, TILE_SAMPLES, BufferedImage.TYPE_INT_ARGB);
             ImageIO.setUseCache(false); // no temp-file spool for images this small
 
-            for (int localZ = 0; localZ < scan.tilesZ; localZ++) {
-                for (int localX = 0; localX < scan.tilesX; localX++) {
-                    if (!scan.wanted[localZ * scan.tilesX + localX]) {
-                        continue; // an existing tile this scan deliberately did not sample
-                    }
-                    for (int py = 0; py < TILE_SAMPLES; py++) {
-                        int rowStart = (localZ * TILE_SAMPLES + py) * scan.width + localX * TILE_SAMPLES;
-                        int out = py * TILE_SAMPLES;
-                        for (int px = 0; px < TILE_SAMPLES; px++) {
-                            int sample = rowStart + px;
-                            pixels[out + px] = palette[((scan.colors[sample] & 0xFF) << 2) | scan.shade[sample]];
-                        }
-                    }
-                    image.setRGB(0, 0, TILE_SAMPLES, TILE_SAMPLES, pixels, 0, TILE_SAMPLES);
-                    int tx = scan.tileX0 + localX;
-                    int tz = scan.tileZ0 + localZ;
-                    Path target = dir.resolve(tx + "_" + tz + ".png");
-                    Path temp = dir.resolve(tx + "_" + tz + ".png.tmp");
-                    if (!ImageIO.write(image, "png", temp.toFile())) {
-                        throw new IOException("no PNG writer available");
-                    }
-                    move(temp, target);
-                    tiles.add(new int[]{tx, tz});
-                    written++;
+            for (Ready ready : batch) {
+                for (int i = 0; i < pixels.length; i++) {
+                    pixels[i] = palette[((ready.colors()[i] & 0xFF) << 2) | ready.shade()[i]];
                 }
+                image.setRGB(0, 0, TILE_SAMPLES, TILE_SAMPLES, pixels, 0, TILE_SAMPLES);
+                Path target = dir.resolve(ready.tx() + "_" + ready.tz() + ".png");
+                Path temp = dir.resolve(ready.tx() + "_" + ready.tz() + ".png.tmp");
+                if (!ImageIO.write(image, "png", temp.toFile())) {
+                    throw new IOException("no PNG writer available");
+                }
+                move(temp, target);
+                tiles.add(new int[]{ready.tx(), ready.tz()});
+                written++;
             }
 
-            // Merge: everything that was already on disk (incremental only) plus what
-            // this scan drew, deduplicated by tile key.
+            // Merge: everything already published for this dimension plus what this batch
+            // drew, deduplicated by tile key.
             Map<Long, int[]> merged = new LinkedHashMap<>();
             if (previous != null) {
                 for (int[] tile : previous.tiles()) {
@@ -885,20 +1074,24 @@ public final class SatelliteScanner {
             for (int[] tile : tiles) {
                 merged.put(key(tile[0], tile[1]), tile);
             }
-            long[] bbox = {scan.bboxMinX, scan.bboxMinZ, scan.bboxMaxX, scan.bboxMaxZ};
-            Satellite result = make(scan.dimension, scannedAt, SCALE, TILE_SAMPLES,
-                    scan.stableOriginX, scan.stableOriginZ, List.copyOf(merged.values()), bbox);
+            long[] unionBbox = bbox;
+            if (previous != null && previous.bbox().length == 4) {
+                unionBbox = new long[]{
+                        Math.min(bbox[0], previous.bbox()[0]), Math.min(bbox[1], previous.bbox()[1]),
+                        Math.max(bbox[2], previous.bbox()[2]), Math.max(bbox[3], previous.bbox()[3])};
+            }
+            Satellite result = make(dimension, scannedAt, SCALE, TILE_SAMPLES,
+                    originX, originZ, List.copyOf(merged.values()), unionBbox);
             writeIndex(dir, result);
 
             Map<String, Satellite> published = new LinkedHashMap<>(index);
             published.put(directory, result);
             index = Map.copyOf(published);
-            StationAnnouncer.LOGGER.info("Satellite basemap for {} updated: {} new tile(s), {} total ({})",
-                    scan.dimension, written, result.tiles().size(),
-                    scan.incremental ? "incremental" : "full refresh");
+            StationAnnouncer.LOGGER.info("Satellite basemap for {}: +{} tile(s), {} total ({}/{} tiles scanned{})",
+                    dimension, written, result.tiles().size(), tilesDone, tilesTotal, last ? ", final batch" : "");
         } catch (Throwable t) {
             StationAnnouncer.LOGGER.warn("Could not write the satellite basemap for {} ({} tiles written)",
-                    scan.dimension, written, t);
+                    dimension, written, t);
         } finally {
             encoding = false;
         }
@@ -945,8 +1138,8 @@ public final class SatelliteScanner {
 
     /**
      * Drops the previous scan's tiles so a smaller re-scan cannot leave orphans behind.
-     * FULL REFRESH ONLY — an incremental pass must never call this, or it would delete
-     * exactly the tiles it decided it did not need to sample again.
+     * FULL REFRESH ONLY, and only on its FIRST batch — any later call would delete
+     * exactly the tiles the same scan had just published.
      */
     private static void clearDirectory(Path dir) throws IOException {
         try (Stream<Path> files = Files.list(dir)) {
@@ -1097,73 +1290,77 @@ public final class SatelliteScanner {
         }
     }
 
-    /** Mutable scan state; only ever touched on the server thread (then, once, by the encoder). */
+    /** One finished tile on its way to the encoder. The arrays belong to the writer thread. */
+    private record Ready(int tx, int tz, byte[] colors, byte[] shade) {
+    }
+
+    /** Mutable scan state; only ever touched on the server thread. */
     private static final class Scan {
+        /** One seed row (the strip north of the tile) plus the tile's own rows. */
+        private static final int SAMPLES_PER_TILE = TILE_SAMPLES * (TILE_SAMPLES + 1);
+
         private final ServerWorld world;
         private final String dimension;
         /** Null for the automatic pass — see {@link #tell}. */
         private final ServerCommandSource source;
-        /** True = merge into the existing tiles; false = full refresh (wipe first). */
-        private final boolean incremental;
+        /** Which chunks exist on disk; samples outside it never touch the world. */
+        private final TerrainScanner.ChunkIndex chunks;
         /** The dimension's permanent tile origin, world coordinates. */
         private final int stableOriginX;
         private final int stableOriginZ;
-        /** Tile index of this scan's own corner; may be negative. */
-        private final int tileX0;
-        private final int tileZ0;
-        private final int tilesX;
-        private final int tilesZ;
-        /** Which tiles of this rectangle to actually sample, row-major over the rectangle. */
-        private final boolean[] wanted;
-        /** World coordinates of sample (0,0). */
-        private final int originX;
-        private final int originZ;
-        private final int width;
-        private final int height;
+        /** The tiles to draw, in order. Indices may be negative. */
+        private final List<int[]> tiles;
         /** The box the published index will advertise (union with earlier scans). */
         private final long bboxMinX;
         private final long bboxMinZ;
         private final long bboxMaxX;
         private final long bboxMaxZ;
-        /** Map colour id per sample; 0 (CLEAR) means transparent. */
-        private final byte[] colors;
+        private final int bottomY;
+        /** Nether-style roof: the heightmap is useless, so probe down (see surfaceY). */
+        private final boolean hasCeiling;
+        private final int ceilingStartY;
+
+        /** Map colour id per sample of the CURRENT tile; 0 (CLEAR) means transparent. */
+        private byte[] colors = new byte[TILE_SAMPLES * TILE_SAMPLES];
         /** SHADE_* per sample. Decided during the scan so no height grid is ever kept. */
-        private final byte[] shade;
-        private short[] prevRow;
-        private short[] curRow;
+        private byte[] shade = new byte[TILE_SAMPLES * TILE_SAMPLES];
+        private short[] prevRow = new short[TILE_SAMPLES];
+        private short[] curRow = new short[TILE_SAMPLES];
+        /** Finished tiles waiting for the encoder. Replaced wholesale at each flush. */
+        private List<Ready> ready = new ArrayList<>();
+        /** A full refresh wipes the tile directory once, at its first flush. */
+        private boolean needsWipe;
+
         private final BlockPos.Mutable cursor = new BlockPos.Mutable();
+        /** Sample index WITHIN the current tile, 0..SAMPLES_PER_TILE-1. */
         private int index;
+        /** Which tile of {@link #tiles} is being sampled. */
+        private int tileIndex;
+        private long sampled;
         private int water;
         private WorldChunk chunk;
         private int chunkX = Integer.MIN_VALUE;
         private int chunkZ = Integer.MIN_VALUE;
 
         private Scan(ServerWorld world, String dimension, ServerCommandSource source, boolean incremental,
-                     int stableOriginX, int stableOriginZ, int tileX0, int tileZ0, int tilesX, int tilesZ,
-                     boolean[] wanted, long bboxMinX, long bboxMinZ, long bboxMaxX, long bboxMaxZ) {
+                     TerrainScanner.ChunkIndex chunks, int stableOriginX, int stableOriginZ, List<int[]> tiles,
+                     long bboxMinX, long bboxMinZ, long bboxMaxX, long bboxMaxZ) {
             this.world = world;
             this.dimension = dimension;
             this.source = source;
-            this.incremental = incremental;
+            this.chunks = chunks;
             this.stableOriginX = stableOriginX;
             this.stableOriginZ = stableOriginZ;
-            this.tileX0 = tileX0;
-            this.tileZ0 = tileZ0;
-            this.tilesX = tilesX;
-            this.tilesZ = tilesZ;
-            this.wanted = wanted;
-            this.originX = stableOriginX + tileX0 * TILE_BLOCKS;
-            this.originZ = stableOriginZ + tileZ0 * TILE_BLOCKS;
-            this.width = tilesX * TILE_SAMPLES;
-            this.height = tilesZ * TILE_SAMPLES;
+            this.tiles = tiles;
             this.bboxMinX = bboxMinX;
             this.bboxMinZ = bboxMinZ;
             this.bboxMaxX = bboxMaxX;
             this.bboxMaxZ = bboxMaxZ;
-            this.colors = new byte[width * height];
-            this.shade = new byte[width * height];
-            this.prevRow = new short[width];
-            this.curRow = new short[width];
+            this.needsWipe = !incremental;
+            this.bottomY = world.getBottomY();
+            DimensionType type = world.getDimension();
+            this.hasCeiling = type.hasCeiling();
+            this.ceilingStartY = this.bottomY + Math.max(1, type.logicalHeight() - CEILING_HEADROOM);
             java.util.Arrays.fill(this.prevRow, NO_HEIGHT);
             java.util.Arrays.fill(this.curRow, NO_HEIGHT);
         }

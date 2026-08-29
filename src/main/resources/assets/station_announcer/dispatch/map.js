@@ -69,8 +69,18 @@ const THEMES = {
 };
 let PALETTE = THEMES.light;
 
-/** Walking speed used for transfer/walk timings (m/s) + a fixed platform-change buffer. */
-const WALK_SPEED = 1.4;
+/**
+ * Walking speed used for EVERY walk timing (m/s) + a fixed platform-change buffer.
+ *
+ * The default is Minecraft's own walking speed (4.3 m/s), not a pedestrian's 1.4 — the
+ * rider is a player, and a 90 m concourse link that reads as "2 min" to a real commuter
+ * is 21 s to somebody sprinting down it. The settings slider covers sneak-ish to
+ * sprint-ish; changing it rebuilds the graph, drops the plan memo and re-plans, because
+ * every transfer edge's `seconds` is derived from it.
+ */
+const WALK_SPEED_DEFAULT = 4.3;
+const WALK_SPEED_MIN = 2.0;
+const WALK_SPEED_MAX = 5.6;
 const WALK_BUFFER_S = 30;
 
 /* ---- schematic drawing constants (section 5) ---- */
@@ -96,11 +106,47 @@ const SAMPLE_STEP = 8;
 const GRID_CELL = 16;
 /** A drawn train is snapped onto its line's nearest schematic segment within this. */
 const VEHICLE_SNAP = 24;
+
+/* ---- arriving at a station tangent-continuously (the "folding" fix) ---- */
+/** The approach chord is measured over this much of the segment, capped in blocks; the
+ *  whole of it is rotated RIGIDLY, so the arrival direction lands exactly on target. */
+const ALIGN_HOLD_FRACTION = 0.15;
+const ALIGN_HOLD_MAX = 20;
+/** ...and the rotation eases back to nothing by here — inside the middle third, so the
+ *  pair-averaged centre of the segment is never touched. */
+const ALIGN_REACH_FRACTION = 0.30;
+const ALIGN_REACH_MAX = 40;
+/** How parallel the segments meeting at a part must already be (mean double-angle
+ *  resultant) before they are forced collinear. A real corner station scores ~0 and is
+ *  left alone — rounding a genuine 90-degree turn into a diagonal would be a lie. */
+const ALIGN_COHERENCE = 0.6;
+/** ...and no single arrival is ever turned by more than this. */
+const ALIGN_MAX_TURN = 30 * Math.PI / 180;
+
+/* ---- reference-centreline bundling (constant gap through corners) ---- */
+/** A companion may only lend its geometry to a segment it actually CONTAINS: this much
+ *  of the borrower's samples must sit inside the lender's corridor. */
+const REF_CONTAIN_FRACTION = 0.85;
+/** A borrowed centreline is drawn as a PARALLEL of the reference: the lateral offset is
+ *  measured at both ends and ramped between them, which keeps the ends exactly on the
+ *  segment's own stations. Nothing more to tune here. */
+
+/* ---- street transfers (drawn) ---- */
+/** Zoom at which the cross-station walk connectors appear (the overview stays clean). */
+const STREET_LINK_SCALE = 0.5;
+/** ...and at which their "120 m" chip appears. */
+const STREET_LINK_CHIP_SCALE = 0.8;
 /** Bullets a single interlining chip will draw. */
 const MAX_CHIP_BULLETS = 4;
 /** Line-thickness multiplier bounds (the settings slider). */
 const LINE_SCALE_MIN = 0.6;
 const LINE_SCALE_MAX = 1.6;
+/** Satellite-brightness multiplier bounds — multiplies the THEME's own satAlpha. */
+const SAT_BRIGHT_MIN = 0.3;
+const SAT_BRIGHT_MAX = 1;
+/** Station-label size multiplier bounds. */
+const LABEL_SCALE_MIN = 0.8;
+const LABEL_SCALE_MAX = 1.3;
 
 /* ---- train card / follow / station panel (sections 10a, 10b) ---- */
 /** A followed vehicle missing from the feed this long drops follow (the pill fades
@@ -112,6 +158,28 @@ const DEPARTURES_PER_DEST = 2;
 const DEPARTURE_HORIZON_MS = 90 * 60000;
 /** Gap between a train puck and its floating card, in px. */
 const CARD_GAP = 18;
+
+/* ---- live journey tracking (feature 6) ---- */
+/** No self player in the feed for this long ends tracking (the banner says so first). */
+const TRACK_GPS_LOST_MS = 30000;
+/** The "Arrived" banner lingers this long, then tracking ends on its own. */
+const TRACK_ARRIVED_LINGER_MS = 10000;
+/** Blocks: "the rider is AT this platform / has reached this leg's end". */
+const TRACK_NEAR_PLATFORM = 24;
+/** Blocks: a live vehicle on the leg's route this close to the rider IS the rider's train. */
+const TRACK_VEHICLE_MATCH = 12;
+/** Blocks from the leg's own geometry before the rider counts as off course… */
+const TRACK_OFF_ROUTE_DIST = 80;
+/** …for this long (one GPS blip must never pop a re-plan popup). */
+const TRACK_OFF_ROUTE_MS = 10000;
+/** A boarding/transfer this close is "imminent" and the banner goes loud. */
+const TRACK_IMMINENT_MS = 60000;
+/** A re-planned journey must beat the current projection by this much to be offered. */
+const TRACK_BETTER_MS = 60000;
+/** Blocks/second at or above which the rider is moving like a train, not walking. */
+const TRACK_RIDE_SPEED = 8;
+/** Blocks: how far off the ride leg's corridor the motion test still counts as aboard. */
+const TRACK_CORRIDOR = 28;
 
 /* ---- point-to-point planning (feature 2) ---- */
 /** A dropped pin reaches stations no further than this (blocks). */
@@ -160,6 +228,7 @@ const state = {
 	terrain: null,                 // {polygons: [[[x,z],...], ...]}
 
 	/* --- indexed data --- */
+	throughRuns: [],               // [{from:routeId, to:routeId, platform:platformId}] (mapdata)
 	rails: new Map(),              // railId -> {id, mode, pts:[[x,z]], cum, len, bbox, speed, ...}
 	stations: new Map(),           // stationId -> {id, name, display, color, hex, accessible,
 	                               //               bounds, parts:[], partWalks:[], platformDistances:[]}
@@ -179,6 +248,8 @@ const state = {
 	glyphs: [],                    // [{stationId, partId, x, z, colors:[hex], capsule, dir, accessible, weight, fullService}]
 	stopMarks: new Map(),          // partId -> full-service? (feature 1, computeStopMarks)
 	walks: [],                     // [{ax, az, bx, bz, dist}]
+	streetLinks: [],               // cross-STATION walk connectors: [{ax, az, bx, bz, dist, partA, partB}]
+	streetPairs: null,             // cached platform pairs behind them (shared with buildGraph)
 	networkBox: null,
 
 	/* --- live --- */
@@ -205,6 +276,8 @@ const state = {
 	chipHits: [],                  // world-space boxes of drawn interlining bullets -> line view
 	mapPick: null,                 // "from" | "to" while the map is armed to drop a pin (10c)
 	pointNodes: new Map(),         // POINT_FROM/POINT_TO -> {id, xz, y, label} synthetic nodes
+	tracking: null,                // live journey guidance state — trackReduce (section 10d)
+	trackCam: false,               // the camera is riding the self dot (broken by any pan/zoom)
 
 	/* --- planner --- */
 	plan: {
@@ -228,6 +301,12 @@ const state = {
 		basemap: "schematic",      // schematic | satellite  (feature 5)
 		showPlayers: true,         // the Players layer toggle (feature 3)
 		selfPlayer: "",            // remembered "I am" name; ?player= overrides and rewrites it
+		walkSpeed: WALK_SPEED_DEFAULT,   // m/s, every walk timing in the planner
+		hideTrains: false,         // Layers: live vehicles off (and with them their hit targets)
+		hideOtherPlayers: false,   // Layers: everybody but me off
+		satBrightness: 1,          // multiplies the theme's satellite alpha, 0.3..1
+		labelScale: 1,             // multiplies every station label's font size, 0.8..1.3
+		hideLabels: false,         // station names off (dots stay; the selection keeps its own)
 	},
 };
 
@@ -362,6 +441,9 @@ async function loadDimension(n) {
 	state.prefs.dim = n;
 	savePrefs();
 	state.vehicles.clear();
+	state.players.clear();
+	// a journey in another world is not a journey the rider can follow
+	stopTracking("dimension");
 	clearSelection();
 	stopFollow("stop");
 	closeTrainCard();
@@ -386,6 +468,7 @@ async function loadDimension(n) {
 	if (sat) applySatmeta(sat);
 	prepareGeometry();
 	fitView();
+	syncDimUi();
 	openStream();
 	hideBanner();
 }
@@ -420,6 +503,9 @@ async function refetchNetwork() {
 
 function applyNetwork(net) {
 	state.network = net;
+	// through runs belong to mapdata; a dimension whose mapdata never arrives must not
+	// inherit the previous one's collapsed termini
+	state.throughRuns = [];
 	state.rails.clear();
 	state.platforms.clear();
 	state.routes.clear();
@@ -479,6 +565,12 @@ function applyNetwork(net) {
 
 function applyMapdata(md) {
 	state.mapdata = md;
+	// THROUGH RUNNING (feature 7). Newer mapdata publishes the collapsed termini: route
+	// `from` arriving at `platform` continues as route `to` on the SAME physical train.
+	// An older payload simply has no field, which is an empty list, not an error.
+	state.throughRuns = (Array.isArray(md.throughRuns) ? md.throughRuns : [])
+		.filter((t) => t && t.from && t.to && t.platform && t.from !== t.to)
+		.map((t) => ({ from: String(t.from), to: String(t.to), platform: String(t.platform) }));
 	for (const r of md.routes || []) {
 		let rt = state.routes.get(r.id);
 		if (!rt) {
@@ -734,9 +826,11 @@ function prepareGeometry() {
 	indexParts();
 	buildLegs();
 	buildLines();
+	state.streetPairs = null;      // recomputed once below, then reused by buildGraph
 	buildSegments();
 	buildGlyphs();
 	buildWalks();
+	buildStreetLinks();
 	state.plan.graph = null;
 	rebuildSearchIndex();
 	renderLayerList();
@@ -939,31 +1033,94 @@ const DIRECTION_ARROWS = /[←-⇿⬀-⬑⟵-⟺]/g;
 const LABEL_SEPARATORS = /[\s\-‐-―_/\\|·,.:;()\[\]{}]+/;
 
 /**
- * Strip direction tokens from a service label.
+ * Strip direction tokens from a label, STRICTLY: "" when nothing survives.
  *
- * Only WHOLE words are stripped, case-insensitively ("2 IN" -> "2", "A Inbound" -> "A"),
- * never substrings ("Ba" stays "Ba"). If stripping empties the label the original is
- * kept ("OU" alone is somebody's actual route number, not a direction suffix).
+ * Only WHOLE words go, case-insensitively ("2 IN" -> "2", "A Inbound" -> "A"), never
+ * substrings ("Ba" stays "Ba").
  */
-function normalizeServiceLabel(raw) {
+function stripDirectionTokens(raw) {
 	const src = String(raw == null ? "" : raw).trim();
 	if (!src) return "";
 	const words = src.replace(DIRECTION_ARROWS, " ").split(LABEL_SEPARATORS).filter(Boolean);
 	const kept = words.filter((w) => !DIRECTION_TOKENS.has(w.toUpperCase()));
-	const out = kept.join(" ").replace(/^[\s\-‐-―_/\\|·,.:;]+|[\s\-‐-―_/\\|·,.:;]+$/g, "").trim();
-	return out || src;
+	return kept.join(" ").replace(/^[\s\-‐-―_/\\|·,.:;]+|[\s\-‐-―_/\\|·,.:;]+$/g, "").trim();
 }
 
-/** The bullet text for one route: its number, else the first two letters of its name. */
+/** Strip direction tokens, keeping the original when that would leave nothing. */
+function normalizeServiceLabel(raw) {
+	const src = String(raw == null ? "" : raw).trim();
+	return stripDirectionTokens(src) || src;
+}
+
+/** Characters of a route NAME used as a bullet when there is no usable number. */
+const NAME_BULLET_CHARS = 3;
+
+/**
+ * The bullet text for one route.
+ *
+ * number -> name -> raw. The middle step is the fix for the hub chip that read
+ * "OU IN IN OU": those routes' NUMBERS are bare direction words, so stripping empties
+ * them and falling back to the raw number just prints the direction. The route's NAME
+ * knows better ("Kransfield Loop OU" -> "Kransfield" -> "Kra"), and because both
+ * directions share a name they collapse to ONE bullet. Only a route with neither a
+ * usable number nor a usable name keeps its raw label.
+ */
 function routeServiceLabel(rt) {
 	const num = rt && rt.number != null ? String(rt.number).trim() : "";
-	if (num) return normalizeServiceLabel(num);
+	const fromNum = stripDirectionTokens(num);
+	if (fromNum) return fromNum;
 	const name = (rt && (rt.display || rt.name)) || "";
-	return normalizeServiceLabel(name).slice(0, 2);
+	const fromName = stripDirectionTokens(name);
+	if (fromName) return fromName.split(/\s+/)[0].slice(0, NAME_BULLET_CHARS);
+	return num || name || "";
+}
+
+/* ---- near-identical colours are ONE line (feature: shade drift) ------------
+ * A user who makes an inbound and an outbound route by hand often ends up with two
+ * colours a few RGB points apart. Colour IS the line, so two shades that close have to
+ * resolve to one, or the pair braids down the corridor as two "lines". Union-find over
+ * the (tiny) set of route colours, joined when every channel is within
+ * COLOR_MERGE_DELTA; the representative is the LOWEST colour int in the cluster, which
+ * makes the choice deterministic. Merging is applied to the ROUTES themselves at
+ * buildLines time, so segments, bullets, chips, the line view, planner leg colours and
+ * vehicle pucks all agree without a single call site having to remember. */
+const COLOR_MERGE_DELTA = 16;
+
+function canonicaliseRouteColors(routes) {
+	const ints = [...new Set(routes.map((rt) => (rt.color || 0) & 0xFFFFFF))].sort((a, b) => a - b);
+	const parent = new Map(ints.map((v) => [v, v]));
+	const find = (v) => {
+		while (parent.get(v) !== v) { parent.set(v, parent.get(parent.get(v))); v = parent.get(v); }
+		return v;
+	};
+	const near = (a, b) => Math.max(
+		Math.abs(((a >> 16) & 255) - ((b >> 16) & 255)),
+		Math.abs(((a >> 8) & 255) - ((b >> 8) & 255)),
+		Math.abs((a & 255) - (b & 255))) <= COLOR_MERGE_DELTA;
+	for (let i = 0; i < ints.length; i++) {
+		for (let j = i + 1; j < ints.length; j++) {
+			if (!near(ints[i], ints[j])) continue;
+			const ra = find(ints[i]), rb = find(ints[j]);
+			if (ra !== rb) parent.set(Math.max(ra, rb), Math.min(ra, rb));
+		}
+	}
+	const canon = new Map();
+	for (const v of ints) canon.set(v, find(v));
+	return canon;
 }
 
 function buildLines() {
 	state.lines = new Map();
+	// resolve shade drift FIRST, over every route the payload knows (not just the
+	// visible ones), so toggling a layer can never re-cluster the network's colours
+	const canon = canonicaliseRouteColors([...state.routes.values()]);
+	state.colorCanon = canon;
+	for (const rt of state.routes.values()) {
+		const rep = canon.get((rt.color || 0) & 0xFFFFFF);
+		if (rep === undefined) continue;
+		rt.color = rep;
+		rt.hex = colorHex(rep);
+	}
 	for (const rt of candidateRoutes()) {
 		let line = state.lines.get(rt.hex);
 		if (!line) {
@@ -1156,6 +1313,320 @@ function snapEnds(pts, a, b) {
 }
 
 /* ----------------------------------------------------------------------------
+ * 5b-i. HAIRPIN / TURNING-LOOP TRUNCATION
+ * --------------------------------------------------------------------------
+ * Real track at a terminus turns the train round: a balloon loop, or a hairpin into a
+ * relief siding. Drawn literally, the line runs past the station, loops the loop over
+ * the glyph and comes back — the tangle in the mega-hub screenshot.
+ *
+ * A schematic line approaches its stop ONCE, straight in. So per end: walk in from the
+ * OTHER end and find the first sample that comes within APPROACH_R of this end's
+ * centroid — the moment the line first arrives. If the geometry after that point wanders
+ * far further than the straight run in (arc length > APPROACH_OVERSHOOT x that straight
+ * distance) it is a loop, not an approach, and it is cut off. The remaining end is then
+ * snapped to the centroid by the usual blend.
+ * ------------------------------------------------------------------------- */
+
+/** Blocks: "the line has arrived at this station". */
+const APPROACH_R = 28;
+/** Arc length past the arrival point, as a multiple of the straight distance from it to
+ *  the centroid, above which the tail is a loop rather than an approach. */
+const APPROACH_OVERSHOOT = 1.6;
+
+/**
+ * Cut any turning loop off each end of a raw leg polyline. `ca`/`cb` are the centroids
+ * of the parts at pts[0] and pts[n-1]. Returns a polyline (possibly the straight chord
+ * when the whole thing sits inside one station's area).
+ */
+function truncateApproaches(pts, ca, cb) {
+	let cur = pts.map((p) => [p[0], p[1]]);
+	if (cur.length < 3) return cur;
+
+	// the tail at the FAR end (pts[n-1] / cb)
+	const cutTail = (line, c) => {
+		if (!c) return line;
+		const n = line.length;
+		let k = -1;
+		for (let i = 0; i < n; i++) if (dist(line[i], c) < APPROACH_R) { k = i; break; }
+		if (k < 0 || k >= n - 1) return line;              // never gets near, or arrives last
+		if (k < 2) return null;                            // the whole line is in the station
+		let arc = 0;
+		for (let i = k; i < n - 1; i++) arc += dist(line[i], line[i + 1]);
+		const straight = dist(line[k], c);
+		if (arc <= Math.max(4, straight * APPROACH_OVERSHOOT)) return line;
+		return line.slice(0, k + 1);
+	};
+
+	let out = cutTail(cur, cb);
+	if (out === null) return ca && cb ? [[ca[0], ca[1]], [cb[0], cb[1]]] : cur;
+	// the head is the same problem seen from the other side
+	out = cutTail(out.slice().reverse(), ca);
+	if (out === null) return ca && cb ? [[ca[0], ca[1]], [cb[0], cb[1]]] : cur;
+	out = out.slice().reverse();
+	if (out.length < 2 || polylineLength(out) < 1) {
+		return ca && cb ? [[ca[0], ca[1]], [cb[0], cb[1]]] : cur;
+	}
+	return out;
+}
+
+/* ----------------------------------------------------------------------------
+ * 5b-ii. TANGENT-CONTINUOUS ARRIVALS — the station "folding" fix
+ * --------------------------------------------------------------------------
+ * snapEnds pulls each segment's end onto its station-part centroid independently, so
+ * the two segments of a through station arrive from whatever direction their own track
+ * happened to have. Where the centroid sits a few blocks off the through line that
+ * leaves a small lens — the dark strand doubling back beside the glyph, and the hump on
+ * an otherwise straight line, in the play-test shots.
+ *
+ * Fix: per (part, colour) the arrivals share ONE axis (double-angle mean of their
+ * approach chords) and each terminal stretch is ROTATED about its endpoint until its
+ * chord lies on that axis. Rotation is an isometry, so nothing bunches; the endpoint
+ * itself never moves; and consecutive segments therefore leave the station collinear.
+ * ------------------------------------------------------------------------- */
+
+/**
+ * Unit vector from one end of a polyline out along EXACTLY `reach` blocks of it
+ * (interpolated within the sample it lands in — walking to the next sample instead
+ * would overshoot the rigid part of the rotation window and leave the alignment short).
+ */
+function endApproachChord(pts, end, reach) {
+	const n = pts.length;
+	if (n < 2) return null;
+	const start = end === 0 ? 0 : n - 1;
+	const step = end === 0 ? 1 : -1;
+	let acc = 0, i = start;
+	let tip = pts[start];
+	while (i + step >= 0 && i + step < n) {
+		const j = i + step;
+		const d = dist(pts[i], pts[j]);
+		if (acc + d >= reach && d > 1e-9) {
+			const f = (reach - acc) / d;
+			tip = [pts[i][0] + (pts[j][0] - pts[i][0]) * f, pts[i][1] + (pts[j][1] - pts[i][1]) * f];
+			break;
+		}
+		acc += d; i = j; tip = pts[j];
+	}
+	const vx = tip[0] - pts[start][0], vz = tip[1] - pts[start][1];
+	const l = Math.hypot(vx, vz);
+	return l < 1e-6 ? null : [vx / l, vz / l];
+}
+
+/**
+ * Rotate a segment's terminal window about its endpoint: rigidly over the first `hold`
+ * blocks (so the approach chord lands exactly on target) then easing to zero by `reach`.
+ * Arc lengths are measured BEFORE anything moves, or the window would walk.
+ */
+function rotateEndWindow(pts, end, delta, hold, reach) {
+	if (!delta || Math.abs(delta) < 1e-9 || reach <= hold) return;
+	const n = pts.length;
+	const order = [], acc = [];
+	let a = 0;
+	if (end === 0) {
+		for (let i = 0; i < n; i++) { if (i) a += dist(pts[i - 1], pts[i]); order.push(i); acc.push(a); }
+	} else {
+		for (let i = n - 1; i >= 0; i--) { if (i < n - 1) a += dist(pts[i + 1], pts[i]); order.push(i); acc.push(a); }
+	}
+	const ox = pts[order[0]][0], oz = pts[order[0]][1];
+	for (let k = 0; k < order.length; k++) {
+		const d = acc[k];
+		if (d >= reach) break;
+		const w = d <= hold ? 1 : (Math.cos(Math.PI * (d - hold) / (reach - hold)) + 1) / 2;
+		const ang = delta * w, c = Math.cos(ang), sn = Math.sin(ang);
+		const p = pts[order[k]];
+		const dx = p[0] - ox, dz = p[1] - oz;
+		p[0] = ox + dx * c - dz * sn;
+		p[1] = oz + dx * sn + dz * c;
+	}
+}
+
+function alignEndTangents(drawn) {
+	const groups = new Map();          // partId|hex -> [{seg, end}]
+	for (const s of drawn) {
+		for (const end of [0, 1]) {
+			const k = (end === 0 ? s.partA : s.partB) + "|" + s.hex;
+			let list = groups.get(k);
+			if (!list) { list = []; groups.set(k, list); }
+			list.push({ seg: s, end });
+		}
+	}
+	for (const list of groups.values()) {
+		if (list.length < 2) continue;                 // a terminus keeps its own approach
+		const items = [];
+		let sx = 0, sz = 0;
+		for (const it of list) {
+			const total = polylineLength(it.seg.pts);
+			const hold = Math.min(total * ALIGN_HOLD_FRACTION, ALIGN_HOLD_MAX);
+			const t = endApproachChord(it.seg.pts, it.end, hold);
+			if (!t) continue;
+			items.push({ seg: it.seg, end: it.end, total, hold, t });
+			sx += t[0] * t[0] - t[1] * t[1];           // cos 2a
+			sz += 2 * t[0] * t[1];                     // sin 2a
+		}
+		if (items.length < 2) continue;
+		// how much the arrivals already agree on ONE axis: ~1 for a through station,
+		// ~0 where the line genuinely turns a corner (which must stay a corner)
+		if (Math.hypot(sx, sz) / items.length < ALIGN_COHERENCE) continue;
+		const axis = Math.atan2(sz, sx) / 2;
+		const ux = Math.cos(axis), uz = Math.sin(axis);
+		for (const it of items) {
+			const sgn = (it.t[0] * ux + it.t[1] * uz) >= 0 ? 1 : -1;
+			let d = Math.atan2(uz * sgn, ux * sgn) - Math.atan2(it.t[1], it.t[0]);
+			while (d > Math.PI) d -= 2 * Math.PI;
+			while (d < -Math.PI) d += 2 * Math.PI;
+			if (Math.abs(d) > ALIGN_MAX_TURN) continue;
+			// rotate rigidly one sample PAST the chord, so the chord itself — which ends
+			// mid-sample — is turned by the full angle and lands exactly on the axis
+			const spacing = it.total / Math.max(1, it.seg.pts.length - 1);
+			const rigid = it.hold + spacing;
+			rotateEndWindow(it.seg.pts, it.end, d, rigid,
+				Math.max(rigid * 1.15, Math.min(it.total * ALIGN_REACH_FRACTION, ALIGN_REACH_MAX)));
+		}
+	}
+}
+
+/* ----------------------------------------------------------------------------
+ * 5b-iii. REFERENCE-CENTRELINE BUNDLING — a constant gap through corners
+ * --------------------------------------------------------------------------
+ * Each colour used to offset its OWN pair-averaged centreline. On a curve the two
+ * centrelines disagree slightly (different tracks, different corner radii), so the
+ * offsets fought and the bundle kinked and wobbled at the apex.
+ *
+ * Now, within a companion group, ONE geometry is the reference — the longest segment of
+ * the lowest colour int, which is deterministic — and every companion it CONTAINS is
+ * redrawn as a PARALLEL of that reference (see projectOntoReference): same shape, its
+ * own lateral distance, its own endpoints. Two members of a bundle then share a shape,
+ * so the gap between them can only change as slowly as their lateral offsets do —
+ * corners included — while each still meets its own stations.
+ *
+ * References resolve in ascending colour int, so a chain (orange follows green follows
+ * blue) lands everyone on the same geometry without any cycle risk.
+ * ------------------------------------------------------------------------- */
+
+function arcTable(pts) {
+	const cum = [0];
+	for (let i = 1; i < pts.length; i++) cum.push(cum[i - 1] + dist(pts[i - 1], pts[i]));
+	return cum;
+}
+
+/** Arc-length parameter of the point on `pts` nearest `p`, with that distance. */
+function paramOfNearest(p, pts, cum) {
+	let best = Infinity, at = 0;
+	for (let i = 1; i < pts.length; i++) {
+		const a = pts[i - 1], b = pts[i];
+		const vx = b[0] - a[0], vz = b[1] - a[1];
+		const l2 = vx * vx + vz * vz;
+		const t = l2 <= 1e-12 ? 0 : clamp(((p[0] - a[0]) * vx + (p[1] - a[1]) * vz) / l2, 0, 1);
+		const d = Math.hypot(p[0] - (a[0] + vx * t), p[1] - (a[1] + vz * t));
+		if (d < best) { best = d; at = cum[i - 1] + t * Math.sqrt(l2); }
+	}
+	return { dist: best, at };
+}
+
+function pointAtArc(pts, cum, target) {
+	const total = cum[cum.length - 1];
+	const t = clamp(target, 0, total);
+	let i = 1;
+	while (i < cum.length - 1 && cum[i] < t) i++;
+	const span = cum[i] - cum[i - 1] || 1;
+	const f = clamp((t - cum[i - 1]) / span, 0, 1);
+	return [pts[i - 1][0] + (pts[i][0] - pts[i - 1][0]) * f, pts[i - 1][1] + (pts[i][1] - pts[i - 1][1]) * f];
+}
+
+/** Unit tangent of a polyline at an arc-length position. */
+function tangentAtArc(pts, cum, target) {
+	const total = cum[cum.length - 1];
+	const h = Math.max(1e-3, Math.min(2, total / 64));
+	const a = pointAtArc(pts, cum, clamp(target - h, 0, total));
+	const b = pointAtArc(pts, cum, clamp(target + h, 0, total));
+	const vx = b[0] - a[0], vz = b[1] - a[1];
+	const l = Math.hypot(vx, vz);
+	return l < 1e-9 ? [1, 0] : [vx / l, vz / l];
+}
+
+/**
+ * Re-express `pts` as a PARALLEL of `refPts`.
+ *
+ * The segment's two ends are projected onto the reference (a nearest point is always a
+ * perpendicular foot, so the vector from it to the end is a pure lateral offset). The
+ * drawn geometry is then the reference walked at matching arc length, pushed out along
+ * the reference's own normal by that offset, ramped linearly between the two ends.
+ *
+ * What that buys, in order of how much it mattered:
+ *   - the drawn line has the REFERENCE's shape, so a bundle's members can never disagree
+ *     around a corner: the gap is whatever the offsets say and it changes only slowly;
+ *   - both endpoints land EXACTLY on the segment's own ends, so a line still meets its
+ *     own station glyphs and consecutive segments still join;
+ *   - a line that stops where the reference does not keeps its lateral distance instead
+ *     of doglegging in to touch the reference and back out again.
+ *
+ * Returns null when the match is not like-for-like — the stretch found on the reference
+ * is far shorter or longer than the segment itself — so nothing is ever stretched over a
+ * corridor it does not actually run along.
+ */
+function projectOntoReference(pts, refPts) {
+	const n = pts.length;
+	if (n < 3 || !refPts || refPts.length < 2) return null;
+	const cum = arcTable(refPts);
+	if (cum[cum.length - 1] < 1e-6) return null;
+	const p0 = paramOfNearest(pts[0], refPts, cum);
+	const p1 = paramOfNearest(pts[n - 1], refPts, cum);
+	const span = Math.abs(p1.at - p0.at);
+	const own = polylineLength(pts);
+	if (own < 1e-6 || span < own * 0.55 || span > own * 1.8) return null;
+	const lateral = (p, at) => {
+		const q = pointAtArc(refPts, cum, at);
+		const t = tangentAtArc(refPts, cum, at);
+		return (p[0] - q[0]) * -t[1] + (p[1] - q[1]) * t[0];       // signed, on the normal
+	};
+	const d0 = lateral(pts[0], p0.at), d1 = lateral(pts[n - 1], p1.at);
+	if (Math.abs(d0) > CORRIDOR_TOL * 2 || Math.abs(d1) > CORRIDOR_TOL * 2) return null;
+	const out = [];
+	for (let i = 0; i < n; i++) {
+		const u = i / (n - 1);
+		const at = p0.at + (p1.at - p0.at) * u;
+		const q = pointAtArc(refPts, cum, at);
+		const t = tangentAtArc(refPts, cum, at);
+		const d = d0 + (d1 - d0) * u;
+		out.push([q[0] - t[1] * d, q[1] + t[0] * d]);
+	}
+	// the ends are perpendicular feet, so this is exact — but pin them anyway, because
+	// "the line meets its own station" is the one property that must never drift
+	out[0] = [pts[0][0], pts[0][1]];
+	out[n - 1] = [pts[n - 1][0], pts[n - 1][1]];
+	return out;
+}
+
+/** Resolve every drawn segment's DRAWN geometry (`drawPts`); `pts` stays the segment's
+ *  own pair-averaged centreline, which is what coverage and hit tests reason about. */
+function buildDrawGeometry(all) {
+	// Canonical form: uniform arc-length sampling. A borrower reads its reference at
+	// uniform positions, so the two coincide EXACTLY only if the reference is uniform
+	// too — and after the end-tangent rotation `pts` no longer is.
+	for (const s of all) {
+		s.drawPts = resamplePolyline(s.pts, SEG_SAMPLES);
+		s.drawBbox = bboxOf(s.drawPts);
+		s.refId = null;
+	}
+	const order = all.filter((s) => !s.suppressed)
+		.sort((a, b) => a.colorInt - b.colorInt || (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
+	for (const s of order) {
+		if (s.count < 2) continue;
+		let ref = null;
+		for (const o of s.companionSegs) {
+			if (o.suppressed || o.colorInt >= s.colorInt) continue;
+			if (((s.nearFrac && s.nearFrac.get(o)) || 0) < REF_CONTAIN_FRACTION) continue;
+			if (!ref || o.colorInt < ref.colorInt || (o.colorInt === ref.colorInt && o.len > ref.len)) ref = o;
+		}
+		if (!ref) continue;
+		const pts = projectOntoReference(s.drawPts, ref.drawPts);
+		if (!pts) continue;
+		s.drawPts = pts;
+		s.drawBbox = bboxOf(pts);
+		s.refId = ref.id;
+	}
+}
+
+/* ----------------------------------------------------------------------------
  * 5c. SCHEMATIC SEGMENTS — one line per colour per corridor, everywhere
  * --------------------------------------------------------------------------
  * The drawing is no longer per rail. A drawn SEGMENT is (colour, unordered pair of
@@ -1206,7 +1677,10 @@ function buildSegments() {
 				};
 				buckets.set(id, bk);
 			}
-			bk.polys.push(resamplePolyline(leg.pts, SEG_SAMPLES));
+			// cut turning loops off BEFORE averaging: a looped inbound track and a plain
+			// outbound one must not be averaged together, or the pair folds into a bowtie
+			bk.polys.push(resamplePolyline(
+				truncateApproaches(leg.pts, partCentroid(a), partCentroid(b)), SEG_SAMPLES));
 			if (!bk.routes.includes(rt)) bk.routes.push(rt);
 			bk.modes.add(rt.mode || "train");
 			if (!rt.hidden) bk.hidden = false;
@@ -1251,8 +1725,17 @@ function buildSegments() {
 	}
 	for (const segs of byColor.values()) suppressCoveredSegments(segs);
 
-	/* --- 4. cross-colour bundling over what survives --- */
+	/* --- 4. arrive at every shared station along ONE axis (no folding) --- */
 	const drawn = all.filter((s) => !s.suppressed);
+	alignEndTangents(drawn);
+	for (const s of drawn) {
+		s.samples = sampleAlong(s.pts, SAMPLE_STEP);
+		s.len = polylineLength(s.pts);
+		s.bbox = bboxOf(s.pts);
+		s.offSign = canonicalOffsetSign(s.pts);
+	}
+
+	/* --- 5. cross-colour bundling over what survives --- */
 	bundleCompanions(drawn);
 	for (const s of drawn) {
 		const colors = new Map([[s.hex, s.colorInt]]);
@@ -1263,7 +1746,10 @@ function buildSegments() {
 		s.idx = list.indexOf(s.hex);
 	}
 
-	/* --- 5. stable paint order + per-colour index for the vehicle snap --- */
+	/* --- 6. one reference centreline per bundle, so the gap is constant --- */
+	buildDrawGeometry(all);
+
+	/* --- 7. stable paint order + per-colour index for the vehicle snap --- */
 	drawn.sort((a, b) => a.colorInt - b.colorInt || (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
 	state.ribbons = drawn;
 	for (const s of drawn) {
@@ -1400,6 +1886,12 @@ function bundleCompanions(drawn) {
 			}
 		}
 	}
+	// keep the DIRECTIONAL containment fraction: "this much of me runs inside that one",
+	// which is what decides whether a companion may lend me its geometry
+	for (const [s, mine] of hits) {
+		s.nearFrac = new Map();
+		for (const [o, c] of mine) s.nearFrac.set(o, c / Math.max(1, s.samples.length));
+	}
 	const done = new Set();
 	for (const [s, mine] of hits) {
 		for (const o of mine.keys()) {
@@ -1433,7 +1925,7 @@ function buildBundleChips(drawn) {
 	}
 	state.bundles = [];
 	for (const s of best.values()) {
-		const pts = s.pts;
+		const pts = s.drawPts || s.pts;
 		const m = Math.floor(pts.length / 2);
 		const a = pts[Math.max(0, m - 1)], b = pts[Math.min(pts.length - 1, m + 1)];
 		const dx = b[0] - a[0], dz = b[1] - a[1];
@@ -1462,9 +1954,10 @@ function segmentDirAtPart(partId) {
 		let a = null, b = null;
 		// measured a few samples in, past the worst of the centroid blend, or the
 		// direction would read as the sideways kink rather than how the line leaves
-		const span = Math.min(4, s.pts.length - 1);
-		if (s.partA === partId) { a = s.pts[0]; b = s.pts[span]; }
-		else if (s.partB === partId) { a = s.pts[s.pts.length - 1]; b = s.pts[s.pts.length - 1 - span]; }
+		const pts = s.drawPts || s.pts;
+		const span = Math.min(4, pts.length - 1);
+		if (s.partA === partId) { a = pts[0]; b = pts[span]; }
+		else if (s.partB === partId) { a = pts[pts.length - 1]; b = pts[pts.length - 1 - span]; }
 		else continue;
 		const vx = b[0] - a[0], vz = b[1] - a[1];
 		const l = Math.hypot(vx, vz);
@@ -1610,6 +2103,100 @@ function buildGlyphs() {
 				sub: part.sub,
 			});
 		}
+	}
+}
+
+/* ----------------------------------------------------------------------------
+ * 5e. CROSS-STREET TRANSFERS (feature 2) — one source, two consumers
+ * --------------------------------------------------------------------------
+ * Two different stations close enough to walk between are a real interchange even when
+ * MTR knows nothing about it — the 14 St / 6 Av case. Each station keeps only its
+ * STREET_TRANSFER_NEIGHBOURS nearest neighbours inside STREET_TRANSFER_RADIUS, measured
+ * between the closest platform of each, so a dense downtown adds a handful of links
+ * rather than a clique; a link counts for BOTH stations whenever EITHER side picked it.
+ *
+ * Two stations that are ADJACENT STOPS on some service are deliberately excluded. A
+ * street transfer exists to reach a line you cannot otherwise reach; between consecutive
+ * stops the service itself IS the connection, and on a network whose stops sit ~100
+ * blocks apart an unfiltered radius turns every trunk into a footpath and the planner
+ * starts telling riders to walk the line instead of riding it.
+ *
+ * The result is computed ONCE per geometry rebuild and shared: buildGraph turns it into
+ * walk edges, buildStreetLinks turns it into the dotted connectors on the map. They can
+ * therefore never disagree about which stations are walkable.
+ * ------------------------------------------------------------------------- */
+function streetTransferPairs() {
+	if (state.streetPairs) return state.streetPairs;
+	const byStation = new Map();
+	for (const pl of state.platforms.values()) {
+		if (!pl.stationId) continue;
+		if (!byStation.has(pl.stationId)) byStation.set(pl.stationId, []);
+		byStation.get(pl.stationId).push(pl);
+	}
+	const rideAdjacent = new Set();
+	for (const rt of state.routes.values()) {
+		if (rt.hidden && !state.prefs.showHidden) continue;
+		const plats = rt.platforms || [];
+		for (let i = 0; i < plats.length - 1; i++) {
+			if (!state.legs.get(rt.id + "|" + i)) continue;
+			const a = state.platforms.get(plats[i]), b = state.platforms.get(plats[i + 1]);
+			if (!a || !b || a.stationId === b.stationId) continue;
+			rideAdjacent.add(a.stationId + ">" + b.stationId);
+			rideAdjacent.add(b.stationId + ">" + a.stationId);
+		}
+	}
+	const closestPair = (aList, bList) => {
+		let best = null;
+		for (const a of aList) for (const b of bList) {
+			const m = dist(a.xz, b.xz);
+			if (!best || m < best.meters) {
+				best = { a: a.id, b: b.id, meters: m, stationA: a.stationId, stationB: b.stationId };
+			}
+		}
+		return best;
+	};
+	const ids = [...byStation.keys()];
+	const out = [], seen = new Set();
+	for (const sa of ids) {
+		const cands = [];
+		for (const sb of ids) {
+			if (sa === sb || rideAdjacent.has(sa + ">" + sb)) continue;
+			const pair = closestPair(byStation.get(sa) || [], byStation.get(sb) || []);
+			if (pair && pair.meters <= STREET_TRANSFER_RADIUS) cands.push(pair);
+		}
+		cands.sort((x, y) => x.meters - y.meters);
+		for (const pair of cands.slice(0, STREET_TRANSFER_NEIGHBOURS)) {
+			const key = pair.a < pair.b ? pair.a + ">" + pair.b : pair.b + ">" + pair.a;
+			if (seen.has(key)) continue;
+			seen.add(key);
+			out.push(pair);
+		}
+	}
+	state.streetPairs = out;
+	return out;
+}
+
+/**
+ * The drawable form: a dotted connector between the two stations' NEAREST part
+ * centroids, so it starts and ends exactly where the two glyphs are. A link whose
+ * station part is not drawn (a Layers filter took its only mode away) is dropped rather
+ * than left dangling in space.
+ */
+function buildStreetLinks() {
+	state.streetLinks = [];
+	const drawnParts = new Set(state.glyphs.map((g) => g.partId));
+	for (const pair of streetTransferPairs()) {
+		const pa = partOfPlatform(pair.a), pb = partOfPlatform(pair.b);
+		if (pa && pb && (!drawnParts.has(pa) || !drawnParts.has(pb))) continue;
+		const pla = state.platforms.get(pair.a), plb = state.platforms.get(pair.b);
+		const a = (pa && partCentroid(pa)) || (pla && pla.xz);
+		const b = (pb && partCentroid(pb)) || (plb && plb.xz);
+		if (!a || !b) continue;
+		state.streetLinks.push({
+			ax: a[0], az: a[1], bx: b[0], bz: b[1],
+			dist: pair.meters, partA: pa, partB: pb,
+			stationA: pair.stationA, stationB: pair.stationB,
+		});
 	}
 }
 
@@ -1817,8 +2404,10 @@ function drawStatic(dpr) {
 		g.globalAlpha = 1;
 	}
 
-	// 4. walk connectors between split-station parts
+	// 4. walk connectors between split-station parts, then the cross-STATION street
+	//    transfers (they mean the same thing to a rider, so they look the same)
 	drawWalks(g, vp, sel ? PALETTE.dim : 1);
+	drawStreetLinks(g, vp, sel ? PALETTE.dim : 1);
 
 	// 5. station glyphs
 	drawGlyphs(g, vp, sel);
@@ -1848,7 +2437,7 @@ function drawSatellite(g, vp) {
 	const span = satTileSpan(meta);
 	g.save();
 	g.imageSmoothingEnabled = false;
-	g.globalAlpha = PALETTE.satAlpha;
+	g.globalAlpha = satAlpha();          // theme alpha x the rider's brightness slider
 	for (const t of meta.tiles) {
 		const tx = t[0], tz = t[1];
 		const [x0, z0] = satWorldOf(meta, tx, tz, 0, 0);
@@ -1891,9 +2480,9 @@ function drawRibbons(g, vp, skipKeys, alpha) {
 	g.lineJoin = "round";
 	for (const rb of state.ribbons) {
 		if (skipKeys && skipKeys.has(rb.id)) continue;
-		const bb = rb.bbox;
+		const bb = rb.drawBbox || rb.bbox;
 		if (bb[2] < vp.l || bb[0] > vp.r || bb[3] < vp.t || bb[1] > vp.b) continue;
-		const pts = toScreenPath(rb.pts);
+		const pts = toScreenPath(rb.drawPts || rb.pts);
 		if (pts.length < 2) continue;
 		const off = (rb.idx - (rb.count - 1) / 2) * (w + gap) * (rb.offSign || 1);
 		const line = offsetPolyline(pts, off);
@@ -1922,6 +2511,35 @@ function drawWalks(g, vp, alpha) {
 		g.beginPath(); g.moveTo(a[0], a[1]); g.lineTo(b[0], b[1]); g.stroke();
 		g.setLineDash([]);
 		if (state.view.scale > 0.25) drawWalkChip(g, (a[0] + b[0]) / 2, (a[1] + b[1]) / 2, fmtMeters(w.dist));
+	}
+	g.globalAlpha = 1;
+}
+
+/**
+ * Cross-station street transfers (feature 2). Same dotted line + walk chip as the
+ * split-station connectors — to a rider they are the same instruction — but they only
+ * appear from mid-zoom up: at network scale a hundred of them would be noise, and the
+ * overview is exactly where they matter least. Under a selection they dim with the rest
+ * of the network; the one the journey actually walks is repainted at full strength by
+ * the journey overlay.
+ */
+function drawStreetLinks(g, vp, alpha) {
+	if (!state.streetLinks.length || state.view.scale < STREET_LINK_SCALE) return;
+	const s = uiScale();
+	g.globalAlpha = alpha;
+	for (const w of state.streetLinks) {
+		if (Math.max(w.ax, w.bx) < vp.l || Math.min(w.ax, w.bx) > vp.r) continue;
+		if (Math.max(w.az, w.bz) < vp.t || Math.min(w.az, w.bz) > vp.b) continue;
+		const a = worldToScreen(w.ax, w.az), b = worldToScreen(w.bx, w.bz);
+		g.strokeStyle = PALETTE.ink2;
+		g.lineWidth = 2.4 * s;
+		g.lineCap = "round";
+		g.setLineDash([1.5, 7]);
+		g.beginPath(); g.moveTo(a[0], a[1]); g.lineTo(b[0], b[1]); g.stroke();
+		g.setLineDash([]);
+		if (state.view.scale > STREET_LINK_CHIP_SCALE) {
+			drawWalkChip(g, (a[0] + b[0]) / 2, (a[1] + b[1]) / 2, fmtMeters(w.dist));
+		}
 	}
 	g.globalAlpha = 1;
 }
@@ -1981,7 +2599,10 @@ function drawGlyph(g, gl, s, w) {
 		const span = Math.min(Math.max(w * (gl.colors.length - 1) * 1.35, r * 1.6), r * 2.6);
 		g.save();
 		g.translate(sx, sy);
-		g.rotate(Math.atan2(gl.dir[1], gl.dir[0]) + Math.PI / 2);
+		// The capsule is authored with its long axis along local +Y, and rotate(t) maps
+		// +Y to the PERPENDICULAR of dir — across the bundle, covering both parallel
+		// ribbons. (It used to add PI/2, which laid the capsule ALONG the line.)
+		g.rotate(Math.atan2(gl.dir[1], gl.dir[0]));
 		g.beginPath();
 		g.roundRect(-r, -(r + span / 2), r * 2, r * 2 + span, r);
 		paint();
@@ -2050,7 +2671,17 @@ const FONT = '"Helvetica Neue", Helvetica, Arial, sans-serif';
  * every other station stays as a dim dot. Thomas's play-test: a highlighted journey
  * across a busy network was unreadable under the full label set.
  */
-function labelVisibleFor(gl, sel) { return !sel || sel.partIds.has(gl.partId); }
+function labelVisibleFor(gl, sel) {
+	// "Hide station names" keeps the dots and drops the names — except for the stations
+	// the rider is actually looking at: the selected journey or line, and the journey
+	// being tracked, which must stay legible whatever the layer says.
+	if (state.prefs.hideLabels) {
+		if (sel && sel.partIds.has(gl.partId)) return true;
+		const tracked = trackedPartIds();
+		return !!(tracked && tracked.has(gl.partId));
+	}
+	return !sel || sel.partIds.has(gl.partId);
+}
 
 function drawLabels(g, vp, sel) {
 	const s = uiScale();
@@ -2075,7 +2706,7 @@ function drawLabels(g, vp, sel) {
 		if (sx < -80 || sy < -40 || sx > canvas.clientWidth + 80 || sy > canvas.clientHeight + 40) continue;
 		const inJourney = sel && sel.partIds.has(gl.partId);
 		const big = gl.main && gl.weight >= 3;
-		const size = (big ? 15 : gl.main ? 14 : 12.5) * s;
+		const size = (big ? 15 : gl.main ? 14 : 12.5) * s * labelScale();
 		const text = gl.main ? gl.label : (gl.sub || gl.label);
 		if (!text) continue;
 		g.font = (gl.main ? "600 " : "500 ") + size.toFixed(1) + "px " + FONT;
@@ -2169,7 +2800,7 @@ function drawJourneyOverlay(g, vp) {
 	for (const pass of [0, 1]) {
 		for (const rb of state.ribbons) {
 			if (!sel.ribbonKeys.has(rb.id)) continue;
-			const pts = toScreenPath(rb.pts);
+			const pts = toScreenPath(rb.drawPts || rb.pts);
 			if (pts.length < 2) continue;
 			const line = offsetPolyline(pts, (rb.idx - (rb.count - 1) / 2) * (w + gap) * (rb.offSign || 1));
 			if (pass === 0) {
@@ -2289,6 +2920,7 @@ function frame() {
 	ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
 
 	followCamera();          // recentre BEFORE the pucks are drawn at this view
+	trackCamera();           // …and while tracking a journey, ride the rider's own dot
 	drawPlayers();           // under the trains: a puck a rider tapped must stay on top
 	drawVehicles();
 	positionTrainCard();     // the card rides its puck, so it moves every frame
@@ -2324,6 +2956,8 @@ function drawPlayers() {
 	const smoothing = 1 - Math.exp(-Math.min(0.1, (frameNow - (state.lastFrameAt || frameNow - 16)) / 1000) / 0.12);
 	const labels = [];
 	for (const [name, rec] of state.players) {
+		// "Hide other players": the self dot is the rider's own position and always stays
+		if (state.prefs.hideOtherPlayers && name !== state.selfPlayer) { rec.screen = null; continue; }
 		const p = playerPos(rec, renderTime);
 		if (!p) { rec.screen = null; continue; }
 		if (!rec.disp || Math.hypot(p.x - rec.disp.x, p.z - rec.disp.z) > 48) rec.disp = { x: p.x, z: p.z };
@@ -2368,6 +3002,13 @@ function drawPlayers() {
 }
 
 function drawVehicles() {
+	// "Hide live trains" is a rendering layer only: the planner's live departures and the
+	// station panel still read state.vehicles, they just no longer appear on the map.
+	if (state.prefs.hideTrains) {
+		for (const rec of state.vehicles.values()) rec.screen = null;
+		state.lastFrameAt = now();
+		return;
+	}
 	const s = uiScale();
 	const sel = state.selection;
 	// interpolation delay from the measured stream cadence (app.js's rule)
@@ -2394,12 +3035,12 @@ function drawVehicles() {
 		// sits beside the schematic line: pull the puck onto its own line's nearest
 		// drawn segment, but only when one is genuinely close (a depot move keeps its
 		// true position rather than being yanked onto the nearest passenger line).
-		const ride = snapToLine(rec.route ? colorHex(rec.route.color) : null, rec.disp.x, rec.disp.z, VEHICLE_SNAP);
+		const ride = snapToLine(vehicleLineHex(rec), rec.disp.x, rec.disp.z, VEHICLE_SNAP);
 		rec.screen = ride ? worldToScreen(ride[0], ride[1]) : worldToScreen(rec.disp.x, rec.disp.z);
 		const [sx, sy] = rec.screen;
 		if (sx < -60 || sy < -60 || sx > canvas.clientWidth + 60 || sy > canvas.clientHeight + 60) continue;
 
-		const color = rec.route ? colorHex(rec.route.color) : PALETTE.ink2;
+		const color = vehicleLineHex(rec) || PALETTE.ink2;
 		const followed = !!(state.follow && state.follow.vehicleId === id);
 		const carded = state.trainCard === id;
 
@@ -2437,6 +3078,18 @@ function drawVehicles() {
 }
 
 /**
+ * The LINE colour of a streamed route object. The stream carries the route's raw colour,
+ * which may be one of two drifted shades the map has merged into one line, so the loaded
+ * route record wins whenever we have it.
+ */
+function lineHexOfRoute(r) {
+	if (!r) return null;
+	const known = r.id ? state.routes.get(r.id) : null;
+	return known ? known.hex : colorHex(r.color);
+}
+function vehicleLineHex(rec) { return rec && rec.route ? lineHexOfRoute(rec.route) : null; }
+
+/**
  * Nearest point of `hex`'s nearest drawn segment, or null when nothing of that colour
  * is within `maxDist` blocks.
  */
@@ -2446,9 +3099,9 @@ function snapToLine(hex, x, z, maxDist) {
 	if (!segs || !segs.length) return null;
 	let best = null, bestD = maxDist;
 	for (const s of segs) {
-		const bb = s.bbox;
+		const bb = s.drawBbox || s.bbox;
 		if (x < bb[0] - maxDist || x > bb[2] + maxDist || z < bb[1] - maxDist || z > bb[3] + maxDist) continue;
-		const r = nearestOnPolyline([x, z], s.pts);
+		const r = nearestOnPolyline([x, z], s.drawPts || s.pts);
 		if (r.point && r.dist < bestD) { bestD = r.dist; best = r.point; }
 	}
 	return best;
@@ -2676,14 +3329,24 @@ function vehiclePos(rec, renderTime) {
  * 10. interaction
  * ========================================================================== */
 
+/**
+ * The rider drove the camera themselves. Both automatic cameras let go on exactly the
+ * same gestures: a followed train (section 10a) and the tracked journey's self dot
+ * (10d). Neither ever comes back on its own — the rider re-arms it.
+ */
+function cameraTakenBack() {
+	stopFollow("input");
+	releaseTrackCamera();
+}
+
 function initUi() {
 	// every deliberate camera control also lets go of a followed train: the rider took
 	// the wheel back (follow keeps the zoom it was handed, it never drives it)
-	$("zIn").onclick = () => { stopFollow("input"); zoomAt(canvas.clientWidth / 2, canvas.clientHeight / 2, 1.4); };
-	$("zOut").onclick = () => { stopFollow("input"); zoomAt(canvas.clientWidth / 2, canvas.clientHeight / 2, 1 / 1.4); };
+	$("zIn").onclick = () => { cameraTakenBack(); zoomAt(canvas.clientWidth / 2, canvas.clientHeight / 2, 1.4); };
+	$("zOut").onclick = () => { cameraTakenBack(); zoomAt(canvas.clientWidth / 2, canvas.clientHeight / 2, 1 / 1.4); };
 	// LOCATE (feature 3): with a live self player this recentres on the rider; without
 	// one it stays the fit-the-network button it has always been.
-	$("zHome").onclick = () => { stopFollow("input"); locateOrFit(); };
+	$("zHome").onclick = () => { cameraTakenBack(); locateOrFit(); };
 	syncSelfUi();
 
 	let drag = null;
@@ -2706,7 +3369,7 @@ function initUi() {
 		const rect = canvas.getBoundingClientRect();
 		if (!drag) { hoverAt(e.clientX - rect.left, e.clientY - rect.top); return; }
 		const dx = e.clientX - drag.x, dy = e.clientY - drag.y;
-		if (Math.abs(dx) + Math.abs(dy) > 3) { drag.moved = true; cancelPress(); stopFollow("input"); }   // 3 px click threshold
+		if (Math.abs(dx) + Math.abs(dy) > 3) { drag.moved = true; cancelPress(); cameraTakenBack(); }   // 3 px click threshold
 		state.view.x -= dx / state.view.scale;
 		state.view.z -= dy / state.view.scale;
 		drag.x = e.clientX; drag.y = e.clientY;
@@ -2729,7 +3392,7 @@ function initUi() {
 	canvas.addEventListener("pointerleave", () => $("mapTip").classList.add("hidden"));
 	canvas.addEventListener("wheel", (e) => {
 		e.preventDefault();
-		stopFollow("input");
+		cameraTakenBack();
 		const rect = canvas.getBoundingClientRect();
 		zoomAt(e.clientX - rect.left, e.clientY - rect.top, Math.exp(-e.deltaY * 0.0015));
 	}, { passive: false });
@@ -2738,7 +3401,7 @@ function initUi() {
 		const tag = (e.target.tagName || "").toLowerCase();
 		if (tag === "input" || tag === "select" || tag === "textarea") return;
 		if (e.key === "Escape") escapePressed();
-		else if (e.key.toLowerCase() === "f") { stopFollow("input"); fitView(); }
+		else if (e.key.toLowerCase() === "f") { cameraTakenBack(); fitView(); }
 		else if (e.key.toLowerCase() === "h") {
 			// the only way to reach the show-hidden pref (deliberately not a visible
 			// control — hidden routes are depot moves riders never board)
@@ -2770,6 +3433,7 @@ function glyphAt(sx, sy) {
 	return best;
 }
 function trainAt(sx, sy) {
+	if (state.prefs.hideTrains) return null;      // hidden implies untouchable
 	let best = null, bestD = 16 * uiScale();
 	for (const [id, rec] of state.vehicles) {
 		if (!rec.screen) continue;
@@ -2805,7 +3469,7 @@ function hoverAt(sx, sy) {
 	let html;
 	if (t) {
 		const r = t.rec.route;
-		const color = r ? colorHex(r.color) : PALETTE.ink2;
+		const color = (r && lineHexOfRoute(r)) || PALETTE.ink2;
 		const lbl = r ? routeServiceLabel({ number: r.number, display: routeBase(r.name), name: r.name }) : "";
 		const label = r ? (lbl ? lbl + " · " : "") + (routeBase(r.name) || "Train") : "Train";
 		const dest = r && (r.dest || routeDest(r.name));
@@ -2859,9 +3523,9 @@ function ribbonAt(sx, sy) {
 	for (const rb of state.ribbons) {
 		const spread = Math.max(0, rb.count - 1) / 2 * (w + gap);
 		const tol = (w / 2 + spread + 4) / Math.max(1e-6, state.view.scale);
-		const bb = rb.bbox;
+		const bb = rb.drawBbox || rb.bbox;
 		if (wx < bb[0] - tol || wx > bb[2] + tol || wz < bb[1] - tol || wz > bb[3] + tol) continue;
-		const d = pointPolylineDist([wx, wz], rb.pts);
+		const d = pointPolylineDist([wx, wz], rb.drawPts || rb.pts);
 		if (d <= tol && d < bestD) { bestD = d; best = rb; }
 	}
 	return best;
@@ -2977,9 +3641,13 @@ function escapePressed() {
 	let handled = false;
 	// an armed map pick is the most transient thing on screen: it goes first
 	if (state.mapPick) { disarmMapPick(); handled = true; }
+	// the re-plan question is next: Esc means "keep what I am on"
+	if (state.tracking && state.tracking.offer) { refuseTrackOffer(); return; }
 	if (state.follow) { stopFollow("escape"); handled = true; }
 	if (state.trainCard) { closeTrainCard(); handled = true; }
 	if (state.stationPanel) { closeStationPanel(); handled = true; }
+	// tracking is the last thing to give up: an open card is what the rider meant
+	if (!handled && state.tracking) { stopTracking("escape"); return; }
 	if (!handled) clearSelection();
 }
 
@@ -3202,7 +3870,8 @@ function followTargetVisible() {
 	const f = state.follow;
 	if (!f) return false;
 	const rec = state.vehicles.get(f.vehicleId);
-	return !!(rec && rec.disp && modeVisible(rec.mode || "train") && vehiclePassesSelection(rec, state.selection));
+	return !!(rec && rec.disp && !state.prefs.hideTrains && modeVisible(rec.mode || "train")
+		&& vehiclePassesSelection(rec, state.selection));
 }
 
 /** One frame of follow: advance the state machine, then park the camera. */
@@ -3261,7 +3930,11 @@ function selectionLineHexes(selection) {
 	const out = new Set();
 	const legs = selection && selection.journey ? selection.journey.legs || [] : [];
 	for (const leg of legs) {
-		if (leg.kind === "ride" && leg.color) out.add(String(leg.color).toLowerCase());
+		if (leg.kind !== "ride") continue;
+		if (leg.color) out.add(String(leg.color).toLowerCase());
+		// a through run can hand the rider to a different-coloured service without them
+		// leaving their seat: that colour's trains must stay on the map too
+		for (const c of leg.continuations || []) if (c.color) out.add(String(c.color).toLowerCase());
 	}
 	return out;
 }
@@ -3277,7 +3950,664 @@ function vehiclePassesSelection(rec, selection) {
 	const hexes = selection.lineHexes instanceof Set ? selection.lineHexes : selectionLineHexes(selection);
 	if (!hexes.size) return true;
 	if (!rec || !rec.route) return false;
-	return hexes.has(colorHex(rec.route.color).toLowerCase());
+	return hexes.has((vehicleLineHex(rec) || "").toLowerCase());
+}
+
+/* ============================================================================
+ * 10d. LIVE JOURNEY TRACKING (feature 6)
+ * ==========================================================================
+ * "Start" on the selected option hands the rider turn-by-turn guidance: a banner at the
+ * top of the map saying what to do next, driven by their own GPS dot and by the live
+ * vehicle feed.
+ *
+ * The whole lifecycle is a PURE REDUCER, `trackReduce(tracking, event)`, exactly like
+ * followReduce — every decision is taken from a snapshot of derived facts (`ctx`) rather
+ * than by reaching into state, so the harness can drive start -> walk -> wait -> board ->
+ * ride -> alight -> transfer -> arrive, and every failure branch, with no DOM and no map.
+ *
+ * The impure half is `trackContext()`, which measures those facts: how far the rider is
+ * from the leg's end, whether a live vehicle on the leg's route is within
+ * TRACK_VEHICLE_MATCH blocks of them (the correlation), how many stops that vehicle has
+ * left before the alighting platform, and whether they have wandered off the plan.
+ *
+ * Nothing here ever switches the rider's journey on its own. Going off course sets
+ * `needsReplan`; the driver re-runs the planner from the CURRENT position and, only if
+ * the answer is meaningfully better (or the current plan is dead), raises an `offer`
+ * which the rider accepts or refuses in a popup.
+ * ------------------------------------------------------------------------- */
+
+/** What the rider is doing during leg `i`: walking to it, waiting for it, or riding it. */
+function trackLegPhase(journey, i) {
+	const legs = (journey && journey.legs) || [];
+	const leg = legs[i];
+	if (!leg) return "arrived";
+	if (leg.kind === "ride") return "wait";
+	const prev = legs[i - 1], next = legs[i + 1];
+	// a walk sandwiched between two rides is an interchange, not a stroll
+	return prev && prev.kind === "ride" && next && next.kind === "ride" ? "transfer" : "walk";
+}
+
+/** Return `t` unchanged when the patch says nothing new — the banner never re-renders. */
+function trackSettle(t, patch) {
+	let changed = false;
+	for (const k in patch) if (t[k] !== patch[k]) { changed = true; break; }
+	return changed ? { ...t, ...patch } : t;
+}
+
+function trackFresh(journey, at, geom) {
+	return {
+		journey, geom: geom || null, stepIndex: 0, phase: trackLegPhase(journey, 0),
+		startedAt: at, lastGoodAt: at, updatedAt: at,
+		vehicleId: null, pendingVehicleId: null, stopsLeft: null, alert: null, offer: null,
+		needsReplan: false, missed: false, offRouteSince: 0, lostSince: 0, arrivedAt: 0, degraded: false,
+	};
+}
+
+/**
+ * @param tracking current tracking state or null
+ * @param ev  {type, at, …}
+ *            start   {journey, geom}   begin tracking
+ *            tick    {ctx}             one second of guidance (ctx from trackContext)
+ *            offer   {journey, reason} a re-plan is available — ASK, never switch
+ *            switch                    the rider accepted the offer
+ *            keep                      the rider refused it (a dead plan degrades)
+ *            clearReplan               the driver looked and found nothing better
+ *            stop | escape | user      end tracking
+ * @returns the next tracking state, or null when tracking has ended.
+ */
+function trackReduce(tracking, ev) {
+	const at = ev && Number.isFinite(ev.at) ? ev.at : 0;
+	const type = ev && ev.type;
+	if (type === "start") {
+		if (!ev.journey || !((ev.journey.legs || []).length)) return null;
+		return trackFresh(ev.journey, at, ev.geom);
+	}
+	if (!tracking) return null;
+	switch (type) {
+		case "stop": case "escape": case "user": case "dimension":
+			return null;
+		case "offer": {
+			if (!ev.journey && ev.reason !== "invalid") return trackSettle(tracking, { needsReplan: false });
+			return { ...tracking, needsReplan: false, offer: {
+				journey: ev.journey || null, reason: ev.reason === "invalid" ? "invalid" : "faster",
+				at, arriveMs: ev.journey ? ev.journey.arriveMs : 0, savedMs: Number(ev.savedMs) || 0,
+			} };
+		}
+		case "switch": {
+			const j = (tracking.offer && tracking.offer.journey) || ev.journey || null;
+			if (!j) return trackSettle(tracking, { offer: null, needsReplan: false });
+			return trackFresh(j, at, ev.geom);
+		}
+		case "keep":
+			return { ...tracking, offer: null, needsReplan: false, offRouteSince: 0,
+				degraded: tracking.degraded || !!(tracking.offer && tracking.offer.reason === "invalid") };
+		case "clearReplan":
+			return trackSettle(tracking, { needsReplan: false, offRouteSince: 0 });
+		case "tick":
+			return trackTick(tracking, ev.ctx || {}, at);
+		default:
+			return tracking;
+	}
+}
+
+function trackTick(t, c, at) {
+	// ARRIVED lingers so the rider can read it, then tracking ends itself
+	if (t.phase === "arrived") {
+		return at - (t.arrivedAt || t.updatedAt) >= TRACK_ARRIVED_LINGER_MS ? null : t;
+	}
+	// GPS: the banner says so first, and only a full 30 s of silence ends tracking
+	if (!c.hasSelf) {
+		const since = t.lostSince || at;
+		if (at - since >= TRACK_GPS_LOST_MS) return null;
+		return trackSettle(t, { lostSince: since, alert: "gps", updatedAt: at });
+	}
+
+	const legs = t.journey.legs || [];
+	let i = t.stepIndex;
+	let phase = t.phase;
+	let vehicleId = t.vehicleId;
+	let pendingVehicleId = t.pendingVehicleId || null;
+	let stopsLeft = t.stopsLeft;
+	let arrivedAt = t.arrivedAt;
+	let alert = null;
+
+	const advance = () => {
+		i += 1;
+		if (i >= legs.length) { phase = "arrived"; arrivedAt = at; i = legs.length - 1; }
+		else phase = trackLegPhase(t.journey, i);
+		vehicleId = null;
+		pendingVehicleId = null;
+		stopsLeft = null;
+	};
+
+	if (phase === "walk" || phase === "transfer") {
+		if (c.atLegEnd) advance();
+	} else if (phase === "wait") {
+		/* Boarding needs the SAME train two ticks running. A service that merely passes
+		 * through the platform is inside the match radius for about a second, and a rider
+		 * waiting on that platform must not be declared aboard it; a train they actually
+		 * board dwells there. A motion-only match (moving at line speed along the
+		 * corridor, with no puck to match) is already unambiguous and counts at once. */
+		if (c.aboard && (!c.vehicleId || pendingVehicleId === c.vehicleId)) {
+			phase = "ride";
+			vehicleId = c.vehicleId || null;
+			stopsLeft = Number.isFinite(c.stopsLeft) ? c.stopsLeft : null;
+			pendingVehicleId = null;
+		} else if (c.aboard && c.vehicleId) {
+			pendingVehicleId = c.vehicleId;
+			if (Number.isFinite(c.departsInMs) && c.departsInMs <= TRACK_IMMINENT_MS) alert = "boarding";
+		} else {
+			pendingVehicleId = null;
+			if (Number.isFinite(c.departsInMs) && c.departsInMs <= TRACK_IMMINENT_MS) alert = "boarding";
+		}
+	} else if (phase === "ride") {
+		if (c.aboard) {
+			vehicleId = c.vehicleId || vehicleId;
+			if (Number.isFinite(c.stopsLeft)) stopsLeft = c.stopsLeft;
+			if (c.nextStopIsAlight || stopsLeft === 1) alert = "alight";
+		} else if (c.atLegEnd) {
+			advance();
+		}
+	}
+
+	/* OFF COURSE. Two ways to fall off a plan: the train left without the rider (the
+	 * planned departure is past and nothing has picked them up), or their dot has been
+	 * well away from this leg's own geometry for a while. Either one asks the driver for
+	 * a fresh plan; neither one changes anything by itself. */
+	let offRouteSince = t.offRouteSince;
+	let needsReplan = t.needsReplan;
+	const missed = phase === "wait" && !c.aboard && !!c.departPassed;
+	if (c.offRoute) {
+		if (!offRouteSince) offRouteSince = at;
+		if (at - offRouteSince >= TRACK_OFF_ROUTE_MS) needsReplan = true;
+	} else {
+		// back on the plan: the question is withdrawn before it is ever asked
+		offRouteSince = 0;
+		if (!missed) needsReplan = false;
+	}
+	if (missed) needsReplan = true;
+	if (t.offer) needsReplan = false;          // one question at a time
+
+	return trackSettle(t, {
+		stepIndex: i, phase, vehicleId, pendingVehicleId, stopsLeft, arrivedAt, alert,
+		offRouteSince, needsReplan, missed, lostSince: 0, lastGoodAt: at, updatedAt: at,
+	});
+}
+
+/* ---- the impure half: measuring what the rider is actually doing ---- */
+
+/** Blocks per second between the two newest GPS samples (0 with nothing to measure). */
+function playerSpeed(rec) {
+	const s = (rec && rec.samples) || [];
+	if (s.length < 2) return 0;
+	const a = s[s.length - 2], b = s[s.length - 1];
+	const dt = (b.t - a.t) / 1000;
+	if (!(dt > 0)) return 0;
+	return Math.hypot(b.x - a.x, b.z - a.z) / dt;
+}
+
+/** A platform's (or a plan point's) world position. */
+function trackPointOf(platformId) {
+	const pl = state.platforms.get(platformId);
+	if (pl) return [pl.xz[0], pl.xz[1]];
+	const pt = state.pointNodes.get(platformId);
+	if (pt) return [pt.xz[0], pt.xz[1]];
+	for (const key of ["from", "to"]) {
+		const sel = state.plan[key];
+		if (sel && sel.point && ((key === "from" && platformId === POINT_FROM) || (key === "to" && platformId === POINT_TO))) {
+			return [sel.point[0], sel.point[1]];
+		}
+	}
+	return null;
+}
+
+/**
+ * Snapshot the geometry of every leg at the moment tracking starts: leg ends, the
+ * polyline the rider should be near, and each intermediate stop's position. Taken ONCE,
+ * because the plan's point nodes are rewritten by every later query.
+ */
+function trackGeometry(journey) {
+	return (journey.legs || []).map((leg) => {
+		const from = trackPointOf(leg.fromPlatform), to = trackPointOf(leg.toPlatform);
+		let pts = [];
+		if (leg.kind === "ride") {
+			const spans = leg.spans && leg.spans.length
+				? leg.spans
+				: [{ routeId: leg.routeId, fromPlatform: leg.fromPlatform, toPlatform: leg.toPlatform }];
+			for (const sp of spans) {
+				const rt = state.routes.get(sp.routeId);
+				if (!rt) continue;
+				const plats = rt.platforms || [];
+				const a = plats.indexOf(sp.fromPlatform), b = plats.indexOf(sp.toPlatform);
+				if (a < 0 || b < 0) continue;
+				for (let k = Math.min(a, b); k < Math.max(a, b); k++) {
+					const lg = state.legs.get(rt.id + "|" + k);
+					if (lg && lg.pts) for (const p of lg.pts) pts.push([p[0], p[1]]);
+				}
+			}
+		}
+		if (pts.length < 2) pts = from && to ? [from, to] : [];
+		return { from, to, pts, stops: (leg.stops || []).map(trackPointOf) };
+	});
+}
+
+/**
+ * VEHICLE CORRELATION. The rider is aboard a specific train, and that train's own
+ * pPlat/nPlat is a far better countdown than any dead reckoning — so find it: a streamed
+ * vehicle whose route is one this leg is aboard for (the boarded route OR any route a
+ * through run hands it on to) sitting within TRACK_VEHICLE_MATCH blocks of the rider.
+ * The already-matched vehicle keeps the match out to twice that, so a puck drifting a
+ * few blocks while its samples interpolate does not hand the rider to the train behind.
+ */
+function trackMatchVehicle(leg, pos, preferId) {
+	const routes = legRouteIds(leg);
+	let best = null;
+	for (const [id, rec] of state.vehicles) {
+		if (!rec.route || !routes.includes(rec.route.id)) continue;
+		const p = rec.disp || (rec.data && Number.isFinite(rec.data.x) ? { x: rec.data.x, z: rec.data.z } : null);
+		if (!p) continue;
+		const d = Math.hypot(p.x - pos.x, p.z - pos.z);
+		const limit = id === preferId ? TRACK_VEHICLE_MATCH * 2 : TRACK_VEHICLE_MATCH;
+		if (d > limit) continue;
+		const score = id === preferId ? d - TRACK_VEHICLE_MATCH : d;   // hysteresis
+		if (!best || score < best.score) best = { id, rec, dist: d, score };
+	}
+	return best;
+}
+
+/**
+ * Stops still to go before the rider gets off, read from the matched vehicle: 1 means
+ * "the next stop is yours". Falls back to the stop it just left when nPlat is missing,
+ * and returns null when the train is not on this leg's stop list at all.
+ */
+function trackStopsLeft(leg, rec) {
+	const stops = leg.stops || [];
+	if (stops.length < 2) return null;
+	const last = stops.length - 1;
+	const d = (rec && rec.data) || {};
+	let idx = d.nPlat ? stops.indexOf(d.nPlat) : -1;
+	if (idx < 0 && d.pPlat) {
+		const p = stops.indexOf(d.pPlat);
+		if (p >= 0) idx = p + 1;
+	}
+	if (idx < 0 || idx > last) return null;
+	return Math.max(0, last - idx + 1);
+}
+
+/** Same count, estimated from the rider's own position when no puck matched. */
+function trackStopsLeftByPosition(geom, leg, pos) {
+	const pts = (geom && geom.stops) || [];
+	const stops = leg.stops || [];
+	if (pts.length !== stops.length || stops.length < 2) return null;
+	let nearest = 0, bestD = Infinity;
+	for (let i = 0; i < pts.length; i++) {
+		if (!pts[i]) continue;
+		const d = Math.hypot(pts[i][0] - pos.x, pts[i][1] - pos.z);
+		if (d < bestD) { bestD = d; nearest = i; }
+	}
+	return Math.max(1, stops.length - 1 - nearest);
+}
+
+/** Everything trackReduce needs to know about the world right now. */
+function trackContext(tracking, at) {
+	const legs = (tracking && tracking.journey && tracking.journey.legs) || [];
+	const leg = legs[tracking.stepIndex] || null;
+	const geom = tracking.geom ? tracking.geom[tracking.stepIndex] : null;
+	const rec = state.selfPlayer ? state.players.get(state.selfPlayer) : null;
+	const pos = selfPlayerPos();
+	const ctx = {
+		hasSelf: !!(rec && pos), pos, speed: 0, atLegEnd: false, distanceToEnd: null,
+		aboard: false, vehicleId: null, stopsLeft: null, nextStopIsAlight: false,
+		offRoute: false, departPassed: false, departsInMs: null,
+	};
+	if (!ctx.hasSelf || !leg) return ctx;
+	ctx.speed = playerSpeed(rec);
+	if (geom && geom.to) {
+		ctx.distanceToEnd = Math.hypot(pos.x - geom.to[0], pos.z - geom.to[1]);
+		ctx.atLegEnd = ctx.distanceToEnd <= TRACK_NEAR_PLATFORM;
+	}
+	const corridor = geom && geom.pts && geom.pts.length >= 2
+		? pointPolylineDist([pos.x, pos.z], geom.pts) : 0;
+	ctx.offRoute = corridor > TRACK_OFF_ROUTE_DIST;
+
+	if (leg.kind === "ride") {
+		ctx.departsInMs = leg.depMs - at;
+		ctx.departPassed = at > leg.depMs + 15000;
+		const m = trackMatchVehicle(leg, pos, tracking.vehicleId);
+		if (m) {
+			ctx.vehicleId = m.id;
+			ctx.aboard = true;
+			const sl = trackStopsLeft(leg, m.rec);
+			if (Number.isFinite(sl)) ctx.stopsLeft = sl;
+		} else if (ctx.speed >= TRACK_RIDE_SPEED && corridor <= TRACK_CORRIDOR) {
+			ctx.aboard = true;                       // moving like a train, no puck to match
+		}
+		if (ctx.aboard && !Number.isFinite(ctx.stopsLeft)) {
+			const est = trackStopsLeftByPosition(geom, leg, pos);
+			if (Number.isFinite(est)) ctx.stopsLeft = est;
+		}
+		ctx.nextStopIsAlight = ctx.stopsLeft === 1 || ctx.stopsLeft === 0;
+		// standing still at the alighting platform IS getting off, however well the puck
+		// still matches — the train dwells there with the rider stepping out of it
+		if (ctx.aboard && ctx.atLegEnd && ctx.speed < 2) ctx.aboard = false;
+	}
+	return ctx;
+}
+
+/* ---- what the banner says ---- */
+
+/**
+ * The banner's content as plain values (pure — the harness asserts `text` directly).
+ * `bullet`/`hex` let the DOM draw a real line bullet where the text has its label.
+ */
+function trackBannerText(tracking, ctx) {
+	const c = ctx || {};
+	const legs = (tracking && tracking.journey && tracking.journey.legs) || [];
+	const leg = legs[tracking.stepIndex] || null;
+	const out = { phase: tracking ? tracking.phase : "", alert: (tracking && tracking.alert) || null,
+		pre: "", bullet: "", hex: "", post: "", detail: "", text: "" };
+	const finish = () => {
+		const head = out.pre + out.bullet + out.post;
+		out.text = out.detail ? head + " · " + out.detail : head;
+		return out;
+	};
+	if (!tracking) return finish();
+	if (tracking.phase === "arrived") {
+		out.pre = "Arrived";
+		out.detail = tracking.journey.toPoint
+			? (tracking.journey.toName || "your destination")
+			: stationLabel(tracking.journey.toStation, tracking.journey.toPart);
+		return finish();
+	}
+	if (tracking.alert === "gps") {
+		out.pre = "GPS lost — waiting for your position";
+		return finish();
+	}
+	if (!leg) return finish();
+
+	const endName = leg.toPoint ? (leg.toName || "your destination") : stationLabel(leg.toStation, leg.toPart);
+	if (tracking.phase === "walk") {
+		out.pre = "Walk to " + endName;
+		out.detail = fmtMeters(Number.isFinite(c.distanceToEnd) ? c.distanceToEnd : leg.meters || 0);
+		return finish();
+	}
+	if (tracking.phase === "transfer") {
+		out.pre = "Transfer: " + (leg.note || "change platforms") + ", " + fmtMeters(leg.meters || 0);
+		return finish();
+	}
+	if (tracking.phase === "wait") {
+		const mins = Number.isFinite(c.departsInMs) ? Math.round(c.departsInMs / 60000) : leg.departsInMin;
+		out.pre = "Board the ";
+		out.bullet = legLabel(leg) || leg.routeName || "train";
+		out.hex = leg.color || "";
+		out.post = leg.headsign ? " toward " + firstLang(leg.headsign) : "";
+		out.detail = !Number.isFinite(mins) ? "" : mins <= 0 ? "departing now" : "departs in " + mins + " min";
+		return finish();
+	}
+	if (tracking.phase === "ride") {
+		if (tracking.alert === "alight") {
+			out.pre = "Get off at the NEXT stop";
+			out.detail = endName;
+			return finish();
+		}
+		const left = Number.isFinite(tracking.stopsLeft) ? tracking.stopsLeft : leg.stopCount;
+		out.pre = "On the ";
+		out.bullet = legLabel(leg) || leg.routeName || "train";
+		out.hex = leg.color || "";
+		out.detail = Number.isFinite(left)
+			? left + " stop" + (left === 1 ? "" : "s") + " to " + endName
+			: "to " + endName;
+		return finish();
+	}
+	return finish();
+}
+
+/* ---- driver: start / stop / tick / the re-plan offer ---- */
+
+/** The station parts of the journey being tracked (labels stay on while it runs). */
+function trackedPartIds() {
+	const t = state.tracking;
+	if (!t || !t.journey) return null;
+	if (t.partIds) return t.partIds;
+	const set = new Set();
+	for (const leg of t.journey.legs || []) {
+		for (const pid of leg.stops || [leg.fromPlatform, leg.toPlatform]) {
+			const pl = state.platforms.get(pid);
+			if (pl && pl.partId) set.add(pl.partId);
+		}
+		if (leg.fromPart) set.add(leg.fromPart);
+		if (leg.toPart) set.add(leg.toPart);
+	}
+	t.partIds = set;
+	return set;
+}
+
+function startTracking(journey) {
+	if (!journey || !((journey.legs || []).length)) return null;
+	state.tracking = trackReduce(null, { type: "start", journey, at: now(), geom: trackGeometry(journey) });
+	state.trackCam = true;
+	selectJourney(journey);
+	renderTrackBanner();
+	renderTrackOffer();
+	renderOptions();
+	return state.tracking;
+}
+
+function stopTracking(reason) {
+	if (!state.tracking) return null;
+	state.tracking = trackReduce(state.tracking, { type: reason || "stop", at: now() });
+	state.trackCam = false;
+	renderTrackBanner();
+	renderTrackOffer();
+	renderOptions();
+	return state.tracking;
+}
+
+/** The rider took the camera back (any deliberate pan/zoom), exactly like follow. */
+function releaseTrackCamera() { state.trackCam = false; }
+
+/** Where the tracked journey ends, as a planner endpoint. */
+function trackDestination(journey) {
+	const last = (journey.legs || [])[(journey.legs || []).length - 1];
+	if (!last) return null;
+	if (last.toPoint) {
+		const p = trackPointOf(last.toPoint);
+		return p ? { point: [p[0], p[1]], label: last.toName || "Destination" } : null;
+	}
+	if (!last.toStation) return null;
+	return { stationId: last.toStation, partId: last.toPart || null };
+}
+
+/** When the rider now expects to arrive on the plan they are following. */
+function trackProjectedArrival(tracking, at) {
+	const legs = (tracking.journey.legs || []);
+	const leg = legs[tracking.stepIndex];
+	// running late on the current leg pushes the whole tail of the journey back
+	const behind = leg && tracking.phase === "wait" ? Math.max(0, at - leg.depMs) : 0;
+	return tracking.journey.arriveMs + behind;
+}
+
+/**
+ * The rider has fallen off the plan. Re-run the planner FROM WHERE THEY ARE and, if the
+ * answer is worth it, ask. This never switches anything: the popup does, and only when
+ * the rider presses Switch.
+ */
+function trackOfferReplan(at) {
+	const t = state.tracking;
+	if (!t) return null;
+	const pos = selfPlayerPos();
+	const dest = trackDestination(t.journey);
+	const viable = !t.missed;
+	if (!pos || !dest) {
+		state.tracking = trackReduce(t, { type: "clearReplan", at });
+		return null;
+	}
+	if (!state.plan.graph) state.plan.graph = buildGraph();
+	// planEndpoints rewrites state.pointNodes for its own query — the tracked journey's
+	// anchors must not be collateral damage
+	const keepPoints = state.pointNodes;
+	let cand = null;
+	try {
+		const res = planEndpoints(state.plan.graph,
+			{ point: [pos.x, pos.z], y: pos.y, label: "My location", live: true }, dest, state.plan.prefs, at);
+		cand = (res.journeys || [])[0] || null;
+	} catch (e) {
+		cand = null;
+	}
+	state.pointNodes = keepPoints;
+	const projected = trackProjectedArrival(t, at);
+	const better = cand && cand.arriveMs < projected - TRACK_BETTER_MS;
+	if (cand && (better || !viable)) {
+		state.tracking = trackReduce(t, {
+			type: "offer", at, journey: cand, reason: viable ? "faster" : "invalid",
+			savedMs: Math.max(0, projected - cand.arriveMs),
+		});
+	} else if (!viable) {
+		state.tracking = trackReduce(t, { type: "offer", at, journey: null, reason: "invalid" });
+	} else {
+		state.tracking = trackReduce(t, { type: "clearReplan", at });
+	}
+	renderTrackOffer();
+	renderTrackBanner();
+	return state.tracking;
+}
+
+/** One second of guidance. Called from tickLive, which runs whether or not SSE is alive. */
+function tickTracking() {
+	const t = state.tracking;
+	if (!t) return null;
+	const at = now();
+	const ctx = trackContext(t, at);
+	const next = trackReduce(t, { type: "tick", at, ctx });
+	const changed = next !== t;
+	state.tracking = next;
+	if (!next) {
+		state.trackCam = false;
+		renderTrackBanner();
+		renderTrackOffer();
+		renderOptions();
+		return null;
+	}
+	// the map keeps the journey's fade for as long as the rider is on it
+	if (!state.selection) selectJourney(next.journey);
+	if (next.needsReplan && !next.offer) trackOfferReplan(at);
+	renderTrackBanner(ctx);
+	if (changed && next.phase !== t.phase) renderOptions();
+	return state.tracking;
+}
+
+/** Ride the self dot while aboard, on the same terms follow rides a train. */
+function trackCamera() {
+	const t = state.tracking;
+	if (!t || !state.trackCam || t.phase !== "ride" || state.follow) return false;
+	const p = selfPlayerPos();
+	if (!p) return false;
+	const rec = state.players.get(state.selfPlayer);
+	const at = (rec && rec.disp) || p;
+	if (Math.abs(state.view.x - at.x) > 0.01 || Math.abs(state.view.z - at.z) > 0.01) {
+		state.view.x = at.x;
+		state.view.z = at.z;
+		invalidateStatic();
+	}
+	return true;
+}
+
+/* ---- the banner + the offer popup ---- */
+
+let trackBannerKey = "";
+function renderTrackBanner(ctx) {
+	const el = $("trackBanner");
+	if (!el) return;
+	const t = state.tracking;
+	if (!t) {
+		trackBannerKey = "";
+		if (el.classList) { el.classList.add("hidden"); el.classList.remove("alert"); }
+		return;
+	}
+	const d = trackBannerText(t, ctx || null);
+	const loud = t.alert === "alight" || t.alert === "boarding";
+	const html = `<span class="tb-body">${esc(d.pre)}${
+		d.bullet ? `<span class="bullet sm" style="background:${d.hex || PALETTE.accent}">${esc(d.bullet)}</span>` : ""
+	}${esc(d.post)}${d.detail ? `<span class="tb-detail">${esc(d.detail)}</span>` : ""}</span>`
+		+ `<button class="tb-close" type="button" title="Stop tracking" aria-label="Stop tracking">×</button>`;
+	const key = t.phase + "|" + (t.alert || "") + "|" + html;
+	if (key !== trackBannerKey) {
+		trackBannerKey = key;
+		el.innerHTML = html;
+		const close = el.querySelector ? el.querySelector(".tb-close") : null;
+		if (close) close.onclick = (e) => { if (e && e.stopPropagation) e.stopPropagation(); stopTracking("user"); };
+	}
+	if (el.classList) {
+		el.classList.remove("hidden");
+		el.classList.toggle("alert", loud);
+		el.classList.toggle("degraded", !!t.degraded);
+	}
+}
+
+/** The popup. A rider is ASKED; a route is never swapped under them. */
+function trackOfferHtml(offer) {
+	const invalid = offer.reason === "invalid";
+	const saved = offer.savedMs > 60000 ? Math.round(offer.savedMs / 60000) + " min earlier" : "";
+	const title = invalid
+		? (offer.journey ? "This journey is no longer valid" : "This journey is no longer valid")
+		: "A faster route is available";
+	const body = offer.journey
+		? (invalid
+			? "You missed the connection. A replacement gets you there at " + fmtTime(offer.journey.arriveMs) + "."
+			: "Switching gets you in at " + fmtTime(offer.journey.arriveMs) + (saved ? " — " + saved + "." : "."))
+		: "There is no other way there right now — keep going and the map will follow your progress.";
+	return `
+		<div class="to-card">
+			<div class="to-title">${esc(title)}</div>
+			<div class="to-body">${esc(body)}</div>
+			<div class="to-actions">
+				${offer.journey ? '<button class="to-switch" type="button">Switch</button>' : ""}
+				<button class="to-keep" type="button">Keep current</button>
+			</div>
+		</div>`;
+}
+
+let trackOfferKey = "";
+function renderTrackOffer() {
+	const el = $("trackOffer");
+	if (!el) return;
+	const offer = state.tracking && state.tracking.offer;
+	if (!offer) {
+		trackOfferKey = "";
+		if (el.classList) el.classList.add("hidden");
+		return;
+	}
+	const html = trackOfferHtml(offer);
+	if (html !== trackOfferKey) {
+		trackOfferKey = html;
+		el.innerHTML = html;
+		const sw = el.querySelector ? el.querySelector(".to-switch") : null;
+		if (sw) sw.onclick = () => acceptTrackOffer();
+		const keep = el.querySelector ? el.querySelector(".to-keep") : null;
+		if (keep) keep.onclick = () => refuseTrackOffer();
+	}
+	if (el.classList) el.classList.remove("hidden");
+}
+
+function acceptTrackOffer() {
+	const t = state.tracking;
+	if (!t || !t.offer || !t.offer.journey) return null;
+	const j = t.offer.journey;
+	state.tracking = trackReduce(t, { type: "switch", at: now(), journey: j, geom: trackGeometry(j) });
+	state.trackCam = true;
+	selectJourney(j);
+	renderTrackBanner();
+	renderTrackOffer();
+	renderOptions();
+	return state.tracking;
+}
+
+function refuseTrackOffer() {
+	if (!state.tracking || !state.tracking.offer) return null;
+	state.tracking = trackReduce(state.tracking, { type: "keep", at: now() });
+	renderTrackBanner();
+	renderTrackOffer();
+	return state.tracking;
 }
 
 /* ============================================================================
@@ -3847,6 +5177,18 @@ function renderOptions() {
 	box.innerHTML = p.journeys.map((j, i) => optionCard(j, i === p.selectedIndex)).join("");
 	for (const card of box.querySelectorAll(".opt")) {
 		card.onclick = () => selectOption(parseInt(card.dataset.i, 10));
+		const start = card.querySelector ? card.querySelector(".opt-start") : null;
+		if (start) {
+			start.onclick = (e) => {
+				if (e && e.stopPropagation) e.stopPropagation();
+				const j = p.journeys[parseInt(card.dataset.i, 10)];
+				if (state.tracking && state.tracking.journey && j && state.tracking.journey.signature === j.signature) {
+					stopTracking("user");
+				} else if (j) {
+					startTracking(j);
+				}
+			};
+		}
 	}
 }
 
@@ -3855,11 +5197,35 @@ function legLabel(leg) {
 	return routeServiceLabel({ number: leg.number, display: leg.routeName, name: leg.routeName });
 }
 
+/** The same, for the service a through run hands the rider on to. */
+function continuationLabel(c) {
+	return routeServiceLabel({ number: c.number, display: c.routeName, name: c.routeName });
+}
+
+/**
+ * The through-run note rows of one ride leg (feature 7): "Continues as ⑤ toward X",
+ * drawn INSIDE the boarding row, because the rider does nothing at all here.
+ */
+function throughRowsHtml(leg) {
+	return (leg.continuations || []).map((c) => `
+		<div class="thru">
+			<span class="thru-key">Continues as</span>
+			<span class="bullet sm" style="background:${c.color}">${esc(continuationLabel(c))}</span>
+			<span class="thru-dest">${c.headsign ? "toward " + esc(firstLang(c.headsign)) : esc(c.routeName || "")}</span>
+			${c.station ? `<span class="thru-at">at ${esc(c.station)}</span>` : ""}
+		</div>`).join("");
+}
+
 function optionCard(j, selected) {
 	const seq = [];
 	for (const leg of j.legs) {
 		if (leg.kind === "ride") {
-			seq.push(`<span class="bullet" style="background:${leg.color}">${esc(legLabel(leg))}</span>`);
+			// a through run shows both bullets joined by a hairline "stays aboard" link,
+			// never by the transfer chevron — the rider does not get off
+			seq.push([`<span class="bullet" style="background:${leg.color}">${esc(legLabel(leg))}</span>`]
+				.concat((leg.continuations || []).map((c) =>
+					`<span class="thru-join" title="stays aboard">·</span><span class="bullet" style="background:${c.color}">${
+						esc(continuationLabel(c))}</span>`)).join(""));
 		} else {
 			const icon = leg.mode === "boat" ? "i-boat" : "i-walk";
 			seq.push(`<span class="modechip"><svg class="icon sm"><use href="#${icon}"/></svg>${esc(fmtMeters(leg.meters))}</span>`);
@@ -3878,7 +5244,21 @@ function optionCard(j, selected) {
 		${first ? `<div class="opt-live"><span class="dot pulse"></span>${esc(legLabel(first) || first.routeName)} departs ${liveMin <= 0 ? "now" : "in " + liveMin + " min"}</div>` : ""}
 		${j.tags && j.tags.length ? `<div class="opt-sub">${j.accessible ? ACCESS_IMG : ""}${esc(j.tags.join(" · "))}</div>` : ""}
 		${selected ? itineraryHtml(j) : ""}
+		${selected ? startButtonHtml(j) : ""}
 	</div>`;
+}
+
+/**
+ * "Start" turns the selected option into live guidance (feature 6). It only appears when
+ * there is a self player to follow — without GPS there is nothing to track — and reads
+ * "Stop" while this very journey is the one being tracked.
+ */
+function startButtonHtml(j) {
+	if (!state.selfPlayer || !selfPlayerPos()) return "";
+	const tracked = !!(state.tracking && state.tracking.journey
+		&& state.tracking.journey.signature === j.signature);
+	return `<button class="opt-start${tracked ? " on" : ""}" type="button">${
+		tracked ? "Stop guidance" : "Start"}</button>`;
 }
 
 /**
@@ -3903,6 +5283,7 @@ function itineraryHtml(j) {
 					<div class="stop-name">${esc(legEndLabel(leg, "from"))}</div>
 					${pendingWalk ? walkChipHtml(pendingWalk, true) : ""}
 					<div class="stop-sub">${sub}</div>
+					${throughRowsHtml(leg)}
 					<div class="ride">${leg.stopCount} stop${leg.stopCount === 1 ? "" : "s"} · ${fmtMin((leg.arrMs - leg.depMs) / 1000)}</div>
 				</div>`);
 			pendingWalk = null;
@@ -3995,8 +5376,9 @@ function selectJourney(journey) {
 
 	for (const leg of journey.legs) {
 		if (leg.kind === "ride") {
-			const rt = state.routes.get(leg.routeId);
-			if (rt) routeIds.add(rt.id);
+			// a through-running leg is aboard several routes: all of them belong to the
+			// selection, or the map would fade out the very train the rider is on
+			for (const rid of legRouteIds(leg)) if (state.routes.get(rid)) routeIds.add(rid);
 			if (!boardPlatform) boardPlatform = leg.fromPlatform;
 			// every schematic segment the ride's legs traverse, in this line's colour
 			const covered = legSegmentIds(leg);
@@ -4025,10 +5407,7 @@ function selectJourney(journey) {
 
 	// the LINE colours this journey rides: everything else's trains come off the map
 	// (feature 2), which also means a followed train on another line is let go
-	const lineHexes = new Set();
-	for (const leg of journey.legs) {
-		if (leg.kind === "ride" && leg.color) lineHexes.add(String(leg.color).toLowerCase());
-	}
+	const lineHexes = selectionLineHexes({ journey });
 
 	state.selection = { kind: "journey", journey, ribbonKeys, partIds, routeIds, walks, fallbacks, origin, dest, boardPlatform, lineHexes };
 	if (state.follow) {
@@ -4048,6 +5427,18 @@ function selectJourney(journey) {
  * the express skips.
  */
 function legSegmentIds(leg) {
+	// a through-running leg is several routes' worth of track under one boarding: light
+	// each span with the same rule, then merge
+	const spans = leg.spans && leg.spans.length > 1 ? leg.spans : null;
+	if (spans) {
+		const ids = [], fallbacks = [];
+		for (const s of spans) {
+			const r = legSegmentIds({ routeId: s.routeId, fromPlatform: s.fromPlatform, toPlatform: s.toPlatform });
+			for (const id of r.ids) if (!ids.includes(id)) ids.push(id);
+			fallbacks.push(...r.fallbacks);
+		}
+		return { ids, fallbacks };
+	}
 	const rt = state.routes.get(leg.routeId);
 	if (!rt) return { ids: [], fallbacks: [] };
 	const ids = [], fallbacks = [];
@@ -4277,6 +5668,7 @@ function tickLive() {
 		if (bucket !== state.plan.lastBucket) replan(true);
 	}
 	followLiveOrigin();
+	tickTracking();          // live journey guidance (feature 6)
 }
 
 /**
@@ -4315,6 +5707,12 @@ function savePrefs() {
 			basemap: state.prefs.basemap === "satellite" ? "satellite" : "schematic",
 			showPlayers: state.prefs.showPlayers !== false,
 			selfPlayer: String(state.prefs.selfPlayer || ""),
+			walkSpeed: walkSpeed(),
+			hideTrains: !!state.prefs.hideTrains,
+			hideOtherPlayers: !!state.prefs.hideOtherPlayers,
+			satBrightness: clamp(state.prefs.satBrightness || 1, SAT_BRIGHT_MIN, SAT_BRIGHT_MAX),
+			labelScale: labelScale(),
+			hideLabels: !!state.prefs.hideLabels,
 		}));
 	} catch (e) { /* storage unavailable — prefs just don't persist */ }
 }
@@ -4333,6 +5731,15 @@ function loadPrefs() {
 	state.prefs.showPlayers = p.showPlayers !== false;
 	// ?player= wins over the remembered name and rewrites it once the feed confirms it
 	state.prefs.selfPlayer = PLAYER_PARAM || (typeof p.selfPlayer === "string" ? p.selfPlayer : "");
+	state.prefs.walkSpeed = Number.isFinite(p.walkSpeed)
+		? clamp(p.walkSpeed, WALK_SPEED_MIN, WALK_SPEED_MAX) : WALK_SPEED_DEFAULT;
+	state.prefs.hideTrains = !!p.hideTrains;
+	state.prefs.hideOtherPlayers = !!p.hideOtherPlayers;
+	state.prefs.satBrightness = Number.isFinite(p.satBrightness)
+		? clamp(p.satBrightness, SAT_BRIGHT_MIN, SAT_BRIGHT_MAX) : 1;
+	state.prefs.labelScale = Number.isFinite(p.labelScale)
+		? clamp(p.labelScale, LABEL_SCALE_MIN, LABEL_SCALE_MAX) : 1;
+	state.prefs.hideLabels = !!p.hideLabels;
 }
 
 /* ---------------------------------------------------------------------------- 
@@ -4401,6 +5808,99 @@ function setPlayersVisible(on) {
 	savePrefs();
 }
 
+/**
+ * WALK SPEED. Every walk timing in the planner is derived from it, so a change is a
+ * graph change: rebuild it, drop the memo (its keys do not mention the speed) and
+ * re-plan, keeping the rider's expanded option when the answer comes back the same.
+ */
+function setWalkSpeed(v) {
+	const next = clamp(Number(v) || WALK_SPEED_DEFAULT, WALK_SPEED_MIN, WALK_SPEED_MAX);
+	if (next === state.prefs.walkSpeed) return next;
+	state.prefs.walkSpeed = next;
+	savePrefs();
+	state.plan.graph = null;
+	planMemo.graph = null;
+	planMemo.entries.clear();
+	replan(true);
+	return next;
+}
+
+/** Layers: live vehicles off. Their hit targets go with them (hover, click, follow). */
+function setTrainsHidden(on) {
+	state.prefs.hideTrains = !!on;
+	savePrefs();
+	if (state.prefs.hideTrains) {
+		closeTrainCard();
+		stopFollow("filtered");
+	}
+	return state.prefs.hideTrains;
+}
+
+/** Layers: everybody except me. The self dot is never hidden by this. */
+function setOtherPlayersHidden(on) {
+	state.prefs.hideOtherPlayers = !!on;
+	savePrefs();
+	return state.prefs.hideOtherPlayers;
+}
+
+/** Satellite brightness: a multiplier over the THEME's own alpha, never a replacement. */
+function setSatBrightness(v) {
+	state.prefs.satBrightness = clamp(Number(v) || 1, SAT_BRIGHT_MIN, SAT_BRIGHT_MAX);
+	savePrefs();
+	if (satEnabled()) invalidateStatic();
+	return state.prefs.satBrightness;
+}
+
+/** The alpha the satellite layer is actually drawn at. */
+function satAlpha() {
+	return clamp(PALETTE.satAlpha * clamp(Number(state.prefs.satBrightness) || 1, SAT_BRIGHT_MIN, SAT_BRIGHT_MAX), 0.05, 1);
+}
+
+function setLabelScale(v) {
+	state.prefs.labelScale = clamp(Number(v) || 1, LABEL_SCALE_MIN, LABEL_SCALE_MAX);
+	savePrefs();
+	invalidateStatic();
+	return state.prefs.labelScale;
+}
+
+function labelScale() {
+	return clamp(Number(state.prefs.labelScale) || 1, LABEL_SCALE_MIN, LABEL_SCALE_MAX);
+}
+
+function setLabelsHidden(on) {
+	state.prefs.hideLabels = !!on;
+	savePrefs();
+	invalidateStatic();
+	return state.prefs.hideLabels;
+}
+
+/** "minecraft/the_nether" -> "The Nether"; "demo:overworld" -> "Overworld". */
+function dimensionLabel(name, index) {
+	const raw = String(name == null ? "" : name);
+	const tail = raw.split(/[/:]/).filter(Boolean).pop() || "";
+	const out = tail.replace(/_+/g, " ").trim()
+		.split(/\s+/).filter(Boolean)
+		.map((w) => w.charAt(0).toUpperCase() + w.slice(1))
+		.join(" ");
+	return out || ("Dimension " + ((index | 0) + 1));
+}
+
+/**
+ * The dimension row: only worth showing when the server actually has more than one.
+ * Switching goes through the ordinary loadDimension() flow, which drops the vehicles,
+ * the selection and any live tracking before it fetches.
+ */
+function syncDimUi() {
+	const row = $("dimRow"), sel = $("dimSel");
+	const many = (state.dims || []).length > 1;
+	if (row && row.classList) row.classList.toggle("hidden", !many);
+	if (!sel) return;
+	const html = (state.dims || []).map((d, i) =>
+		`<option value="${i}"${i === state.dim ? " selected" : ""}>${esc(dimensionLabel(d, i))}</option>`).join("");
+	if (sel.innerHTML !== html) sel.innerHTML = html;
+	sel.value = String(state.dim);
+}
+
 /** One checkbox per mode the network actually contains, plus the players layer. */
 function renderLayerList() {
 	const box = $("layerList");
@@ -4412,10 +5912,20 @@ function renderLayerList() {
 		|| '<div class="set-hint">No routes loaded yet.</div>';
 	box.innerHTML = modeRows + `
 		<label class="layer"><input type="checkbox" data-layer="players"${state.prefs.showPlayers !== false ? " checked" : ""}>
-		<span>Players</span></label>`;
+		<span>Players</span></label>
+		<label class="layer"><input type="checkbox" data-layer="hidetrains"${state.prefs.hideTrains ? " checked" : ""}>
+		<span>Hide live trains</span></label>
+		<label class="layer"><input type="checkbox" data-layer="hideothers"${state.prefs.hideOtherPlayers ? " checked" : ""}>
+		<span>Hide other players</span></label>
+		<label class="layer"><input type="checkbox" data-layer="hidelabels"${state.prefs.hideLabels ? " checked" : ""}>
+		<span>Hide station names</span></label>`;
 	for (const el of box.querySelectorAll("input[type=checkbox]")) {
 		el.onchange = () => {
-			if (el.dataset && el.dataset.layer === "players") setPlayersVisible(!!el.checked);
+			const layer = el.dataset ? el.dataset.layer : "";
+			if (layer === "players") setPlayersVisible(!!el.checked);
+			else if (layer === "hidetrains") setTrainsHidden(!!el.checked);
+			else if (layer === "hideothers") setOtherPlayersHidden(!!el.checked);
+			else if (layer === "hidelabels") setLabelsHidden(!!el.checked);
 			else setModeVisible(el.dataset.mode, !!el.checked);
 		};
 	}
@@ -4432,6 +5942,23 @@ function syncSettingsUi() {
 	if (sl) sl.value = String(state.prefs.lineScale || 1);
 	const out = $("lineScaleOut");
 	if (out) out.textContent = (state.prefs.lineScale || 1).toFixed(2).replace(/0$/, "") + "x";
+
+	const ws = $("walkSpeed");
+	if (ws) ws.value = String(walkSpeed());
+	const wsOut = $("walkSpeedOut");
+	if (wsOut) wsOut.textContent = walkSpeed().toFixed(1) + " m/s";
+
+	const sb = $("satBright");
+	if (sb) sb.value = String(state.prefs.satBrightness || 1);
+	const sbOut = $("satBrightOut");
+	if (sbOut) sbOut.textContent = Math.round((state.prefs.satBrightness || 1) * 100) + "%";
+
+	const ls = $("labelScale");
+	if (ls) ls.value = String(labelScale());
+	const lsOut = $("labelScaleOut");
+	if (lsOut) lsOut.textContent = labelScale().toFixed(2).replace(/0$/, "") + "x";
+
+	syncDimUi();
 }
 
 function initSettings() {
@@ -4464,13 +5991,27 @@ function initSettings() {
 			renderOptions();
 		};
 	}
-	const sl = $("lineScale");
-	if (sl) {
-		sl.min = String(LINE_SCALE_MIN);
-		sl.max = String(LINE_SCALE_MAX);
-		sl.step = "0.05";
-		sl.oninput = () => { setLineScale(sl.value); syncSettingsUi(); };
+	const dim = $("dimSel");
+	if (dim) {
+		dim.onchange = () => {
+			const n = parseInt(dim.value, 10);
+			if (!Number.isFinite(n) || n === state.dim) return;
+			if (DEMO) { syncDimUi(); return; }        // the demo city is one world
+			loadDimension(n);
+		};
 	}
+	const slider = (id, min, max, step, apply) => {
+		const el = $(id);
+		if (!el) return;
+		el.min = String(min);
+		el.max = String(max);
+		el.step = String(step);
+		el.oninput = () => { apply(el.value); syncSettingsUi(); };
+	};
+	slider("lineScale", LINE_SCALE_MIN, LINE_SCALE_MAX, 0.05, setLineScale);
+	slider("walkSpeed", WALK_SPEED_MIN, WALK_SPEED_MAX, 0.1, setWalkSpeed);
+	slider("satBright", SAT_BRIGHT_MIN, SAT_BRIGHT_MAX, 0.05, setSatBrightness);
+	slider("labelScale", LABEL_SCALE_MIN, LABEL_SCALE_MAX, 0.05, setLabelScale);
 	syncSettingsUi();
 	renderLayerList();
 }
@@ -4500,7 +6041,8 @@ function initSettings() {
  * Ride edges come straight from mapdata legs (one edge per consecutive platform pair
  * per route), with `seconds` resolved by legSeconds() and `headwaySeconds` from the
  * route's headwayMs. Transfer edges come from each station's platformDistances at
- * WALK_SPEED (1.4 m/s) plus a WALK_BUFFER_S (30 s) buffer; when platformDistances is
+ * walkSpeed() (the rider's own setting, 4.3 m/s by default) plus a WALK_BUFFER_S (30 s)
+ * buffer; when platformDistances is
  * missing or truncated, part centroids supply the distance instead. `accessible` on a
  * transfer means BOTH endpoints are step-free.
  */
@@ -4571,57 +6113,11 @@ function buildGraph() {
 		}
 	}
 
-	/* CROSS-STREET TRANSFERS (feature 2). Two different stations close enough to walk
-	 * between are a real interchange even when MTR knows nothing about it — the 14 St /
-	 * 6 Av case. Each station keeps only its STREET_TRANSFER_NEIGHBOURS nearest
-	 * neighbours inside STREET_TRANSFER_RADIUS, measured between the closest platform of
-	 * each, so a dense downtown adds a handful of edges rather than a clique; the edge
-	 * is added in BOTH directions whenever EITHER side picked it.
-	 *
-	 * TWO stations that are ADJACENT STOPS on some service are deliberately excluded. A
-	 * street transfer exists to reach a line you cannot otherwise reach; between two
-	 * consecutive stops the service itself is the connection, and on a network whose
-	 * stops sit ~100 blocks apart (which is normal for MTR) an unfiltered radius turns
-	 * every trunk line into a footpath and the planner starts telling riders to walk the
-	 * line instead of riding it. */
-	const rideAdjacent = new Set();
-	for (const e of rideEdges) {
-		const a = nodes.get(e.from), b = nodes.get(e.to);
-		if (!a || !b || a.stationId === b.stationId) continue;
-		rideAdjacent.add(a.stationId + ">" + b.stationId);
-		rideAdjacent.add(b.stationId + ">" + a.stationId);
-	}
-	const stationIds = [...byStation.keys()];
-	const closestPair = (aIds, bIds) => {
-		let best = null;
-		for (const ai of aIds) {
-			const a = nodes.get(ai);
-			if (!a) continue;
-			for (const bi of bIds) {
-				const b = nodes.get(bi);
-				if (!b) continue;
-				const m = dist(a.xz, b.xz);
-				if (!best || m < best.meters) best = { a: ai, b: bi, meters: m };
-			}
-		}
-		return best;
-	};
-	const streetSeen = new Set();
-	for (const sa of stationIds) {
-		const cands = [];
-		for (const sb of stationIds) {
-			if (sa === sb || rideAdjacent.has(sa + ">" + sb)) continue;
-			const pair = closestPair(byStation.get(sa) || [], byStation.get(sb) || []);
-			if (pair && pair.meters <= STREET_TRANSFER_RADIUS) cands.push(pair);
-		}
-		cands.sort((x, y) => x.meters - y.meters);
-		for (const pair of cands.slice(0, STREET_TRANSFER_NEIGHBOURS)) {
-			const key = pair.a < pair.b ? pair.a + ">" + pair.b : pair.b + ">" + pair.a;
-			if (streetSeen.has(key)) continue;
-			streetSeen.add(key);
-			pushTransfer(pair.a, pair.b, pair.meters, true);
-			pushTransfer(pair.b, pair.a, pair.meters, true);
-		}
+	// CROSS-STREET TRANSFERS (feature 2): the same pairs the map draws as dotted
+	// connectors, computed once with the geometry (see streetTransferPairs).
+	for (const pair of streetTransferPairs()) {
+		pushTransfer(pair.a, pair.b, pair.meters, true);
+		pushTransfer(pair.b, pair.a, pair.meters, true);
 	}
 
 	const adjacency = new Map();
@@ -4633,7 +6129,21 @@ function buildGraph() {
 	for (const e of rideEdges) adj(e.from).rides.push(e);
 	for (const e of transferEdges) adj(e.from).transfers.push(e);
 
-	return { nodes, rideEdges, transferEdges, byStation, adjacency, stations: state.stations };
+	/* THROUGH RUNNING (feature 7). "platform|fromRouteId" -> Set(toRouteId): a train of
+	 * `from` standing at `platform` carries on as `to`. Only pairs whose routes are both
+	 * in the graph count — a through run onto a hidden depot move is not a service a
+	 * rider can stay aboard for. */
+	const through = new Map();
+	const routeInGraph = new Set(rideEdges.map((e) => e.routeId));
+	for (const t of state.throughRuns || []) {
+		if (!nodes.has(t.platform) || !routeInGraph.has(t.from) || !routeInGraph.has(t.to)) continue;
+		const key = t.platform + "|" + t.from;
+		let set = through.get(key);
+		if (!set) { set = new Set(); through.set(key, set); }
+		set.add(t.to);
+	}
+
+	return { nodes, rideEdges, transferEdges, byStation, adjacency, through, stations: state.stations };
 }
 
 /* ----------------------------------------------------------------------------
@@ -4652,8 +6162,14 @@ function walkDistance3(a, b) {
 	return Math.hypot(a.xz[0] - b.xz[0], a.xz[1] - b.xz[1], dy);
 }
 
+/** The rider's walking speed in m/s (settings slider, clamped, never 0). */
+function walkSpeed() {
+	const v = Number(state.prefs.walkSpeed);
+	return Number.isFinite(v) ? clamp(v, WALK_SPEED_MIN, WALK_SPEED_MAX) : WALK_SPEED_DEFAULT;
+}
+
 /** Seconds a walk of `meters` takes: the same rule every transfer edge already uses. */
-function walkSeconds(meters) { return meters / WALK_SPEED + WALK_BUFFER_S; }
+function walkSeconds(meters) { return meters / walkSpeed() + WALK_BUFFER_S; }
 
 /**
  * The stations a point can reach on foot: nearest first, at most POINT_WALK_STATIONS of
@@ -4730,6 +6246,7 @@ function injectPointNodes(graph, points) {
 	const overlay = {
 		nodes, byStation, adjacency,
 		rideEdges: graph.rideEdges, transferEdges: graph.transferEdges,
+		through: graph.through,
 		stations: graph.stations, _routeSeq: graph._routeSeq, _base: graph,
 	};
 	// routeSequence() memoises on the object it is handed; share the base's cache so the
@@ -4997,10 +6514,18 @@ function planSearch(graph, originIds, targetIds, prefs, departAtMs) {
 		// 1. stay aboard — no wait, no transfer, just this platform's dwell
 		if (L.aboard) {
 			const dwellMs = platformDwellSeconds(L.node) * 1000;
+			// …and THROUGH RUNNING (feature 7): at a collapsed terminus the same physical
+			// train carries on as another route, so its ride edges are reachable on exactly
+			// the same terms — dwell only, no wait, no boarding counted.
+			const cont = graph.through ? graph.through.get(L.node + "|" + L.aboard) : null;
 			for (const e of adj.rides) {
-				if (e.routeId !== L.aboard) continue;
+				const same = e.routeId === L.aboard;
+				if (!same && !(cont && cont.has(e.routeId))) continue;
 				push({ node: e.to, aboard: e.routeId, arrMs: L.arrMs + dwellMs + e.seconds * 1000,
-					boardings: L.boardings, walk: L.walk, prev: L, via: { kind: "ride", edge: e } });
+					boardings: L.boardings, walk: L.walk, prev: L,
+					via: same
+						? { kind: "ride", edge: e }
+						: { kind: "ride", edge: e, through: { fromRouteId: L.aboard, platform: L.node } } });
 			}
 		}
 		if (!onFoot) continue;      // step-free: the rider cannot get off here
@@ -5026,6 +6551,26 @@ function planSearch(graph, originIds, targetIds, prefs, departAtMs) {
 		}
 	}
 	return results;
+}
+
+/**
+ * The route spans of one ride leg, as a signature fragment. A plain leg is one span; a
+ * through-running leg is one span per route the same train runs as, so two journeys that
+ * differ only in where the train changes identity are still two distinct options.
+ */
+function rideSpanKey(leg) {
+	const spans = leg.spans && leg.spans.length
+		? leg.spans
+		: [{ routeId: leg.routeId, fromPlatform: leg.fromPlatform, toPlatform: leg.toPlatform }];
+	return spans.map((s) => s.routeId + ":" + s.fromPlatform + ">" + s.toPlatform).join("+");
+}
+
+/** Every route id one ride leg is aboard for (the boarded route plus its through runs). */
+function legRouteIds(leg) {
+	if (!leg || leg.kind !== "ride") return [];
+	const out = [leg.routeId];
+	for (const c of leg.continuations || []) if (!out.includes(c.routeId)) out.push(c.routeId);
+	return out;
 }
 
 /** Turn one label chain into the Journey shape the option cards + itinerary consume. */
@@ -5055,15 +6600,40 @@ function assembleJourney(label) {
 		if (steps[i].via.kind === "ride") {
 			const routeId = steps[i].via.edge.routeId;
 			const stops = [steps[i].from];
+			/* One boarding = one leg. That covers consecutive same-route rides (a
+			 * re-boarding carries its own depMs and breaks the run) AND a THROUGH RUN
+			 * (feature 7), where the train changes route without the rider moving: the
+			 * continuation is recorded as a note on this leg, never as a transfer. */
+			const spans = [];
+			const continuations = [];
+			let spanRoute = routeId, spanFrom = steps[i].from;
 			let j = i;
-			// consecutive same-route rides = one boarding; a re-boarding carries a depMs
-			while (j < steps.length && steps[j].via.kind === "ride" && steps[j].via.edge.routeId === routeId
-				&& (j === i || steps[j].via.depMs === undefined)) {
+			while (j < steps.length && steps[j].via.kind === "ride") {
+				const via = steps[j].via;
+				if (j > i) {
+					const thru = via.through && via.through.fromRouteId === spanRoute && via.edge.routeId !== spanRoute;
+					if (thru) {
+						const rtC = state.routes.get(via.edge.routeId);
+						spans.push({ routeId: spanRoute, fromPlatform: spanFrom, toPlatform: steps[j].from });
+						continuations.push({
+							platform: steps[j].from, atStopIndex: stops.length - 1,
+							fromRouteId: spanRoute, routeId: via.edge.routeId,
+							routeName: via.edge.routeName, number: via.edge.routeNumber,
+							color: via.edge.color, headsign: rtC ? rtC.dest : "",
+							station: anchor(steps[j].from).name,
+						});
+						spanRoute = via.edge.routeId;
+						spanFrom = steps[j].from;
+					} else if (via.edge.routeId !== spanRoute || via.depMs !== undefined) {
+						break;
+					}
+				}
 				stops.push(steps[j].to);
 				j++;
 			}
 			const first = steps[i], last = steps[j - 1], e = first.via.edge;
-			const rt = state.routes.get(routeId);
+			spans.push({ routeId: spanRoute, fromPlatform: spanFrom, toPlatform: last.to });
+			const rt = state.routes.get(spanRoute);
 			const a = anchor(first.from), b = anchor(last.to);
 			accessible = accessible && a.accessible && b.accessible;
 			legs.push({
@@ -5071,7 +6641,13 @@ function assembleJourney(label) {
 				fromStation: a.station, fromPart: a.part, fromPlatform: first.from,
 				toStation: b.station, toPart: b.part, toPlatform: last.to,
 				fromPoint: a.point, toPoint: b.point, fromName: a.name, toName: b.name,
-				stops, stopCount: Math.max(1, stops.length - 1), headsign: rt ? rt.dest : "",
+				// `stops` spans the whole ride, through runs included, so the stop count a
+				// rider counts down is the one they actually experience
+				stops, stopCount: Math.max(1, stops.length - 1),
+				// the headsign is the FINAL route's destination: that is where this train
+				// is going by the time the rider gets off
+				headsign: rt ? rt.dest : "",
+				spans, continuations,
 				depMs: Math.round(first.via.depMs), arrMs: Math.round(last.endMs),
 				live: !!first.via.live, vehicleId: first.via.vehicleId || null, estimated: !!first.via.estimated,
 				departsInMin: Math.max(0, Math.round((first.via.depMs - now()) / 60000)),
@@ -5114,13 +6690,12 @@ function assembleJourney(label) {
 		transfers: Math.max(0, legs.filter((l) => l.kind === "ride").length - 1),
 		walkMeters: legs.reduce((a, l) => a + (l.kind === "walk" ? l.meters : 0), 0),
 		signature: legs.map((l) => l.kind === "ride"
-			? "r:" + l.routeId + ":" + l.fromPlatform + ">" + l.toPlatform
+			? "r:" + rideSpanKey(l)
 			: "w:" + l.fromPlatform + ">" + l.toPlatform).join("|"),
 		// the leg signature options are deduped on: two journeys that ride the same
 		// services between the same platforms are ONE option to a rider, even when they
 		// finish at different platforms of the destination station.
-		rideSignature: legs.filter((l) => l.kind === "ride")
-			.map((l) => l.routeId + ":" + l.fromPlatform + ">" + l.toPlatform).join("|"),
+		rideSignature: legs.filter((l) => l.kind === "ride").map(rideSpanKey).join("|"),
 	};
 }
 
@@ -5376,6 +6951,10 @@ function bootDemo() {
 	const loop = [[636, 200], [700, 240], [720, 330], [660, 400], [600, 360], [590, 260]];
 	let walk = 0;
 	for (const r of runs) r.i = 0;
+	// …unless the rider is SCRIPTED (?demo=1&player=Demo), in which case Demo actually
+	// travels the first planned option and the guidance banner can be watched end to end
+	const scripted = /^demo$/i.test(PLAYER_PARAM);
+	const rider = demoRider();
 	setInterval(() => {
 		const t = now();
 		const vehicles = runs.map((r) => {
@@ -5395,15 +6974,141 @@ function bootDemo() {
 		const seg = walk * loop.length;
 		const i0 = Math.floor(seg), f = seg - i0;
 		const a = loop[i0], b = loop[(i0 + 1) % loop.length];
-		const players = [
-			{ name: "Demo", x: a[0] + (b[0] - a[0]) * f, y: 64, z: a[1] + (b[1] - a[1]) * f },
-			{ name: "Riley", x: 1210, y: 64, z: 640 },
-		];
+		let me = { name: "Demo", x: a[0] + (b[0] - a[0]) * f, y: 64, z: a[1] + (b[1] - a[1]) * f };
+		if (scripted) {
+			const step = rider.step(t, 0.333);
+			if (step.pos) me = { name: "Demo", x: step.pos[0], y: 64, z: step.pos[1] };
+			if (step.vehicle) vehicles.push(step.vehicle);
+		}
+		const players = [me, { name: "Riley", x: 1210, y: 64, z: 640 }];
 		handleFrame({ schemaVersion: 1, serverTime: t, dimension: 0, vehicles, players }, false);
+		if (scripted) rider.after();
 	}, 333);
 
 	requestAnimationFrame(frame);
 	setInterval(tickLive, 1000);
+}
+
+/* ----------------------------------------------------------------------------
+ * 13a. the scripted demo rider (?demo=1&player=Demo) — live tracking, watchable
+ * --------------------------------------------------------------------------
+ * Demo walks to the first platform, waits, rides (a synthetic train is published at
+ * their own position on the leg's route, so the tracker's vehicle correlation has
+ * something real to lock on to), changes, rides again, arrives — then loops.
+ *
+ * `&miss=1` makes them dawdle on the platform instead of boarding, so the planned
+ * departure slides past and the missed-departure -> re-plan -> POPUP path runs.
+ * ------------------------------------------------------------------------- */
+
+/** Point `f` of the way along a polyline, plus the fraction as a stop index. */
+function polylineAt(pts, f) {
+	if (!pts || pts.length < 2) return pts && pts.length ? pts[0].slice() : null;
+	const total = polylineLength(pts);
+	if (!(total > 0)) return pts[0].slice();
+	let want = clamp(f, 0, 1) * total, acc = 0;
+	for (let i = 1; i < pts.length; i++) {
+		const d = dist(pts[i - 1], pts[i]);
+		if (acc + d >= want) {
+			const k = d > 0 ? (want - acc) / d : 0;
+			return [pts[i - 1][0] + (pts[i][0] - pts[i - 1][0]) * k, pts[i - 1][1] + (pts[i][1] - pts[i - 1][1]) * k];
+		}
+		acc += d;
+	}
+	return pts[pts.length - 1].slice();
+}
+
+function demoRider() {
+	const DAWDLE = new URLSearchParams(location.search).get("miss") === "1";
+	const WAIT_TICKS = 12;          // ~4 s of platform wait before the train shows up
+	const RIDE_BOOST = 3;           // a 5-minute leg in 100 s: watchable, still sane
+	const r = { journey: null, geom: null, leg: 0, f: 0, wait: 0, hold: 0, pos: null, pending: false };
+
+	const arm = () => {
+		const j = (state.plan.journeys || [])[0];
+		if (!j) return false;
+		r.journey = j;
+		r.geom = trackGeometry(j);
+		r.leg = 0; r.f = 0; r.wait = WAIT_TICKS; r.hold = 0;
+		r.pending = true;                 // guidance re-arms once per loop, not per tick
+		const g = r.geom[0];
+		r.pos = (g && g.from) ? g.from.slice() : null;
+		return !!r.pos;
+	};
+
+	const routeIdAt = (leg, stopIdx) => {
+		let id = leg.routeId;
+		for (const c of leg.continuations || []) if (stopIdx >= c.atStopIndex) id = c.routeId;
+		return id;
+	};
+
+	return {
+		/** One 333 ms step: where the rider is, and the train they are on (if any). */
+		step(tNow, dt) {
+			if (!r.journey && !arm()) return { pos: null, vehicle: null };
+			const legs = r.journey.legs || [];
+			const leg = legs[r.leg];
+			const geom = r.geom[r.leg];
+			if (!leg || !geom) { r.journey = null; return { pos: r.pos, vehicle: null }; }
+			if (r.hold > 0) { r.hold--; if (!r.hold) arm(); return { pos: r.pos, vehicle: null }; }
+
+			const pts = geom.pts && geom.pts.length >= 2 ? geom.pts : (geom.from && geom.to ? [geom.from, geom.to] : null);
+			if (!pts) { r.leg++; r.f = 0; r.wait = WAIT_TICKS; return { pos: r.pos, vehicle: null }; }
+			const len = Math.max(1, polylineLength(pts));
+
+			if (leg.kind === "walk") {
+				r.f = Math.min(1, r.f + (walkSpeed() * dt) / len);
+			} else {
+				// wait on the platform first — and with ?miss=1, keep waiting until the
+				// planner has offered a way out
+				if (r.wait > 0 && !(DAWDLE && state.tracking && state.tracking.offer)) {
+					if (!DAWDLE) r.wait--;
+					r.pos = polylineAt(pts, 0);
+					// dawdling means dawdling NEAR the platform, not on it: far enough that
+					// no passing train correlates as "they got on", close enough to still be
+					// on the plan's own corridor
+					if (DAWDLE) r.pos = [r.pos[0] + 30, r.pos[1] + 30];
+					return { pos: r.pos, vehicle: null };
+				}
+				r.wait = 0;
+				const secs = Math.max(30, (leg.arrMs - leg.depMs) / 1000);
+				r.f = Math.min(1, r.f + (dt * RIDE_BOOST) / secs);
+			}
+			r.pos = polylineAt(pts, r.f);
+
+			let vehicle = null;
+			if (leg.kind === "ride") {
+				const stops = leg.stops || [];
+				const last = Math.max(0, stops.length - 1);
+				const passed = Math.min(last, Math.floor(r.f * last));
+				const nextIdx = Math.min(last, passed + 1);
+				const rt = state.routes.get(routeIdAt(leg, passed)) || state.routes.get(leg.routeId);
+				vehicle = {
+					id: "demo_ride", x: r.pos[0], y: 64, z: r.pos[1], kmh: 55, rev: false,
+					rail: "", railT: -1, doors: false, dwellMs: 0, devMs: 0, manual: false, stop: passed,
+					pPlat: stops[passed] || "", nPlat: stops[nextIdx] || "", pFrac: r.f,
+					route: rt ? { id: rt.id, name: rt.name, number: rt.number, color: rt.color, dest: rt.dest } : null,
+					consist: { cars: ["m7_a", "m7_b", "m7_a"], carLengths: [19.2, 19.2, 19.2] },
+				};
+			}
+			if (r.f >= 1) {
+				r.leg++;
+				r.f = 0;
+				r.wait = WAIT_TICKS;
+				if (r.leg >= legs.length) { r.hold = 30; r.leg = legs.length - 1; }   // 10 s, then loop
+			}
+			return { pos: r.pos, vehicle };
+		},
+		/**
+		 * Arm the tracker on whatever the rider is travelling — ONCE per loop, so
+		 * dismissing the banner keeps it dismissed until the rider starts over.
+		 */
+		after() {
+			if (!r.journey || !r.pending || state.tracking) return;
+			if (!state.selfPlayer || !selfPlayerPos()) return;
+			r.pending = false;
+			startTracking(r.journey);
+		},
+	};
 }
 
 /**
@@ -5477,9 +7182,24 @@ function buildDemoCity() {
 	R("red_0", [[518, 60], [516, 190], [518, 320]]);
 	R("red_1", [[518, 320], [524, 460], [522, 600]]);
 	R("red_2", [[522, 600], [525, 720], [531, 830]]);
+	// A SECOND colour along the crosstown's 90-degree corner: the Meadow Link runs beside
+	// the orange on its own track, ~8 blocks out, so the corner is a real two-colour
+	// bundle — the case where each colour offsetting its OWN centreline used to kink and
+	// wobble at the apex (reference-centreline bundling is what makes it constant).
+	R("mdw_0", [[768, 207], [988, 198], [1188, 192]]);
+	R("mdw_1", [[1188, 192], [1324, 256], [1387, 430], [1392, 616]]);
 	// harbor ferry (boat mode -> dashed ribbon)
 	R("fer_0", [[748, 880], [1000, 900], [1220, 866], [1392, 806]], { mode: "boat", speed: 30 });
 	R("fer_1", [[1392, 806], [1408, 720], [1400, 616]], { mode: "boat", speed: 30 });
+	/* THE MEGA-HUB REPRODUCTION (Thomas's Albany screenshot), off on its own so it
+	 * changes no journey: Kransfield is a terminus with a real BALLOON LOOP — the
+	 * inbound track runs past the platform, loops right round and comes back — and its
+	 * two services are a shade-drifted pair (#808000 / #7f8200) whose numbers are the
+	 * bare direction words "IN" and "OU". Drawn naively that is a loop-the-loop over the
+	 * glyph, two olive lines braiding, and a chip reading "IN OU". */
+	R("oli_0", [[300, 640], [300, 700], [300, 760], [301, 800], [306, 840], [330, 858],
+		[354, 840], [356, 812], [336, 796], [312, 802], [300, 818]]);
+	R("oli_0o", [[306, 810], [306, 760], [306, 700], [306, 640]]);
 
 	const P = (id, name, stationId, x, z, dx, dz, accessible) => ({
 		id, name, dwellMs: 20000, stationId,
@@ -5510,6 +7230,8 @@ function buildDemoCity() {
 		P("wg_r", "1", "wg", 518, 320, 0.1, 1, false),
 		P("fd_r", "1", "fd", 522, 600, 0.1, 1, true),
 		P("sy_r", "1", "sy", 531, 830, 0.1, 1, false),
+		P("wl_o", "1", "wl", 300, 640, 0.1, 1, false),
+		P("kf_o", "1", "kf", 300, 820, 0.1, 1, true),
 	];
 
 	const S = (id, name, color, plats, accessible, x, z) => ({
@@ -5535,6 +7257,8 @@ function buildDemoCity() {
 		S("wg", "Westgate", 0xEE352E, ["wg_r"], false, 518, 320),
 		S("fd", "Foundry", 0xEE352E, ["fd_r"], true, 522, 600),
 		S("sy", "South Yards", 0xEE352E, ["sy_r"], false, 531, 830),
+		S("wl", "Willowbank", 0x808000, ["wl_o"], false, 300, 640),
+		S("kf", "Kransfield", 0x808000, ["kf_o"], true, 300, 820),
 	];
 
 	const RT = (id, name, number, color, hidden) => ({ id, name, number, color, hidden: !!hidden });
@@ -5552,6 +7276,10 @@ function buildDemoCity() {
 		RT("rR", "Ridge Line||South Yards", "1", 0xEE352E),
 		RT("rF", "Harbor Ferry||Airport", "F", 0x3F7FA8),
 		RT("rS", "Harbour Shuttle||Harbor East", "S", 0x6B3FA0),
+		RT("rM", "Meadow Link||Airport Terminal", "M", 0x8B5E3C),
+		// the mega-hub pair: two shades of the same olive, numbered by DIRECTION ONLY
+		RT("rL", "Kransfield Loop||Kransfield", "IN", 0x808000),
+		RT("rLo", "Kransfield Loop||Willowbank", "OU", 0x7F8200),
 		RT("rD", "Depot Move||Yard", "D", 0x8A929C, true),
 	];
 
@@ -5607,6 +7335,16 @@ function buildDemoCity() {
 		{ id: "rS", name: "Harbour Shuttle||Harbor East", number: "S", color: 0x6B3FA0, hidden: false, mode: "train",
 			platforms: ["hv_b", "he_f"], legs: [{ rails: [] }],
 			durations: [300000], durationsValid: true, headwayMs: 900000 },
+		{ id: "rM", name: "Meadow Link||Airport Terminal", number: "M", color: 0x8B5E3C, hidden: false, mode: "train",
+			platforms: ["fg_o", "em_o", "ap_t"],
+			legs: [leg("mdw_0"), leg("mdw_1")],
+			durations: [240000, 320000], durationsValid: true, headwayMs: 600000 },
+		{ id: "rL", name: "Kransfield Loop||Kransfield", number: "IN", color: 0x808000, hidden: false, mode: "train",
+			platforms: ["wl_o", "kf_o"], legs: [leg("oli_0")],
+			durations: [240000], durationsValid: true, headwayMs: 600000 },
+		{ id: "rLo", name: "Kransfield Loop||Willowbank", number: "OU", color: 0x7F8200, hidden: false, mode: "train",
+			platforms: ["kf_o", "wl_o"], legs: [leg("oli_0o")],
+			durations: [240000], durationsValid: true, headwayMs: 600000 },
 		{ id: "rD", name: "Depot Move||Yard", number: "D", color: 0x8A929C, hidden: true, mode: "train",
 			platforms: ["sp_g", "bf_g"], legs: [leg("grn_1")],
 			durations: [300000], durationsValid: true, headwayMs: 0 },
@@ -5675,7 +7413,14 @@ function buildDemoCity() {
 			schemaVersion: 1, dimension: "demo:overworld", dimensionIndex: 0,
 			dimensions: ["demo:overworld"], rails, stations, platforms, routes,
 		},
-		mapdata: { schemaVersion: 1, routes: mdRoutes, stations: mdStations },
+		mapdata: {
+			schemaVersion: 1, routes: mdRoutes, stations: mdStations,
+			/* THROUGH RUNNING (feature 7). The blue A's Harborview working carries on as
+			 * the purple S shuttle to Harbor East: same train, same seat, different
+			 * bullet — which is exactly the case the planner must not price as a
+			 * transfer, and the itinerary must draw as a "Continues as S" note. */
+			throughRuns: [{ from: "rA", to: "rS", platform: "hv_b" }],
+		},
 		terrain: demoTerrain(),
 	};
 }

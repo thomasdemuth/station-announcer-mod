@@ -3031,3 +3031,54 @@ rail. VERIFIED live on the dev rig: covered launch → both passes skip
 instantly with clear logs; deleted one tile from the cache → next launch
 scanned exactly that 1 tile (65k samples, 39 s), kept 3, merged to 4.
 2.4.36. NOT tested: multi-dimension networks, negative-index growth in game.
+
+## System Map+ round 4 — whole-world scans, journey tracking, Albany cleanup (2026-08-29 night)
+
+Three parallel agent deliverables, all landed + verified; 2.4.37.
+
+WHOLE-WORLD SCANS (Dynmap technique, user choice "whole generated world"):
+chunk existence from region-file HEADERS (first 4 KiB of each .mca, 256 B/region
+bitmaps, background enumeration thread) — discovery loads NOTHING; sampling
+skips non-existent chunks pre-getChunk, existing ones load without generating.
+Caps replaced by sanity guards. Ceiling dims (nether-with-rails): descend past
+the roof to first air then first floor (96-step cap). Satellite publishes every
+64 finished tiles (single-writer encode handshake) → long scans show progress
++ resume via index diff; terrain has NO partial-progress story (documented
+levers: GRID/budget). CONTAIN_SLACK 64 hysteresis. Proto-chunk caveat noted in
+code. VERIFIED dev rig: terrain 10412 chunks/7.5 min zero generation; satellite
+2.1 M samples/32 tiles/28 min, 49 empty skipped, renders the world's real
+generation footprint. Screenshot note: hidden browser pane composites lag one
+frame — take two screenshots; NOT an app bug.
+
+JOURNEY TRACKING + FIXES (map.js): trackReduce pure reducer (walk/transfer/
+wait/ride/arrived; GPS-lost 30 s; two-tick vehicle confirmation; hysteresis
+12→24 blocks; stops-remaining from the matched vehicle), guidance banner with
+loud board/alight alerts, camera rides the dot, faster-route POPUP (user rule:
+never auto-switch; [Switch]/[Keep], invalid plan degrades to progress-only).
+Demo: ?demo=1&player=Demo rides option 1 on a loop; &miss=1 exercises the
+missed→popup path. Walk speed pref (default 4.3 m/s MC walking, 2.0–5.6).
+THROUGH-RUNNING: server emits throughRuns [{from,to,platform}] off depot.routes
+order (collapsed termini, wrap incl., deduped); planner continues aboard with
+dwell only — demo pair rA→rS at Harborview: 2 transfers/35 min → 1/26 min;
+itinerary "Continues as Ⓢ toward …". Dimension selector (>1 dims). Settings
+regrouped (Appearance/Layers/Planner/Me): hide trains, hide other players,
+satellite brightness, label scale + hide names.
+
+ALBANY CLEANUP (the user's acceptance bar): street-transfer links DRAWN
+(shared streetTransferPairs feeds graph AND drawing; dotted+chip, staged by
+zoom); alignEndTangents (per part+colour shared arrival axis, rigid rotation
+cosine-eased, corners guarded by coherence <0.6) kills lens-folds; PARALLEL-OF-
+REFERENCE bundling (companions ≥85% inside the corridor redraw as the
+reference's shape at their own lateral offset — literal collapse was tried and
+rejected: dog-legs at stations only one line serves; demo 90° corner gap
+7.28–7.79 px vs 7.49 nominal); capsule 90° fix (drop the +PI/2);
+truncateApproaches (first approach within 28 blocks + 1.6× overshoot = balloon
+loop cut, applied per source polyline BEFORE averaging; demo loop 363→180);
+label fallback number→name→raw ("IN"+"Kransfield Loop"→"Kra", one bullet);
+shade-drift merging (union-find, per-channel ≤16, representative = lowest int,
+applied at buildLines by rewriting rt.hex so everything agrees). Demo gained
+the Meadow Link corner bundle + the Kransfield/Willowbank hub (balloon loop,
+drifted olives, direction-named routes). harness.mjs 417, planner.mjs 81.
+
+NOT in-game tested; Baker City first launch auto-scans the whole generated
+world (satellite runs long in background, resumes across restarts).
