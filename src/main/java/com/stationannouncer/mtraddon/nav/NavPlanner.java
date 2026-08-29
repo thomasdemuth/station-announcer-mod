@@ -110,25 +110,49 @@ public final class NavPlanner {
     public static final int MAX_LEGS = 24;
     /** The packet contract's cap on through-run continuations within one ride. */
     public static final int MAX_VIA = 4;
+    /**
+     * The packet contract's cap on a ride's resolved stop list. A ride with MORE stops
+     * than this sends an EMPTY list rather than a truncated one — a partial sequence
+     * would make the client count down to the wrong stop, whereas an empty one falls
+     * back to the leg's {@code stops} count, which is always right.
+     */
+    public static final int MAX_STOP_LIST = 48;
 
     private NavPlanner() {
     }
 
     // ------------------------------------------------------------------- results
 
-    /** A walk endpoint: either loose coordinates or a platform. */
-    public record Point(boolean platform, long platformId, double x, double y, double z) {
+    /**
+     * A walk/ride endpoint: either loose coordinates or a platform.
+     *
+     * <p>A platform point carries its RESOLVED world position and display name beside
+     * the id, because the client can only look an id up while MTR has synced that
+     * platform to it — which it has not for anything outside the player's area. A
+     * position of exactly (0, 0, 0) means "not known"; {@code name} is already
+     * {@link #displayName}'d and empty means "not known".</p>
+     */
+    public record Point(boolean platform, long platformId, double x, double y, double z, String name) {
         public static Point ofPlatform(long platformId) {
-            return new Point(true, platformId, 0, 0, 0);
+            return new Point(true, platformId, 0, 0, 0, "");
+        }
+
+        public static Point ofPlatform(long platformId, double x, double y, double z, String name) {
+            return new Point(true, platformId, x, y, z, name == null ? "" : name);
         }
 
         public static Point ofCoords(double x, double y, double z) {
-            return new Point(false, 0, x, y, z);
+            return new Point(false, 0, x, y, z, "");
         }
     }
 
+    /** One stop of a ride, resolved server-side so the client can count down out of sync range. */
+    public record Stop(String name, double x, double y, double z) {
+    }
+
     /** One through-run continuation inside a ride: the train becomes {@code routeId} here. */
-    public record Via(long routeId, long atPlatformId) {
+    public record Via(long routeId, long atPlatformId, String routeName, String routeLabel,
+                      int routeColor, String headsign) {
     }
 
     /** Marker for the three leg shapes; {@link #type()} is the packet's leg byte. */
@@ -143,15 +167,30 @@ public final class NavPlanner {
         }
     }
 
-    public record RideLeg(long routeId, long boardPlatformId, long alightPlatformId, int stops,
-                          List<Via> via) implements Leg {
+    /**
+     * @param routeColor 0xRRGGBB, or −1 when the route could not be resolved
+     * @param headsign   where the train is going from the boarding stop ("" = unknown)
+     * @param stopList   board → alight inclusive, or EMPTY when longer than
+     *                   {@value #MAX_STOP_LIST}
+     */
+    public record RideLeg(long routeId, String routeName, String routeLabel, int routeColor, String headsign,
+                          Point board, Point alight, int stops, List<Via> via,
+                          List<Stop> stopList) implements Leg {
         @Override
         public int type() {
             return 1;
         }
+
+        public long boardPlatformId() {
+            return board == null ? 0 : board.platformId();
+        }
+
+        public long alightPlatformId() {
+            return alight == null ? 0 : alight.platformId();
+        }
     }
 
-    public record TransferLeg(long fromPlatformId, long toPlatformId, int metres) implements Leg {
+    public record TransferLeg(Point from, Point to, int metres) implements Leg {
         @Override
         public int type() {
             return 2;
@@ -167,8 +206,13 @@ public final class NavPlanner {
 
     // --------------------------------------------------------------- graph build
 
-    /** One route, flattened: its resolved stop platforms and the seconds between them. */
-    private record RouteInfo(long id, long[] platformIds, int[] legSeconds, int boardWaitSeconds) {
+    /**
+     * One route, flattened: its resolved stop platforms, the seconds between them, and
+     * everything the HUD needs to NAME it — {@code destinations[i]} is the headsign a
+     * rider boarding at stop {@code i} sees.
+     */
+    private record RouteInfo(long id, String name, String label, int color, long[] platformIds,
+                             int[] legSeconds, int boardWaitSeconds, String[] destinations) {
     }
 
     /** Everything the search needs, all primitives. */
@@ -182,6 +226,8 @@ public final class NavPlanner {
         double[] platformZ = new double[0];
         long[] platformStation = new long[0];
         boolean[] platformStepFree = new boolean[0];
+        /** platform index → the display name a rider knows it by (its station, else itself). */
+        String[] platformName = new String[0];
         /** station id → its platform indices. */
         final Map<Long, List<Integer>> stationPlatforms = new HashMap<>();
         /** platform index → the (routeIndex, stopIndex) pairs calling there, packed. */
@@ -411,10 +457,14 @@ public final class NavPlanner {
         Collections.reverse(chain);
 
         List<Leg> legs = new ArrayList<>();
-        long boardPlatform = 0;
-        long routeId = 0;
+        int boardRouteIndex = -1;
+        int boardStopIndex = 0;
         int stops = 0;
         List<Via> continuations = new ArrayList<>();
+        // The ride's platform sequence, board → alight inclusive, as ids; turned into
+        // named + positioned Stops at the alight so the client can count stops down
+        // without MTR having synced any of them.
+        List<Long> sequence = new ArrayList<>();
         boolean aboard = false;
 
         for (int[] step : chain) {
@@ -423,34 +473,49 @@ public final class NavPlanner {
             switch (kind) {
                 case 0 -> // origin walk
                         legs.add(new WalkLeg(Point.ofCoords(originX, originY, originZ),
-                                Point.ofPlatform(platformIdOf(graph, current)),
+                                platformPoint(graph, platformIdOf(graph, current)),
                                 metres(originX, originY, originZ, graph, current)));
                 case 1 -> { // board
                     aboard = true;
                     stops = 0;
                     continuations = new ArrayList<>();
-                    int routeIndex = routeOf(graph, current);
-                    routeId = graph.routes.get(routeIndex).id();
-                    boardPlatform = graph.routes.get(routeIndex).platformIds()[current - graph.routeStopBase[routeIndex]];
+                    sequence = new ArrayList<>();
+                    boardRouteIndex = routeOf(graph, current);
+                    boardStopIndex = current - graph.routeStopBase[boardRouteIndex];
+                    appendStop(sequence, graph.routes.get(boardRouteIndex).platformIds()[boardStopIndex]);
                 }
-                case 2 -> stops++; // ride one stop
+                case 2 -> { // ride one stop
+                    stops++;
+                    appendStop(sequence, platformIdOf(graph, current));
+                }
                 case 5 -> { // through-run: same seat, new route number
                     int routeIndex = routeOf(graph, current);
-                    long newRouteId = graph.routes.get(routeIndex).id();
+                    RouteInfo next = graph.routes.get(routeIndex);
                     if (continuations.size() < MAX_VIA) {
-                        continuations.add(new Via(newRouteId, graph.routes.get(routeIndex).platformIds()[0]));
+                        continuations.add(new Via(next.id(), next.platformIds()[0], next.name(),
+                                next.label(), next.color(),
+                                next.destinations().length > 0 ? next.destinations()[0] : ""));
                     }
+                    // Same physical platform as the previous route's terminus, so this
+                    // is a no-op unless the two disagree; appendStop drops the repeat.
+                    appendStop(sequence, next.platformIds()[0]);
                 }
                 case 3 -> { // alight
-                    if (aboard) {
-                        legs.add(new RideLeg(routeId, boardPlatform, platformIdOf(graph, current), stops,
-                                List.copyOf(continuations)));
+                    if (aboard && boardRouteIndex >= 0) {
+                        RouteInfo route = graph.routes.get(boardRouteIndex);
+                        legs.add(new RideLeg(route.id(), route.name(), route.label(), route.color(),
+                                boardStopIndex < route.destinations().length
+                                        ? route.destinations()[boardStopIndex] : "",
+                                platformPoint(graph, route.platformIds()[boardStopIndex]),
+                                platformPoint(graph, platformIdOf(graph, current)),
+                                stops, List.copyOf(continuations), stopList(graph, sequence)));
                         aboard = false;
                     }
                 }
                 case 4 -> { // transfer between platforms of one station
                     int parent = previous[current];
-                    legs.add(new TransferLeg(platformIdOf(graph, parent), platformIdOf(graph, current),
+                    legs.add(new TransferLeg(platformPoint(graph, platformIdOf(graph, parent)),
+                            platformPoint(graph, platformIdOf(graph, current)),
                             metresBetween(graph, parent, current)));
                 }
                 default -> {
@@ -464,6 +529,47 @@ public final class NavPlanner {
             return new ArrayList<>(legs.subList(0, MAX_LEGS));
         }
         return legs;
+    }
+
+    /**
+     * A platform endpoint with everything the client needs when it cannot look the id
+     * up itself: the mid position (BLOCK-CENTRED, matching the client's own
+     * {@code platformPosition}, so live and packet coordinates never disagree) and the
+     * station display name. An id the graph does not know yields id-only.
+     */
+    private static Point platformPoint(Graph graph, long platformId) {
+        Integer index = graph.platformIndex.get(platformId);
+        if (index == null) {
+            return Point.ofPlatform(platformId);
+        }
+        int i = index;
+        return Point.ofPlatform(platformId, graph.platformX[i] + 0.5, graph.platformY[i] + 0.5,
+                graph.platformZ[i] + 0.5, graph.platformName[i]);
+    }
+
+    /** Appends a stop id, dropping an immediate repeat (a through-run's handover platform). */
+    private static void appendStop(List<Long> sequence, long platformId) {
+        if (sequence.isEmpty() || sequence.get(sequence.size() - 1) != platformId) {
+            sequence.add(platformId);
+        }
+    }
+
+    /**
+     * The ride's stops as named, positioned entries — or EMPTY when the ride has more
+     * than {@value #MAX_STOP_LIST} of them, because a TRUNCATED sequence would have the
+     * client counting down to the wrong stop while an absent one just falls back to the
+     * leg's stop count.
+     */
+    private static List<Stop> stopList(Graph graph, List<Long> sequence) {
+        if (sequence.size() < 2 || sequence.size() > MAX_STOP_LIST) {
+            return List.of();
+        }
+        List<Stop> stops = new ArrayList<>(sequence.size());
+        for (long platformId : sequence) {
+            Point point = platformPoint(graph, platformId);
+            stops.add(new Stop(point.name(), point.x(), point.y(), point.z()));
+        }
+        return List.copyOf(stops);
     }
 
     private static long platformIdOf(Graph graph, int state) {
@@ -511,6 +617,7 @@ public final class NavPlanner {
         graph.platformZ = new double[count];
         graph.platformStation = new long[count];
         graph.platformStepFree = new boolean[count];
+        graph.platformName = new String[count];
         for (int i = 0; i < count; i++) {
             Platform platform = platforms.get(i);
             Position mid = platform.getMidPosition();
@@ -522,6 +629,15 @@ public final class NavPlanner {
             Station station = platform.area;
             long stationId = station == null ? 0 : station.getId();
             graph.platformStation[i] = stationId;
+            // The name a rider knows the stop by: its station, or — for a platform
+            // outside any station area — the platform's own name. Resolved HERE, on
+            // the simulator thread, because the client cannot do it for a platform
+            // MTR has not synced to it.
+            String platformDisplayName = station == null ? "" : displayName(station.getName());
+            if (platformDisplayName.isEmpty()) {
+                platformDisplayName = displayName(platform.getName());
+            }
+            graph.platformName[i] = platformDisplayName;
             graph.platformIndex.put(platform.getId(), i);
             if (stationId != 0) {
                 graph.stationPlatforms.computeIfAbsent(stationId, ignored -> new ArrayList<>()).add(i);
@@ -675,7 +791,23 @@ public final class NavPlanner {
         int waitSeconds = headwayMillis > 0
                 ? (int) Math.max(1, Math.round(headwayMillis / 2000.0))
                 : UNKNOWN_HEADWAY_WAIT_SECONDS;
-        return new RouteInfo(route.getId(), platformIds, legSeconds, waitSeconds);
+
+        // Headsign per resolved stop. Route.getDestination(index) is MTR's own answer
+        // (custom destination walked back from that stop, else the terminus station),
+        // so a through-run's continuation reads exactly like the PIDS does.
+        String[] destinations = new String[resolvedCount];
+        Arrays.fill(destinations, "");
+        for (int i = 0; i < resolvedCount; i++) {
+            try {
+                destinations[i] = displayName(route.getDestination(originalIndex[i]));
+            } catch (Throwable ignored) {
+                // A half-built route can throw here; an unnamed headsign is not fatal.
+            }
+        }
+        int color = route.getColor() & 0xFFFFFF;
+        return new RouteInfo(route.getId(), displayName(route.getName()),
+                routeLabel(route.getRouteNumber(), route.getName()), color,
+                platformIds, legSeconds, waitSeconds, destinations);
     }
 
     private static int estimateLegSeconds(Graph graph, long fromPlatformId, long toPlatformId) {
@@ -705,6 +837,32 @@ public final class NavPlanner {
         double dy = y1 - y2;
         double dz = z1 - z2;
         return Math.sqrt(dx * dx + dy * dy + dz * dz);
+    }
+
+    /**
+     * The short bullet label for a route. MTR carries a real {@code routeNumber} field
+     * server-side, so it is preferred outright; only when it is blank does this fall back
+     * to the project's client-side heuristic (first digit run, else first letter), which
+     * is all {@code SimplifiedRoute} lets the client do.
+     *
+     * @return at most 8 characters, "" when nothing named the route
+     */
+    public static String routeLabel(String routeNumber, String routeName) {
+        String number = displayName(routeNumber).trim();
+        if (!number.isEmpty()) {
+            return number.length() <= 8 ? number : number.substring(0, 8);
+        }
+        String name = displayName(routeName).trim();
+        for (int i = 0; i < name.length(); i++) {
+            if (Character.isDigit(name.charAt(i))) {
+                int end = i;
+                while (end < name.length() && Character.isDigit(name.charAt(end))) {
+                    end++;
+                }
+                return name.substring(i, Math.min(end, i + 2));
+            }
+        }
+        return name.isEmpty() ? "" : name.substring(0, 1).toUpperCase(java.util.Locale.ROOT);
     }
 
     /** MTR names are {@code "English|Other"}; only the first half is ever displayed. */

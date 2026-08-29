@@ -2606,9 +2606,13 @@ const thru = run(`(() => {
 		rides: p.legs.filter((l) => l.type === "ride").length,
 		transfers: p.legs.filter((l) => l.type === "transfer").length };
 })()`);
+// via now carries the continuation's own name/bullet/colour/headsign too, because the
+// game client cannot resolve a route it has not synced (the "? ?" bug).
 check("a through run stays ONE ride leg and records the change as via",
 	thru && thru.ride && thru.ride.route === "rA"
-	&& J(thru.ride.via) === J([{ route: "rS", at: "hv_b" }]), J(thru && thru.ride));
+	&& thru.ride.via && thru.ride.via.length === 1
+	&& thru.ride.via[0].route === "rS" && thru.ride.via[0].at === "hv_b"
+	&& !!thru.ride.via[0].routeName && !!thru.ride.via[0].routeLabel, J(thru && thru.ride));
 check("...boarding and alighting still span the whole run",
 	thru.ride.board === thru.board && thru.ride.alight === thru.alight,
 	J([thru.ride.board, thru.ride.alight]));
@@ -2891,12 +2895,44 @@ const body = await run(`(async () => {
 	return { bytes: wire.length, keys: Object.keys(built.payload).sort(),
 		legKeys: [...new Set(built.payload.legs.map((l) => Object.keys(l).sort().join(",")))].sort() };
 })()`);
-check("the body is nowhere near the 16 KB cap", body.bytes < 2048, body.bytes + " bytes");
+// Names, positions and stop lists ride along now (they are what stops the HUD saying
+// "Unknown stop"), so the body is fatter — and the server's cap rose to 64 KB to match.
+check("the body is well inside the 64 KB cap", body.bytes < 16 * 1024, body.bytes + " bytes");
 check("the journey object carries exactly destination / plannedArriveMs / legs",
 	J(body.keys) === J(["destination", "legs", "plannedArriveMs"]), J(body.keys));
+// Every key must be one the servlet knows: the ids/metres it routes on, plus the
+// OPTIONAL display fields (names, positions, stop lists) it sanitises and passes through.
+const NAV_WIRE_KEYS = new Set([
+	"type", "route", "board", "alight", "stops", "via", "from", "to", "meters",
+	"routeName", "routeLabel", "routeColor", "headsign",
+	"boardName", "boardPos", "alightName", "alightPos", "stopList",
+	"fromName", "fromPos", "toName", "toPos",
+]);
 check("every leg carries only the contract's own keys",
-	body.legKeys.every((k) => ["alight,board,route,stops,type", "alight,board,route,stops,type,via",
-		"from,meters,to,type"].indexOf(k) >= 0), J(body.legKeys));
+	body.legKeys.every((k) => k.split(",").every((key) => NAV_WIRE_KEYS.has(key))), J(body.legKeys));
+
+/* REGRESSION (reported in game): the HUD printed "Unknown stop" and "? ?" because the
+   packet carried ids alone and MTR only syncs data near the player. Every ride must
+   therefore ship its own names, colour, positions and stop list. */
+const named = run(`(() => {
+  const p = journeyPayload(state.plan.journeys[0]).payload;
+  const rides = p.legs.filter((l) => l.type === "ride");
+  const pos = (v) => Array.isArray(v) && v.length === 3 && v.every((n) => Number.isFinite(n));
+  return {
+    rides: rides.length,
+    named: rides.every((r) => r.boardName && r.alightName && r.routeName),
+    positioned: rides.every((r) => pos(r.boardPos) && pos(r.alightPos)),
+    stopLists: rides.every((r) => Array.isArray(r.stopList) && r.stopList.length >= 2
+      && r.stopList.every((s) => s.name && pos(s.pos))),
+    capped: rides.every((r) => (r.stopList || []).length <= 48
+      && r.routeName.length <= 48 && r.routeLabel.length <= 8),
+  };
+})()`);
+check("every ride names its board and alight stops and its route", named.rides > 0 && named.named, J(named));
+check("...and carries their world positions, so the waypoint works out of sync range",
+	named.positioned, J(named));
+check("...and a stop list, so the HUD counts down beyond synced data", named.stopLists, J(named));
+check("...all within the server's field caps", named.capped, J(named));
 
 /* ---- 8g. the card + modal state machine (no real DOM, just the strings) ---- */
 const ui = run(`(() => {

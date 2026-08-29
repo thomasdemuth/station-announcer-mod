@@ -42,10 +42,19 @@ import java.util.List;
  * snapshot; the only per-frame work they do is text measuring, fills and a
  * blink-phase colour choice.</p>
  *
- * <p><b>MTR client lookups.</b> Every id is resolved through the cheap hash
- * maps MTR syncs to clients — {@code platformIdMap} for platform positions and
- * (through {@code Platform.area}) station names, {@code simplifiedRouteIdMap}
- * for route names/colours. The one genuinely expensive call, {@code
+ * <p><b>MTR client lookups, and why they are not enough.</b> Every id is
+ * resolved through the cheap hash maps MTR syncs to clients —
+ * {@code platformIdMap} for platform positions and (through
+ * {@code Platform.area}) station names, {@code simplifiedRouteIdMap} for route
+ * names/colours. But MTR syncs those AROUND THE PLAYER, so nothing outside that
+ * area resolves at all: before the v2 packet the itinerary printed "Unknown
+ * stop" and "?" for every distant leg, and — silently — the waypoint had no
+ * target and the stop countdown could not advance, because both need platform
+ * POSITIONS. The packet now carries the server's own resolved name and position
+ * beside every id, and this class prefers the live lookup ONLY WHEN IT
+ * SUCCEEDS: see {@link #resolve}, {@link #endpointName}, {@link #routeName},
+ * {@link #routeColor}, {@link #headsign} and {@code StopRef.position()}, which
+ * are the six places that fallback lives. The one genuinely expensive call, {@code
  * ArrivalsCacheClient.requestArrivals}, is wrapped in the same
  * fetched-at/TTL guard {@code DrivingHud} uses ({@value #ARRIVALS_TTL_MILLIS}
  * ms for one platform), which is exactly the discipline {@code MtrDataCache}
@@ -69,6 +78,11 @@ public final class ClientNav {
     private static final int MAX_VIA = 4;
     private static final int MAX_METRES = 1_000_000;
     private static final int MAX_STOPS = 4_096;
+    private static final int MAX_STOP_LIST = 48;
+    private static final int MAX_NAME_LENGTH = 64;
+    private static final int MAX_ROUTE_NAME_LENGTH = 48;
+    private static final int MAX_ROUTE_LABEL_LENGTH = 8;
+    private static final int MAX_HEADSIGN_LENGTH = 64;
 
     private static final int LEG_WALK = 0;
     private static final int LEG_RIDE = 1;
@@ -197,9 +211,11 @@ public final class ClientNav {
     // ------------------------------------------------------------- packet
 
     /**
-     * Reads the itinerary off the wire in exactly the documented order. Every
-     * count and length is bounded; anything out of range throws, and the caller
-     * drops the packet.
+     * Reads the itinerary off the wire in exactly the order
+     * {@code NavNetworking}'s javadoc documents (v2 — every id is followed by
+     * the server's own resolved position and display name). Every count and
+     * length is bounded; anything out of range throws, and the caller drops the
+     * packet.
      */
     private static Journey read(PacketByteBuf buf) {
         String destination = buf.readString(MAX_DESTINATION_LENGTH);
@@ -219,8 +235,12 @@ public final class ClientNav {
                 }
                 case LEG_RIDE -> {
                     long routeId = buf.readLong();
-                    long boardPlatformId = buf.readLong();
-                    long alightPlatformId = buf.readLong();
+                    String routeName = buf.readString(MAX_ROUTE_NAME_LENGTH);
+                    String routeLabel = buf.readString(MAX_ROUTE_LABEL_LENGTH);
+                    int routeColor = readColor(buf);
+                    String headsign = buf.readString(MAX_HEADSIGN_LENGTH);
+                    Endpoint board = readPlatform(buf);
+                    Endpoint alight = readPlatform(buf);
                     int stops = clampCount(buf.readVarInt(), MAX_STOPS);
                     int viaCount = buf.readVarInt();
                     if (viaCount < 0 || viaCount > MAX_VIA) {
@@ -230,15 +250,33 @@ public final class ClientNav {
                     for (int j = 0; j < viaCount; j++) {
                         long viaRouteId = buf.readLong();
                         long atPlatformId = buf.readLong();
-                        vias.add(new Via(viaRouteId, atPlatformId));
+                        String viaName = buf.readString(MAX_ROUTE_NAME_LENGTH);
+                        String viaLabel = buf.readString(MAX_ROUTE_LABEL_LENGTH);
+                        int viaColor = readColor(buf);
+                        String viaHeadsign = buf.readString(MAX_HEADSIGN_LENGTH);
+                        vias.add(new Via(viaRouteId, atPlatformId, viaName, viaLabel, viaColor, viaHeadsign));
                     }
-                    legs.add(Leg.ride(routeId, boardPlatformId, alightPlatformId, stops, List.copyOf(vias)));
+                    int stopCount = buf.readVarInt();
+                    if (stopCount < 0 || stopCount > MAX_STOP_LIST) {
+                        throw new IllegalArgumentException("stop list count " + stopCount);
+                    }
+                    List<PacketStop> stopList = new ArrayList<>(stopCount);
+                    for (int s = 0; s < stopCount; s++) {
+                        String name = buf.readString(MAX_NAME_LENGTH);
+                        double x = buf.readDouble();
+                        double y = buf.readDouble();
+                        double z = buf.readDouble();
+                        requireFinite(x, y, z);
+                        stopList.add(new PacketStop(name, x, y, z));
+                    }
+                    legs.add(Leg.ride(routeId, routeName, routeLabel, routeColor, headsign,
+                            board, alight, stops, List.copyOf(vias), List.copyOf(stopList)));
                 }
                 case LEG_TRANSFER -> {
-                    long fromPlatformId = buf.readLong();
-                    long toPlatformId = buf.readLong();
+                    Endpoint from = readPlatform(buf);
+                    Endpoint to = readPlatform(buf);
                     int metres = clampCount(buf.readVarInt(), MAX_METRES);
-                    legs.add(Leg.transfer(fromPlatformId, toPlatformId, metres));
+                    legs.add(Leg.transfer(from, to, metres));
                 }
                 default -> throw new IllegalArgumentException("leg type " + type);
             }
@@ -247,21 +285,40 @@ public final class ClientNav {
         return new Journey(destination, List.copyOf(legs), plannedArriveMs);
     }
 
+    /** A walk endpoint: kind byte, optional platform id, position, name. */
     private static Endpoint readEndpoint(PacketByteBuf buf) {
         int kind = buf.readByte();
-        if (kind == 0) {
-            double x = buf.readDouble();
-            double y = buf.readDouble();
-            double z = buf.readDouble();
-            if (!Double.isFinite(x) || !Double.isFinite(y) || !Double.isFinite(z)) {
-                throw new IllegalArgumentException("non-finite coordinate");
-            }
-            return Endpoint.coords(x, y, z);
+        if (kind != 0 && kind != 1) {
+            throw new IllegalArgumentException("endpoint kind " + kind);
         }
-        if (kind == 1) {
-            return Endpoint.platform(buf.readLong());
+        long platformId = kind == 1 ? buf.readLong() : 0;
+        double x = buf.readDouble();
+        double y = buf.readDouble();
+        double z = buf.readDouble();
+        requireFinite(x, y, z);
+        return new Endpoint(kind == 1, platformId, x, y, z, buf.readString(MAX_NAME_LENGTH));
+    }
+
+    /** A ride/transfer endpoint, always a platform: id, position, name. */
+    private static Endpoint readPlatform(PacketByteBuf buf) {
+        long platformId = buf.readLong();
+        double x = buf.readDouble();
+        double y = buf.readDouble();
+        double z = buf.readDouble();
+        requireFinite(x, y, z);
+        return new Endpoint(true, platformId, x, y, z, buf.readString(MAX_NAME_LENGTH));
+    }
+
+    /** 0xRRGGBB, or −1 for "the server did not know either". */
+    private static int readColor(PacketByteBuf buf) {
+        int color = buf.readInt();
+        return color < 0 ? -1 : color & 0xFFFFFF;
+    }
+
+    private static void requireFinite(double x, double y, double z) {
+        if (!Double.isFinite(x) || !Double.isFinite(y) || !Double.isFinite(z)) {
+            throw new IllegalArgumentException("non-finite coordinate");
         }
-        throw new IllegalArgumentException("endpoint kind " + kind);
     }
 
     private static int clampCount(int value, int max) {
@@ -354,13 +411,16 @@ public final class ClientNav {
             advanceRideProgress(ride, player);
         }
 
-        Vec3d endTarget = resolve(leg.endpointTo());
+        // resolve() is live-position-then-packet-position, so this test works for a
+        // destination the client has never had synced — which is what made the leg
+        // advance (and with it the whole itinerary) stall before.
+        Vec3d endTarget = resolve(leg.to());
         boolean reached = endTarget != null && player.squaredDistanceTo(endTarget) <= ARRIVE_RADIUS * ARRIVE_RADIUS;
         if (ride != null) {
             // A ride ends only once the alight platform is both reached and the
             // last in the passed sequence — otherwise a route that loops back
             // past its own boarding platform would end the leg early.
-            reached = reached && passedIndex >= ride.platformIds().size() - 1;
+            reached = reached && passedIndex >= ride.stops().size() - 1;
         }
         if (reached) {
             legIndex++;
@@ -397,8 +457,8 @@ public final class ClientNav {
     // --------------------------------------------------------- walk / transfer
 
     private static Snapshot walkSnapshot(Leg leg, Vec3d player) {
-        Vec3d target = resolve(leg.endpointTo());
-        String where = endpointName(leg.endpointTo());
+        Vec3d target = resolve(leg.to());
+        String where = endpointName(leg.to());
         String title = where.isEmpty()
                 ? Text.translatable("gui.station_announcer.nav.walk").getString()
                 : Text.translatable("gui.station_announcer.nav.walk_to", where).getString();
@@ -408,8 +468,8 @@ public final class ClientNav {
     }
 
     private static Snapshot transferSnapshot(Leg leg, Vec3d player) {
-        Vec3d target = resolve(leg.endpointTo());
-        String where = endpointName(leg.endpointTo());
+        Vec3d target = resolve(leg.to());
+        String where = endpointNameOrUnknown(leg.to());
         String title = Text.translatable("gui.station_announcer.nav.transfer", where).getString();
         String detail = detailDistance(target, player, leg.metres());
         return new Snapshot(true, 0, "", title, detail, 0, 0, false, NavHud.COLOR_TEXT,
@@ -428,14 +488,18 @@ public final class ClientNav {
                                          @Nullable Ride ride, Vec3d player, long now) {
         Segment segment = ride == null ? null : ride.segmentAt(passedIndex);
         long routeId = segment != null ? segment.routeId() : leg.routeId();
-        SimplifiedRoute route = MinecraftClientData.getInstance().simplifiedRouteIdMap.get(routeId);
-        int color = route == null ? NavHud.COLOR_FALLBACK_BULLET : 0xFF000000 | route.getColor();
-        String routeName = route == null ? "" : firstLang(route.getName());
-        String label = routeLabel(routeName);
+        // Live MTR data first, the packet's server-resolved values second — which is
+        // the only reason any of this reads correctly outside the synced area.
+        int color = routeColor(routeId, segment != null ? segment.routeColor() : leg.routeColor());
+        String routeName = routeName(routeId, segment != null ? segment.routeName() : leg.routeName());
+        String label = bulletLabel(segment != null ? segment.routeLabel() : leg.routeLabel(), routeName);
 
         boolean aboard = lastSpeed > ABOARD_SPEED || (client.player != null && client.player.hasVehicle());
-        String alightName = platformStationName(leg.alightPlatformId());
-        int total = ride == null ? leg.stops() : Math.max(0, ride.platformIds().size() - 1);
+        String alightName = endpointNameOrUnknown(leg.to());
+        // A ride whose stop sequence could not be resolved at all still knows how many
+        // stops it is, from the planner: trust the larger of the two so a degraded
+        // sequence never counts down from 1 and fires the alight alert straight away.
+        int total = ride == null ? leg.stops() : Math.max(ride.stops().size() - 1, leg.stops());
         int done = ride == null ? 0 : Math.min(passedIndex, total);
         int remaining = Math.max(0, total - done);
 
@@ -449,13 +513,14 @@ public final class ClientNav {
         if (!aboard && passedIndex == 0) {
             // Still boarding: the target is the boarding platform and the
             // detail line is the live countdown for this route there.
-            String destination = segment != null && !segment.destination().isEmpty()
-                    ? segment.destination()
-                    : firstLang(current.destination());
+            String destination = headsign(routeId, segment != null ? segment.headsign() : leg.headsign());
+            if (destination.isEmpty()) {
+                destination = firstLang(current.destination());
+            }
             title = Text.translatable("gui.station_announcer.nav.board",
                     displayRoute(label, routeName), destination).getString();
-            target = platformPosition(leg.boardPlatformId());
-            targetLabel = platformStationName(leg.boardPlatformId());
+            target = resolve(leg.from());
+            targetLabel = endpointNameOrUnknown(leg.from());
             long departure = departureMillis(leg.boardPlatformId(), routeId, now);
             if (departure > Long.MIN_VALUE) {
                 long untilMillis = departure - now;
@@ -480,7 +545,7 @@ public final class ClientNav {
                         : Text.translatable("gui.station_announcer.nav.platform", platformName).getString();
             }
         } else {
-            target = platformPosition(leg.alightPlatformId());
+            target = resolve(leg.to());
             targetLabel = alightName;
             if (remaining <= 1) {
                 title = Text.translatable("gui.station_announcer.nav.alight", alightName).getString();
@@ -491,7 +556,7 @@ public final class ClientNav {
             } else if (segment != null && segment.index() > 0) {
                 // Through-run: the vehicle carries on as a different route.
                 title = Text.translatable("gui.station_announcer.nav.continues_as",
-                        displayRoute(label, routeName), segment.destination()).getString();
+                        displayRoute(label, routeName), headsign(routeId, segment.headsign())).getString();
                 detail = stopsDetail(remaining, alightName);
             } else {
                 title = Text.translatable("gui.station_announcer.nav.stay_on",
@@ -521,11 +586,13 @@ public final class ClientNav {
      * never rewinds the instruction.
      */
     private static void advanceRideProgress(Ride ride, Vec3d player) {
-        List<Long> ids = ride.platformIds();
+        List<StopRef> stops = ride.stops();
         int best = -1;
         double bestSquared = PASSED_RADIUS * PASSED_RADIUS;
-        for (int i = passedIndex; i < ids.size(); i++) {
-            Vec3d pos = platformPosition(ids.get(i));
+        for (int i = passedIndex; i < stops.size(); i++) {
+            // StopRef.position() is live-then-packet, so a stop this client has never
+            // synced still has coordinates to be measured against.
+            Vec3d pos = stops.get(i).position();
             if (pos == null) {
                 continue;
             }
@@ -542,7 +609,11 @@ public final class ClientNav {
 
     // ------------------------------------------------------- ride sequence
 
-    /** The resolved ride for this leg, cached until the journey or the leg changes. */
+    /**
+     * The resolved ride for this leg, cached until the journey or the leg changes
+     * — EXCEPT while it is degraded, because the routes it wanted may sync at any
+     * moment and a rebuild is only a handful of map lookups.
+     */
     @Nullable
     private static Ride ride(Journey current, Leg leg) {
         long key = journeyStamp * 1_000L + legIndex;
@@ -550,73 +621,113 @@ public final class ClientNav {
             return cachedRide;
         }
         Ride built = buildRide(leg);
-        cachedRide = built;
-        cachedRideKey = key;
+        if (built.degraded()) {
+            cachedRide = null;
+            cachedRideKey = Long.MIN_VALUE;
+        } else {
+            cachedRide = built;
+            cachedRideKey = key;
+        }
         return built;
     }
 
     /**
-     * Expands the ride into one platform sequence plus the segment boundaries
-     * of any through-run. A segment whose route is not synced yet degrades to
-     * its two endpoints, so the HUD keeps working with partial data.
+     * Expands the ride into one stop sequence plus the segment boundaries of any
+     * through-run.
+     *
+     * <p>MTR's {@code SimplifiedRoute} is preferred because it is live and carries
+     * platform IDS, which keep working as the player rides into range. When ANY
+     * segment cannot be resolved from it, the SERVER's stop list takes over whole:
+     * it is complete, ordered and positioned, so "3 stops to …" keeps counting down
+     * far outside the synced area. Only when neither exists does a segment fall back
+     * to its two endpoints.</p>
      */
     private static Ride buildRide(Leg leg) {
         List<Via> vias = leg.vias();
         List<Segment> segments = new ArrayList<>(vias.size() + 1);
-        List<Long> sequence = new ArrayList<>();
+        List<StopRef> sequence = new ArrayList<>();
+        boolean degraded = false;
 
-        long startId = leg.boardPlatformId();
         for (int i = 0; i <= vias.size(); i++) {
             long routeId = i == 0 ? leg.routeId() : vias.get(i - 1).routeId();
-            long from = i == 0 ? startId : vias.get(i - 1).atPlatformId();
+            long from = i == 0 ? leg.boardPlatformId() : vias.get(i - 1).atPlatformId();
             long to = i < vias.size() ? vias.get(i).atPlatformId() : leg.alightPlatformId();
 
             List<Long> part = platformsBetween(routeId, from, to);
+            if (part == null) {
+                degraded = true;
+                part = from == to ? List.of(from) : List.of(from, to);
+            }
             int begin = sequence.size();
             for (Long id : part) {
-                if (sequence.isEmpty() || !sequence.get(sequence.size() - 1).equals(id)) {
+                if (sequence.isEmpty() || sequence.get(sequence.size() - 1).platformId() != id) {
                     if (sequence.size() >= MAX_SEQUENCE) {
                         break;
                     }
-                    sequence.add(id);
+                    sequence.add(new StopRef(id, "", 0, 0, 0));
                 }
             }
             int end = Math.max(begin, sequence.size() - 1);
-            segments.add(new Segment(i, routeId, destinationOf(routeId, to), begin, end));
+            segments.add(i == 0
+                    ? new Segment(0, routeId, leg.routeName(), leg.routeLabel(), leg.routeColor(),
+                            leg.headsign(), begin, end)
+                    : new Segment(i, routeId, vias.get(i - 1).routeName(), vias.get(i - 1).routeLabel(),
+                            vias.get(i - 1).routeColor(), vias.get(i - 1).headsign(), begin, end));
         }
-        return new Ride(List.copyOf(sequence), List.copyOf(segments));
+
+        if (degraded && leg.stopList().size() >= 2) {
+            return packetRide(leg);
+        }
+        return new Ride(List.copyOf(sequence), List.copyOf(segments), degraded);
     }
 
-    /** The route's platforms from {@code from} to {@code to} inclusive, or the two endpoints. */
+    /**
+     * The ride rebuilt from the server's stop list. The two ends keep their platform
+     * ids (so they still upgrade to live positions the moment MTR syncs them); the
+     * stops in between are packet-only, which is exactly what makes the countdown
+     * work before the player has ever been near them.
+     *
+     * <p>It collapses to ONE segment: the wire carries no id per stop, so a
+     * through-run's handover cannot be located inside the list. The "continues as"
+     * title therefore waits for route data to sync; the {@code via} lines in the
+     * chat itinerary are unaffected, since those read the leg directly.</p>
+     */
+    private static Ride packetRide(Leg leg) {
+        List<PacketStop> packet = leg.stopList();
+        int count = Math.min(packet.size(), MAX_SEQUENCE);
+        List<StopRef> stops = new ArrayList<>(count);
+        for (int i = 0; i < count; i++) {
+            PacketStop stop = packet.get(i);
+            long id = i == 0 ? leg.boardPlatformId() : i == count - 1 ? leg.alightPlatformId() : 0;
+            stops.add(new StopRef(id, stop.name(), stop.x(), stop.y(), stop.z()));
+        }
+        Segment only = new Segment(0, leg.routeId(), leg.routeName(), leg.routeLabel(), leg.routeColor(),
+                leg.headsign(), 0, Math.max(0, count - 1));
+        return new Ride(List.copyOf(stops), List.of(only), true);
+    }
+
+    /**
+     * The route's platforms from {@code from} to {@code to} inclusive, or NULL when
+     * MTR has not synced enough of that route to say — the caller then decides
+     * whether to use the server's list or just the two endpoints.
+     */
+    @Nullable
     private static List<Long> platformsBetween(long routeId, long from, long to) {
         SimplifiedRoute route = MinecraftClientData.getInstance().simplifiedRouteIdMap.get(routeId);
-        if (route != null) {
-            int start = route.getPlatformIndex(from);
-            int end = route.getPlatformIndex(to);
-            ObjectArrayList<SimplifiedRoutePlatform> platforms = route.getPlatforms();
-            if (start >= 0 && end > start && end < platforms.size()) {
-                List<Long> ids = new ArrayList<>(end - start + 1);
-                for (int i = start; i <= end && ids.size() < MAX_SEQUENCE; i++) {
-                    ids.add(platforms.get(i).getPlatformId());
-                }
-                return ids;
-            }
-        }
-        return from == to ? List.of(from) : List.of(from, to);
-    }
-
-    /** The destination string a route shows when heading toward this platform. */
-    private static String destinationOf(long routeId, long towardPlatformId) {
-        SimplifiedRoute route = MinecraftClientData.getInstance().simplifiedRouteIdMap.get(routeId);
         if (route == null) {
-            return platformStationName(towardPlatformId);
+            return null;
         }
+        int start = route.getPlatformIndex(from);
+        int end = route.getPlatformIndex(to);
         ObjectArrayList<SimplifiedRoutePlatform> platforms = route.getPlatforms();
-        if (platforms.isEmpty()) {
-            return platformStationName(towardPlatformId);
+        if (start < 0 || end <= start || end >= platforms.size()) {
+            return from == to ? List.of(from) : null;
         }
-        String destination = firstLang(platforms.get(platforms.size() - 1).getStationName());
-        return destination.isEmpty() ? platformStationName(towardPlatformId) : destination;
+        List<Long> ids = new ArrayList<>(end - start + 1);
+        for (int i = start; i <= end && ids.size() < MAX_SEQUENCE; i++) {
+            ids.add(platforms.get(i).getPlatformId());
+        }
+        return ids;
     }
 
     // ----------------------------------------------------------- arrivals
@@ -718,7 +829,7 @@ public final class ClientNav {
 
     private static Text legLine(Leg leg) {
         if (leg.type() == LEG_WALK) {
-            String where = endpointName(leg.endpointTo());
+            String where = endpointName(leg.to());
             MutableText line = where.isEmpty()
                     ? Text.translatable("msg.station_announcer.nav.leg_walk_plain", leg.metres())
                     : Text.translatable("msg.station_announcer.nav.leg_walk", leg.metres(), where);
@@ -726,29 +837,37 @@ public final class ClientNav {
         }
         if (leg.type() == LEG_TRANSFER) {
             return bullet(0, "").append(Text.translatable("msg.station_announcer.nav.leg_transfer",
-                    platformStationName(leg.alightPlatformId()), leg.metres()).formatted(Formatting.WHITE));
+                    endpointNameOrUnknown(leg.to()), leg.metres()).formatted(Formatting.WHITE));
         }
-        SimplifiedRoute route = MinecraftClientData.getInstance().simplifiedRouteIdMap.get(leg.routeId());
-        int color = route == null ? NavHud.COLOR_FALLBACK_BULLET : 0xFF000000 | route.getColor();
-        String routeName = route == null ? "" : firstLang(route.getName());
-        String label = displayRoute(routeLabel(routeName), routeName);
+        // Live route data first, the server's resolved values second: this line is
+        // exactly where "? ? from Unknown stop to Unknown stop" used to appear for
+        // anything beyond MTR's sync radius.
+        int color = routeColor(leg.routeId(), leg.routeColor());
+        String routeName = routeName(leg.routeId(), leg.routeName());
+        String shortLabel = bulletLabel(leg.routeLabel(), routeName);
+        String label = displayRoute(shortLabel, routeName);
         MutableText line = Text.translatable(
                 leg.stops() == 1
                         ? "msg.station_announcer.nav.leg_ride_one"
                         : "msg.station_announcer.nav.leg_ride",
                 label,
-                platformStationName(leg.boardPlatformId()),
-                platformStationName(leg.alightPlatformId()),
+                endpointNameOrUnknown(leg.from()),
+                endpointNameOrUnknown(leg.to()),
                 leg.stops()).formatted(Formatting.WHITE);
-        MutableText out = bullet(color, routeLabel(routeName)).append(line);
+        MutableText out = bullet(color, shortLabel).append(line);
         for (Via via : leg.vias()) {
-            SimplifiedRoute viaRoute = MinecraftClientData.getInstance()
-                    .simplifiedRouteIdMap.get(via.routeId());
-            String viaName = viaRoute == null ? "" : firstLang(viaRoute.getName());
+            String viaName = routeName(via.routeId(), via.routeName());
+            String viaLabel = bulletLabel(via.routeLabel(), viaName);
+            // The one name the wire format has no slot for: a via carries the handover
+            // PLATFORM id but no name for it (the strings it does carry describe the
+            // route the train becomes). Live lookup or the placeholder, therefore.
+            String viaAt = livePlatformStationName(via.atPlatformId());
+            if (viaAt.isEmpty()) {
+                viaAt = Text.translatable("gui.station_announcer.nav.unknown").getString();
+            }
             out.append(Text.literal("\n")).append(
                     Text.translatable("msg.station_announcer.nav.leg_via",
-                                    displayRoute(routeLabel(viaName), viaName),
-                                    platformStationName(via.atPlatformId()))
+                                    displayRoute(viaLabel, viaName), viaAt)
                             .formatted(Formatting.GRAY));
         }
         return out;
@@ -773,14 +892,26 @@ public final class ClientNav {
 
     // ------------------------------------------------------------ resolving
 
+    /**
+     * The world position a leg's endpoint points at. Loose coordinates are used as
+     * given; a platform prefers MTR's live entry and falls back to the position the
+     * SERVER resolved, which is what lets the waypoint and the leg-advance test
+     * work for a platform this client has never been near. Null only when neither
+     * side knew.
+     */
     @Nullable
-    private static Vec3d resolve(Endpoint endpoint) {
+    private static Vec3d resolve(@Nullable Endpoint endpoint) {
         if (endpoint == null) {
             return null;
         }
-        return endpoint.isPlatform()
-                ? platformPosition(endpoint.platformId())
-                : new Vec3d(endpoint.x(), endpoint.y(), endpoint.z());
+        if (!endpoint.isPlatform()) {
+            return endpoint.packetPosition();
+        }
+        Vec3d live = platformPosition(endpoint.platformId());
+        if (live != null) {
+            return live;
+        }
+        return endpoint.hasPosition() ? endpoint.packetPosition() : null;
     }
 
     /** The middle of a platform, in world coordinates, or null when it is not synced. */
@@ -797,27 +928,103 @@ public final class ClientNav {
         return new Vec3d(position.getX() + 0.5, position.getY() + 0.5, position.getZ() + 0.5);
     }
 
-    /** The station a platform belongs to, falling back to the platform's own name. */
-    private static String platformStationName(long platformId) {
+    /**
+     * The station a platform belongs to (else the platform's own name) from MTR's
+     * LIVE client data, or "" when that platform is not synced. Never returns a
+     * placeholder — the callers layer the packet's name in first.
+     */
+    private static String livePlatformStationName(long platformId) {
+        if (platformId == 0) {
+            return "";
+        }
         Platform platform = MinecraftClientData.getInstance().platformIdMap.get(platformId);
         if (platform == null) {
-            return Text.translatable("gui.station_announcer.nav.unknown").getString();
+            return "";
         }
         Station station = platform.area;
         if (station != null && !station.getName().isEmpty()) {
             return firstLang(station.getName());
         }
-        String name = firstLang(platform.getName());
+        return firstLang(platform.getName());
+    }
+
+    /**
+     * The name to show for an endpoint: MTR's live lookup, then the name the server
+     * put in the packet, then "" — the caller decides whether an empty name means
+     * "omit the phrase" or "say Unknown".
+     */
+    private static String endpointName(@Nullable Endpoint endpoint) {
+        if (endpoint == null) {
+            return "";
+        }
+        if (endpoint.isPlatform()) {
+            String live = livePlatformStationName(endpoint.platformId());
+            if (!live.isEmpty()) {
+                return live;
+            }
+        }
+        return endpoint.name();
+    }
+
+    /** {@link #endpointName} with the "Unknown stop" placeholder as the LAST resort. */
+    private static String endpointNameOrUnknown(@Nullable Endpoint endpoint) {
+        String name = endpointName(endpoint);
         return name.isEmpty() ? Text.translatable("gui.station_announcer.nav.unknown").getString() : name;
     }
 
+    /** The platform's own name/number, live only — it is a nicety, never a fallback chain. */
     private static String platformName(long platformId) {
         Platform platform = MinecraftClientData.getInstance().platformIdMap.get(platformId);
         return platform == null ? "" : firstLang(platform.getName());
     }
 
-    private static String endpointName(Endpoint endpoint) {
-        return endpoint != null && endpoint.isPlatform() ? platformStationName(endpoint.platformId()) : "";
+    // ------------------------------------------------------------ route resolving
+
+    /** The route's display name: live {@code SimplifiedRoute} first, packet second, "" last. */
+    private static String routeName(long routeId, String packetName) {
+        SimplifiedRoute route = MinecraftClientData.getInstance().simplifiedRouteIdMap.get(routeId);
+        String live = route == null ? "" : firstLang(route.getName());
+        return live.isEmpty() ? packetName : live;
+    }
+
+    /** The route's bullet colour as ARGB: live first, packet second, the grey fallback last. */
+    private static int routeColor(long routeId, int packetColor) {
+        SimplifiedRoute route = MinecraftClientData.getInstance().simplifiedRouteIdMap.get(routeId);
+        if (route != null) {
+            return 0xFF000000 | route.getColor();
+        }
+        return packetColor >= 0 ? 0xFF000000 | packetColor : NavHud.COLOR_FALLBACK_BULLET;
+    }
+
+    /**
+     * The bullet label. The PACKET value wins here when it exists, because the server
+     * reads MTR's real {@code Route.routeNumber} while the client can only guess from
+     * the name — and a bullet that changed text as the player rode into sync range
+     * would read as a different line.
+     */
+    private static String bulletLabel(String packetLabel, String resolvedRouteName) {
+        if (!packetLabel.isEmpty()) {
+            return packetLabel;
+        }
+        return routeLabel(resolvedRouteName);
+    }
+
+    /**
+     * Where a train on this route finishes: the live route's last stop, then the
+     * headsign the server resolved, then "".
+     */
+    private static String headsign(long routeId, String packetHeadsign) {
+        SimplifiedRoute route = MinecraftClientData.getInstance().simplifiedRouteIdMap.get(routeId);
+        if (route != null) {
+            ObjectArrayList<SimplifiedRoutePlatform> platforms = route.getPlatforms();
+            if (!platforms.isEmpty()) {
+                String live = firstLang(platforms.get(platforms.size() - 1).getStationName());
+                if (!live.isEmpty()) {
+                    return live;
+                }
+            }
+        }
+        return packetHeadsign;
     }
 
     private static double distance(@Nullable Vec3d target, Vec3d player) {
@@ -888,49 +1095,103 @@ public final class ClientNav {
         }
     }
 
-    /** One endpoint of a walking leg: either world coordinates or a platform. */
-    private record Endpoint(boolean isPlatform, long platformId, double x, double y, double z) {
-        static Endpoint coords(double x, double y, double z) {
-            return new Endpoint(false, 0, x, y, z);
+    /**
+     * One endpoint of a leg: world coordinates, or a platform carrying the id AND
+     * the position and name the SERVER resolved for it. The packet values are the
+     * fallback for everything MTR has not synced to this client — which is every
+     * platform outside the player's own area, i.e. most of any real journey.
+     *
+     * <p>A platform position of exactly (0, 0, 0) means "the server did not know
+     * either"; likewise an empty name.</p>
+     */
+    private record Endpoint(boolean isPlatform, long platformId, double x, double y, double z, String name) {
+        boolean hasPosition() {
+            return x != 0 || y != 0 || z != 0;
         }
 
-        static Endpoint platform(long platformId) {
-            return new Endpoint(true, platformId, 0, 0, 0);
+        Vec3d packetPosition() {
+            return new Vec3d(x, y, z);
         }
     }
 
     /** A through-run handover: the vehicle continues as {@code routeId} at {@code atPlatformId}. */
-    private record Via(long routeId, long atPlatformId) {
+    private record Via(long routeId, long atPlatformId, String routeName, String routeLabel,
+                       int routeColor, String headsign) {
     }
 
-    /** One itinerary step. Unused fields are zero for the type in question. */
-    private record Leg(int type, @Nullable Endpoint endpointFrom, @Nullable Endpoint endpointTo,
-                       int metres, long routeId, long boardPlatformId, long alightPlatformId,
-                       int stops, List<Via> vias) {
+    /** One server-resolved stop of a ride: what it is called and where it is. */
+    private record PacketStop(String name, double x, double y, double z) {
+    }
+
+    /**
+     * One itinerary step. Unused fields are zero/empty for the type in question;
+     * for rides and transfers {@code from}/{@code to} are the board and alight
+     * platforms.
+     */
+    private record Leg(int type, @Nullable Endpoint from, @Nullable Endpoint to,
+                       int metres, long routeId, String routeName, String routeLabel, int routeColor,
+                       String headsign, int stops, List<Via> vias, List<PacketStop> stopList) {
         static Leg walk(Endpoint from, Endpoint to, int metres) {
-            return new Leg(LEG_WALK, from, to, metres, 0, 0, 0, 0, List.of());
+            return new Leg(LEG_WALK, from, to, metres, 0, "", "", -1, "", 0, List.of(), List.of());
         }
 
-        static Leg ride(long routeId, long board, long alight, int stops, List<Via> vias) {
-            return new Leg(LEG_RIDE, Endpoint.platform(board), Endpoint.platform(alight),
-                    0, routeId, board, alight, stops, vias);
+        static Leg ride(long routeId, String routeName, String routeLabel, int routeColor, String headsign,
+                        Endpoint board, Endpoint alight, int stops, List<Via> vias, List<PacketStop> stopList) {
+            return new Leg(LEG_RIDE, board, alight, 0, routeId, routeName, routeLabel, routeColor,
+                    headsign, stops, vias, stopList);
         }
 
-        static Leg transfer(long from, long to, int metres) {
-            return new Leg(LEG_TRANSFER, Endpoint.platform(from), Endpoint.platform(to),
-                    metres, 0, from, to, 0, List.of());
+        static Leg transfer(Endpoint from, Endpoint to, int metres) {
+            return new Leg(LEG_TRANSFER, from, to, metres, 0, "", "", -1, "", 0, List.of(), List.of());
+        }
+
+        long boardPlatformId() {
+            return from == null ? 0 : from.platformId();
+        }
+
+        long alightPlatformId() {
+            return to == null ? 0 : to.platformId();
         }
     }
 
     private record Journey(String destination, List<Leg> legs, long plannedArriveMs) {
     }
 
-    /** One stretch of a ride under a single route; {@code index} 0 is the boarded route. */
-    private record Segment(int index, long routeId, String destination, int firstStop, int lastStop) {
+    /**
+     * One stretch of a ride under a single route; {@code index} 0 is the boarded
+     * route. The route fields are the PACKET's values — the live lookup is redone
+     * every snapshot, so a route that syncs mid-journey starts winning immediately.
+     */
+    private record Segment(int index, long routeId, String routeName, String routeLabel, int routeColor,
+                           String headsign, int firstStop, int lastStop) {
     }
 
-    /** A ride leg expanded into its platform sequence plus the through-run segments. */
-    private record Ride(List<Long> platformIds, List<Segment> segments) {
+    /**
+     * One stop of the ride's resolved sequence. {@link #position()} is the whole
+     * fallback chain in one place: MTR's live entry when this client has it, the
+     * position the server resolved when it does not — which is what keeps the stop
+     * countdown advancing outside the synced area. {@code name} is the server's, kept
+     * for the intermediate stops the wire carries no id for.
+     */
+    private record StopRef(long platformId, String name, double x, double y, double z) {
+        @Nullable
+        Vec3d position() {
+            Vec3d live = platformPosition(platformId);
+            if (live != null) {
+                return live;
+            }
+            return x != 0 || y != 0 || z != 0 ? new Vec3d(x, y, z) : null;
+        }
+    }
+
+    /**
+     * A ride leg expanded into its stop sequence plus the through-run segments.
+     *
+     * @param degraded true when MTR could not supply the route's platform order, so
+     *                 the sequence came from the packet (or, with no packet stop
+     *                 list, is just the two endpoints)
+     */
+    private record Ride(List<StopRef> stops, List<Segment> segments, boolean degraded) {
         @Nullable
         Segment segmentAt(int stopIndex) {
             Segment found = null;

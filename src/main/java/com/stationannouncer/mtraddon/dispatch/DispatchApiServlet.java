@@ -163,8 +163,13 @@ public final class DispatchApiServlet extends ServletBase {
 
     // ------------------------------------------------------------ nav endpoints
 
-    /** Bodies bigger than this are refused unread; a journey is a few hundred bytes. */
-    private static final int MAX_NAV_BODY_BYTES = 16 * 1024;
+    /**
+     * Bodies bigger than this are refused unread. Raised from 16 KB with the v2 wire
+     * format: a journey now carries a display name and a position for every endpoint
+     * plus a per-ride stop list (up to 24 legs × 48 stops × ~100 bytes), so the old cap
+     * would have rejected a long itinerary outright.
+     */
+    private static final int MAX_NAV_BODY_BYTES = 64 * 1024;
     /**
      * How long a nav request will wait for its hop onto the server thread. Bounded, and
      * only reached when that thread is already badly behind — the reply then says so
@@ -187,7 +192,16 @@ public final class DispatchApiServlet extends ServletBase {
      *       mirroring {@link NavNetworking}'s packet with every id as a DECIMAL STRING
      *       (JavaScript cannot hold MTR's random longs exactly). Rate limited to one
      *       accepted send per {@link NavStore#SEND_COOLDOWN_MILLIS} ms per token AND per
-     *       target player.</li>
+     *       target player.
+     *       <p>The browser has NO simulator here, so it also supplies what it resolved
+     *       from its own map payload, all OPTIONAL: {@code "name"} and
+     *       {@code "pos":[x,y,z]} on walk endpoints; {@code "routeName"},
+     *       {@code "routeLabel"}, {@code "routeColor"}, {@code "headsign"},
+     *       {@code "boardName"}/{@code "boardPos"}, {@code "alightName"}/
+     *       {@code "alightPos"} and {@code "stopList":[{"name":…,"pos":[…]}]} on ride
+     *       legs; {@code "fromName"}/{@code "fromPos"} and {@code "toName"}/
+     *       {@code "toPos"} on transfers. Each is capped and stripped of control
+     *       characters; a missing one is never a reason to reject the journey.</p></li>
      *   <li>{@code GET navstatus?token=…} → {@code {"ok":true,"player":"…","online":true}}.</li>
      * </ul>
      *
@@ -372,7 +386,11 @@ public final class DispatchApiServlet extends ServletBase {
                             throw new IllegalArgumentException("leg " + index + ": via " + v + " is not an object");
                         }
                         JsonObject entry = viaJson.get(v).getAsJsonObject();
-                        via.add(new NavPlanner.Via(id(entry, "route", index), id(entry, "at", index)));
+                        via.add(new NavPlanner.Via(id(entry, "route", index), id(entry, "at", index),
+                                string(entry, "routeName", NavNetworking.MAX_ROUTE_NAME_LENGTH),
+                                string(entry, "routeLabel", NavNetworking.MAX_ROUTE_LABEL_LENGTH),
+                                routeColor(entry),
+                                string(entry, "headsign", NavNetworking.MAX_HEADSIGN_LENGTH)));
                     }
                 }
                 int stops = 0;
@@ -384,29 +402,152 @@ public final class DispatchApiServlet extends ServletBase {
                         stops = 0;
                     }
                 }
-                yield new NavPlanner.RideLeg(id(legJson, "route", index), id(legJson, "board", index),
-                        id(legJson, "alight", index), stops, List.copyOf(via));
+                yield new NavPlanner.RideLeg(id(legJson, "route", index),
+                        string(legJson, "routeName", NavNetworking.MAX_ROUTE_NAME_LENGTH),
+                        string(legJson, "routeLabel", NavNetworking.MAX_ROUTE_LABEL_LENGTH),
+                        routeColor(legJson),
+                        string(legJson, "headsign", NavNetworking.MAX_HEADSIGN_LENGTH),
+                        namedPlatform(legJson, "board", index),
+                        namedPlatform(legJson, "alight", index),
+                        stops, List.copyOf(via), parseStopList(legJson));
             }
-            case "transfer" -> new NavPlanner.TransferLeg(id(legJson, "from", index),
-                    id(legJson, "to", index), metres(legJson));
+            case "transfer" -> new NavPlanner.TransferLeg(namedPlatform(legJson, "from", index),
+                    namedPlatform(legJson, "to", index), metres(legJson));
             default -> throw new IllegalArgumentException("leg " + index + " has unknown type \"" + type + "\"");
         };
     }
 
-    /** {@code {"x":…,"y":…,"z":…}} or {@code {"platform":"<decimal id>"}}. */
+    /**
+     * {@code {"x":…,"y":…,"z":…}} or {@code {"platform":"<decimal id>"}}, either of which
+     * may also carry {@code "name"} and {@code "pos":[x,y,z]}. Names and positions are
+     * OPTIONAL and never a reason to reject a journey — an absent one simply means the
+     * HUD falls back to whatever MTR has synced to that player.
+     */
     private static NavPlanner.Point parsePoint(JsonElement element, int index, String field) {
         if (element == null || !element.isJsonObject()) {
             throw new IllegalArgumentException("leg " + index + ": " + field + " is not an object");
         }
         JsonObject point = element.getAsJsonObject();
+        String name = string(point, "name", NavNetworking.MAX_NAME_LENGTH);
         if (point.has("platform")) {
-            return NavPlanner.Point.ofPlatform(id(point, "platform", index));
+            double[] pos = position(point, "pos");
+            return NavPlanner.Point.ofPlatform(id(point, "platform", index), pos[0], pos[1], pos[2], name);
+        }
+        if (point.has("x") && point.has("y") && point.has("z")) {
+            try {
+                return new NavPlanner.Point(false, 0, finite(point.get("x").getAsDouble()),
+                        finite(point.get("y").getAsDouble()), finite(point.get("z").getAsDouble()), name);
+            } catch (RuntimeException e) {
+                throw new IllegalArgumentException("leg " + index + ": " + field + " needs x/y/z or platform");
+            }
+        }
+        if (point.has("pos")) {
+            // Loose coordinates may also arrive in the same "pos":[x,y,z] shape the
+            // platform endpoints use, so a caller need only learn one spelling.
+            double[] pos = position(point, "pos");
+            return new NavPlanner.Point(false, 0, pos[0], pos[1], pos[2], name);
+        }
+        throw new IllegalArgumentException("leg " + index + ": " + field + " needs x/y/z, pos or platform");
+    }
+
+    /**
+     * A ride/transfer endpoint, which is always a platform: {@code "<field>"} is the
+     * required decimal id, {@code "<field>Name"} and {@code "<field>Pos"} the optional
+     * resolved name and position (e.g. {@code board} / {@code boardName} /
+     * {@code boardPos}).
+     */
+    private static NavPlanner.Point namedPlatform(JsonObject legJson, String field, int index) {
+        double[] pos = position(legJson, field + "Pos");
+        return NavPlanner.Point.ofPlatform(id(legJson, field, index), pos[0], pos[1], pos[2],
+                string(legJson, field + "Name", NavNetworking.MAX_NAME_LENGTH));
+    }
+
+    /**
+     * {@code "stopList":[{"name":…,"pos":[x,y,z]}]} — the ride's stops in order, so the
+     * HUD can count them down outside MTR's sync range. Over the cap it is TRUNCATED
+     * rather than rejected (the brief's rule: never refuse a journey over its names).
+     */
+    private static List<NavPlanner.Stop> parseStopList(JsonObject legJson) {
+        JsonElement element = legJson.get("stopList");
+        if (element == null || !element.isJsonArray()) {
+            return List.of();
+        }
+        JsonArray array = element.getAsJsonArray();
+        int count = Math.min(array.size(), NavNetworking.MAX_STOP_LIST);
+        List<NavPlanner.Stop> stops = new ArrayList<>(count);
+        for (int i = 0; i < count; i++) {
+            JsonElement entry = array.get(i);
+            if (entry == null || !entry.isJsonObject()) {
+                continue;
+            }
+            JsonObject stop = entry.getAsJsonObject();
+            double[] pos = position(stop, "pos");
+            stops.add(new NavPlanner.Stop(string(stop, "name", NavNetworking.MAX_NAME_LENGTH),
+                    pos[0], pos[1], pos[2]));
+        }
+        return List.copyOf(stops);
+    }
+
+    /**
+     * {@code "pos":[x,y,z]} (or {@code {"x":…,"y":…,"z":…}} under that key) as three
+     * finite doubles. Anything missing or unparseable is {@code (0,0,0)}, which the wire
+     * contract defines as "position unknown".
+     */
+    private static double[] position(JsonObject object, String key) {
+        double[] none = {0, 0, 0};
+        JsonElement element = object.get(key);
+        if (element == null) {
+            return none;
         }
         try {
-            return NavPlanner.Point.ofCoords(point.get("x").getAsDouble(),
-                    point.get("y").getAsDouble(), point.get("z").getAsDouble());
-        } catch (RuntimeException e) {
-            throw new IllegalArgumentException("leg " + index + ": " + field + " needs x/y/z or platform");
+            if (element.isJsonArray()) {
+                JsonArray array = element.getAsJsonArray();
+                if (array.size() < 3) {
+                    return none;
+                }
+                return new double[]{finite(array.get(0).getAsDouble()), finite(array.get(1).getAsDouble()),
+                        finite(array.get(2).getAsDouble())};
+            }
+            if (element.isJsonObject()) {
+                JsonObject point = element.getAsJsonObject();
+                return new double[]{finite(point.get("x").getAsDouble()), finite(point.get("y").getAsDouble()),
+                        finite(point.get("z").getAsDouble())};
+            }
+        } catch (RuntimeException ignored) {
+            // A malformed position is simply an absent one.
+        }
+        return none;
+    }
+
+    private static double finite(double value) {
+        return Double.isFinite(value) ? value : 0;
+    }
+
+    /**
+     * {@code "routeColor"} as a number or a {@code "#rrggbb"} / {@code "0xrrggbb"} string.
+     * −1 (the wire's "unknown") for anything absent or unparseable.
+     */
+    private static int routeColor(JsonObject object) {
+        JsonElement element = object.get("routeColor");
+        if (element == null || !element.isJsonPrimitive()) {
+            return -1;
+        }
+        try {
+            String raw = element.getAsString().trim();
+            if (raw.isEmpty()) {
+                return -1;
+            }
+            if (raw.startsWith("#")) {
+                raw = raw.substring(1);
+            } else if (raw.startsWith("0x") || raw.startsWith("0X")) {
+                raw = raw.substring(2);
+            } else {
+                // A plain decimal number, which is how JSON normally carries it.
+                return (int) (Long.parseLong(raw) & 0xFFFFFF);
+            }
+            return (int) (Long.parseLong(raw, 16) & 0xFFFFFF);
+        } catch (RuntimeException ignored) {
+            return -1;
         }
     }
 
@@ -438,7 +579,12 @@ public final class DispatchApiServlet extends ServletBase {
         }
     }
 
-    /** A capped, never-null string field. */
+    /**
+     * A capped, never-null string field with every control character stripped. The
+     * browser is an untrusted source and these strings are drawn straight onto the HUD
+     * and into chat, so newlines, section signs and the like must never survive: a
+     * {@code §} would let a journey recolour chat, and a newline would forge lines.
+     */
     private static String string(JsonObject object, String key, int maxLength) {
         JsonElement element = object.get(key);
         if (element == null || !element.isJsonPrimitive()) {
@@ -446,7 +592,14 @@ public final class DispatchApiServlet extends ServletBase {
         }
         try {
             String value = element.getAsString();
-            return value.length() <= maxLength ? value : value.substring(0, maxLength);
+            StringBuilder builder = new StringBuilder(Math.min(value.length(), maxLength));
+            for (int i = 0; i < value.length() && builder.length() < maxLength; i++) {
+                char c = value.charAt(i);
+                if (c >= ' ' && c != 0x7F && c != '§') {
+                    builder.append(c);
+                }
+            }
+            return builder.toString();
         } catch (RuntimeException ignored) {
             return "";
         }

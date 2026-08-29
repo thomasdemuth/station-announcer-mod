@@ -3192,3 +3192,40 @@ strings the UI parses; `/navpair` and `/nav` register and refuse the console
 cleanly. harness.mjs 512 + planner.mjs 81 green — **both harnesses now live in
 `tools/` instead of the scratchpad** so they survive sessions. NOT tested in
 game: pairing round trip, HUD/waypoint rendering, alerts, /nav planning quality.
+
+## Nav packet v2 — names + positions on the wire (2026-08-29, Thomas's in-game report)
+
+**Bug:** the HUD/chat printed "Unknown stop" and "? ?" for anything outside MTR's
+synced area. The v1 packet carried IDS ONLY on the theory the client could
+resolve everything from MTR client data — but MTR syncs `platformIdMap` /
+`simplifiedRouteIdMap` AROUND THE PLAYER. Two silent consequences beyond the
+visible text: the in-world waypoint had no position to aim at, and
+`advanceRideProgress`/leg-advance could never fire, because both need platform
+POSITIONS. Navigation effectively only worked inside the synced bubble.
+
+**Fix — wire v2 carries the server's resolved display data beside every id:**
+per walk/transfer endpoint a name + world position; per ride the route name,
+bullet label, colour, headsign, board/alight names + positions, and the
+intermediate stop list (≤48). Client resolution is LIVE-FIRST, packet second,
+placeholder last (six call sites: waypoint target, leg advance, stop progress,
+place names, route name/colour, headsign) — so it self-upgrades as MTR syncs.
+EXCEPTION: the bullet label prefers the PACKET (the server reads MTR's real
+`routeNumber`; the client only has a name heuristic, so live-first would make
+the bullet change text as the rider entered sync range).
+
+Details worth keeping: platform positions are written BLOCK-CENTRED (mid + 0.5)
+so packet and live coordinates never disagree by half a block; a ride with >48
+stops sends an EMPTY list rather than a truncated one (a partial list counts
+down to the WRONG stop, an absent one falls back to the planner's count); a
+degraded ride is deliberately NOT cached so it re-resolves at 4 Hz and upgrades
+the moment data syncs; total stops = max(sequence−1, leg.stops) because a
+degraded 2-endpoint sequence otherwise fired the alight alert on boarding; the
+servlet strips control chars AND `§` from browser-supplied names (they land in
+chat) and accepts colours as int / #rrggbb / 0xrrggbb; body cap 16 KB → 64 KB
+on both sides. map.js sends everything it already knows (names, positions, stop
+list, per-continuation route data).
+
+VERIFIED: compile green, dedicated server boots clean in 2.19 s with zero addon
+errors, endpoints unchanged; harness 516 + planner 81 green, including four new
+regression checks asserting every ride ships names, positions, a stop list and
+within-cap fields. Both harnesses now live in `tools/`. NOT re-tested in game.

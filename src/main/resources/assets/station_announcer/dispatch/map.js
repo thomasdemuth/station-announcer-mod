@@ -4668,7 +4668,14 @@ const PAIR_CODE_LEN = 6;
 const NAV_MAX_LEGS = 24;
 const NAV_MAX_VIA = 4;
 const NAV_DEST_MAX = 64;
-const NAV_MAX_BODY = 16 * 1024;
+/** Station/headsign names, route names and bullet labels sent alongside the ids. */
+const NAV_NAME_MAX = 64;
+const NAV_ROUTE_NAME_MAX = 48;
+const NAV_ROUTE_LABEL_MAX = 8;
+/** Intermediate stops per ride, so the HUD counts down beyond MTR's synced area. */
+const NAV_MAX_STOP_LIST = 48;
+/** 64 KB, not 16: the names and stop lists that keep the HUD readable are what fill it. */
+const NAV_MAX_BODY = 64 * 1024;
 /** The server allows one send per 3 s; the button holds the same line locally. */
 const NAV_SEND_COOLDOWN_MS = 3000;
 const NAV_TOAST_MS = 4200;
@@ -4751,42 +4758,102 @@ function navPointOf(pointId) {
 }
 
 /**
+ * The station a platform belongs to, and where it is in the world.
+ *
+ * BOTH travel on the wire, because the game client can only resolve a platform id that
+ * MTR has synced to it — everything outside the player's synced area came out as
+ * "Unknown stop", and the in-world waypoint had no position to point at. The client
+ * still prefers its own live lookup; these are the fallback.
+ */
+function navPlatformInfo(platformId) {
+	const p = state.platforms.get(platformId);
+	if (!p) return null;
+	const name = stationLabel(p.stationId, p.partId) || p.name || "";
+	const xz = p.xz || [0, 0];
+	return { name: String(name).slice(0, NAV_NAME_MAX), pos: [round2(xz[0]),
+		round2(Number.isFinite(p.y) ? p.y : NAV_DEFAULT_Y), round2(xz[1])] };
+}
+
+/**
  * One end of a walk leg on the wire: `{platform:id}` for a real platform, world
  * coordinates for a dropped pin / the live GPS origin. A point carries no height of its
  * own unless it came from a player, so the y is borrowed from the platform at the OTHER
- * end of the same walk, and only then falls back to 64.
+ * end of the same walk, and only then falls back to 64. Either shape may carry `name`,
+ * and a platform end also carries `pos` (see navPlatformInfo).
  */
 function navEndpoint(leg, which) {
 	const point = which === "to" ? leg.toPoint : leg.fromPoint;
 	const id = which === "to" ? leg.toPlatform : leg.fromPlatform;
-	if (!point) return { platform: String(id) };
+	const label = String((which === "to" ? leg.toName : leg.fromName) || "").slice(0, NAV_NAME_MAX);
+	if (!point) {
+		const info = navPlatformInfo(id);
+		const out = { platform: String(id) };
+		const name = label || (info && info.name) || "";
+		if (name) out.name = name;
+		if (info) out.pos = info.pos;
+		return out;
+	}
 	const pt = navPointOf(point) || navPointOf(id);
 	const xz = (pt && pt.xz) || [0, 0];
 	const other = state.platforms.get(which === "to" ? leg.fromPlatform : leg.toPlatform);
 	const y = pt && Number.isFinite(pt.y) ? pt.y
 		: other && Number.isFinite(other.y) ? other.y : NAV_DEFAULT_Y;
-	return { x: round2(xz[0]), y: round2(y), z: round2(xz[1]) };
+	const out = { x: round2(xz[0]), y: round2(y), z: round2(xz[1]) };
+	if (label) out.name = label;
+	return out;
 }
 
 /** One leg on the wire. Ride / transfer / walk — the only three shapes the HUD reads. */
 function navLegPayload(leg) {
 	if (!leg) return null;
 	if (leg.kind === "ride") {
+		const board = navPlatformInfo(leg.fromPlatform), alight = navPlatformInfo(leg.toPlatform);
 		const out = {
 			type: "ride", route: String(leg.routeId),
 			board: String(leg.fromPlatform), alight: String(leg.toPlatform),
 			stops: Math.max(0, Math.round(leg.stopCount || 0)),
+			// Everything below is what the game client cannot look up beyond MTR's synced
+			// area; it falls back to these rather than printing "Unknown stop" / "?".
+			routeName: String(leg.routeName || "").slice(0, NAV_ROUTE_NAME_MAX),
+			routeLabel: String(legLabel(leg) || "").slice(0, NAV_ROUTE_LABEL_MAX),
+			routeColor: leg.color || "",
+			headsign: String(firstLang(leg.headsign || "")).slice(0, NAV_NAME_MAX),
+			boardName: String(leg.fromName || (board && board.name) || "").slice(0, NAV_NAME_MAX),
+			alightName: String(leg.toName || (alight && alight.name) || "").slice(0, NAV_NAME_MAX),
 		};
+		if (board) out.boardPos = board.pos;
+		if (alight) out.alightPos = alight.pos;
+		// The stops the rider passes, so the HUD can count down out of sync range.
+		const stopList = (leg.stops || []).slice(0, NAV_MAX_STOP_LIST)
+			.map((id) => navPlatformInfo(id)).filter(Boolean)
+			.map((info) => ({ name: info.name, pos: info.pos }));
+		if (stopList.length) out.stopList = stopList;
 		// a through run is the same train changing route under the rider: the HUD needs
 		// to know so it does not tell them to get off (capped at the server's 4)
-		const via = (leg.continuations || []).slice(0, NAV_MAX_VIA)
-			.map((c) => ({ route: String(c.routeId), at: String(c.platform) }));
+		const via = (leg.continuations || []).slice(0, NAV_MAX_VIA).map((c) => {
+			const rt = state.routes.get(c.routeId);
+			return {
+				route: String(c.routeId), at: String(c.platform),
+				routeName: String(c.routeName || (rt && rt.display) || "").slice(0, NAV_ROUTE_NAME_MAX),
+				routeLabel: String(c.number || (rt && rt.number) || "").slice(0, NAV_ROUTE_LABEL_MAX),
+				routeColor: c.color || (rt && rt.hex) || "",
+				headsign: String(firstLang(c.headsign || (rt && rt.dest) || "")).slice(0, NAV_NAME_MAX),
+			};
+		});
 		if (via.length) out.via = via;
 		return out;
 	}
 	const meters = Math.max(0, Math.round(leg.meters || 0));
 	if (navIsTransferLeg(leg)) {
-		return { type: "transfer", from: String(leg.fromPlatform), to: String(leg.toPlatform), meters };
+		const from = navPlatformInfo(leg.fromPlatform), to = navPlatformInfo(leg.toPlatform);
+		const out = { type: "transfer", from: String(leg.fromPlatform), to: String(leg.toPlatform), meters };
+		const fromName = String(leg.fromName || (from && from.name) || "").slice(0, NAV_NAME_MAX);
+		const toName = String(leg.toName || (to && to.name) || "").slice(0, NAV_NAME_MAX);
+		if (fromName) out.fromName = fromName;
+		if (toName) out.toName = toName;
+		if (from) out.fromPos = from.pos;
+		if (to) out.toPos = to.pos;
+		return out;
 	}
 	return { type: "walk", from: navEndpoint(leg, "from"), to: navEndpoint(leg, "to"), meters };
 }
