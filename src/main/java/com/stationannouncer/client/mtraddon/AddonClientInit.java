@@ -221,7 +221,10 @@ public final class AddonClientInit {
             if (withMapPlus) {
                 Screens.getButtons(screen).add(ButtonWidget.builder(
                                 Text.translatable("gui.station_announcer.mapplus.button"),
-                                button -> Util.getOperatingSystem().open(URI.create(ClientDispatchInfo.url() + "map.html")))
+                                // ?player= tells the page whose live position is "you"
+                                // (usernames are [A-Za-z0-9_], safe in a query verbatim)
+                                button -> Util.getOperatingSystem().open(URI.create(
+                                        ClientDispatchInfo.url() + "map.html?player=" + client.getSession().getUsername())))
                         .dimensions(mapButton.getX() + mapButton.getWidth() + 2 + dispatchWidth + 2, mapButton.getY(),
                                 mapPlusWidth, mapButton.getHeight())
                         .build());

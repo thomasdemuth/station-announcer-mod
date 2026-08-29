@@ -6,6 +6,7 @@ import com.mojang.brigadier.context.CommandContext;
 import com.mojang.brigadier.suggestion.Suggestions;
 import com.mojang.brigadier.suggestion.SuggestionsBuilder;
 import com.stationannouncer.mtraddon.AddonServerConfig;
+import com.stationannouncer.mtraddon.dispatch.SatelliteScanner;
 import com.stationannouncer.mtraddon.dispatch.TerrainScanner;
 import net.fabricmc.fabric.api.command.v2.CommandRegistrationCallback;
 import net.minecraft.server.command.CommandManager;
@@ -57,11 +58,29 @@ public final class AnalyticsCommand {
                                             context.getSource().sendFeedback(() -> Text.literal("Terrain: "
                                                     + TerrainScanner.status()).formatted(Formatting.AQUA), false);
                                             return 1;
+                                        })))
+                        // The satellite basemap: the same shape of command over the same
+                        // bounding box, 16x denser and rastered to PNG tiles.
+                        .then(CommandManager.literal("satellite")
+                                .then(CommandManager.literal("scan")
+                                        .executes(context -> SatelliteScanner.startScan(context.getSource(),
+                                                DEFAULT_SATELLITE_MARGIN))
+                                        .then(CommandManager.argument("margin", IntegerArgumentType.integer(0, 1024))
+                                                .executes(context -> SatelliteScanner.startScan(context.getSource(),
+                                                        IntegerArgumentType.getInteger(context, "margin")))))
+                                .then(CommandManager.literal("status")
+                                        .executes(context -> {
+                                            context.getSource().sendFeedback(() -> Text.literal("Satellite: "
+                                                    + SatelliteScanner.status()).formatted(Formatting.AQUA), false);
+                                            return 1;
                                         })))));
     }
 
     /** How far past the outermost rail/station the terrain scan reaches by default. */
     private static final int DEFAULT_TERRAIN_MARGIN = 128;
+
+    /** Same default for the satellite basemap; it is snapped up to a whole tile anyway. */
+    private static final int DEFAULT_SATELLITE_MARGIN = 128;
 
     /**
      * MTR keys its simulators by {@code "<namespace>/<path>"} (see {@code Init.getWorldId}),

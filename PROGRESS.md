@@ -2954,3 +2954,57 @@ part-pair SORT order, which is arbitrary vs geography, so colours flipped sides
 at station boundaries ("switch sides over and over"). Numerically verified in
 the browser: every green trunk segment displaces the same world side (−5 px at
 a 10 px test offset), blue mirrored. Harness + planner suites green. 2.4.34.
+
+## System Map+ round 3 — interactions, GPS, satellite (2026-08-29 afternoon)
+
+Three agent batches + orchestrator geometry fixes, all browser-verified (demo +
+live dev rig) and harness-covered (harness.mjs 260, planner.mjs 66):
+
+RENDERING FIXES (orchestrator): snapEnds rebuilt — decaying-delta translation
+over ≤35% of arc length (old point-lerp bunched samples at the centroid → the
+"line goes back on itself" hooks at every station); COVER_TOL 24 @ 0.8 for
+curve-tolerant express suppression; hub stations (3+ colours) draw a big plain
+circle instead of a stretched capsule; badge rides inline with labels;
+canonicalOffsetSign pins bundle sides.
+
+BATCH 1 (map.js): train click card (bullet/dest/next stop/cars/speed) + Follow
+(camera tracking, pill, pan/Esc/vanish>10s breaks, followReduce reducer);
+journey-selected hides off-line vehicles; station panel (live departures
+grouped by line — live green vs quieter scheduled, exits, per-platform
+step-free, Plan from/to here); terrain refetch on the 60 s cycle gated by
+scannedAt.
+
+SERVER (Java): DispatchMapData emits station exits (StationExit name +
+destinations). SatelliteScanner — /dispatch satellite scan [margin] (+status),
+2 ms/tick, 1 sample per 2 blocks, vanilla-map colouring (MapColor.getRender-
+Color is ABGR! swapped for ARGB; CLEAR descends ≤4 like vanilla; water depth-
+banded), rolling two-row height buffer, tiles 256×256 samples → PNGs on a
+daemon encoder thread, <save>/station-announcer-addon/satellite/<dim>/,
+origin snapped to 512 so client tile math is remainder-free; served via
+satmeta (getContent) + sattile (synchronous Jetty pre-empt, image/png).
+PlayerPositions captured every 5 ticks → "players":[{name,x,y,z}] in every
+SSE frame. Dashboard Map+ button appends ?player=<username>.
+VERIFIED live: 262k-sample scan of the dev world (4.5 min, chunk-GEN bound —
+generated worlds are much faster), 4 tiles, viewable vanilla-map render,
+index survives reboot, players field flows.
+
+BATCH 2 (map.js): express/local stop marks (open ring when a service of a
+line runs through without stopping; suppressed-express resolves via
+coveredBy); point-to-point planning (field-click arms map pick, right-click/
+long-press drops pins, ≤3 stations within 300 blocks walk-linked,
+copy-on-write graph overlay, street transfers between different stations
+≤120 blocks capped at 3 neighbours — EXCLUDING adjacent-stop pairs so the
+planner never "walks the trunk"); live player GPS (?player= case-insensitive
++ settings "I am", blue pulsing self dot, gray others with names at high
+zoom, Players layer toggle, locate centres on self, "Plan from my location"
+re-plans after 32 blocks); line view (ribbon/chip/panel-bullet click → line
+card with ordered stops, ride times, every ~N min, skip marks; selection
+kind journey|line); satellite basemap layer (Basemap Schematic/Satellite in
+settings, tile drawing per the server's exact math, smoothing off, 0.85/0.6
+alpha by theme, ≤6 concurrent loads, no-retry 404s, water skipped when
+imagery exists, no-scan hint chip, satmeta on the 60 s cycle).
+
+NOT in-game tested: everything (Thomas's pass: satellite legibility on a real
+scan, long-press feel, GPS smoothness at 4 Hz, express marks on real
+patterns). Baker City needs /dispatch terrain scan AND /dispatch satellite
+scan run once as op.

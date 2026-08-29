@@ -44,6 +44,20 @@ try {
 <div id="mapTip" class="hidden"></div>
 <div id="banner" class="hidden"></div>
 
+<!-- Transient pills over the map:
+     #mapHint  "click the map to set your start" while a planner field armed the map
+     #satHint  the one-time "no satellite scan yet" nudge -->
+<div id="mapHint" class="mappill hidden"></div>
+<div id="satHint" class="mappill sat hidden"></div>
+
+<!-- Floating overlays, all filled by map.js:
+     #trainCard    the card anchored beside a clicked train puck (section 10a)
+     #followPill   top-centre "Following … · tap to stop" while the camera rides a train
+     #stationPanel the right-hand station card: departures, exits, accessibility (10b) -->
+<div id="trainCard" class="floatcard hidden"></div>
+<button id="followPill" class="followpill hidden" type="button"></button>
+<aside id="stationPanel" class="stpanel hidden"></aside>
+
 <aside id="planner">
 	<div class="brand"><b>System Map+</b><span id="brandSub">BAKER CITY TRANSIT</span></div>
 
@@ -94,7 +108,7 @@ try {
 	</div>
 
 	<div id="options"></div>
-	<div id="plannerHint" class="hint">Pick a start and a destination — or click two stations on the map.</div>
+	<div id="plannerHint" class="hint">Pick a start and a destination — or click a station on the map and use Plan from here.</div>
 </aside>
 
 <!-- map settings: theme, line thickness, mode layers -->
@@ -110,6 +124,20 @@ try {
 			<button type="button" data-theme="light">Light</button>
 			<button type="button" data-theme="dark">Dark</button>
 		</div>
+	</div>
+
+	<div class="set-row">
+		<label>Basemap</label>
+		<div class="seg" id="basemapSeg">
+			<button type="button" data-basemap="schematic">Schematic</button>
+			<button type="button" data-basemap="satellite">Satellite</button>
+		</div>
+	</div>
+
+	<!-- shown only once the stream carries players (map.js: syncSelfUi) -->
+	<div class="set-row hidden" id="selfRow">
+		<label for="selfSel">I am</label>
+		<select id="selfSel" class="set-select"><option value="">Nobody</option></select>
 	</div>
 
 	<div class="set-row">

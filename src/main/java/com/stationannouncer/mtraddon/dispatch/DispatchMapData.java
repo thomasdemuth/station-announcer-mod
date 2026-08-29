@@ -332,6 +332,29 @@ public final class DispatchMapData {
             stationJson.addProperty("color", station.getColor());
             long[] accessiblePlatforms = accessibility.get(station.getId());
             stationJson.addProperty("accessible", accessiblePlatforms != null);
+            // Exits with their signed destinations (MTR's own station-exit editor data),
+            // for the station detail panel. Absent list = no exits configured.
+            try {
+                JsonArray exitsJson = new JsonArray();
+                for (org.mtr.core.data.StationExit exit : station.getExits()) {
+                    if (exit == null) {
+                        continue;
+                    }
+                    JsonObject exitJson = new JsonObject();
+                    exitJson.addProperty("name", exit.getName());
+                    JsonArray destinations = new JsonArray();
+                    for (String destination : exit.getDestinations()) {
+                        destinations.add(destination);
+                    }
+                    exitJson.add("destinations", destinations);
+                    exitsJson.add(exitJson);
+                }
+                if (!exitsJson.isEmpty()) {
+                    stationJson.add("exits", exitsJson);
+                }
+            } catch (Throwable ignored) {
+                // exits are decorative — never let them break the payload
+            }
             if (accessiblePlatforms != null && accessiblePlatforms.length > 0) {
                 JsonArray accessibleJson = new JsonArray(accessiblePlatforms.length);
                 for (long platformId : accessiblePlatforms) {

@@ -44,7 +44,8 @@ import java.util.concurrent.TimeUnit;
  * <p><b>Message framing:</b> named SSE events {@code full} (complete vehicle + signal
  * state; sent to a client on subscribe and to everyone every 10th tick) and
  * {@code delta} (changed/new vehicles, removed vehicle ids, changed signals, cleared
- * signal rails). Every payload carries {@code schemaVersion} and {@code serverTime}.
+ * signal rails). Every payload carries {@code schemaVersion}, {@code serverTime} and
+ * the full {@code players} list for its dimension (additive since schemaVersion 1).
  * A delta event is emitted even when empty — at ≈3 Hz it doubles as the keep-alive.</p>
  */
 public final class DispatchStreamer {
@@ -439,7 +440,48 @@ public final class DispatchStreamer {
         json.addProperty("schemaVersion", SCHEMA_VERSION);
         json.addProperty("serverTime", sampledAt);
         json.addProperty("dimension", dimensionIndex);
+        // Every frame, full and delta alike, carries the complete player list for this
+        // dimension: it is a handful of names, so there is nothing worth deltaing, and
+        // building it here means neither frame builder can forget it.
+        json.add("players", playersJson(dimensionIndex));
         return json;
+    }
+
+    /**
+     * The dispatch map's live player layer, filtered to this frame's dimension.
+     *
+     * <p>Read on the streamer thread from {@link PlayerPositions}' volatile immutable
+     * snapshot — no simulator involvement, no server-thread hop. The uuid is captured
+     * but deliberately NOT sent: the map needs a label and a dot, not an identity.</p>
+     */
+    private static JsonArray playersJson(int dimensionIndex) {
+        JsonArray array = new JsonArray();
+        List<PlayerPositions.Position> positions = PlayerPositions.get();
+        if (positions.isEmpty()) {
+            return array;
+        }
+        Simulator simulator = DispatchRegistry.simulator(dimensionIndex);
+        if (simulator == null) {
+            return array;
+        }
+        String dimension = simulator.dimension;
+        for (PlayerPositions.Position position : positions) {
+            if (!dimension.equals(position.worldId())) {
+                continue;
+            }
+            JsonObject json = new JsonObject();
+            json.addProperty("name", position.name());
+            json.addProperty("x", round(position.x()));
+            json.addProperty("y", round(position.y()));
+            json.addProperty("z", round(position.z()));
+            array.add(json);
+        }
+        return array;
+    }
+
+    /** One decimal place: a player dot is never worth seventeen significant figures. */
+    private static double round(double value) {
+        return Math.round(value * 10) / 10.0;
     }
 
     private static JsonObject buildFull(int dimensionIndex, DispatchSampler.DimensionSample sample) {

@@ -40,6 +40,11 @@ import java.util.function.Consumer;
  *       scheduled headways. Per-dimension 30 s {@link CachedResponse} like network.</li>
  *   <li>{@code terrain} — cached water polygons from the last {@code /dispatch terrain
  *       scan} ({@link TerrainScanner}); empty until a scan has run.</li>
+ *   <li>{@code satmeta} — the satellite basemap's tile index ({@link SatelliteScanner}):
+ *       origin, scale, tile list and bbox; {@code available:false} until a scan has run.</li>
+ *   <li>{@code sattile} — one basemap tile as {@code image/png}. Handled before
+ *       ServletBase's simulator hop (like {@code analytics}) and read straight off the
+ *       disk, so painting a screenful of tiles never touches the simulation.</li>
  * </ul>
  *
  * <p>{@code /dispatch/api/ping} and {@code /dispatch/api/stream} are separate exact-path
@@ -57,14 +62,22 @@ public final class DispatchApiServlet extends ServletBase {
     private final ConcurrentHashMap<String, CachedResponse> networkResponses = new ConcurrentHashMap<>();
     private final ConcurrentHashMap<String, CachedResponse> stringlineAxisResponses = new ConcurrentHashMap<>();
     private final ConcurrentHashMap<String, CachedResponse> mapDataResponses = new ConcurrentHashMap<>();
+    /**
+     * ServletBase keeps its own copy privately, so {@code sattile} — which answers before
+     * the simulator hop and therefore never receives a {@link Simulator} — keeps a second
+     * reference to resolve the {@code dimension} index exactly the way the base class does.
+     */
+    private final ObjectImmutableList<Simulator> simulators;
 
     public DispatchApiServlet(ObjectImmutableList<Simulator> simulators) {
         super(simulators);
+        this.simulators = simulators;
     }
 
     @Override
     protected void doGet(HttpServletRequest request, HttpServletResponse response) {
-        if (unavailable(response) || handleAnalytics(request, response) || handleAlerts(request, response)) {
+        if (unavailable(response) || handleAnalytics(request, response) || handleAlerts(request, response)
+                || handleSatTile(request, response)) {
             return;
         }
         super.doGet(request, response);
@@ -76,10 +89,71 @@ public final class DispatchApiServlet extends ServletBase {
      */
     @Override
     protected void doPost(HttpServletRequest request, HttpServletResponse response) {
-        if (unavailable(response) || handleAnalytics(request, response) || handleAlerts(request, response)) {
+        if (unavailable(response) || handleAnalytics(request, response) || handleAlerts(request, response)
+                || handleSatTile(request, response)) {
             return;
         }
         super.doPost(request, response);
+    }
+
+    /**
+     * {@code sattile} — one satellite basemap tile as a PNG. Answered SYNCHRONOUSLY on
+     * the Jetty worker like {@code analytics}: the tiles are immutable files on disk
+     * (written once, moved into place atomically, and only then listed in the index the
+     * lookup validates against), so a blocking read here needs no simulator at all and
+     * a browser fetching a screenful of tiles costs the simulation nothing.
+     *
+     * <p>Query: {@code dimension} (int index, ServletBase's convention — default 0),
+     * {@code tx}, {@code tz}. Unknown tiles answer 404 in plain text rather than MTR's
+     * JSON envelope: the caller is an {@code <img>}/fetch expecting image bytes.</p>
+     *
+     * @return true when the request was handled here
+     */
+    private boolean handleSatTile(HttpServletRequest request, HttpServletResponse response) {
+        if (!"sattile".equals(firstSegment(request))) {
+            return false;
+        }
+        int dimensionIndex = intParameter(request, "dimension", 0);
+        if (dimensionIndex < 0 || dimensionIndex >= simulators.size()) {
+            DispatchStaticServlet.sendText(response, 400, "text/plain;charset=utf-8", "invalid dimension");
+            return true;
+        }
+        // Integer.MIN_VALUE = "absent or unparseable"; no real tile index is ever negative
+        // (the scan origin is the bounding box's own snapped low corner).
+        int tx = intParameter(request, "tx", Integer.MIN_VALUE);
+        int tz = intParameter(request, "tz", Integer.MIN_VALUE);
+        byte[] png = tx == Integer.MIN_VALUE || tz == Integer.MIN_VALUE
+                ? null
+                : SatelliteScanner.tile(simulators.get(dimensionIndex).dimension, tx, tz);
+        if (png == null) {
+            DispatchStaticServlet.sendText(response, 404, "text/plain;charset=utf-8", "no such tile");
+            return true;
+        }
+        try {
+            response.setStatus(200);
+            response.setHeader("Content-Type", "image/png");
+            response.setHeader("Cache-Control", "no-cache");
+            response.setHeader("Access-Control-Allow-Origin", "*");
+            response.setContentLength(png.length);
+            response.getOutputStream().write(png);
+        } catch (IOException | RuntimeException ignored) {
+            // Client went away mid-reply; nothing to clean up for a sync response.
+        }
+        return true;
+    }
+
+    /** A tolerant int query parameter, matching ServletBase's parse-or-default behaviour. */
+    private static int intParameter(HttpServletRequest request, String name, int fallback) {
+        try {
+            String parameter = request.getParameter(name);
+            if (parameter != null && !parameter.isEmpty()) {
+                return Integer.parseInt(parameter.trim());
+            }
+        } catch (RuntimeException ignored) {
+            // NumberFormatException, or a container that dislikes the query string;
+            // fall through to the default, matching ServletBase's tolerant handling.
+        }
+        return fallback;
     }
 
     /**
@@ -210,6 +284,11 @@ public final class DispatchApiServlet extends ServletBase {
             // snapshot is volatile-immutable, so reading it here is thread-safe and
             // cheap; empty polygons until a scan has run in this dimension.
             sendResponse.accept(TerrainScanner.terrainJson(simulator.dimension));
+        } else if ("satmeta".equals(endpoint)) {
+            // Where the satellite basemap's tiles are and how they map onto the world.
+            // Same volatile-immutable snapshot rules as terrain; the tiles themselves go
+            // out through the synchronous /sattile branch above, never from here.
+            sendResponse.accept(SatelliteScanner.satelliteJson(simulator.dimension));
         } else {
             JsonObject error = new JsonObject();
             error.addProperty("error", "unknown endpoint: " + endpoint);

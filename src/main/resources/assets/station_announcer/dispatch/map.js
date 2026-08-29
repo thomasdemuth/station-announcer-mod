@@ -26,6 +26,8 @@
 const SCHEMA_VERSION = 1;
 const API = "api";
 const DEMO = new URLSearchParams(location.search).get("demo") === "1";
+/** ?player=<username> — the in-game button opens the map with this set (feature 3). */
+const PLAYER_PARAM = new URLSearchParams(location.search).get("player") || "";
 const PREFS_KEY = "sa_mapplus_prefs";
 
 /**
@@ -44,6 +46,12 @@ const THEMES = {
 		accent: "#1a73e8", pin: "#d93025", live: "#0f9d58",
 		chip: "#ffffff", chipInk: "#3c434b", chipShadow: "rgba(20,28,40,0.22)",
 		glyphFill: "#ffffff", glyphStroke: "#1c1f23",
+		// the express/local ring (feature 1) has NO fill, so on paper it reads in ink;
+		// on the near-black dark ground the same ink would disappear — see THEMES.dark
+		openStroke: "#1c1f23",
+		player: "#1a73e8", playerHalo: "rgba(26,115,232,0.16)", playerOther: "#7d8792",
+		// satellite imagery is drawn over the paper fill at this alpha (feature 5)
+		satAlpha: 0.85,
 		leader: "#9aa2ab", rawRail: "#9aa2ab", dim: 0.15,
 	},
 	dark: {
@@ -52,6 +60,10 @@ const THEMES = {
 		accent: "#6aa8ff", pin: "#ff5f52", live: "#3ddc84",
 		chip: "#1a1b20", chipInk: "#dfe3e8", chipShadow: "rgba(0,0,0,0.55)",
 		glyphFill: "#ffffff", glyphStroke: "#0b0b0f",
+		openStroke: "#ffffff",
+		player: "#4c8dff", playerHalo: "rgba(76,141,255,0.22)", playerOther: "#9aa4b0",
+		// darker in dark mode: full-brightness aerial imagery under white type is unreadable
+		satAlpha: 0.6,
 		leader: "#5c6672", rawRail: "#5c6672", dim: 0.22,
 	},
 };
@@ -67,9 +79,14 @@ const SEG_SAMPLES = 32;
 /** Blocks. "These two polylines run in the same corridor." Used by both the express
  *  coverage test and cross-colour bundling. */
 const CORRIDOR_TOL = 14;
+/** Blocks, express-coverage only: wider than CORRIDOR_TOL because on curves the
+ *  pair-averaged local centreline cuts the corner tighter than the express track —
+ *  the strands are still the same corridor even where they briefly spread (curved
+ *  sections were breaking the interlined express view at 14). */
+const COVER_TOL = 24;
 /** Fraction of an express segment that must be covered by the line's own shorter
  *  segments before it is suppressed. */
-const COVER_FRACTION = 0.85;
+const COVER_FRACTION = 0.8;
 /** Fraction of the SHORTER segment's samples that must sit inside CORRIDOR_TOL of the
  *  other before two different-colour segments count as bundle companions. */
 const COMPANION_FRACTION = 0.6;
@@ -84,6 +101,46 @@ const MAX_CHIP_BULLETS = 4;
 /** Line-thickness multiplier bounds (the settings slider). */
 const LINE_SCALE_MIN = 0.6;
 const LINE_SCALE_MAX = 1.6;
+
+/* ---- train card / follow / station panel (sections 10a, 10b) ---- */
+/** A followed vehicle missing from the feed this long drops follow (the pill fades
+ *  meanwhile, so a rider watching the map sees it let go rather than freeze). */
+const FOLLOW_LOST_MS = 10000;
+/** Departures a station panel lists per line-and-destination. */
+const DEPARTURES_PER_DEST = 2;
+/** Departures further out than this are not worth a rider's row. */
+const DEPARTURE_HORIZON_MS = 90 * 60000;
+/** Gap between a train puck and its floating card, in px. */
+const CARD_GAP = 18;
+
+/* ---- point-to-point planning (feature 2) ---- */
+/** A dropped pin reaches stations no further than this (blocks). */
+const POINT_WALK_RADIUS = 300;
+/** …and never more than this many of them (the nearest ones win). */
+const POINT_WALK_STATIONS = 3;
+/** Two DIFFERENT stations whose closest platforms are within this walk to each other. */
+const STREET_TRANSFER_RADIUS = 120;
+/** …capped to each station's N nearest neighbours, so a dense downtown stays sparse. */
+const STREET_TRANSFER_NEIGHBOURS = 3;
+/** Synthetic graph node ids for the two map points. `@` cannot collide with a platform id. */
+const POINT_FROM = "@from";
+const POINT_TO = "@to";
+
+/* ---- live player GPS (feature 3) ---- */
+/** Player samples kept for interpolation (the feed runs at 4 Hz). */
+const PLAYER_SAMPLES = 4;
+/** A player missing from the feed this long is dropped. */
+const PLAYER_STALE_MS = 15000;
+/** Other players' name labels only appear once the map is zoomed in this far. */
+const PLAYER_LABEL_SCALE = 0.55;
+/** "Plan from my location" re-plans once the rider has moved this far (blocks). */
+const PLAYER_REPLAN_MOVE = 32;
+
+/* ---- satellite basemap (feature 5) ---- */
+/** Tile images fetched at once; the rest queue (a 60-tile city would otherwise storm). */
+const SAT_MAX_INFLIGHT = 6;
+/** How long the "no scan yet" chip stays up. */
+const SAT_HINT_MS = 9000;
 
 const state = {
 	/* --- server / dimension --- */
@@ -119,21 +176,40 @@ const state = {
 	segByPair: new Map(),          // "hex|partA>partB" -> segment (drawn OR suppressed)
 	segsByColor: new Map(),        // hex -> [drawn segment]
 	bundles: [],                   // interlining chips: [{x, z, nx, nz, colors:[{hex, numbers:[]}]}]
-	glyphs: [],                    // [{stationId, partId, x, z, colors:[hex], capsule, dir, accessible, weight}]
+	glyphs: [],                    // [{stationId, partId, x, z, colors:[hex], capsule, dir, accessible, weight, fullService}]
+	stopMarks: new Map(),          // partId -> full-service? (feature 1, computeStopMarks)
 	walks: [],                     // [{ax, az, bx, bz, dist}]
 	networkBox: null,
 
 	/* --- live --- */
 	vehicles: new Map(),           // id -> {data, samples, route, consist, disp, screen}
+	players: new Map(),            // name -> {name, samples:[{t,x,y,z}], disp:{x,z}, y, lastSeen, screen}
+	selfPlayer: "",                // the streamed name of "me" (?player= / settings)
+	selfManual: false,             // the rider picked "I am" by hand: it now beats ?player=
+
+	/* --- satellite basemap (feature 5) --- */
+	satmeta: null,                 // {available, scale, tileSamples, originX, originZ, tiles, bbox, scannedAt}
+	satTiles: new Map(),           // "tx,tz" -> {img, ok, failed, queued}
+	satQueue: [],
+	satInflight: 0,
+	satHintAt: 0,                  // when the "no scan yet" chip was raised (0 = never)
 
 	/* --- view / interaction --- */
 	view: { x: 0, z: 0, scale: 1 },
 	hover: { trainId: null, glyph: null, x: 0, y: 0 },
-	selection: null,               // see selectJourney()
+	selection: null,               // {kind:"journey"|"line", …} — selectJourney / selectLine
+	trainCard: null,               // vehicle id whose floating card is open (10a)
+	follow: null,                  // {vehicleId, since, lastSeenAt, fading} — followReduce
+	stationPanel: null,            // {stationId, partId} of the open station panel (10b)
+	labelHits: [],                 // world-space boxes of the drawn station labels
+	chipHits: [],                  // world-space boxes of drawn interlining bullets -> line view
+	mapPick: null,                 // "from" | "to" while the map is armed to drop a pin (10c)
+	pointNodes: new Map(),         // POINT_FROM/POINT_TO -> {id, xz, y, label} synthetic nodes
 
 	/* --- planner --- */
 	plan: {
-		from: null,                // {stationId, partId|null}
+		// {stationId, partId|null} OR a map point {point:[x,z], y, label, live}
+		from: null,
 		to: null,
 		when: { mode: "now", at: null },       // at = "HH:MM"
 		prefs: { mode: "fastest", stepFree: false },
@@ -149,6 +225,9 @@ const state = {
 		theme: "light",            // light | dark  (settings menu)
 		lineScale: 1,              // ribbon width multiplier, LINE_SCALE_MIN..MAX
 		hiddenModes: [],           // transport modes switched off in the Layers list
+		basemap: "schematic",      // schematic | satellite  (feature 5)
+		showPlayers: true,         // the Players layer toggle (feature 3)
+		selfPlayer: "",            // remembered "I am" name; ?player= overrides and rewrites it
 	},
 };
 
@@ -284,18 +363,27 @@ async function loadDimension(n) {
 	savePrefs();
 	state.vehicles.clear();
 	clearSelection();
+	stopFollow("stop");
+	closeTrainCard();
+	closeStationPanel();
 	if (state.es) { state.es.close(); state.es = null; }
 
 	// network + mapdata + terrain in parallel — mapdata and terrain are optional, the
 	// map degrades to raw rails / no water rather than failing.
-	const [net, md, terr] = await Promise.all([
+	state.satmeta = null;
+	state.satTiles = new Map();
+	state.satQueue = [];
+	state.satInflight = 0;
+	const [net, md, terr, sat] = await Promise.all([
 		fetchJson(`${API}/network?dimension=${n}`),
 		fetchJson(`${API}/mapdata?dimension=${n}`).catch(() => null),
 		fetchJson(`${API}/terrain?dimension=${n}`).catch(() => null),
+		fetchJson(`${API}/satmeta?dimension=${n}`).catch(() => null),
 	]);
 	applyNetwork(net);
 	if (md) applyMapdata(md);
 	if (terr) applyTerrain(terr);
+	if (sat) applySatmeta(sat);
 	prepareGeometry();
 	fitView();
 	openStream();
@@ -310,12 +398,22 @@ async function fetchJson(url) {
 async function refetchNetwork() {
 	if (DEMO || document.hidden) return;
 	try {
-		const [net, md] = await Promise.all([
+		// terrain rides along: a /dispatch terrain scan run while the page is open used to
+		// stay invisible until a manual reload, because only loadDimension ever fetched it
+		const [net, md, terr, sat] = await Promise.all([
 			fetchJson(`${API}/network?dimension=${state.dim}`),
 			fetchJson(`${API}/mapdata?dimension=${state.dim}`).catch(() => null),
+			fetchJson(`${API}/terrain?dimension=${state.dim}`).catch(() => null),
+			fetchJson(`${API}/satmeta?dimension=${state.dim}`).catch(() => null),
 		]);
 		applyNetwork(net);
 		if (md) applyMapdata(md);
+		// only when the scan actually changed: applyTerrain + prepareGeometry repaint the
+		// whole static layer, and an identical polygon set every 60 s is pure churn
+		if (terrainChanged(state.terrain, terr)) applyTerrain(terr);
+		// the satellite index rides the same gate (and throws away every cached bitmap,
+		// so an identical index every 60 s must never be "applied")
+		if (satmetaChanged(state.satmeta, sat)) applySatmeta(sat);
 		prepareGeometry();
 	} catch (e) { /* transient — the stream status covers visibility */ }
 }
@@ -362,7 +460,8 @@ function applyNetwork(net) {
 		const dir = p.p1 && p.p2 ? [p.p2[0] - p.p1[0], p.p2[2] - p.p1[2]] : [1, 0];
 		state.platforms.set(p.id, {
 			id: p.id, name: firstLang(p.name), stationId: p.stationId, partId: null,
-			xz: p.mid ? [p.mid[0], p.mid[2]] : [0, 0], dir,
+			// y is kept for the 3D walk distance a dropped pin / a live player uses (feature 2)
+			xz: p.mid ? [p.mid[0], p.mid[2]] : [0, 0], y: p.mid ? p.mid[1] : 0, dir,
 			accessible: !!p.accessible, dwellMs: p.dwellMs || 0, routeIds: p.routeIds || [],
 		});
 	}
@@ -404,6 +503,9 @@ function applyMapdata(md) {
 		}
 		if (s.accessible !== undefined) st.accessible = !!s.accessible;
 		if (s.accessiblePlatforms) st.accessiblePlatforms = s.accessiblePlatforms;
+		// exits are a newer mapdata field: absent on older payloads, so never overwrite
+		// what a previous payload gave us with nothing
+		if (Array.isArray(s.exits)) st.exits = s.exits;
 		st.partWalks = s.partWalks || [];
 		st.platformDistances = s.platformDistances || [];
 		st.platformDistancesTruncated = !!s.platformDistancesTruncated;
@@ -412,11 +514,11 @@ function applyMapdata(md) {
 		for (const p of s.platforms || []) {
 			let pl = state.platforms.get(p.id);
 			if (!pl) {
-				pl = { id: p.id, name: "", stationId: s.id, xz: [0, 0], dir: [1, 0], routeIds: [] };
+				pl = { id: p.id, name: "", stationId: s.id, xz: [0, 0], y: 0, dir: [1, 0], routeIds: [] };
 				state.platforms.set(p.id, pl);
 			}
 			pl.stationId = s.id;
-			if (p.mid) pl.xz = [p.mid[0], p.mid[2]];
+			if (p.mid) { pl.xz = [p.mid[0], p.mid[2]]; pl.y = p.mid[1]; }
 			if (p.accessible !== undefined) pl.accessible = !!p.accessible;
 			if (p.dwellMs !== undefined) pl.dwellMs = p.dwellMs;
 			if (!st.platformIds.includes(p.id)) st.platformIds.push(p.id);
@@ -452,6 +554,175 @@ function applyMapdata(md) {
 function applyTerrain(t) {
 	const polys = (t.polygons || []).filter((p) => p && p.length >= 3);
 	state.terrain = polys.length ? { polygons: polys, scannedAt: t.scannedAt || 0 } : null;
+	invalidateStatic();
+}
+
+/**
+ * Is this terrain payload worth applying over what is already drawn?
+ *
+ * The 60 s refetch pulls terrain too, and a water scan almost never changes between
+ * cycles — `scannedAt` is the server's own stamp for "this is a different scan", so it
+ * is the whole test. Nothing applied yet counts as a change as soon as the payload has
+ * any usable polygon (a payload of nothing over nothing is not).
+ */
+function terrainChanged(current, payload) {
+	if (!payload) return false;
+	const usable = (payload.polygons || []).filter((p) => p && p.length >= 3).length;
+	if (!current) return usable > 0;
+	return (payload.scannedAt || 0) !== (current.scannedAt || 0);
+}
+
+/* ----------------------------------------------------------------------------
+ * 4a. SATELLITE BASEMAP (feature 5) — tile index, tile maths, tile loading
+ * --------------------------------------------------------------------------
+ * The server scans the world into square PNG tiles and publishes an index:
+ *
+ *   scale        blocks per sample = blocks per PNG pixel      (2)
+ *   tileSamples  pixels per tile edge                          (256)
+ *   originX/Z    world coords of pixel (0,0) of tile (0,0); always multiples of 512
+ *
+ * so one tile covers scale x tileSamples = 512 blocks square, and
+ *
+ *   world -> tile:  gx = floor((worldX - originX) / scale); tx = floor(gx / tileSamples)
+ *   tile  -> world: worldX = originX + (tx * tileSamples + px) * scale
+ *
+ * Everything below is that arithmetic and nothing else; the drawing (section 7) just
+ * turns a tile extent into a screen rect. `+z` is south, i.e. down-screen, like the
+ * rest of the map.
+ * ------------------------------------------------------------------------- */
+
+/** Blocks covered by one tile edge. */
+function satTileSpan(meta) {
+	return (meta && meta.scale ? meta.scale : 2) * (meta && meta.tileSamples ? meta.tileSamples : 256);
+}
+
+/** World point -> {tx, tz, px, pz}: which tile it is in, and where inside it. */
+function satTileOf(meta, worldX, worldZ) {
+	const scale = (meta && meta.scale) || 2;
+	const n = (meta && meta.tileSamples) || 256;
+	const ox = (meta && meta.originX) || 0, oz = (meta && meta.originZ) || 0;
+	const gx = Math.floor((worldX - ox) / scale), gz = Math.floor((worldZ - oz) / scale);
+	const tx = Math.floor(gx / n), tz = Math.floor(gz / n);
+	return { tx, tz, px: gx - tx * n, pz: gz - tz * n };
+}
+
+/** Tile pixel -> the world coordinate of that pixel's top-left corner. */
+function satWorldOf(meta, tx, tz, px, pz) {
+	const scale = (meta && meta.scale) || 2;
+	const n = (meta && meta.tileSamples) || 256;
+	return [
+		((meta && meta.originX) || 0) + (tx * n + px) * scale,
+		((meta && meta.originZ) || 0) + (tz * n + pz) * scale,
+	];
+}
+
+/** The world rectangle a tile covers: [x0, z0, x1, z1], half-open at x1/z1. */
+function satTileExtent(meta, tx, tz) {
+	const span = satTileSpan(meta);
+	const [x0, z0] = satWorldOf(meta, tx, tz, 0, 0);
+	return [x0, z0, x0 + span, z0 + span];
+}
+
+function satEnabled() {
+	return state.prefs.basemap === "satellite";
+}
+
+/** Is there actually imagery to draw? (satellite selected but never scanned = no) */
+function satHasTiles() {
+	return !!(state.satmeta && state.satmeta.available && state.satmeta.tiles.length);
+}
+
+function satKey(tx, tz) { return tx + "," + tz; }
+
+/**
+ * The tile index changed? Same rule as terrain: the server's own `scannedAt` stamp
+ * decides, and a first payload counts as a change as soon as it carries tiles.
+ */
+function satmetaChanged(current, payload) {
+	if (!payload) return false;
+	if (!current) return !!payload.available && (payload.tiles || []).length > 0;
+	return (payload.scannedAt || 0) !== (current.scannedAt || 0);
+}
+
+function applySatmeta(meta) {
+	if (!meta) return;
+	state.satmeta = {
+		available: !!meta.available,
+		dimension: meta.dimension,
+		scannedAt: meta.scannedAt || 0,
+		scale: meta.scale || 2,
+		tileSamples: meta.tileSamples || 256,
+		originX: meta.originX || 0,
+		originZ: meta.originZ || 0,
+		tiles: (meta.tiles || []).filter((t) => Array.isArray(t) && t.length >= 2),
+		bbox: meta.bbox || null,
+	};
+	// a rescan invalidates every cached bitmap, not just the index
+	state.satTiles = new Map();
+	state.satQueue = [];
+	state.satInflight = 0;
+	if (satEnabled()) invalidateStatic();
+	maybeSatHint();
+}
+
+/**
+ * The bitmap for one tile, or null while it is still coming. Demo mode paints its own
+ * (a canvas is a perfectly good drawImage source, so no data URL is needed); the real
+ * page fetches `api/sattile`, at most SAT_MAX_INFLIGHT at a time.
+ */
+function satTileImage(tx, tz) {
+	const key = satKey(tx, tz);
+	let rec = state.satTiles.get(key);
+	if (rec) return rec.ok ? rec.img : null;
+	rec = { img: null, ok: false, failed: false, queued: false };
+	state.satTiles.set(key, rec);
+	if (DEMO) {
+		try {
+			rec.img = demoSatTile(tx, tz);
+			rec.ok = !!rec.img;
+		} catch (e) { rec.failed = true; }
+		return rec.ok ? rec.img : null;
+	}
+	rec.queued = true;
+	state.satQueue.push([tx, tz]);
+	pumpSatQueue();
+	return null;
+}
+
+function pumpSatQueue() {
+	while (state.satInflight < SAT_MAX_INFLIGHT && state.satQueue.length) {
+		const [tx, tz] = state.satQueue.shift();
+		const rec = state.satTiles.get(satKey(tx, tz));
+		if (!rec) continue;
+		rec.queued = false;
+		state.satInflight++;
+		const img = new Image();
+		img.onload = () => {
+			rec.img = img; rec.ok = true;
+			state.satInflight--;
+			pumpSatQueue();
+			if (satEnabled()) invalidateStatic();
+		};
+		img.onerror = () => {
+			rec.failed = true;                 // 404 = never scanned; never retried
+			state.satInflight--;
+			pumpSatQueue();
+		};
+		img.src = `${API}/sattile?dimension=${state.dim}&tx=${tx}&tz=${tz}`;
+	}
+}
+
+/** One-time nudge when the rider picks satellite and the server has never scanned. */
+function maybeSatHint() {
+	const el = $("satHint");
+	if (!el || !el.classList) return;
+	const need = satEnabled() && !(state.satmeta && state.satmeta.available);
+	if (!need) { el.classList.add("hidden"); return; }
+	if (state.satHintAt) return;               // already shown once this session
+	state.satHintAt = now();
+	el.textContent = "No satellite scan yet — run /dispatch satellite scan";
+	el.classList.remove("hidden");
+	setTimeout(() => { if (el.classList) el.classList.add("hidden"); }, SAT_HINT_MS);
 }
 
 /* ============================================================================
@@ -841,19 +1112,45 @@ function smoothLightly(pts, passes = 1) {
  * the station instead of kinking; this is what turns a big throat (many same-colour
  * tracks fanning out across a station) into lines that meet at one point.
  */
-const SNAP_WEIGHTS = [1, 0.55, 0.2];
+/**
+ * Blend a segment's ends onto the part centroids WITHOUT hooks: each end's full
+ * correction delta is applied at the endpoint and decays smoothly (cosine) over
+ * up to 45% of the segment's arc length. Translating by a decaying DELTA keeps
+ * the polyline's direction monotone — the old approach lerped samples toward the
+ * centroid POINT, which bunched them there and made the line double back on
+ * itself at every station whose platforms sit laterally off the through track
+ * (the "line goes back on itself" play-test report).
+ */
 function snapEnds(pts, a, b) {
 	const n = pts.length;
-	if (a) for (let i = 0; i < SNAP_WEIGHTS.length && i < n; i++) {
-		const w = SNAP_WEIGHTS[i];
-		pts[i][0] += (a[0] - pts[i][0]) * w;
-		pts[i][1] += (a[1] - pts[i][1]) * w;
+	if (n < 2) return pts;
+	const cum = [0];
+	for (let i = 1; i < n; i++) {
+		cum.push(cum[i - 1] + Math.hypot(pts[i][0] - pts[i - 1][0], pts[i][1] - pts[i - 1][1]));
 	}
-	if (b) for (let i = 0; i < SNAP_WEIGHTS.length && i < n; i++) {
-		const j = n - 1 - i, w = SNAP_WEIGHTS[i];
-		if (j < 0) break;
-		pts[j][0] += (b[0] - pts[j][0]) * w;
-		pts[j][1] += (b[1] - pts[j][1]) * w;
+	const total = cum[n - 1] || 1;
+	// 35% keeps the two end windows disjoint AND leaves the middle third of the
+	// segment unwarped (each endpoint still lands EXACTLY on its centroid);
+	// 48 blocks caps how far a long segment feels the station pull.
+	const reach = Math.max(1e-6, Math.min(total * 0.35, 48));
+	const ease = (t) => t >= 1 ? 0 : (Math.cos(Math.PI * Math.max(0, t)) + 1) / 2;
+	if (a) {
+		const dx = a[0] - pts[0][0], dz = a[1] - pts[0][1];
+		for (let i = 0; i < n; i++) {
+			const w = ease(cum[i] / reach);
+			if (w <= 0) break;
+			pts[i][0] += dx * w;
+			pts[i][1] += dz * w;
+		}
+	}
+	if (b) {
+		const dx = b[0] - pts[n - 1][0], dz = b[1] - pts[n - 1][1];
+		for (let i = n - 1; i >= 0; i--) {
+			const w = ease((total - cum[i]) / reach);
+			if (w <= 0) break;
+			pts[i][0] += dx * w;
+			pts[i][1] += dz * w;
+		}
 	}
 	return pts;
 }
@@ -989,8 +1286,8 @@ function suppressCoveredSegments(segs) {
 		const bb = s.bbox;
 		const others = segs.filter((o) => o !== s && !o.suppressed && o.len < s.len - 1e-6
 			// a shorter segment can only cover part of `s` if their bboxes come within TOL
-			&& o.bbox[2] >= bb[0] - CORRIDOR_TOL && o.bbox[0] <= bb[2] + CORRIDOR_TOL
-			&& o.bbox[3] >= bb[1] - CORRIDOR_TOL && o.bbox[1] <= bb[3] + CORRIDOR_TOL);
+			&& o.bbox[2] >= bb[0] - COVER_TOL && o.bbox[0] <= bb[2] + COVER_TOL
+			&& o.bbox[3] >= bb[1] - COVER_TOL && o.bbox[1] <= bb[3] + COVER_TOL);
 		if (!others.length) continue;
 		let covered = 0;
 		const by = new Set();
@@ -998,13 +1295,13 @@ function suppressCoveredSegments(segs) {
 			let bestD = Infinity, bestSeg = null;
 			for (const o of others) {
 				const ob = o.bbox;
-				if (p[0] < ob[0] - CORRIDOR_TOL || p[0] > ob[2] + CORRIDOR_TOL
-					|| p[1] < ob[1] - CORRIDOR_TOL || p[1] > ob[3] + CORRIDOR_TOL) continue;
+				if (p[0] < ob[0] - COVER_TOL || p[0] > ob[2] + COVER_TOL
+					|| p[1] < ob[1] - COVER_TOL || p[1] > ob[3] + COVER_TOL) continue;
 				const d = pointPolylineDist(p, o.pts);
 				if (d < bestD) { bestD = d; bestSeg = o; }
 				if (bestD <= 0.5) break;                     // already sitting on top of it
 			}
-			if (bestD <= CORRIDOR_TOL) { covered++; if (bestSeg) by.add(bestSeg.id); }
+			if (bestD <= COVER_TOL) { covered++; if (bestSeg) by.add(bestSeg.id); }
 		}
 		if (covered / s.samples.length < COVER_FRACTION) continue;
 		if (!partsConnectedWithout(segs, s)) continue;
@@ -1163,8 +1460,8 @@ function segmentDirAtPart(partId) {
 	let sx = 0, sz = 0, n = 0;
 	for (const s of state.ribbons) {
 		let a = null, b = null;
-		// measured past SNAP_WEIGHTS' reach, or the blend into the centroid would read as
-		// a sideways kink rather than the direction the line actually leaves the station
+		// measured a few samples in, past the worst of the centroid blend, or the
+		// direction would read as the sideways kink rather than how the line leaves
 		const span = Math.min(4, s.pts.length - 1);
 		if (s.partA === partId) { a = s.pts[0]; b = s.pts[span]; }
 		else if (s.partB === partId) { a = s.pts[s.pts.length - 1]; b = s.pts[s.pts.length - 1 - span]; }
@@ -1183,8 +1480,86 @@ function segmentDirAtPart(partId) {
 	return dx < 0 || (dx === 0 && dz < 0) ? [-dx, -dz] : [dx, dz];
 }
 
+/* ----------------------------------------------------------------------------
+ * 5d. EXPRESS / LOCAL STOP MARKS (feature 1) — the NYC convention
+ * --------------------------------------------------------------------------
+ * On an NYC map a station where EVERY service of the lines serving it stops is a
+ * solid dot; a station some service runs past is a smaller OPEN ring ("local only").
+ *
+ * The test is per (part, line). A route counts against a part only when its corridor
+ * actually RUNS THROUGH that part — an express whose own long segment was suppressed
+ * by the local chain (section 5c) runs over that chain, and the chain is exactly the
+ * list of parts it passes; a route on a different branch never comes near and is
+ * therefore irrelevant. So:
+ *
+ *   part P is full-service  <=>  for every line L touching P,
+ *                                every route of L whose covered segments touch P
+ *                                also stops at P.
+ * ------------------------------------------------------------------------- */
+
+function computeStopMarks() {
+	/* 1. the segments incident to each part (drawn AND suppressed — the suppressed
+	      express is what we resolve THROUGH, never what we test against) */
+	const segsAtPart = new Map();
+	for (const seg of state.segByPair.values()) {
+		for (const p of [seg.partA, seg.partB]) {
+			let s = segsAtPart.get(p);
+			if (!s) { s = new Set(); segsAtPart.set(p, s); }
+			s.add(seg.id);
+		}
+	}
+
+	/* 2. per route: which corridor segments it runs over, and which parts it stops at */
+	const byLine = new Map();          // hex -> [{covers:Set, stops:Set}]
+	const stopsAt = new Map();         // partId -> Set(hex) of lines that CALL there
+	for (const rt of visibleRoutes()) {
+		const covers = new Set(), stops = new Set();
+		const plats = rt.platforms || [];
+		for (const pid of plats) {
+			const part = partOfPlatform(pid);
+			if (!part) continue;
+			stops.add(part);
+			let hexes = stopsAt.get(part);
+			if (!hexes) { hexes = new Set(); stopsAt.set(part, hexes); }
+			hexes.add(rt.hex);
+		}
+		for (let i = 0; i < plats.length - 1; i++) {
+			const lg = state.legs.get(rt.id + "|" + i);
+			if (!lg) continue;
+			const a = partOfPlatform(lg.from), b = partOfPlatform(lg.to);
+			if (!a || !b || a === b) continue;
+			const seg = state.segByPair.get(rt.hex + "|" + pairKeyOf(a, b));
+			if (!seg) continue;
+			if (seg.suppressed && seg.coveredBy.length) for (const id of seg.coveredBy) covers.add(id);
+			else covers.add(seg.id);
+		}
+		if (!byLine.has(rt.hex)) byLine.set(rt.hex, []);
+		byLine.get(rt.hex).push({ covers, stops });
+	}
+
+	/* 3. the verdict per part */
+	const marks = new Map();
+	for (const [partId, hexes] of stopsAt) {
+		const incident = segsAtPart.get(partId);
+		let full = true;
+		for (const hex of hexes) {
+			for (const svc of byLine.get(hex) || []) {
+				if (svc.stops.has(partId)) continue;                       // it calls here
+				if (!incident) continue;
+				let through = false;
+				for (const id of svc.covers) if (incident.has(id)) { through = true; break; }
+				if (through) { full = false; break; }                      // runs past: local only
+			}
+			if (!full) break;
+		}
+		marks.set(partId, full);
+	}
+	return marks;
+}
+
 /** Station part glyphs: dot, or capsule when the part serves two or more ribbon colours. */
 function buildGlyphs() {
+	state.stopMarks = computeStopMarks();
 	const shown = new Set(visibleRoutes().map((r) => r.id));
 	const known = new Set(candidateRoutes().map((r) => r.id));
 	state.glyphs = [];
@@ -1227,6 +1602,8 @@ function buildGlyphs() {
 				// direction here, not the raw platform vectors
 				dir: segmentDirAtPart(part.id) || (n && dl > 0.05 ? [dx / dl, dz / dl] : [1, 0]),
 				accessible: accessible || (!!st.accessible && part.id === st.mainPartId),
+				// cached on the glyph: the drawn ring is picked from this every frame
+				fullService: state.stopMarks.get(part.id) !== false,
 				main: part.id === st.mainPartId,
 				weight: (part.platforms.length || st.platformIds.length || 1),
 				label: st.display,
@@ -1398,6 +1775,7 @@ function drawStatic(dpr) {
 	g.setTransform(dpr, 0, 0, dpr, 0, 0);
 	const W = canvas.clientWidth, H = canvas.clientHeight;
 	labelObstacles = [];
+	state.chipHits = [];
 
 	// 1. land
 	g.fillStyle = PALETTE.paper;
@@ -1411,7 +1789,13 @@ function drawStatic(dpr) {
 		t: v.z - H / 2 / v.scale - mz, b: v.z + H / 2 / v.scale + mz,
 	};
 
-	drawWater(g);
+	// 2. basemap. Satellite imagery goes UNDER everything else, over the paper fill (which
+	//    stays visible wherever the scan has no tile); terrain water is skipped there,
+	//    because the imagery already shows the real water. With satellite SELECTED but
+	//    nothing scanned there is no imagery to show it, so the water polygons stay —
+	//    a blank page would be strictly less map than the rider had a moment ago.
+	if (satEnabled() && satHasTiles()) drawSatellite(g, vp);
+	else drawWater(g);
 
 	const sel = state.selection;
 	const journeyKeys = sel ? sel.ribbonKeys : null;
@@ -1447,6 +1831,37 @@ function drawStatic(dpr) {
 
 	// 6. labels last so nothing paints over them
 	drawLabels(g, vp, sel);
+}
+
+/**
+ * Aerial imagery under the network (feature 5).
+ *
+ * Each tile's world extent becomes a screen rect through the same worldToScreen the rest
+ * of the map uses, so imagery and lines can never drift apart. Smoothing is OFF — at high
+ * zoom a Minecraft top-down scan should read as crisp blocks, not as mush — and the whole
+ * layer is drawn at PALETTE.satAlpha over the paper fill, which is what keeps white type
+ * and saturated ribbons readable on top (0.85 on paper, 0.6 on the near-black ground).
+ */
+function drawSatellite(g, vp) {
+	const meta = state.satmeta;
+	if (!meta || !meta.tiles.length) return;
+	const span = satTileSpan(meta);
+	g.save();
+	g.imageSmoothingEnabled = false;
+	g.globalAlpha = PALETTE.satAlpha;
+	for (const t of meta.tiles) {
+		const tx = t[0], tz = t[1];
+		const [x0, z0] = satWorldOf(meta, tx, tz, 0, 0);
+		const x1 = x0 + span, z1 = z0 + span;
+		if (x1 < vp.l || x0 > vp.r || z1 < vp.t || z0 > vp.b) continue;      // viewport cull
+		const img = satTileImage(tx, tz);
+		if (!img) continue;
+		const a = worldToScreen(x0, z0), b = worldToScreen(x1, z1);
+		// round outward by a hair so neighbouring tiles never show a sub-pixel seam
+		const px = Math.floor(a[0]), py = Math.floor(a[1]);
+		g.drawImage(img, px, py, Math.ceil(b[0]) - px, Math.ceil(b[1]) - py);
+	}
+	g.restore();
 }
 
 function drawWater(g) {
@@ -1543,25 +1958,38 @@ function drawGlyphs(g, vp, sel) {
 
 function drawGlyph(g, gl, s, w) {
 	const [sx, sy] = worldToScreen(gl.x, gl.z);
-	const r = (gl.main ? 6 : 5.2) * s * (gl.weight > 3 ? 1.12 : 1);
+	// EXPRESS/LOCAL (feature 1): a stop some service of its own line runs past is drawn
+	// smaller, as a thinner ring with NO fill — the line shows through it, which is
+	// exactly the NYC "local only" mark. Everything else keeps the solid white glyph.
+	const open = gl.fullService === false;
+	const r = (gl.main ? 6 : 5.2) * s * (gl.weight > 3 ? 1.12 : 1) * (open ? 0.76 : 1);
 	g.fillStyle = PALETTE.glyphFill;
-	g.strokeStyle = PALETTE.glyphStroke;
-	g.lineWidth = (gl.main ? 3 : 2.5) * s;
+	g.strokeStyle = open ? PALETTE.openStroke : PALETTE.glyphStroke;
+	g.lineWidth = (gl.main ? 3 : 2.5) * s * (open ? 0.68 : 1);
 	g.lineJoin = "round";
-	if (gl.capsule) {
-		// elongate along the local track direction so the capsule spans the bundle
-		const span = Math.max(w * (gl.colors.length - 1) * 1.35, r * 1.6);
+	const paint = () => { if (!open) g.fill(); g.stroke(); };
+	if (gl.capsule && gl.colors.length >= 3) {
+		// Big interchange: a large plain circle (NYC-map style). A capsule stretched
+		// across 3+ bundle slots grew enormous and diagonal at hub stations and
+		// buried its own label — the play-test "tons of lines just break" shot.
+		g.beginPath();
+		g.arc(sx, sy, r * 1.45, 0, Math.PI * 2);
+		paint();
+	} else if (gl.capsule) {
+		// elongate along the local track direction so the capsule spans the bundle,
+		// but never further than the bundle can actually be wide
+		const span = Math.min(Math.max(w * (gl.colors.length - 1) * 1.35, r * 1.6), r * 2.6);
 		g.save();
 		g.translate(sx, sy);
 		g.rotate(Math.atan2(gl.dir[1], gl.dir[0]) + Math.PI / 2);
 		g.beginPath();
 		g.roundRect(-r, -(r + span / 2), r * 2, r * 2 + span, r);
-		g.fill(); g.stroke();
+		paint();
 		g.restore();
 	} else {
 		g.beginPath();
 		g.arc(sx, sy, r, 0, Math.PI * 2);
-		g.fill(); g.stroke();
+		paint();
 	}
 	// NOTE: the accessibility badge is drawn by drawLabels, inline after the
 	// station name — anchoring it to the dot while the label floats produced
@@ -1600,6 +2028,13 @@ function drawBundleChips(g, vp, alpha) {
 			g.beginPath(); g.arc(bx, cy, R, 0, Math.PI * 2); g.fill();
 			g.fillStyle = "#fff";      // bullets are always white-on-colour
 			g.fillText(String(bl.n).slice(0, 2), bx, cy + 0.5);
+			// each bullet is a line-view target (feature 4). Kept in WORLD units for the
+			// same reason the label boxes are: a stale blit must not move the hit box.
+			const wa = screenToWorld(bx - R - 2, cy - R - 2), wb = screenToWorld(bx + R + 2, cy + R + 2);
+			state.chipHits.push({
+				hex: bl.hex,
+				box: [Math.min(wa[0], wb[0]), Math.min(wa[1], wb[1]), Math.max(wa[0], wb[0]), Math.max(wa[1], wb[1])],
+			});
 		});
 		g.textBaseline = "alphabetic";
 	}
@@ -1620,6 +2055,10 @@ function labelVisibleFor(gl, sel) { return !sel || sel.partIds.has(gl.partId); }
 function drawLabels(g, vp, sel) {
 	const s = uiScale();
 	const placed = labelObstacles.slice(); // chips + pins claimed their space first
+	// Label hit boxes are kept in WORLD units: the static layer can be blitted at a
+	// slightly different view for up to 100 ms, and a world box survives that (and any
+	// pan) where a screen box would drift.
+	state.labelHits = [];
 	// journey stations claim space first, then the busiest stations
 	const order = state.glyphs.slice().sort((a, b) => {
 		const ja = sel && sel.partIds.has(a.partId) ? 1 : 0;
@@ -1681,6 +2120,12 @@ function drawLabels(g, vp, sel) {
 		}
 		if (!chosen) continue;               // no room at this zoom — drop the label
 		placed.push(chosen.box);
+		const wA = screenToWorld(chosen.box[0], chosen.box[1]);
+		const wB = screenToWorld(chosen.box[2], chosen.box[3]);
+		state.labelHits.push({
+			stationId: gl.stationId, partId: gl.partId,
+			box: [Math.min(wA[0], wB[0]), Math.min(wA[1], wB[1]), Math.max(wA[0], wB[0]), Math.max(wA[1], wB[1])],
+		});
 
 		g.globalAlpha = sel ? (inJourney ? 1 : PALETTE.dim) : 1;
 		g.textAlign = "left";                 // chosen.x0 already encodes the alignment
@@ -1843,20 +2288,90 @@ function frame() {
 	}
 	ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
 
+	followCamera();          // recentre BEFORE the pucks are drawn at this view
+	drawPlayers();           // under the trains: a puck a rider tapped must stay on top
 	drawVehicles();
+	positionTrainCard();     // the card rides its puck, so it moves every frame
 
 	if (!DEMO && state.lastEventAt && now() - state.lastEventAt > 5000) setStatus("connecting");
 	requestAnimationFrame(frame);
+}
+
+/** Interpolation instant: one measured stream interval behind the wall clock. */
+function interpTime() {
+	const delay = state.emaInterval
+		? clamp(state.emaInterval * 1.25 + 120, 250, 2000)
+		: state.updateMillis * 1.5;
+	return now() - delay;
+}
+
+/**
+ * LIVE PLAYERS (feature 3).
+ *
+ * "Me" is the Google-Maps blue dot: a soft accuracy halo, a white ring and a solid
+ * blue core that pulses. Everybody else is a small neutral dot — this is a transit map,
+ * not a player tracker — and their names only appear once the view is zoomed in enough
+ * that a crowd cannot turn into a wall of text.
+ *
+ * Positions are interpolated between the feed's 4 Hz samples and then smoothed
+ * exponentially, exactly like the train pucks, so walking reads as walking.
+ */
+function drawPlayers() {
+	if (!state.prefs.showPlayers || !state.players.size) return;
+	const s = uiScale();
+	const renderTime = interpTime();
+	const frameNow = now();
+	const smoothing = 1 - Math.exp(-Math.min(0.1, (frameNow - (state.lastFrameAt || frameNow - 16)) / 1000) / 0.12);
+	const labels = [];
+	for (const [name, rec] of state.players) {
+		const p = playerPos(rec, renderTime);
+		if (!p) { rec.screen = null; continue; }
+		if (!rec.disp || Math.hypot(p.x - rec.disp.x, p.z - rec.disp.z) > 48) rec.disp = { x: p.x, z: p.z };
+		else {
+			rec.disp.x += (p.x - rec.disp.x) * smoothing;
+			rec.disp.z += (p.z - rec.disp.z) * smoothing;
+		}
+		const [sx, sy] = worldToScreen(rec.disp.x, rec.disp.z);
+		rec.screen = [sx, sy];
+		if (sx < -40 || sy < -40 || sx > canvas.clientWidth + 40 || sy > canvas.clientHeight + 40) continue;
+		const me = name === state.selfPlayer;
+		if (me) {
+			const r = 7.5 * s;
+			ctx.fillStyle = PALETTE.playerHalo;
+			ctx.beginPath(); ctx.arc(sx, sy, r * 3.4, 0, Math.PI * 2); ctx.fill();
+			ctx.globalAlpha = 0.55 + 0.45 * Math.sin(frameNow / 520);
+			ctx.beginPath(); ctx.arc(sx, sy, r * 2.1, 0, Math.PI * 2); ctx.fill();
+			ctx.globalAlpha = 1;
+			ctx.beginPath(); ctx.arc(sx, sy, r, 0, Math.PI * 2);
+			ctx.fillStyle = PALETTE.player; ctx.fill();
+			ctx.lineWidth = 2.6 * s; ctx.strokeStyle = "#ffffff"; ctx.stroke();
+		} else {
+			ctx.beginPath(); ctx.arc(sx, sy, 4.2 * s, 0, Math.PI * 2);
+			ctx.fillStyle = PALETTE.playerOther; ctx.fill();
+			ctx.lineWidth = 1.6 * s; ctx.strokeStyle = PALETTE.chip; ctx.stroke();
+			if (state.view.scale > PLAYER_LABEL_SCALE) labels.push({ sx, sy, name });
+		}
+	}
+	if (!labels.length) return;
+	ctx.font = "600 " + (11 * s).toFixed(1) + "px " + FONT;
+	ctx.textAlign = "center";
+	ctx.lineJoin = "round";
+	ctx.miterLimit = 2;
+	ctx.lineWidth = 3.5 * s;
+	for (const l of labels) {
+		ctx.strokeStyle = PALETTE.paper;
+		ctx.strokeText(l.name, l.sx, l.sy - 8 * s);
+		ctx.fillStyle = PALETTE.ink2;
+		ctx.fillText(l.name, l.sx, l.sy - 8 * s);
+	}
+	ctx.textAlign = "left";
 }
 
 function drawVehicles() {
 	const s = uiScale();
 	const sel = state.selection;
 	// interpolation delay from the measured stream cadence (app.js's rule)
-	const delay = state.emaInterval
-		? clamp(state.emaInterval * 1.25 + 120, 250, 2000)
-		: state.updateMillis * 1.5;
-	const renderTime = now() - delay;
+	const renderTime = interpTime();
 	const frameNow = now();
 	const dtSec = state.lastFrameAt ? Math.min(0.1, (frameNow - state.lastFrameAt) / 1000) : 0.016;
 	state.lastFrameAt = frameNow;
@@ -1865,6 +2380,9 @@ function drawVehicles() {
 	const callouts = [];
 	for (const [id, rec] of state.vehicles) {
 		if (!modeVisible(rec.mode || "train")) { rec.screen = null; continue; }
+		// while a journey is selected the map shows ONLY that journey's lines running
+		// (section 10a): a dimmed puck on an unrelated line still reads as traffic
+		if (!vehiclePassesSelection(rec, sel)) { rec.screen = null; continue; }
 		const p = vehiclePos(rec, renderTime);
 		if (!p) { rec.screen = null; continue; }
 		if (!rec.disp || Math.hypot(p.x - rec.disp.x, p.z - rec.disp.z) > 64) rec.disp = { x: p.x, z: p.z };
@@ -1882,8 +2400,8 @@ function drawVehicles() {
 		if (sx < -60 || sy < -60 || sx > canvas.clientWidth + 60 || sy > canvas.clientHeight + 60) continue;
 
 		const color = rec.route ? colorHex(rec.route.color) : PALETTE.ink2;
-		const onJourney = sel && rec.route && sel.routeIds.has(rec.route.id);
-		ctx.globalAlpha = sel && !onJourney ? 0.2 : 1;
+		const followed = !!(state.follow && state.follow.vehicleId === id);
+		const carded = state.trainCard === id;
 
 		const r = 11 * s;
 		ctx.save();
@@ -1896,6 +2414,14 @@ function drawVehicles() {
 		ctx.strokeStyle = color;
 		ctx.beginPath(); ctx.arc(sx, sy, r, 0, Math.PI * 2); ctx.stroke();
 		drawIcon(ctx, rec.mode === "boat" ? P_BOAT : P_TRAIN, sx, sy, 14 * s, color);
+		// the puck the card is anchored to (or the camera is riding) wears a halo ring,
+		// so a rider never loses which train they picked
+		if (followed || carded) {
+			ctx.lineWidth = 2 * s;
+			ctx.strokeStyle = color;
+			ctx.globalAlpha = followed ? 0.55 + 0.35 * Math.sin(now() / 320) : 0.5;
+			ctx.beginPath(); ctx.arc(sx, sy, r + 5 * s, 0, Math.PI * 2); ctx.stroke();
+		}
 		ctx.globalAlpha = 1;
 
 		// "due in N min" callout when this train is the one the journey boards
@@ -2010,6 +2536,102 @@ function handleFrame(f, isFull) {
 		if (rec.samples.length > 4) rec.samples.shift();
 		state.vehicles.set(v.id, rec);
 	}
+
+	// players ride BOTH frame kinds (full and delta) as the whole current set for this
+	// dimension, so an absent name means "gone", not "unchanged"
+	if (Array.isArray(f.players)) applyPlayers(f.players, f.serverTime);
+}
+
+/* ---- live player GPS (feature 3) ---- */
+
+/**
+ * Which streamed name is "me"? `?player=` (and the settings "I am" row) are matched
+ * CASE-INSENSITIVELY against the names the feed actually carries, and the FEED's spelling
+ * is what comes back — Minecraft usernames are case-preserving but riders type them
+ * however they like, and the URL is written by an in-game button we do not control.
+ *
+ * Pure: the harness drives it directly.
+ */
+function matchSelfPlayer(names, wanted) {
+	const want = String(wanted == null ? "" : wanted).trim().toLowerCase();
+	if (!want) return "";
+	for (const n of names || []) {
+		if (String(n == null ? "" : n).trim().toLowerCase() === want) return n;
+	}
+	return "";
+}
+
+/** Merge one frame's player list; drop anybody who has stopped arriving. */
+function applyPlayers(list, serverTime) {
+	const t = Number.isFinite(serverTime) ? serverTime : now();
+	const seen = new Set();
+	for (const p of list) {
+		if (!p || !p.name) continue;
+		seen.add(p.name);
+		let rec = state.players.get(p.name);
+		if (!rec) { rec = { name: p.name, samples: [], disp: null, y: p.y || 0, screen: null }; state.players.set(p.name, rec); }
+		rec.y = Number.isFinite(p.y) ? p.y : rec.y;
+		rec.lastSeen = t;
+		rec.samples.push({ t, x: p.x, y: p.y, z: p.z });
+		if (rec.samples.length > PLAYER_SAMPLES) rec.samples.shift();
+	}
+	for (const [name, rec] of state.players) {
+		if (!seen.has(name) && t - (rec.lastSeen || 0) > PLAYER_STALE_MS) state.players.delete(name);
+	}
+	resolveSelfPlayer();
+	// the settings "I am" list only needs rebuilding when the roster itself changes
+	const sig = [...state.players.keys()].sort().join("");
+	if (sig !== playerRosterKey) { playerRosterKey = sig; syncSelfUi(); }
+}
+let playerRosterKey = "";
+
+/**
+ * Re-resolve "me" against the current name set. The URL parameter WINS over the stored
+ * preference and rewrites it, so opening the map from the in-game button re-points the
+ * dot at whoever pressed it; the settings row is the fallback for a bare URL.
+ */
+function resolveSelfPlayer() {
+	const names = [...state.players.keys()];
+	// the URL wins at load; an explicit pick in the settings row takes it back
+	const wanted = (state.selfManual ? state.prefs.selfPlayer : (PLAYER_PARAM || state.prefs.selfPlayer)) || "";
+	const found = matchSelfPlayer(names, wanted);
+	const changed = found !== state.selfPlayer;
+	state.selfPlayer = found;
+	if (found && PLAYER_PARAM && state.prefs.selfPlayer !== found) {
+		state.prefs.selfPlayer = found;
+		savePrefs();
+	}
+	if (changed) { syncSelfUi(); renderOptions(); }
+	return found;
+}
+
+/** The self player's live world position, or null. */
+function selfPlayerPos() {
+	const rec = state.selfPlayer ? state.players.get(state.selfPlayer) : null;
+	if (!rec || !rec.samples.length) return null;
+	const s = rec.samples[rec.samples.length - 1];
+	return { x: s.x, y: Number.isFinite(s.y) ? s.y : rec.y || 0, z: s.z };
+}
+
+/** Same two-sample interpolation the vehicles use, without the rail curve. */
+function playerPos(rec, renderTime) {
+	const s = rec.samples;
+	if (!s.length) return null;
+	if (s.length === 1) return { x: s[0].x, z: s[0].z };
+	const last = s[s.length - 1], prev = s[s.length - 2];
+	if (renderTime > last.t) {
+		const dt = Math.min(renderTime - last.t, 600);
+		const span = last.t - prev.t || 1;
+		return { x: last.x + (last.x - prev.x) / span * dt, z: last.z + (last.z - prev.z) / span * dt };
+	}
+	let a = s[0], b = s[s.length - 1];
+	for (let i = 1; i < s.length; i++) {
+		a = s[i - 1]; b = s[i];
+		if (s[i].t >= renderTime) break;
+	}
+	const span = b.t - a.t || 1;
+	const f = clamp((renderTime - a.t) / span, 0, 1);
+	return { x: a.x + (b.x - a.x) * f, z: a.z + (b.z - a.z) * f };
 }
 
 function railPoint(railId, t) {
@@ -2055,21 +2677,36 @@ function vehiclePos(rec, renderTime) {
  * ========================================================================== */
 
 function initUi() {
-	$("zIn").onclick = () => zoomAt(canvas.clientWidth / 2, canvas.clientHeight / 2, 1.4);
-	$("zOut").onclick = () => zoomAt(canvas.clientWidth / 2, canvas.clientHeight / 2, 1 / 1.4);
-	$("zHome").onclick = fitView;
+	// every deliberate camera control also lets go of a followed train: the rider took
+	// the wheel back (follow keeps the zoom it was handed, it never drives it)
+	$("zIn").onclick = () => { stopFollow("input"); zoomAt(canvas.clientWidth / 2, canvas.clientHeight / 2, 1.4); };
+	$("zOut").onclick = () => { stopFollow("input"); zoomAt(canvas.clientWidth / 2, canvas.clientHeight / 2, 1 / 1.4); };
+	// LOCATE (feature 3): with a live self player this recentres on the rider; without
+	// one it stays the fit-the-network button it has always been.
+	$("zHome").onclick = () => { stopFollow("input"); locateOrFit(); };
+	syncSelfUi();
 
 	let drag = null;
+	let pressTimer = 0;
+	const cancelPress = () => { if (pressTimer) { clearTimeout(pressTimer); pressTimer = 0; } };
 	canvas.addEventListener("pointerdown", (e) => {
 		drag = { x: e.clientX, y: e.clientY, moved: false };
 		canvas.setPointerCapture(e.pointerId);
 		canvas.classList.add("dragging");
+		// LONG-PRESS drops a pin (the touch equivalent of the right-click below)
+		const rect = canvas.getBoundingClientRect();
+		const sx = e.clientX - rect.left, sy = e.clientY - rect.top;
+		cancelPress();
+		pressTimer = setTimeout(() => {
+			pressTimer = 0;
+			if (drag && !drag.moved) { drag.moved = true; dropMapPoint(pointTarget(), sx, sy); }
+		}, 520);
 	});
 	canvas.addEventListener("pointermove", (e) => {
 		const rect = canvas.getBoundingClientRect();
 		if (!drag) { hoverAt(e.clientX - rect.left, e.clientY - rect.top); return; }
 		const dx = e.clientX - drag.x, dy = e.clientY - drag.y;
-		if (Math.abs(dx) + Math.abs(dy) > 3) drag.moved = true;   // 3 px click threshold
+		if (Math.abs(dx) + Math.abs(dy) > 3) { drag.moved = true; cancelPress(); stopFollow("input"); }   // 3 px click threshold
 		state.view.x -= dx / state.view.scale;
 		state.view.z -= dy / state.view.scale;
 		drag.x = e.clientX; drag.y = e.clientY;
@@ -2078,13 +2715,21 @@ function initUi() {
 	});
 	canvas.addEventListener("pointerup", (e) => {
 		canvas.classList.remove("dragging");
+		cancelPress();
 		const rect = canvas.getBoundingClientRect();
 		if (drag && !drag.moved) clickAt(e.clientX - rect.left, e.clientY - rect.top);
 		drag = null;
 	});
+	// RIGHT-CLICK drops a pin straight onto the map, with no arming step
+	canvas.addEventListener("contextmenu", (e) => {
+		e.preventDefault();
+		const rect = canvas.getBoundingClientRect();
+		dropMapPoint(pointTarget(), e.clientX - rect.left, e.clientY - rect.top);
+	});
 	canvas.addEventListener("pointerleave", () => $("mapTip").classList.add("hidden"));
 	canvas.addEventListener("wheel", (e) => {
 		e.preventDefault();
+		stopFollow("input");
 		const rect = canvas.getBoundingClientRect();
 		zoomAt(e.clientX - rect.left, e.clientY - rect.top, Math.exp(-e.deltaY * 0.0015));
 	}, { passive: false });
@@ -2092,8 +2737,8 @@ function initUi() {
 	document.addEventListener("keydown", (e) => {
 		const tag = (e.target.tagName || "").toLowerCase();
 		if (tag === "input" || tag === "select" || tag === "textarea") return;
-		if (e.key === "Escape") clearSelection();
-		else if (e.key.toLowerCase() === "f") fitView();
+		if (e.key === "Escape") escapePressed();
+		else if (e.key.toLowerCase() === "f") { stopFollow("input"); fitView(); }
 		else if (e.key.toLowerCase() === "h") {
 			// the only way to reach the show-hidden pref (deliberately not a visible
 			// control — hidden routes are depot moves riders never board)
@@ -2138,8 +2783,25 @@ function hoverAt(sx, sy) {
 	const tip = $("mapTip");
 	const t = trainAt(sx, sy);
 	const gl = t ? null : glyphAt(sx, sy);
-	canvas.classList.toggle("pointing", !!(t || gl));
-	if (!t && !gl) { tip.classList.add("hidden"); return; }
+	// a line under the pointer is a click target too (feature 4)
+	const rb = t || gl ? null : (chipAt(sx, sy) || ribbonAt(sx, sy));
+	canvas.classList.toggle("pointing", !!(t || gl || rb));
+	if (!t && !gl) {
+		if (!rb) { tip.classList.add("hidden"); return; }
+		const labels = lineLabels(rb.hex);
+		const line = state.lines.get(rb.hex);
+		const names = [];
+		for (const id of (line && line.routeIds) || []) {
+			const n = routeBase((state.routes.get(id) || {}).name);
+			if (n && !names.includes(n)) names.push(n);
+		}
+		tip.innerHTML = labels.map((l) => `<span class="bullet sm" style="background:${rb.hex}">${esc(l)}</span>`).join("")
+			+ `<span>${esc(names[0] || "Line")}</span>`;
+		tip.classList.remove("hidden");
+		tip.style.left = (sx + 16) + "px";
+		tip.style.top = (sy - 12) + "px";
+		return;
+	}
 	let html;
 	if (t) {
 		const r = t.rec.route;
@@ -2159,11 +2821,752 @@ function hoverAt(sx, sy) {
 	tip.style.top = (sy - 12) + "px";
 }
 
+/**
+ * A station NAME is a click target too — the glyph is 11 px of dot and the label beside
+ * it is what a rider actually aims at. drawLabels records the boxes it placed in world
+ * units (they survive a stale blit); this walks them back to front.
+ */
+function labelAt(sx, sy) {
+	const [wx, wz] = screenToWorld(sx, sy);
+	for (let i = state.labelHits.length - 1; i >= 0; i--) {
+		const h = state.labelHits[i];
+		if (wx >= h.box[0] && wx <= h.box[2] && wz >= h.box[1] && wz <= h.box[3]) return h;
+	}
+	return null;
+}
+
+/** An interlining chip's bullet (world boxes, recorded by drawBundleChips). */
+function chipAt(sx, sy) {
+	const [wx, wz] = screenToWorld(sx, sy);
+	for (let i = state.chipHits.length - 1; i >= 0; i--) {
+		const h = state.chipHits[i];
+		if (wx >= h.box[0] && wx <= h.box[2] && wz >= h.box[1] && wz <= h.box[3]) return h;
+	}
+	return null;
+}
+
+/**
+ * The drawn line under the pointer (feature 4). Tolerance is the ribbon's own stroke plus
+ * however far its bundle is offset from the shared centreline, so clicking the visible
+ * stroke of an offset colour finds THAT colour rather than the corridor's centre.
+ */
+function ribbonAt(sx, sy) {
+	if (!state.ribbons.length) return null;
+	const [wx, wz] = screenToWorld(sx, sy);
+	const w = ribbonWidth();
+	const gap = Math.max(0.6, w * 0.16);
+	let best = null, bestD = Infinity;
+	for (const rb of state.ribbons) {
+		const spread = Math.max(0, rb.count - 1) / 2 * (w + gap);
+		const tol = (w / 2 + spread + 4) / Math.max(1e-6, state.view.scale);
+		const bb = rb.bbox;
+		if (wx < bb[0] - tol || wx > bb[2] + tol || wz < bb[1] - tol || wz > bb[3] + tol) continue;
+		const d = pointPolylineDist([wx, wz], rb.pts);
+		if (d <= tol && d < bestD) { bestD = d; best = rb; }
+	}
+	return best;
+}
+
+/**
+ * CLICK PRIORITY, as one pure decision (the harness drives it directly):
+ *   train -> station glyph -> station label -> line chip -> line ribbon -> map point / clear.
+ * A line is deliberately BELOW every station target: a rider aiming at a stop on a line
+ * must never get the line instead.
+ */
+const HIT_ORDER = ["train", "glyph", "label", "chip", "ribbon", "pick"];
+function pickHit(hits) {
+	for (const k of HIT_ORDER) if (hits && hits[k]) return k;
+	return "clear";
+}
+
+/**
+ * Click priority matches the hover tooltip: train, then station glyph, then station
+ * label. A click on bare paper closes whatever is open and drops the journey selection.
+ * Note a plain station click no longer FILLS the planner fields — the panel's
+ * "Plan from here" / "Plan to here" buttons do that now (they call pickStation).
+ */
 function clickAt(sx, sy) {
-	const gl = glyphAt(sx, sy);
-	if (gl) { pickStation(gl.stationId, gl.partId); return; }
-	if (trainAt(sx, sy)) return;      // clicking a train keeps the current selection
-	clearSelection();
+	const hits = {
+		train: trainAt(sx, sy),
+		glyph: glyphAt(sx, sy) || labelAt(sx, sy),
+		label: null,                                   // folded into `glyph` above
+		chip: chipAt(sx, sy),
+		ribbon: ribbonAt(sx, sy),
+		pick: state.mapPick ? { which: state.mapPick } : null,
+	};
+	switch (pickHit(hits)) {
+		case "train": openTrainCard(hits.train.id); return;
+		case "glyph": openStationPanel(hits.glyph.stationId, hits.glyph.partId); return;
+		case "chip": selectLine(hits.chip.hex); return;
+		case "ribbon": selectLine(hits.ribbon.hex); return;
+		case "pick": dropMapPoint(hits.pick.which, sx, sy); return;
+		default:
+			closeTrainCard();
+			closeStationPanel();
+			clearSelection();
+	}
+}
+
+/* ---- map point picking (feature 2) ---- */
+
+/** Arm "click the map": crosshair cursor + a hint pill saying what the click will do. */
+function armMapPick(which) {
+	state.mapPick = which === "to" ? "to" : "from";
+	if (canvas.classList) canvas.classList.add("picking");
+	const el = $("mapHint");
+	if (el) {
+		el.textContent = state.mapPick === "to"
+			? "Click the map to set your destination — Esc to cancel"
+			: "Click the map to set your start — Esc to cancel";
+		if (el.classList) el.classList.remove("hidden");
+	}
+	return state.mapPick;
+}
+
+function disarmMapPick() {
+	state.mapPick = null;
+	if (canvas.classList) canvas.classList.remove("picking");
+	const el = $("mapHint");
+	if (el && el.classList) el.classList.add("hidden");
+}
+
+/** Which field a bare right-click / long-press fills: the armed one, else the empty one. */
+function pointTarget() {
+	if (state.mapPick) return state.mapPick;
+	return state.plan.from ? "to" : "from";
+}
+
+/** Put an arbitrary world point into the planner. `live` = it follows the player. */
+function setPlanPoint(which, x, z, y, label, live) {
+	const key = which === "to" ? "to" : "from";
+	state.plan[key] = {
+		stationId: null, partId: null, point: [x, z],
+		y: Number.isFinite(y) ? y : undefined,
+		label: label || (key === "to" ? "Dropped pin (dest)" : "Dropped pin"),
+		live: !!live,
+	};
+	disarmMapPick();
+	syncFields();
+	replan();
+	return state.plan[key];
+}
+
+function dropMapPoint(which, sx, sy) {
+	const [wx, wz] = screenToWorld(sx, sy);
+	return setPlanPoint(which, wx, wz, undefined, null, false);
+}
+
+/** "Plan from my location" — the live position, re-planned as the rider walks. */
+function planFromMyLocation() {
+	const p = selfPlayerPos();
+	if (!p) return null;
+	return setPlanPoint("from", p.x, p.z, p.y, "My location", true);
+}
+
+/** Clearing a field drops whatever it held (station or pin) and disarms the map. */
+function clearPlanField(which) {
+	const key = which === "to" ? "to" : "from";
+	if (state.mapPick === key) disarmMapPick();
+	if (!state.plan[key]) return;
+	state.plan[key] = null;
+	replan();
+}
+
+/** Esc unwinds the overlays one keystroke at a time, then the selection. */
+function escapePressed() {
+	let handled = false;
+	// an armed map pick is the most transient thing on screen: it goes first
+	if (state.mapPick) { disarmMapPick(); handled = true; }
+	if (state.follow) { stopFollow("escape"); handled = true; }
+	if (state.trainCard) { closeTrainCard(); handled = true; }
+	if (state.stationPanel) { closeStationPanel(); handled = true; }
+	if (!handled) clearSelection();
+}
+
+/**
+ * The locate button. With a live self player it parks the camera on the rider at the
+ * current zoom; without one it falls back to fitView(), which is what the button has
+ * always done. The tooltip follows, so it never promises something it cannot do.
+ */
+function locateOrFit() {
+	const p = selfPlayerPos();
+	if (!p) { fitView(); return false; }
+	state.view.x = p.x;
+	state.view.z = p.z;
+	if (state.view.scale < 0.6) state.view.scale = 0.9;      // "where am I" wants street zoom
+	invalidateStatic();
+	return true;
+}
+
+/** Keep the locate tooltip, the "I am" select and the From dropdown honest. */
+function syncSelfUi() {
+	const btn = $("zHome");
+	if (btn) btn.title = state.selfPlayer ? "Centre on " + state.selfPlayer : "Recenter";
+	const sel = $("selfSel");
+	if (sel) {
+		const names = [...state.players.keys()].sort();
+		const html = ['<option value="">Nobody</option>']
+			.concat(names.map((n) => `<option value="${esc(n)}"${n === state.selfPlayer ? " selected" : ""}>${esc(n)}</option>`))
+			.join("");
+		if (sel.innerHTML !== html) sel.innerHTML = html;
+		sel.value = state.selfPlayer || "";
+	}
+	const row = $("selfRow");
+	if (row && row.classList) row.classList.toggle("hidden", state.players.size === 0);
+}
+
+/* ============================================================================
+ * 10a. train card + follow mode
+ * ==========================================================================
+ * Clicking a puck opens a small floating card beside it (line bullet, destination,
+ * consist length, next stop, speed) with a Follow button. Follow parks the camera on
+ * the vehicle's interpolated position every frame at the rider's own zoom, and lets go
+ * the moment the rider pans, zooms, presses Esc, taps the pill, selects a journey that
+ * hides the line, or the vehicle stops arriving in the feed.
+ */
+
+/** The stop a vehicle is running to: `nPlat` resolved to a station, else the feed's own
+ *  `route.nextStation` string, else nothing (never a guess). */
+function vehicleNextStop(rec) {
+	const d = (rec && rec.data) || {};
+	const pl = d.nPlat ? state.platforms.get(d.nPlat) : null;
+	if (pl) {
+		const st = state.stations.get(pl.stationId);
+		if (st) return { name: st.display, platform: pl.name || "", stationId: st.id, source: "platform" };
+	}
+	const named = rec && rec.route && rec.route.nextStation;
+	if (named) return { name: firstLang(named), platform: "", stationId: null, source: "route" };
+	return null;
+}
+
+/** Everything the card (and the follow pill) shows about one vehicle. */
+function trainCardData(id) {
+	const rec = state.vehicles.get(id);
+	if (!rec) return null;
+	const rt = rec.route || null;
+	const cars = rec.consist && (rec.consist.cars || rec.consist.carLengths);
+	const kmh = rec.data && Number.isFinite(rec.data.kmh) ? Math.round(rec.data.kmh) : null;
+	return {
+		id,
+		hex: rt ? colorHex(rt.color) : PALETTE.ink2,
+		label: rt ? routeServiceLabel({ number: rt.number, display: routeBase(rt.name), name: rt.name }) : "",
+		routeName: rt ? (routeBase(rt.name) || "Train") : "Train",
+		dest: rt ? firstLang(rt.dest || routeDest(rt.name)) : "",
+		cars: Array.isArray(cars) ? cars.length : 0,
+		kmh,
+		doors: !!(rec.data && rec.data.doors),
+		nextStop: vehicleNextStop(rec),
+	};
+}
+
+/**
+ * Where a floating card anchored to a point goes. Right of the point by default; it
+ * flips to the left when the card would run off the right edge (and stays right when
+ * neither side fits, then clamps), and its top is clamped into the viewport — so a card
+ * is never clipped, whatever corner its train is in.
+ */
+function anchorFloatCard(sx, sy, w, h, vw, vh, gap) {
+	const g = gap === undefined ? CARD_GAP : gap;
+	const fitsRight = sx + g + w <= vw - 8;
+	const fitsLeft = sx - g - w >= 8;
+	const side = fitsRight || !fitsLeft ? "right" : "left";
+	const left = clamp(side === "right" ? sx + g : sx - g - w, 8, Math.max(8, vw - w - 8));
+	const top = clamp(sy - h / 2, 8, Math.max(8, vh - h - 8));
+	return { left, top, side };
+}
+
+function openTrainCard(id) {
+	state.trainCard = id;
+	renderTrainCard();
+}
+
+function closeTrainCard() {
+	if (!state.trainCard) return;
+	state.trainCard = null;
+	trainCardKey = "";
+	const el = $("trainCard");
+	if (el && el.classList) el.classList.add("hidden");
+}
+
+function trainCardHtml(d, following) {
+	const bullet = d.label
+		? `<span class="bullet sm" style="background:${d.hex}">${esc(d.label)}</span>`
+		: `<span class="fc-swatch" style="background:${d.hex}"></span>`;
+	const head = d.dest ? "→ " + d.dest : d.routeName;
+	const facts = [];
+	if (d.cars) facts.push(`${d.cars} car${d.cars === 1 ? "" : "s"}`);
+	if (d.kmh !== null) facts.push(d.doors && d.kmh === 0 ? "doors open" : d.kmh + " km/h");
+	return `
+		<div class="fc-head">
+			${bullet}
+			<div class="fc-title">
+				<div class="fc-dest">${esc(head)}</div>
+				<div class="fc-line">${esc(d.routeName)}</div>
+			</div>
+			<button class="fc-close" type="button" title="Close" aria-label="Close">×</button>
+		</div>
+		${d.nextStop ? `<div class="fc-next"><span class="fc-key">Next stop</span><b>${esc(d.nextStop.name)}</b>${
+			d.nextStop.platform ? `<span class="fc-plat">Plat ${esc(d.nextStop.platform)}</span>` : ""}</div>` : ""}
+		${facts.length ? `<div class="fc-facts">${facts.map((f) => esc(f)).join(" · ")}</div>` : ""}
+		<button class="fc-follow${following ? " on" : ""}" type="button">${following ? "Following — stop" : "Follow"}</button>`;
+}
+
+let trainCardKey = "";
+function renderTrainCard() {
+	const el = $("trainCard");
+	if (!el) return;
+	if (!state.trainCard) { trainCardKey = ""; if (el.classList) el.classList.add("hidden"); return; }
+	const d = trainCardData(state.trainCard);
+	if (!d) { closeTrainCard(); return; }
+	const html = trainCardHtml(d, !!(state.follow && state.follow.vehicleId === d.id));
+	// the live ticker re-renders this every second: only touch the DOM when something a
+	// rider can see actually changed, so a hovered button never blinks out under them
+	// (keyed by vehicle too — two trains of one service can render identical markup)
+	const key = d.id + "|" + html;
+	if (key === trainCardKey) { positionTrainCard(); return; }
+	trainCardKey = key;
+	el.innerHTML = html;
+	if (el.classList) el.classList.remove("hidden");
+	const close = el.querySelector ? el.querySelector(".fc-close") : null;
+	if (close) close.onclick = (e) => { if (e && e.stopPropagation) e.stopPropagation(); closeTrainCard(); };
+	const follow = el.querySelector ? el.querySelector(".fc-follow") : null;
+	if (follow) {
+		follow.onclick = (e) => {
+			if (e && e.stopPropagation) e.stopPropagation();
+			if (state.follow && state.follow.vehicleId === d.id) stopFollow("user");
+			else startFollow(d.id);
+		};
+	}
+	positionTrainCard();
+}
+
+function positionTrainCard() {
+	const el = $("trainCard");
+	if (!el || !state.trainCard || !el.style) return;
+	const rec = state.vehicles.get(state.trainCard);
+	if (!rec || !rec.screen) { if (el.classList) el.classList.add("hidden"); return; }
+	if (el.classList) el.classList.remove("hidden");
+	const w = el.offsetWidth || 232, h = el.offsetHeight || 132;
+	const a = anchorFloatCard(rec.screen[0], rec.screen[1], w, h,
+		canvas.clientWidth || 1280, canvas.clientHeight || 800);
+	el.style.left = Math.round(a.left) + "px";
+	el.style.top = Math.round(a.top) + "px";
+	if (el.classList) { el.classList.toggle("flip", a.side === "left"); }
+}
+
+/* ---- follow state machine (pure: the harness drives it directly) ---- */
+
+/**
+ * @param follow  current follow state or null
+ * @param ev      {type, id, at, present}
+ *                start     begin following `id` at `at`
+ *                tick      one animation frame; `present` = the vehicle is in the feed
+ *                          AND currently drawable (mode layer on, not filtered out)
+ *                input | escape | user | filtered | stop   let go
+ * @returns the next follow state, or null when follow has ended.
+ */
+function followReduce(follow, ev) {
+	const at = ev && Number.isFinite(ev.at) ? ev.at : 0;
+	switch (ev && ev.type) {
+		case "start":
+			return { vehicleId: ev.id, since: at, lastSeenAt: at, fading: false };
+		case "tick":
+			if (!follow) return null;
+			if (ev.present) return follow.fading ? { ...follow, lastSeenAt: at, fading: false } : { ...follow, lastSeenAt: at };
+			// gone from the feed: the pill fades while we wait, then follow lets go
+			if (at - follow.lastSeenAt > FOLLOW_LOST_MS) return null;
+			return follow.fading ? follow : { ...follow, fading: true };
+		case "input": case "escape": case "user": case "filtered": case "stop":
+			return null;
+		default:
+			return follow;
+	}
+}
+
+function startFollow(id) {
+	if (!state.vehicles.has(id)) return;
+	state.follow = followReduce(state.follow, { type: "start", id, at: now() });
+	renderFollowPill();
+	renderTrainCard();
+}
+
+function stopFollow(reason) {
+	if (!state.follow) return;
+	state.follow = followReduce(state.follow, { type: reason || "stop", at: now() });
+	renderFollowPill();
+	if (state.trainCard) renderTrainCard();
+}
+
+/** Is the followed vehicle currently drawable? (feed + layer + journey filter) */
+function followTargetVisible() {
+	const f = state.follow;
+	if (!f) return false;
+	const rec = state.vehicles.get(f.vehicleId);
+	return !!(rec && rec.disp && modeVisible(rec.mode || "train") && vehiclePassesSelection(rec, state.selection));
+}
+
+/** One frame of follow: advance the state machine, then park the camera. */
+function followCamera() {
+	const f = state.follow;
+	if (!f) return;
+	const present = followTargetVisible();
+	const next = followReduce(f, { type: "tick", at: now(), present });
+	const changed = next !== f;
+	state.follow = next;
+	if (!next) { renderFollowPill(); if (state.trainCard) renderTrainCard(); return; }
+	if (present) {
+		const rec = state.vehicles.get(next.vehicleId);
+		if (Math.abs(state.view.x - rec.disp.x) > 0.01 || Math.abs(state.view.z - rec.disp.z) > 0.01) {
+			state.view.x = rec.disp.x;
+			state.view.z = rec.disp.z;
+			invalidateStatic();
+		}
+	}
+	if (changed && next.fading !== f.fading) renderFollowPill();
+}
+
+function followPillText(d) {
+	if (!d) return "Following this train · tap to stop";
+	const who = (d.label ? d.label + " " : "") + (d.dest ? "→ " + d.dest : d.routeName);
+	return "Following " + who.trim() + " · tap to stop";
+}
+
+let followPillKey = "";
+function renderFollowPill() {
+	const el = $("followPill");
+	if (!el) return;
+	const f = state.follow;
+	if (!f) {
+		followPillKey = "";
+		if (el.classList) { el.classList.add("hidden"); el.classList.remove("fading"); }
+		return;
+	}
+	const d = trainCardData(f.vehicleId);
+	const key = f.vehicleId + "|" + followPillText(d);
+	if (key !== followPillKey) {
+		followPillKey = key;
+		el.innerHTML = `<span class="fp-dot" style="background:${d ? d.hex : PALETTE.accent}"></span>${esc(followPillText(d))}`;
+		el.onclick = () => stopFollow("user");
+	}
+	if (el.classList) {
+		el.classList.remove("hidden");
+		el.classList.toggle("fading", !!f.fading);
+	}
+}
+
+/* ---- journey filter (feature 2) ---- */
+
+/** The LINE colours a selected journey rides (its ride legs carry `#rrggbb`). */
+function selectionLineHexes(selection) {
+	const out = new Set();
+	const legs = selection && selection.journey ? selection.journey.legs || [] : [];
+	for (const leg of legs) {
+		if (leg.kind === "ride" && leg.color) out.add(String(leg.color).toLowerCase());
+	}
+	return out;
+}
+
+/**
+ * Should this vehicle be drawn under the current selection? No selection: yes (the mode
+ * layers still apply upstream). A selection: only vehicles whose route's LINE colour is
+ * one of the journey's — the rider asked about those trains, everything else is noise.
+ * A selection that somehow rides no coloured line hides nothing.
+ */
+function vehiclePassesSelection(rec, selection) {
+	if (!selection) return true;
+	const hexes = selection.lineHexes instanceof Set ? selection.lineHexes : selectionLineHexes(selection);
+	if (!hexes.size) return true;
+	if (!rec || !rec.route) return false;
+	return hexes.has(colorHex(rec.route.color).toLowerCase());
+}
+
+/* ============================================================================
+ * 10b. station panel
+ * ==========================================================================
+ * Clicking a station glyph or its name opens the right-hand card: who serves it, when
+ * the next trains go, where its exits come out, which platforms are step-free, and the
+ * two buttons that put it into the planner.
+ */
+
+/** Distinct lines serving a station, with their normalised bullets. */
+function stationLines(st) {
+	const out = new Map();
+	for (const pid of (st && st.platformIds) || []) {
+		const pl = state.platforms.get(pid);
+		if (!pl) continue;
+		for (const rid of pl.routeIds || []) {
+			const rt = state.routes.get(rid);
+			if (!rt || (rt.hidden && !state.prefs.showHidden) || !modeVisible(rt.mode || "train")) continue;
+			let e = out.get(rt.hex);
+			if (!e) { e = { hex: rt.hex, labels: [] }; out.set(rt.hex, e); }
+			const label = routeServiceLabel(rt);
+			if (label && !e.labels.includes(label)) e.labels.push(label);
+		}
+	}
+	return [...out.values()];
+}
+
+/** The destination a rider reads off a departure row. */
+function routeHeadsign(rt) {
+	if (!rt) return "";
+	return firstLang(rt.dest || routeDest(rt.name) || "") || routeBase(rt.name) || "";
+}
+
+/**
+ * LIVE DEPARTURES for one station, grouped by LINE and sorted soonest-first.
+ *
+ * Each (platform, route) contributes up to `perDest` departures through nextDeparture():
+ * a streamed train inbound to that platform is `live: true`; otherwise the headway model
+ * fills in and the row is flagged schedule-derived. A route with NEITHER (no live train
+ * and no headway — nextDeparture's `estimated` tier) contributes NOTHING: a fabricated
+ * "in 5 min" on a departure board is worse than an empty board. A platform that is the
+ * route's LAST stop contributes nothing either — nobody departs from a terminus arrival.
+ *
+ * @returns [{hex, labels:[], routeIds:[], soonestMs, rows:[{destination, label, routeId,
+ *           platformId, platformName, departMs, waitMs, live, vehicleId}]}]
+ */
+function buildDepartureGroups(graph, stationId, atMs, opts) {
+	const st = state.stations.get(stationId);
+	if (!st || !graph) return [];
+	const perDest = (opts && opts.perDest) || DEPARTURES_PER_DEST;
+	const horizon = (opts && opts.horizonMs) || DEPARTURE_HORIZON_MS;
+	const at = Number.isFinite(atMs) ? atMs : now();
+	const groups = new Map();
+
+	for (const pid of st.platformIds || []) {
+		const pl = state.platforms.get(pid);
+		if (!pl) continue;
+		for (const rid of pl.routeIds || []) {
+			const rt = state.routes.get(rid);
+			if (!rt || (rt.hidden && !state.prefs.showHidden) || !modeVisible(rt.mode || "train")) continue;
+			const seq = routeSequence(graph, rid);
+			const idx = seq ? seq.platformIndex.get(pid) : undefined;
+			if (!seq || idx === undefined || idx >= seq.platforms.length - 1) continue;   // terminus arrival
+
+			let g = groups.get(rt.hex);
+			if (!g) { g = { hex: rt.hex, labels: [], routeIds: [], rows: [], soonestMs: Infinity }; groups.set(rt.hex, g); }
+			const label = routeServiceLabel(rt);
+			if (label && !g.labels.includes(label)) g.labels.push(label);
+			if (!g.routeIds.includes(rid)) g.routeIds.push(rid);
+
+			let prev = null;
+			for (let k = 0; k < perDest; k++) {
+				let d;
+				if (!prev) d = nextDeparture(graph, pid, rid, at);
+				else if (prev.live) d = nextDeparture(graph, pid, rid, prev.departMs + 1000);
+				// a second SCHEDULED departure is simply one headway after the first —
+				// re-asking nextDeparture would re-apply the phase and drift
+				else if (rt.headwayMs > 0) d = { departMs: prev.departMs + rt.headwayMs, live: false, vehicleId: null, estimated: false };
+				else break;
+				if (!d || d.estimated || d.departMs - at > horizon) break;
+				g.rows.push({
+					routeId: rid, label, destination: routeHeadsign(rt),
+					platformId: pid, platformName: pl.name || "",
+					departMs: d.departMs, waitMs: Math.max(0, d.departMs - at),
+					live: !!d.live, vehicleId: d.vehicleId || null,
+				});
+				prev = d;
+			}
+		}
+	}
+
+	const out = [];
+	for (const g of groups.values()) {
+		g.rows.sort((a, b) => a.departMs - b.departMs || String(a.destination).localeCompare(String(b.destination)));
+		// two routes can share a destination (a local and an express to the same place):
+		// the cap is per DESTINATION, which is what the rider is choosing between
+		const seen = new Map();
+		g.rows = g.rows.filter((r) => {
+			const n = (seen.get(r.destination) || 0) + 1;
+			seen.set(r.destination, n);
+			return n <= perDest;
+		});
+		if (!g.rows.length) continue;
+		g.labels.sort();
+		g.soonestMs = g.rows[0].departMs;
+		out.push(g);
+	}
+	out.sort((a, b) => a.soonestMs - b.soonestMs || a.hex.localeCompare(b.hex));
+	return out;
+}
+
+/**
+ * EXITS. mapdata may carry `exits: [{name, destinations:[…]}]`; older payloads have no
+ * such field at all, which is why the panel omits the whole section rather than drawing
+ * an empty one. Rows read "Exit A · Main St, Transit Museum".
+ */
+function stationExits(station) {
+	const out = [];
+	for (const e of (station && station.exits) || []) {
+		if (!e) continue;
+		const name = firstLang(String(e.name == null ? "" : e.name)).trim();
+		const destinations = (e.destinations || [])
+			.map((d) => firstLang(String(d == null ? "" : d)).trim())
+			.filter(Boolean);
+		if (!name && !destinations.length) continue;
+		// MTR's own exit editor stores bare letters ("A", "B1"), so the word is ours to
+		// add — but never twice, for a server that already spells it out
+		const label = !name ? "Exit" : /exit/i.test(name) ? name : "Exit " + name;
+		out.push({ name: label, destinations, text: destinations.length ? label + " · " + destinations.join(", ") : label });
+	}
+	return out;
+}
+
+/**
+ * ACCESSIBILITY. `accessiblePlatforms` is the server's explicit list; when the station
+ * flag is set and that list is empty, EVERY platform is step-free and the panel says so
+ * in one line instead of listing them. Otherwise each platform is listed with its mark.
+ */
+function stationAccessibility(station) {
+	if (!station) return { stepFree: false, all: false, platforms: [] };
+	const listed = Array.isArray(station.accessiblePlatforms) ? station.accessiblePlatforms : null;
+	const platforms = (station.platformIds || []).map((id) => {
+		const pl = state.platforms.get(id);
+		return {
+			id, name: (pl && pl.name) || id,
+			accessible: !!((pl && pl.accessible) || (listed && listed.includes(id))),
+		};
+	});
+	const all = !!station.accessible && !(listed && listed.length);
+	return { stepFree: !!station.accessible || platforms.some((p) => p.accessible), all, platforms };
+}
+
+/** Everything the station panel renders, as plain values. */
+function stationPanelData(stationId, partId, atMs) {
+	const st = state.stations.get(stationId);
+	if (!st) return null;
+	if (!state.plan.graph) state.plan.graph = buildGraph();
+	const part = partId ? st.parts.find((p) => p.id === partId) : null;
+	return {
+		stationId, partId: partId || null,
+		name: st.display,
+		partName: part ? (part.name || part.sub || "") : "",
+		accessible: !!st.accessible,
+		lines: stationLines(st),
+		groups: buildDepartureGroups(state.plan.graph, stationId, Number.isFinite(atMs) ? atMs : now()),
+		exits: stationExits(st),
+		access: stationAccessibility(st),
+	};
+}
+
+function departureWaitText(waitMs) {
+	const m = Math.round(waitMs / 60000);
+	return m <= 0 ? "now" : "in " + m + " min";
+}
+
+function departuresHtml(data) {
+	if (!data.groups.length) {
+		return '<div class="st-empty">No departures to show from here right now.</div>';
+	}
+	return data.groups.map((g) => `
+		<div class="st-group">
+			<div class="st-grouphead" style="--line:${g.hex}">
+				${g.labels.map((l) => `<span class="bullet sm" style="background:${g.hex}">${esc(l)}</span>`).join("")
+					|| `<span class="fc-swatch" style="background:${g.hex}"></span>`}
+			</div>
+			${g.rows.map((r) => `
+				<div class="st-dep${r.live ? " live" : " sched"}">
+					<span class="st-dest">${esc(r.destination || "—")}</span>
+					<span class="st-plat">${r.platformName ? "Plat " + esc(r.platformName) : ""}</span>
+					<span class="st-when">${r.live ? '<span class="dot pulse"></span>' : ""}${esc(departureWaitText(r.waitMs))}</span>
+				</div>`).join("")}
+		</div>`).join("");
+}
+
+function stationPanelHtml(data) {
+	// each bullet opens that line's view (feature 4)
+	const bullets = data.lines.map((l) => (l.labels.length ? l.labels : [""])
+		.map((lb) => `<span class="bullet sm line-bullet" role="button" tabindex="0" title="Show this line"
+			data-line="${esc(l.hex)}" style="background:${l.hex}">${esc(lb)}</span>`).join("")).join("");
+	const acc = data.access;
+	const accBody = acc.all
+		? `<div class="st-accline">${ACCESS_IMG}All platforms step-free</div>`
+		: acc.platforms.length
+			? `<div class="st-platlist">${acc.platforms.map((p) => `
+				<div class="st-platrow${p.accessible ? " yes" : ""}">
+					<span>Platform ${esc(p.name)}</span>
+					${p.accessible ? ACCESS_IMG : '<span class="st-no">not step-free</span>'}
+				</div>`).join("")}</div>`
+			: `<div class="st-accline">No step-free information published.</div>`;
+	return `
+		<div class="st-head">
+			<div class="st-title">
+				<h2>${esc(data.name)}${data.accessible ? " " + ACCESS_IMG : ""}</h2>
+				${data.partName ? `<div class="st-part">${esc(data.partName)}</div>` : ""}
+				<div class="st-bullets">${bullets}</div>
+			</div>
+			<button class="st-close" type="button" title="Close" aria-label="Close">×</button>
+		</div>
+		<div class="st-sec">
+			<div class="st-sectitle">Live departures</div>
+			<div class="st-departures">${departuresHtml(data)}</div>
+		</div>
+		${data.exits.length ? `
+		<div class="st-sec">
+			<div class="st-sectitle">Exits</div>
+			${data.exits.map((e) => `<div class="st-exit"><b>${esc(e.name)}</b>${
+				e.destinations.length ? ' <span class="st-exitdest">· ' + esc(e.destinations.join(", ")) + "</span>" : ""}</div>`).join("")}
+		</div>` : ""}
+		<div class="st-sec">
+			<div class="st-sectitle">Accessibility</div>
+			${accBody}
+		</div>
+		<div class="st-actions">
+			<button class="st-btn" type="button" data-plan="from">Plan from here</button>
+			<button class="st-btn" type="button" data-plan="to">Plan to here</button>
+		</div>`;
+}
+
+function openStationPanel(stationId, partId) {
+	if (!state.stations.has(stationId)) return;
+	state.stationPanel = { stationId, partId: partId || null, openedAt: now() };
+	renderStationPanel();
+}
+
+function closeStationPanel() {
+	if (!state.stationPanel) return;
+	state.stationPanel = null;
+	const el = $("stationPanel");
+	if (el && el.classList) el.classList.add("hidden");
+}
+
+function renderStationPanel() {
+	const el = $("stationPanel");
+	if (!el) return;
+	const sp = state.stationPanel;
+	if (!sp) { if (el.classList) el.classList.add("hidden"); return; }
+	const data = stationPanelData(sp.stationId, sp.partId, now());
+	if (!data) { closeStationPanel(); return; }
+	el.innerHTML = stationPanelHtml(data);
+	if (el.classList) el.classList.remove("hidden");
+	const close = el.querySelector ? el.querySelector(".st-close") : null;
+	if (close) close.onclick = () => closeStationPanel();
+	const buttons = el.querySelectorAll ? el.querySelectorAll("[data-plan]") : [];
+	for (const b of buttons) {
+		b.onclick = () => planFromPanel(b.dataset ? b.dataset.plan : "from");
+	}
+	for (const b of (el.querySelectorAll ? el.querySelectorAll(".line-bullet") : [])) {
+		b.onclick = () => { if (b.dataset && b.dataset.line) selectLine(b.dataset.line); };
+	}
+}
+
+/** The panel's two planner buttons — the only thing that fills the fields now. */
+function planFromPanel(which) {
+	const sp = state.stationPanel;
+	if (!sp) return;
+	pickStation(sp.stationId, sp.partId, which === "to" ? "to" : "from");
+	// replan() clears the selection, which re-renders the panel's live rows honestly
+	renderStationPanel();
+}
+
+/** Called by the live ticker: departures age out every second. */
+function refreshStationDepartures() {
+	const el = $("stationPanel");
+	if (!el || !state.stationPanel) return;
+	const box = el.querySelector ? el.querySelector(".st-departures") : null;
+	if (!box) return;
+	const data = stationPanelData(state.stationPanel.stationId, state.stationPanel.partId, now());
+	if (data) box.innerHTML = departuresHtml(data);
 }
 
 /* ============================================================================
@@ -2268,37 +3671,60 @@ function initPlanner() {
 function setupCombo(inputId, listId, which) {
 	const input = $(inputId), list = $(listId);
 	let active = -1, entries = [];
+	/** Standing actions above the station matches: pick on the map, use my location. */
+	const actions = () => {
+		const rows = [{ action: "map", text: which === "to" ? "Choose destination on the map" : "Choose start on the map", icon: "i-pin" }];
+		if (which === "from" && state.selfPlayer && selfPlayerPos()) {
+			rows.unshift({ action: "me", text: "Plan from my location", icon: "i-locate" });
+		}
+		return rows;
+	};
 	const render = () => {
 		entries = searchEntries(input.value);
+		const acts = actions();
+		const head = acts.map((a) => `
+			<div class="ac-row ac-action" data-action="${a.action}">
+				<svg class="icon sm"><use href="#${a.icon}"/></svg><span>${esc(a.text)}</span>
+			</div>`).join("");
 		if (!entries.length) {
-			list.innerHTML = '<div class="ac-empty">No matching station</div>';
+			list.innerHTML = head + '<div class="ac-empty">No matching station</div>';
 		} else {
-			list.innerHTML = entries.map((e, i) => `
+			list.innerHTML = head + entries.map((e, i) => `
 				<div class="ac-row${i === active ? " active" : ""}" data-i="${i}">
 					<span>${esc(e.label)}</span>
 					${e.sub ? `<span class="sub">${esc(e.sub)}</span>` : ""}
 					${e.accessible ? ACCESS_IMG : ""}
 					<span class="dots">${e.colors.slice(0, 5).map((c) => `<i style="background:${c}"></i>`).join("")}</span>
 				</div>`).join("");
-			for (const row of list.querySelectorAll(".ac-row")) {
-				row.onmousedown = (ev) => {
-					ev.preventDefault();
-					choose(entries[parseInt(row.dataset.i, 10)]);
-				};
-			}
+		}
+		for (const row of list.querySelectorAll(".ac-row")) {
+			row.onmousedown = (ev) => {
+				ev.preventDefault();
+				const act = row.dataset ? row.dataset.action : "";
+				if (act === "me") { list.classList.add("hidden"); planFromMyLocation(); return; }
+				if (act === "map") { list.classList.add("hidden"); armMapPick(which); return; }
+				choose(entries[parseInt(row.dataset.i, 10)]);
+			};
 		}
 		list.classList.remove("hidden");
 	};
 	const choose = (e) => {
 		if (!e) return;
+		disarmMapPick();
 		state.plan[which] = { stationId: e.stationId, partId: e.partId };
 		input.value = entryText(e);
 		list.classList.add("hidden");
 		active = -1;
 		replan();
 	};
-	input.addEventListener("focus", render);
-	input.addEventListener("input", () => { active = -1; render(); });
+	// clicking the FIELD arms "click the map"; typing in it goes straight back to search
+	input.addEventListener("focus", () => { armMapPick(which); render(); });
+	input.addEventListener("input", () => {
+		active = -1;
+		if (state.mapPick === which) disarmMapPick();
+		if (!input.value.trim()) clearPlanField(which);
+		render();
+	});
 	input.addEventListener("blur", () => setTimeout(() => list.classList.add("hidden"), 120));
 	input.addEventListener("keydown", (e) => {
 		if (e.key === "ArrowDown" || e.key === "ArrowUp") {
@@ -2313,11 +3739,17 @@ function setupCombo(inputId, listId, which) {
 	});
 }
 
-/** Clicking a station on the map fills the empty field (From first, then To). */
-function pickStation(stationId, partId) {
+/**
+ * Put a station into the planner. `which` ("from" / "to") comes from the station panel's
+ * two buttons; without it the original fill-the-empty-field-first rule applies (From
+ * first, then To), which is what the station-panel buttons replaced on the map itself.
+ */
+function pickStation(stationId, partId, which) {
 	const p = state.plan;
-	if (!p.from) p.from = { stationId, partId };
-	else if (!p.to) p.to = { stationId, partId };
+	disarmMapPick();
+	if (which === "from") p.from = { stationId, partId };
+	else if (which === "to") p.to = { stationId, partId };
+	else if (!p.from) p.from = { stationId, partId };
 	else p.to = { stationId, partId };
 	syncFields();
 	replan();
@@ -2326,6 +3758,7 @@ function pickStation(stationId, partId) {
 function syncFields() {
 	const label = (sel) => {
 		if (!sel) return "";
+		if (sel.point) return sel.label || "Dropped pin";
 		const st = state.stations.get(sel.stationId);
 		if (!st) return "";
 		if (!sel.partId) return st.display;
@@ -2365,12 +3798,18 @@ function replan(keepSelection) {
 	const prevIndex = p.selectedIndex;
 	p.journeys = [];
 	p.selectedIndex = -1;
-	clearSelection();
-	if (p.from && p.to && p.from.stationId !== p.to.stationId) {
+	p.planError = null;
+	// a line view is not a journey selection and must survive a re-plan (the minute
+	// ticker calls replan while the rider is reading a line)
+	if (state.selection && state.selection.kind !== "line") clearSelection();
+	if (p.from && p.to) {
 		if (!p.graph) p.graph = buildGraph();
-		p.journeys = planJourneys(p.graph, p.from.stationId, p.to.stationId, p.prefs, departAtMs(),
-			{ fromPartId: p.from.partId, toPartId: p.to.partId });
-		if (p.journeys.length) {
+		const res = planEndpoints(p.graph, p.from, p.to, p.prefs, departAtMs());
+		p.journeys = res.journeys;
+		p.planError = res.error;
+		// while a line is open the map belongs to that line: fill the option list but do
+		// not steal the map back for a journey the rider did not just ask for
+		if (p.journeys.length && !(state.selection && state.selection.kind === "line")) {
 			const sig = p.journeys.map((j) => j.signature || "").join("~");
 			const keep = keepSelection && sig === prevSig && prevIndex >= 0 && prevIndex < p.journeys.length;
 			selectOption(keep ? prevIndex : 0);
@@ -2384,19 +3823,23 @@ function replan(keepSelection) {
 function renderOptions() {
 	const p = state.plan;
 	const box = $("options");
+	// LINE VIEW (feature 4) takes the option list over while it is open; the planner is
+	// still there underneath and comes straight back when the line is closed.
+	if (state.selection && state.selection.kind === "line") { renderLineCard(); return; }
 	$("liveOpts").textContent = p.journeys.length + " OPTION" + (p.journeys.length === 1 ? "" : "S");
 	const hint = $("plannerHint");
 	if (!p.from || !p.to) {
 		box.innerHTML = "";
-		hint.textContent = "Pick a start and a destination — or click two stations on the map.";
+		hint.textContent = "Pick a start and a destination — or click a station on the map and use Plan from here.";
 		hint.classList.remove("hidden");
 		return;
 	}
 	if (!p.journeys.length) {
 		box.innerHTML = "";
-		hint.textContent = p.prefs.stepFree
-			? "No step-free journey found — try clearing the step-free filter."
-			: "No journey found between these two stations.";
+		hint.textContent = p.planError ? p.planError
+			: p.prefs.stepFree
+				? "No step-free journey found — try clearing the step-free filter."
+				: "No journey found between these two points.";
 		hint.classList.remove("hidden");
 		return;
 	}
@@ -2457,7 +3900,7 @@ function itineraryHtml(j) {
 				<div class="t">${fmtTime(leg.depMs)}</div>
 				<div class="n"><span class="node" style="border-color:${leg.color}"></span><span class="rail" style="background:${leg.color}"></span></div>
 				<div class="c">
-					<div class="stop-name">${esc(stationLabel(leg.fromStation, leg.fromPart))}</div>
+					<div class="stop-name">${esc(legEndLabel(leg, "from"))}</div>
 					${pendingWalk ? walkChipHtml(pendingWalk, true) : ""}
 					<div class="stop-sub">${sub}</div>
 					<div class="ride">${leg.stopCount} stop${leg.stopCount === 1 ? "" : "s"} · ${fmtMin((leg.arrMs - leg.depMs) / 1000)}</div>
@@ -2465,29 +3908,44 @@ function itineraryHtml(j) {
 			pendingWalk = null;
 		} else {
 			const next = j.legs[i + 1];
-			if (next && next.kind === "ride") { pendingWalk = leg; return; }
+			// a walk BETWEEN two rides is a transfer and folds into the next boarding row;
+			// the walk off a dropped pin is not a transfer — it is the rider leaving home,
+			// and it keeps its own row and its own "Walk 166 m · 2 min to Riverside" chip
+			if (next && next.kind === "ride" && !leg.fromPoint) { pendingWalk = leg; return; }
 			rows.push(`
 				<div class="t">${fmtTime(leg.depMs)}</div>
 				<div class="n"><span class="node" style="border-color:${PALETTE.ink2}"></span><span class="rail walk"></span></div>
 				<div class="c">
-					<div class="stop-name">${esc(stationLabel(leg.fromStation, leg.fromPart))}</div>
+					<div class="stop-name">${esc(legEndLabel(leg, "from"))}</div>
 					${walkChipHtml(leg, false)}
-					${leg.note ? `<div class="stop-sub">${esc(leg.note)}</div>` : ""}
+					${leg.note && !leg.fromPoint && !leg.toPoint ? `<div class="stop-sub">${esc(leg.note)}</div>` : ""}
 				</div>`);
 		}
 	});
 	rows.push(`
 		<div class="t">${fmtTime(j.arriveMs)}</div>
 		<div class="n"><span class="node pin"></span></div>
-		<div class="c"><div class="stop-name">${esc(stationLabel(j.toStation, j.toPart))}</div></div>`);
+		<div class="c"><div class="stop-name">${esc(j.toPoint ? (j.toName || "Dropped pin") : stationLabel(j.toStation, j.toPart))}</div></div>`);
 	return `<div class="itin">${rows.join("")}</div>`;
+}
+
+/** A leg end's display name — a station (with its part) or a map point (feature 2). */
+function legEndLabel(leg, which) {
+	const point = which === "to" ? leg.toPoint : leg.fromPoint;
+	if (point) return (which === "to" ? leg.toName : leg.fromName) || "Dropped pin";
+	return which === "to" ? stationLabel(leg.toStation, leg.toPart) : stationLabel(leg.fromStation, leg.fromPart);
 }
 
 function walkChipHtml(leg, transfer) {
 	const icon = leg.mode === "boat" ? "i-boat" : "i-walk";
+	// a walk that starts or ends at a map point names where it lands — "Walk 240 m ·
+	// 3 min to Museum" is the whole point of the leading/trailing leg
+	const dest = leg.fromPoint || leg.toPoint ? legEndLabel(leg, "to") : "";
 	const label = transfer
 		? `Transfer · ${fmtMeters(leg.meters)} · ${fmtMin(leg.seconds)}`
-		: `Walk ${fmtMeters(leg.meters)} · ${fmtMin(leg.seconds)}${leg.note ? " · " + leg.note : ""}`;
+		: dest
+			? `Walk ${fmtMeters(leg.meters)} · ${fmtMin(leg.seconds)} to ${dest}`
+			: `Walk ${fmtMeters(leg.meters)} · ${fmtMin(leg.seconds)}${leg.note ? " · " + leg.note : ""}`;
 	return `<div class="tchip"><svg class="icon"><use href="#${icon}"/></svg>${esc(label)}${leg.accessible ? ACCESS_IMG : ""}</div>`;
 }
 
@@ -2524,6 +3982,8 @@ function selectJourney(journey) {
 		return pl ? pl.partId : null;
 	};
 	const posOf = (platformId, partId) => {
+		const pt = state.pointNodes.get(platformId);
+		if (pt) return pt.xz;
 		const pl = state.platforms.get(platformId);
 		if (pl) return pl.xz;
 		for (const st of state.stations.values()) {
@@ -2563,7 +4023,18 @@ function selectJourney(journey) {
 	if (firstLeg) origin = posOf(firstLeg.fromPlatform, firstLeg.fromPart);
 	if (lastLeg) dest = posOf(lastLeg.toPlatform, lastLeg.toPart);
 
-	state.selection = { journey, ribbonKeys, partIds, routeIds, walks, fallbacks, origin, dest, boardPlatform };
+	// the LINE colours this journey rides: everything else's trains come off the map
+	// (feature 2), which also means a followed train on another line is let go
+	const lineHexes = new Set();
+	for (const leg of journey.legs) {
+		if (leg.kind === "ride" && leg.color) lineHexes.add(String(leg.color).toLowerCase());
+	}
+
+	state.selection = { kind: "journey", journey, ribbonKeys, partIds, routeIds, walks, fallbacks, origin, dest, boardPlatform, lineHexes };
+	if (state.follow) {
+		const rec = state.vehicles.get(state.follow.vehicleId);
+		if (!vehiclePassesSelection(rec, state.selection)) stopFollow("filtered");
+	}
 	invalidateStatic();
 }
 
@@ -2598,12 +4069,185 @@ function legSegmentIds(leg) {
 	return { ids, fallbacks };
 }
 
+/* ============================================================================
+ * 11c. LINE VIEW (feature 4)
+ * ==========================================================================
+ * Clicking a ribbon, an interlining bullet or a station-panel bullet asks "what IS this
+ * line?". The answer reuses the journey machinery wholesale — a selection with
+ * `kind: "line"` fades the rest of the network exactly the same way — and replaces the
+ * option list with a line card: bullets, frequency, per-service chips, and the stop list
+ * in order with the express-skipped stops carrying the same open ring the map draws.
+ */
+
+/**
+ * Everything the line card renders, as plain values.
+ *
+ * The stop ORDER comes from the line's DOMINANT route — the service calling at the most
+ * stops, which on a local/express pair is always the local, i.e. the full stop list. Ride
+ * times are that route's own leg durations, so they are the times a rider on the all-stops
+ * service actually experiences.
+ */
+function lineViewData(hex) {
+	const line = state.lines.get(hex);
+	if (!line) return null;
+	const routes = line.routeIds.map((id) => state.routes.get(id))
+		.filter((rt) => rt && (!rt.hidden || state.prefs.showHidden) && (rt.platforms || []).length >= 2);
+	if (!routes.length) return null;
+	const dominant = routes.slice().sort((a, b) =>
+		(b.platforms || []).length - (a.platforms || []).length || (a.id < b.id ? -1 : 1))[0];
+
+	const headways = routes.map((r) => r.headwayMs || 0).filter((h) => h > 0);
+	const headwayMs = headways.length ? Math.min(...headways) : 0;
+
+	const names = [];
+	for (const rt of routes) {
+		const n = routeBase(rt.name);
+		if (n && !names.includes(n)) names.push(n);
+	}
+	// per-service chips: one per distinct (bullet, destination), so "4 IN"/"4 OU" read as
+	// two directions of one service rather than as two lines
+	const services = [], seen = new Set();
+	for (const rt of routes) {
+		const s = {
+			routeId: rt.id, label: routeServiceLabel(rt), name: routeBase(rt.name),
+			dest: firstLang(rt.dest || routeDest(rt.name) || ""), headwayMs: rt.headwayMs || 0,
+			stops: (rt.platforms || []).length,
+		};
+		const k = s.label + "|" + s.dest;
+		if (seen.has(k)) continue;
+		seen.add(k);
+		services.push(s);
+	}
+
+	const plats = dominant.platforms || [];
+	const stops = [];
+	for (let i = 0; i < plats.length; i++) {
+		const pl = state.platforms.get(plats[i]);
+		if (!pl) continue;
+		const st = state.stations.get(pl.stationId);
+		const part = st && pl.partId ? st.parts.find((p) => p.id === pl.partId) : null;
+		const lg = i < plats.length - 1 ? state.legs.get(dominant.id + "|" + i) : null;
+		stops.push({
+			stationId: pl.stationId, partId: pl.partId || null, platformId: pl.id,
+			name: st ? st.display : (pl.name || pl.id),
+			sub: part && (part.name || part.sub) ? (part.name || part.sub) : "",
+			// the SAME classifier the map's open rings come from (feature 1)
+			skip: state.stopMarks.get(pl.partId) === false,
+			accessible: !!pl.accessible,
+			rideSeconds: lg ? lg.seconds : 0,
+		});
+	}
+
+	return {
+		hex, labels: line.serviceLabels.slice(), names, headwayMs,
+		everyMin: headwayMs ? Math.max(1, Math.round(headwayMs / 60000)) : 0,
+		services, dominantRouteId: dominant.id, stops,
+	};
+}
+
+/** Open the line view: the line at full strength, everything else at PALETTE.dim. */
+function selectLine(hex) {
+	const data = lineViewData(hex);
+	if (!data) return null;
+	const ribbonKeys = new Set(), partIds = new Set(), routeIds = new Set();
+	for (const seg of state.ribbons) {
+		if (seg.hex !== hex) continue;
+		ribbonKeys.add(seg.id);
+		partIds.add(seg.partA);
+		partIds.add(seg.partB);
+	}
+	// a station the line calls at whose segment was suppressed still belongs to the line
+	for (const gl of state.glyphs) if (gl.colors.includes(hex)) partIds.add(gl.partId);
+	for (const s of data.stops) if (s.partId) partIds.add(s.partId);
+	const line = state.lines.get(hex);
+	for (const id of (line && line.routeIds) || []) routeIds.add(id);
+
+	state.selection = {
+		kind: "line", hex, data, ribbonKeys, partIds, routeIds,
+		walks: [], fallbacks: [], origin: null, dest: null, boardPlatform: null,
+		lineHexes: new Set([String(hex).toLowerCase()]),
+	};
+	if (state.follow) {
+		const rec = state.vehicles.get(state.follow.vehicleId);
+		if (!vehiclePassesSelection(rec, state.selection)) stopFollow("filtered");
+	}
+	invalidateStatic();
+	renderOptions();
+	return state.selection;
+}
+
+function closeLineView() {
+	if (state.selection && state.selection.kind === "line") clearSelection();
+}
+
+function lineCardHtml(d) {
+	const bullets = (d.labels.length ? d.labels : [""])
+		.map((l) => `<span class="bullet" style="background:${d.hex}">${esc(l)}</span>`).join("");
+	const chips = d.services.length > 1
+		? `<div class="lv-services">${d.services.map((s) => `
+			<span class="lv-svc"><span class="bullet sm" style="background:${d.hex}">${esc(s.label)}</span>${
+				s.dest ? "to " + esc(s.dest) : esc(s.name)}</span>`).join("")}</div>`
+		: "";
+	const stops = d.stops.map((s, i) => `
+		<div class="lv-stop" data-station="${esc(s.stationId)}" data-part="${esc(s.partId || "")}">
+			<div class="lv-mark">
+				<span class="lv-dot${s.skip ? " open" : ""}" style="border-color:${d.hex}"></span>
+				${i < d.stops.length - 1 ? `<span class="lv-rail" style="background:${d.hex}"></span>` : ""}
+			</div>
+			<div class="lv-body">
+				<div class="lv-name">${esc(s.name)}${s.sub ? ` <span class="lv-sub">· ${esc(s.sub)}</span>` : ""}${
+					s.accessible ? " " + ACCESS_IMG : ""}${s.skip ? ' <span class="lv-skip">local only</span>' : ""}</div>
+				${s.rideSeconds ? `<div class="lv-ride">${esc(fmtMin(s.rideSeconds))}</div>` : ""}
+			</div>
+		</div>`).join("");
+	return `
+		<div class="lv">
+			<div class="lv-head">
+				<div class="lv-bullets">${bullets}</div>
+				<div class="lv-title">
+					<div class="lv-names">${esc(d.names.join(" · ") || "Line")}</div>
+					<div class="lv-freq">${d.everyMin ? "every ~" + d.everyMin + " min" : "frequency not published"}</div>
+				</div>
+				<button class="lv-close" type="button" title="Back to the planner" aria-label="Back to the planner">×</button>
+			</div>
+			${chips}
+			<div class="lv-sectitle">Stops</div>
+			<div class="lv-stops">${stops}</div>
+		</div>`;
+}
+
+function renderLineCard() {
+	const sel = state.selection;
+	if (!sel || sel.kind !== "line") return;
+	const box = $("options");
+	const hint = $("plannerHint");
+	if (hint && hint.classList) hint.classList.add("hidden");
+	const opts = $("liveOpts");
+	if (opts) opts.textContent = (sel.data.stops.length || 0) + " STOP" + (sel.data.stops.length === 1 ? "" : "S");
+	if (!box) return;
+	box.innerHTML = lineCardHtml(sel.data);
+	const close = box.querySelector ? box.querySelector(".lv-close") : null;
+	if (close) close.onclick = () => closeLineView();
+	for (const row of (box.querySelectorAll ? box.querySelectorAll(".lv-stop") : [])) {
+		row.onclick = () => {
+			const st = row.dataset ? row.dataset.station : "";
+			const part = row.dataset && row.dataset.part ? row.dataset.part : null;
+			if (st) openStationPanel(st, part);
+		};
+	}
+}
+
 function clearSelection() {
 	if (!state.selection) return;
+	const wasLine = state.selection.kind === "line";
 	state.selection = null;
-	// keep the panel honest: no journey is highlighted once the map selection goes
+	// keep the panel honest: no journey is highlighted once the map selection goes.
+	// Closing a LINE always rebuilds the panel too — the line card IS the option list
+	// while it is open, so the planner has to be put back.
 	if (state.plan.selectedIndex >= 0) {
 		state.plan.selectedIndex = -1;
+		renderOptions();
+	} else if (wasLine) {
 		renderOptions();
 	}
 	invalidateStatic();
@@ -2621,6 +4265,10 @@ function tickLive() {
 	if (state.plan.journeys.length) {
 		for (const el of document.querySelectorAll(".opt-live")) el.dataset.tick = age;
 	}
+	// the two floating overlays age on the same tick: the card's speed/next stop and the
+	// station panel's countdowns (only its departure rows are rebuilt, not the panel)
+	if (state.trainCard) renderTrainCard();
+	if (state.stationPanel) refreshStationDepartures();
 	// "Leave now" walks forward with the clock: replan on each minute boundary (the
 	// planner memoises by minute bucket, so this costs one search a minute, not one
 	// a second) and keep the rider's expanded option if nothing actually changed.
@@ -2628,6 +4276,24 @@ function tickLive() {
 		const bucket = Math.floor(now() / 60000);
 		if (bucket !== state.plan.lastBucket) replan(true);
 	}
+	followLiveOrigin();
+}
+
+/**
+ * "Plan from my location" tracks the rider (feature 3). Re-planning on every 4 Hz sample
+ * would be pointless churn, so the origin only moves — and the search only re-runs — once
+ * the rider is PLAYER_REPLAN_MOVE blocks from where the current plan was made.
+ */
+function followLiveOrigin() {
+	const from = state.plan.from;
+	if (!from || !from.live || !from.point) return false;
+	const p = selfPlayerPos();
+	if (!p) return false;
+	if (Math.hypot(p.x - from.point[0], p.z - from.point[1]) < PLAYER_REPLAN_MOVE) return false;
+	from.point = [p.x, p.z];
+	from.y = p.y;
+	replan(true);
+	return true;
 }
 
 function setStatus(s) {
@@ -2646,6 +4312,9 @@ function savePrefs() {
 			theme: state.prefs.theme === "dark" ? "dark" : "light",
 			lineScale: clamp(state.prefs.lineScale || 1, LINE_SCALE_MIN, LINE_SCALE_MAX),
 			hiddenModes: (state.prefs.hiddenModes || []).slice(),
+			basemap: state.prefs.basemap === "satellite" ? "satellite" : "schematic",
+			showPlayers: state.prefs.showPlayers !== false,
+			selfPlayer: String(state.prefs.selfPlayer || ""),
 		}));
 	} catch (e) { /* storage unavailable — prefs just don't persist */ }
 }
@@ -2660,6 +4329,10 @@ function loadPrefs() {
 	state.prefs.lineScale = Number.isFinite(p.lineScale)
 		? clamp(p.lineScale, LINE_SCALE_MIN, LINE_SCALE_MAX) : 1;
 	state.prefs.hiddenModes = Array.isArray(p.hiddenModes) ? p.hiddenModes.filter((m) => typeof m === "string") : [];
+	state.prefs.basemap = p.basemap === "satellite" ? "satellite" : "schematic";
+	state.prefs.showPlayers = p.showPlayers !== false;
+	// ?player= wins over the remembered name and rewrites it once the feed confirms it
+	state.prefs.selfPlayer = PLAYER_PARAM || (typeof p.selfPlayer === "string" ? p.selfPlayer : "");
 }
 
 /* ---------------------------------------------------------------------------- 
@@ -2712,23 +4385,48 @@ function setLineScale(v) {
 	invalidateStatic();
 }
 
-/** One checkbox per mode the network actually contains. Rebuilt with the geometry. */
+/** Basemap: the schematic paper ground, or the server's aerial scan (feature 5). */
+function setBasemap(name) {
+	const basemap = name === "satellite" ? "satellite" : "schematic";
+	if (state.prefs.basemap === basemap) return basemap;
+	state.prefs.basemap = basemap;
+	savePrefs();
+	invalidateStatic();
+	maybeSatHint();
+	return basemap;
+}
+
+function setPlayersVisible(on) {
+	state.prefs.showPlayers = !!on;
+	savePrefs();
+}
+
+/** One checkbox per mode the network actually contains, plus the players layer. */
 function renderLayerList() {
 	const box = $("layerList");
 	if (!box) return;
 	const modes = modesPresent();
-	box.innerHTML = modes.map((m) => `
+	const modeRows = modes.map((m) => `
 		<label class="layer"><input type="checkbox" data-mode="${esc(m)}"${modeVisible(m) ? " checked" : ""}>
 		<span>${esc(modeLabel(m))}</span></label>`).join("")
 		|| '<div class="set-hint">No routes loaded yet.</div>';
+	box.innerHTML = modeRows + `
+		<label class="layer"><input type="checkbox" data-layer="players"${state.prefs.showPlayers !== false ? " checked" : ""}>
+		<span>Players</span></label>`;
 	for (const el of box.querySelectorAll("input[type=checkbox]")) {
-		el.onchange = () => setModeVisible(el.dataset.mode, !!el.checked);
+		el.onchange = () => {
+			if (el.dataset && el.dataset.layer === "players") setPlayersVisible(!!el.checked);
+			else setModeVisible(el.dataset.mode, !!el.checked);
+		};
 	}
 }
 
 function syncSettingsUi() {
 	for (const b of document.querySelectorAll("#themeSeg button")) {
 		b.classList.toggle("on", b.dataset.theme === state.prefs.theme);
+	}
+	for (const b of document.querySelectorAll("#basemapSeg button")) {
+		b.classList.toggle("on", b.dataset.basemap === state.prefs.basemap);
 	}
 	const sl = $("lineScale");
 	if (sl) sl.value = String(state.prefs.lineScale || 1);
@@ -2751,6 +4449,20 @@ function initSettings() {
 	});
 	for (const b of document.querySelectorAll("#themeSeg button")) {
 		b.onclick = () => { applyTheme(b.dataset.theme); savePrefs(); syncSettingsUi(); };
+	}
+	for (const b of document.querySelectorAll("#basemapSeg button")) {
+		b.onclick = () => { setBasemap(b.dataset.basemap); syncSettingsUi(); };
+	}
+	const self = $("selfSel");
+	if (self) {
+		self.onchange = () => {
+			state.selfManual = true;
+			state.prefs.selfPlayer = self.value || "";
+			savePrefs();
+			resolveSelfPlayer();
+			syncSelfUi();
+			renderOptions();
+		};
 	}
 	const sl = $("lineScale");
 	if (sl) {
@@ -2800,7 +4512,7 @@ function buildGraph() {
 		nodes.set(pl.id, {
 			id: pl.id, stationId: pl.stationId, partId: pl.partId,
 			name: pl.name, stationName: st ? st.display : "",
-			xz: pl.xz, accessible: !!pl.accessible, routeIds: pl.routeIds.slice(),
+			xz: pl.xz, y: pl.y || 0, accessible: !!pl.accessible, routeIds: pl.routeIds.slice(),
 		});
 		if (!byStation.has(pl.stationId)) byStation.set(pl.stationId, []);
 		byStation.get(pl.stationId).push(pl.id);
@@ -2826,14 +4538,15 @@ function buildGraph() {
 	}
 
 	const transferEdges = [];
-	const pushTransfer = (aId, bId, meters) => {
+	const pushTransfer = (aId, bId, meters, street) => {
 		const a = nodes.get(aId), b = nodes.get(bId);
 		if (!a || !b || aId === bId) return;
 		transferEdges.push({
 			from: aId, to: bId, meters,
-			seconds: meters / WALK_SPEED + WALK_BUFFER_S,
+			seconds: walkSeconds(meters),
 			walk: true, accessible: a.accessible && b.accessible,
 			sameStation: a.stationId === b.stationId, samePart: a.partId === b.partId,
+			street: !!street,
 		});
 	};
 	for (const st of state.stations.values()) {
@@ -2858,6 +4571,59 @@ function buildGraph() {
 		}
 	}
 
+	/* CROSS-STREET TRANSFERS (feature 2). Two different stations close enough to walk
+	 * between are a real interchange even when MTR knows nothing about it — the 14 St /
+	 * 6 Av case. Each station keeps only its STREET_TRANSFER_NEIGHBOURS nearest
+	 * neighbours inside STREET_TRANSFER_RADIUS, measured between the closest platform of
+	 * each, so a dense downtown adds a handful of edges rather than a clique; the edge
+	 * is added in BOTH directions whenever EITHER side picked it.
+	 *
+	 * TWO stations that are ADJACENT STOPS on some service are deliberately excluded. A
+	 * street transfer exists to reach a line you cannot otherwise reach; between two
+	 * consecutive stops the service itself is the connection, and on a network whose
+	 * stops sit ~100 blocks apart (which is normal for MTR) an unfiltered radius turns
+	 * every trunk line into a footpath and the planner starts telling riders to walk the
+	 * line instead of riding it. */
+	const rideAdjacent = new Set();
+	for (const e of rideEdges) {
+		const a = nodes.get(e.from), b = nodes.get(e.to);
+		if (!a || !b || a.stationId === b.stationId) continue;
+		rideAdjacent.add(a.stationId + ">" + b.stationId);
+		rideAdjacent.add(b.stationId + ">" + a.stationId);
+	}
+	const stationIds = [...byStation.keys()];
+	const closestPair = (aIds, bIds) => {
+		let best = null;
+		for (const ai of aIds) {
+			const a = nodes.get(ai);
+			if (!a) continue;
+			for (const bi of bIds) {
+				const b = nodes.get(bi);
+				if (!b) continue;
+				const m = dist(a.xz, b.xz);
+				if (!best || m < best.meters) best = { a: ai, b: bi, meters: m };
+			}
+		}
+		return best;
+	};
+	const streetSeen = new Set();
+	for (const sa of stationIds) {
+		const cands = [];
+		for (const sb of stationIds) {
+			if (sa === sb || rideAdjacent.has(sa + ">" + sb)) continue;
+			const pair = closestPair(byStation.get(sa) || [], byStation.get(sb) || []);
+			if (pair && pair.meters <= STREET_TRANSFER_RADIUS) cands.push(pair);
+		}
+		cands.sort((x, y) => x.meters - y.meters);
+		for (const pair of cands.slice(0, STREET_TRANSFER_NEIGHBOURS)) {
+			const key = pair.a < pair.b ? pair.a + ">" + pair.b : pair.b + ">" + pair.a;
+			if (streetSeen.has(key)) continue;
+			streetSeen.add(key);
+			pushTransfer(pair.a, pair.b, pair.meters, true);
+			pushTransfer(pair.b, pair.a, pair.meters, true);
+		}
+	}
+
 	const adjacency = new Map();
 	const adj = (id) => {
 		let a = adjacency.get(id);
@@ -2868,6 +4634,114 @@ function buildGraph() {
 	for (const e of transferEdges) adj(e.from).transfers.push(e);
 
 	return { nodes, rideEdges, transferEdges, byStation, adjacency, stations: state.stations };
+}
+
+/* ----------------------------------------------------------------------------
+ * 12-b. POINT-TO-POINT (feature 2) — an arbitrary map point as an endpoint
+ * --------------------------------------------------------------------------
+ * A dropped pin (or the rider's live position) becomes a virtual graph node joined by
+ * WALK edges to the platforms of its nearest stations. The graph is NOT mutated: the
+ * search gets a shallow overlay that shares every untouched Map entry, so the cached
+ * base graph (the station panel, the memoised station-to-station queries) stays clean
+ * and a re-plan after the rider moves 32 blocks costs one small overlay, not a rebuild.
+ * ------------------------------------------------------------------------- */
+
+/** 3D walk distance: a stairs-only interchange is not a 0 m walk. */
+function walkDistance3(a, b) {
+	const dy = Number.isFinite(a.y) && Number.isFinite(b.y) ? a.y - b.y : 0;
+	return Math.hypot(a.xz[0] - b.xz[0], a.xz[1] - b.xz[1], dy);
+}
+
+/** Seconds a walk of `meters` takes: the same rule every transfer edge already uses. */
+function walkSeconds(meters) { return meters / WALK_SPEED + WALK_BUFFER_S; }
+
+/**
+ * The stations a point can reach on foot: nearest first, at most POINT_WALK_STATIONS of
+ * them, none further than POINT_WALK_RADIUS. Distance to a station is the distance to
+ * its closest platform.
+ */
+function stationsNearPoint(graph, point) {
+	const out = [];
+	for (const [stationId, ids] of graph.byStation) {
+		let best = null;
+		for (const id of ids) {
+			const n = graph.nodes.get(id);
+			if (!n) continue;
+			const m = walkDistance3(point, n);
+			if (!best || m < best.meters) best = { stationId, platformId: id, meters: m };
+		}
+		if (best && best.meters <= POINT_WALK_RADIUS) out.push(best);
+	}
+	out.sort((a, b) => a.meters - b.meters || (a.stationId < b.stationId ? -1 : 1));
+	return out.slice(0, POINT_WALK_STATIONS);
+}
+
+/**
+ * Overlay `points` ({id, xz, y, label}) onto a graph.
+ *
+ * @returns {{graph, added:[pointId], reach:Map(pointId -> [{stationId, platformId, meters}])}}
+ *          `graph` is the overlay (share-everything, copy-on-write); a point with no
+ *          station in range is simply absent from `added`, which is what the empty
+ *          state ("no stations within walking range") keys off.
+ */
+function injectPointNodes(graph, points) {
+	const list = (points || []).filter(Boolean);
+	if (!list.length) return { graph, added: [], reach: new Map() };
+	const nodes = new Map(graph.nodes);
+	const byStation = new Map(graph.byStation);
+	const adjacency = new Map(graph.adjacency);
+	const added = [], reach = new Map();
+	const adjOf = (id) => {
+		let a = adjacency.get(id);
+		// copy-on-write: never push into the base graph's own arrays
+		const fresh = { rides: a ? a.rides : [], transfers: a ? a.transfers.slice() : [] };
+		adjacency.set(id, fresh);
+		return fresh;
+	};
+
+	for (const pt of list) {
+		const near = stationsNearPoint(graph, pt);
+		reach.set(pt.id, near);
+		if (!near.length) continue;
+		const node = {
+			id: pt.id, stationId: pt.id, partId: null, name: pt.label || "Map point",
+			stationName: pt.label || "Map point", xz: pt.xz.slice(),
+			y: pt.y, accessible: true, routeIds: [], point: true,
+		};
+		nodes.set(pt.id, node);
+		byStation.set(pt.id, [pt.id]);
+		const mine = adjOf(pt.id);
+		for (const hit of near) {
+			for (const platformId of graph.byStation.get(hit.stationId) || []) {
+				const n = graph.nodes.get(platformId);
+				if (!n) continue;
+				const meters = walkDistance3(pt, n);
+				const edge = {
+					from: pt.id, to: platformId, meters, seconds: walkSeconds(meters),
+					walk: true, accessible: !!n.accessible, sameStation: false, samePart: false, point: true,
+				};
+				mine.transfers.push(edge);
+				adjOf(platformId).transfers.push({ ...edge, from: platformId, to: pt.id });
+			}
+		}
+		added.push(pt.id);
+	}
+
+	const overlay = {
+		nodes, byStation, adjacency,
+		rideEdges: graph.rideEdges, transferEdges: graph.transferEdges,
+		stations: graph.stations, _routeSeq: graph._routeSeq, _base: graph,
+	};
+	// routeSequence() memoises on the object it is handed; share the base's cache so the
+	// overlay never rebuilds it (and writes back, so the first build is not wasted)
+	if (!graph._routeSeq) {
+		Object.defineProperty(overlay, "_routeSeq", {
+			get() { return graph._routeSeq; },
+			set(v) { graph._routeSeq = v; },
+			configurable: true,
+		});
+	}
+	return { graph: overlay, added, reach };
 }
 
 /* ----------------------------------------------------------------------------
@@ -3144,6 +5018,9 @@ function planSearch(graph, originIds, targetIds, prefs, departAtMs) {
 		for (const e of adj.transfers) {
 			if (stepFree && !e.accessible) continue;
 			if (!usable(e.to)) continue;
+			// a street transfer is an INTERCHANGE, never a leg of a walking tour: it may
+			// not follow another walk, so the planner can never chain its way across town
+			if (e.street && L.via && L.via.kind === "walk") continue;
 			push({ node: e.to, aboard: null, arrMs: L.arrMs + e.seconds * 1000,
 				boardings: L.boardings, walk: L.walk + e.meters, prev: L, via: { kind: "walk", edge: e } });
 		}
@@ -3160,9 +5037,17 @@ function assembleJourney(label) {
 	if (!steps.length) return null;
 
 	const legs = [];
+	// a leg end is a platform OR one of the two virtual map points (feature 2); a point is
+	// a place on the street, so it is always reachable and carries its own display name
 	const anchor = (platformId) => {
+		const pt = state.pointNodes.get(platformId);
+		if (pt) return { station: null, part: null, accessible: true, point: platformId, name: pt.label };
 		const pl = state.platforms.get(platformId);
-		return { station: pl ? pl.stationId : null, part: pl ? pl.partId : null, accessible: !!(pl && pl.accessible) };
+		const st = pl ? state.stations.get(pl.stationId) : null;
+		return {
+			station: pl ? pl.stationId : null, part: pl ? pl.partId : null,
+			accessible: !!(pl && pl.accessible), point: null, name: st ? st.display : "",
+		};
 	};
 	let accessible = true;
 	let i = 0;
@@ -3185,6 +5070,7 @@ function assembleJourney(label) {
 				kind: "ride", routeId, routeName: e.routeName, number: e.routeNumber, color: e.color, mode: e.mode,
 				fromStation: a.station, fromPart: a.part, fromPlatform: first.from,
 				toStation: b.station, toPart: b.part, toPlatform: last.to,
+				fromPoint: a.point, toPoint: b.point, fromName: a.name, toName: b.name,
 				stops, stopCount: Math.max(1, stops.length - 1), headsign: rt ? rt.dest : "",
 				depMs: Math.round(first.via.depMs), arrMs: Math.round(last.endMs),
 				live: !!first.via.live, vehicleId: first.via.vehicleId || null, estimated: !!first.via.estimated,
@@ -3210,6 +5096,7 @@ function assembleJourney(label) {
 					: a.station && a.station === b.station ? "concourse link" : "street walk",
 				fromStation: a.station, fromPart: a.part, fromPlatform: first.from,
 				toStation: b.station, toPart: b.part, toPlatform: last.to,
+				fromPoint: a.point, toPoint: b.point, fromName: a.name, toName: b.name,
 				depMs: Math.round(first.startMs), arrMs: Math.round(first.startMs + seconds * 1000),
 			});
 			i = j;
@@ -3221,6 +5108,8 @@ function assembleJourney(label) {
 	return {
 		index: 0, legs, departMs, arriveMs, durationMs: arriveMs - departMs,
 		toStation: lastLeg.toStation, toPart: lastLeg.toPart,
+		toPoint: lastLeg.toPoint || null, toName: lastLeg.toName || "",
+		fromPoint: legs[0].fromPoint || null, fromName: legs[0].fromName || "",
 		accessible, tags: [],
 		transfers: Math.max(0, legs.filter((l) => l.kind === "ride").length - 1),
 		walkMeters: legs.reduce((a, l) => a + (l.kind === "walk" ? l.meters : 0), 0),
@@ -3325,6 +5214,80 @@ function planJourneys(graph, fromStationId, toStationId, prefs, departAtMs, opts
 	}
 }
 
+/** The platforms a station-or-part endpoint offers, narrowed to a part when it has one. */
+function endpointPlatforms(graph, stationId, partId) {
+	const ids = graph.byStation.get(stationId) || [];
+	if (!partId) return ids;
+	const narrowed = ids.filter((id) => {
+		const n = graph.nodes.get(id);
+		return n && n.partId === partId;
+	});
+	return narrowed.length ? narrowed : ids;
+}
+
+/** A plan selection carrying a map point -> the {id, xz, y, label} injectPointNodes wants. */
+function endpointPoint(sel, id) {
+	if (!sel || !sel.point) return null;
+	return {
+		id, xz: [sel.point[0], sel.point[1]],
+		y: Number.isFinite(sel.y) ? sel.y : undefined,
+		label: sel.label || (id === POINT_TO ? "Dropped pin (dest)" : "Dropped pin"),
+	};
+}
+
+/**
+ * The planner the UI actually calls: either endpoint may be a station/part OR an
+ * arbitrary map point (feature 2).
+ *
+ * Station-to-station is delegated to planJourneys() unchanged, memo and all. As soon as a
+ * point is involved the search runs over an overlay graph (injectPointNodes) with the
+ * virtual node as origin and/or target, so the leading and trailing walks fall out of the
+ * same label chain as every other walk — no special-casing in assembleJourney.
+ *
+ * @returns {{journeys: Journey[], error: string|null}} `error` is the rider-facing empty
+ *          state ("no stations within walking range …"), which is NOT the same thing as
+ *          "no journey found".
+ */
+function planEndpoints(graph, from, to, prefs, departAtMs) {
+	state.pointNodes = new Map();
+	if (!graph || !from || !to) return { journeys: [], error: null };
+	const p = prefs || {};
+	const mode = p.mode === "transfers" || p.mode === "walking" ? p.mode : "fastest";
+	const when = Number.isFinite(departAtMs) ? departAtMs : now();
+
+	const fromPt = endpointPoint(from, POINT_FROM), toPt = endpointPoint(to, POINT_TO);
+	if (!fromPt && !toPt) {
+		if (!from.stationId || !to.stationId || from.stationId === to.stationId) return { journeys: [], error: null };
+		return {
+			journeys: planJourneys(graph, from.stationId, to.stationId, p, when,
+				{ fromPartId: from.partId, toPartId: to.partId }),
+			error: null,
+		};
+	}
+
+	const pts = [fromPt, toPt].filter(Boolean);
+	for (const pt of pts) state.pointNodes.set(pt.id, pt);
+	const inj = injectPointNodes(graph, pts);
+	const missing = [];
+	if (fromPt && !inj.added.includes(POINT_FROM)) missing.push("start");
+	if (toPt && !inj.added.includes(POINT_TO)) missing.push("destination");
+	if (missing.length) {
+		return { journeys: [], error: "No stations within walking range of the " + missing.join(" or ") + "." };
+	}
+
+	const g = inj.graph;
+	const originIds = fromPt ? [POINT_FROM] : endpointPlatforms(g, from.stationId, from.partId);
+	const targetIds = new Set(toPt ? [POINT_TO] : endpointPlatforms(g, to.stationId, to.partId));
+	if (!originIds.length || !targetIds.size) return { journeys: [], error: null };
+	try {
+		const out = choosePlanOptions(planSearch(g, originIds, targetIds, { stepFree: !!p.stepFree }, when), mode);
+		return { journeys: out, error: null };
+	} catch (e) {
+		console.warn("planEndpoints failed", e);
+		return { journeys: [], error: null };
+	}
+}
+
 /**
  * Turn destination labels into 2–4 distinct options: the winner under each of the three
  * profiles (deduped — they are often the same journey), the requested profile's winner
@@ -3374,6 +5337,9 @@ function bootDemo() {
 	applyNetwork(demo.network);
 	applyMapdata(demo.mapdata);
 	applyTerrain(demo.terrain);
+	// the satellite index the real server publishes, with origins on the documented
+	// 512-block grid: four tiles covering the demo city (feature 5)
+	applySatmeta(demoSatmeta());
 	prepareGeometry();
 	fitView();
 	setStatus("live");
@@ -3385,19 +5351,30 @@ function bootDemo() {
 	syncFields();
 	replan();
 
-	// three synthetic trains, no SSE — the same handleFrame() the real stream feeds
+	// four synthetic trains, no SSE — the same handleFrame() the real stream feeds.
+	// Consists differ per working (4 / 6 / 8 / 3 cars) so the train card's "N cars" line
+	// is exercised properly, and one route carries `nextStation` so the card's fallback
+	// path (no resolvable nPlat) has data behind it too.
 	const runs = [
 		{ id: "v1", rails: ["cor_1", "cor_2", "cor_3"], t: 0.25, step: 0.010, kmh: 52, nPlat: "mh_g",
-			route: { id: "r4", name: "Baker Line||Bayfront", number: "4 IN", color: 0x00933C, dest: "Bayfront" } },
+			cars: ["m7_a", "m7_b", "m7_b", "m7_a"],
+			route: { id: "r4", name: "Baker Line||Bayfront", number: "4 IN", color: 0x00933C, dest: "Bayfront", nextStation: "Maple Heights" } },
 		// the outbound working: it runs on the OTHER green track, and the drawn puck is
 		// snapped onto the one line both directions share
 		{ id: "v4", rails: ["cor_2o", "cor_1o", "cor_0o"], t: 0.6, step: 0.009, kmh: 50, nPlat: "gf_g",
-			route: { id: "r4o", name: "Baker Line||Northgate", number: "4 OU", color: 0x00933C, dest: "Northgate" } },
+			cars: ["m7_a", "m7_b", "m7_b", "m7_b", "m7_b", "m7_a"],
+			route: { id: "r4o", name: "Baker Line||Northgate", number: "4 OU", color: 0x00933C, dest: "Northgate", nextStation: "Garfield Av" } },
 		{ id: "v2", rails: ["blu_1", "blu_2"], t: 0.4, step: 0.006, kmh: 78, nPlat: "hv_b",
-			route: { id: "rA", name: "Airport Express||Airport", number: "A IN", color: 0x0039A6, dest: "Airport" } },
+			cars: ["m7_a", "m7_b", "m7_b", "m7_b", "m7_b", "m7_b", "m7_b", "m7_a"],
+			route: { id: "rA", name: "Airport Express||Airport", number: "A IN", color: 0x0039A6, dest: "Airport", nextStation: "Harborview" } },
 		{ id: "v3", rails: ["red_1", "red_2"], t: 0.1, step: 0.008, kmh: 46, nPlat: "fd_r",
-			route: { id: "rR", name: "Ridge Line||South Yards", number: "1", color: 0xEE352E, dest: "South Yards" } },
+			cars: ["r62_a", "r62_b", "r62_a"],
+			route: { id: "rR", name: "Ridge Line||South Yards", number: "1", color: 0xEE352E, dest: "South Yards", nextStation: "Foundry" } },
 	];
+	// TWO synthetic players (feature 3): "Demo" walks a loop through the city centre and
+	// is the self player (?player=Demo, matched case-insensitively), "Riley" idles.
+	const loop = [[636, 200], [700, 240], [720, 330], [660, 400], [600, 360], [590, 260]];
+	let walk = 0;
 	for (const r of runs) r.i = 0;
 	setInterval(() => {
 		const t = now();
@@ -3411,10 +5388,18 @@ function bootDemo() {
 				rail, railT: r.t, doors: false, dwellMs: 0, devMs: 0, manual: false, stop: r.i,
 				pPlat: "", nPlat: r.nPlat, pFrac: r.t,
 				route: r.route,
-				consist: { cars: ["m7_a", "m7_b", "m7_b", "m7_a"], carLengths: [19.2, 19.2, 19.2, 19.2] },
+				consist: { cars: r.cars.slice(), carLengths: r.cars.map(() => 19.2) },
 			};
 		});
-		handleFrame({ schemaVersion: 1, serverTime: t, dimension: 0, vehicles }, false);
+		walk = (walk + 0.004) % 1;
+		const seg = walk * loop.length;
+		const i0 = Math.floor(seg), f = seg - i0;
+		const a = loop[i0], b = loop[(i0 + 1) % loop.length];
+		const players = [
+			{ name: "Demo", x: a[0] + (b[0] - a[0]) * f, y: 64, z: a[1] + (b[1] - a[1]) * f },
+			{ name: "Riley", x: 1210, y: 64, z: 640 },
+		];
+		handleFrame({ schemaVersion: 1, serverTime: t, dimension: 0, vehicles, players }, false);
 	}, 333);
 
 	requestAnimationFrame(frame);
@@ -3502,7 +5487,11 @@ function buildDemoCity() {
 		mid: [x, 64, z], routeIds: [], accessible: !!accessible,
 	});
 	const platforms = [
-		P("ng_g", "1", "ng", 636, 70, 0, 1, true), P("ng_b", "2", "ng", 634, 70, 0, 1, true),
+		// Northgate is the demo's MIXED-accessibility station: platform 1 is step-free,
+		// platform 2 is not, and the station publishes the explicit accessiblePlatforms
+		// list — which is what makes the station panel list platforms one by one instead
+		// of saying "All platforms step-free".
+		P("ng_g", "1", "ng", 636, 70, 0, 1, true), P("ng_b", "2", "ng", 634, 70, 0, 1, false),
 		P("mh_g", "1", "mh", 636, 150, 0, 1, true),
 		P("gf_g", "1", "gf", 633, 260, 0, 1, false),
 		P("mu_g", "1", "mu", 634, 365, 0, 1, false),
@@ -3651,10 +5640,28 @@ function buildDemoCity() {
 		};
 	};
 
+	// EXITS: the newer mapdata field. Only two demo stations publish one, so the panel's
+	// "omit the section entirely when absent" path is exercised by every other station.
+	const exits = {
+		bc: [
+			{ name: "Exit A", destinations: ["Main St", "Transit Museum"] },
+			{ name: "Exit B", destinations: ["City Hall", "Baker Plaza"] },
+			{ name: "Exit C", destinations: ["Bus terminal"] },
+		],
+		ap: [
+			{ name: "Exit 1", destinations: ["Terminal A departures", "Car rental"] },
+			{ name: "Exit 2", destinations: ["Terminal B", "Long-stay parking"] },
+		],
+	};
+	// Northgate's explicit step-free list (see the platform table above)
+	const accessiblePlatforms = { ng: ["ng_g"] };
+
 	const mdStations = stations.map((st) => {
 		const extra = partsFor(st);
 		return {
 			id: st.id, name: st.name, color: st.color, accessible: st.accessible,
+			...(exits[st.id] ? { exits: exits[st.id] } : {}),
+			...(accessiblePlatforms[st.id] ? { accessiblePlatforms: accessiblePlatforms[st.id] } : {}),
 			platforms: st.platformIds.map((id) => {
 				const p = platforms.find((q) => q.id === id);
 				return { id, mid: p.mid, accessible: p.accessible, dwellMs: p.dwellMs };
@@ -3682,6 +5689,67 @@ function demoTerrain() {
 	const ring = west.concat([[1420, 1020], [1660, 1020], [1660, 860]], east.slice().reverse());
 	const island = smooth([[1450, 912], [1500, 900], [1528, 924], [1505, 950], [1455, 944], [1450, 912]], 6);
 	return { schemaVersion: 1, dimension: "demo:overworld", scannedAt: now(), grid: 4, polygons: [ring, island] };
+}
+
+/**
+ * The demo's satellite index (feature 5). Four 512-block tiles on the documented grid
+ * (origins are multiples of 512) covering x 512..1536, z 0..1024 — which is the demo
+ * city's own footprint, so switching Basemap to Satellite in ?demo=1 really does put
+ * imagery under the network.
+ */
+function demoSatmeta() {
+	return {
+		available: true, dimension: "demo:overworld", scannedAt: now(),
+		scale: 2, tileSamples: 256, originX: 0, originZ: 0,
+		tiles: [[1, 0], [2, 0], [1, 1], [2, 1]],
+		bbox: [512, 0, 1536, 1024],
+	};
+}
+
+/**
+ * One synthetic tile, painted through the SAME satWorldOf() the renderer places it with —
+ * so if the tile maths were wrong the demo's river would visibly disagree with the
+ * terrain polygons drawn from world coordinates. Vanilla-ish greens and browns, a river
+ * running where demoTerrain()'s water runs, and a canvas returned directly (a canvas is a
+ * valid drawImage source, so nothing has to round-trip through a data URL).
+ *
+ * Lazy: only ever called while the satellite basemap is actually being drawn.
+ */
+function demoSatTile(tx, tz) {
+	const meta = state.satmeta;
+	if (!meta) return null;
+	const n = meta.tileSamples;
+	const cv = document.createElement("canvas");
+	cv.width = n; cv.height = n;
+	const g = cv.getContext("2d");
+	if (!g || typeof g.createImageData !== "function") return null;
+	const img = g.createImageData(n, n);
+	if (!img || !img.data) return null;
+	const d = img.data;
+	// the demo river's centre line as a function of z, matching demoTerrain()'s ring
+	const riverX = (z) => 940 + 60 * Math.sin(z / 260) + z * 0.30;
+	for (let pz = 0; pz < n; pz++) {
+		for (let px = 0; px < n; px++) {
+			const [wx, wz] = satWorldOf(meta, tx, tz, px, pz);
+			const o = (pz * n + px) * 4;
+			const grain = ((Math.sin(wx * 0.37) + Math.sin(wz * 0.29) + Math.sin((wx + wz) * 0.11)) / 3) * 16;
+			const dx = Math.abs(wx - riverX(wz));
+			let r, gg, b;
+			if (dx < 46) { r = 48; gg = 84; b = 122; }                       // water
+			else if (dx < 60) { r = 176; gg = 162; b = 118; }                // sand
+			else if (((wx * 0.013) | 0) % 7 === 0 || ((wz * 0.013) | 0) % 9 === 0) {
+				r = 122; gg = 118; b = 112;                                    // roads
+			} else if (((wx * 0.006) | 0) % 3 === 0 && ((wz * 0.006) | 0) % 4 === 0) {
+				r = 138; gg = 124; b = 104;                                    // built-up
+			} else { r = 86; gg = 118; b = 62; }                             // grass
+			d[o] = clamp(r + grain, 0, 255);
+			d[o + 1] = clamp(gg + grain, 0, 255);
+			d[o + 2] = clamp(b + grain, 0, 255);
+			d[o + 3] = 255;
+		}
+	}
+	g.putImageData(img, 0, 0);
+	return cv;
 }
 
 /* ---------------------------------------------------------------------------- */

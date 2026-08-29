@@ -6,6 +6,8 @@ import com.stationannouncer.mtraddon.analytics.AnalyticsRecorder;
 import com.stationannouncer.mtraddon.dispatch.DispatchRegistry;
 import com.stationannouncer.mtraddon.dispatch.DispatchStreamer;
 import com.stationannouncer.mtraddon.dispatch.DispatchWebSetup;
+import com.stationannouncer.mtraddon.dispatch.PlayerPositions;
+import com.stationannouncer.mtraddon.dispatch.SatelliteScanner;
 import com.stationannouncer.mtraddon.dispatch.TerrainScanner;
 import com.stationannouncer.mtraddon.disruption.DisruptionBroadcaster;
 import com.stationannouncer.mtraddon.disruption.DisruptionNetworking;
@@ -41,6 +43,11 @@ public final class AddonInit {
 
     private static int disruptionCountdown;
 
+    /** Dispatch map player layer: four captures a second, matching the stream's cadence. */
+    private static final int PLAYER_POLL_TICKS = 5;
+
+    private static int playerCountdown;
+
     public static void register() {
         AddonNetworking.registerServerReceivers();
         DisruptionNetworking.registerServerReceivers();
@@ -53,6 +60,9 @@ public final class AddonInit {
             // Dispatch-map terrain: retains the server (nothing else in the addon does)
             // and reads whatever water polygons a previous /dispatch terrain scan cached.
             TerrainScanner.onServerStarted(server);
+            // Satellite basemap: the same lifecycle, its own state machine. Reads only the
+            // per-dimension tile INDEXES here — the PNGs are streamed from disk per request.
+            SatelliteScanner.onServerStarted(server);
             // Timetable analytics: opens <save>/station-announcer-addon/analytics/, prunes
             // expired day files, replays the recent tail into the metric window and starts
             // the writer thread. A no-op when analytics.enabled is false.
@@ -74,6 +84,10 @@ public final class AddonInit {
             AnalyticsRecorder.stop();
             // Join any in-flight terrain.json write and drop the retained server/world refs.
             TerrainScanner.onServerStopping();
+            // Join any in-flight tile encode and drop the retained server/world refs.
+            SatelliteScanner.onServerStopping();
+            // The player layer is live-only; nothing to flush, just forget everybody.
+            PlayerPositions.clear();
             // Dispatch teardown before MTR's Main.stop(). Clear the registry FIRST so
             // late servlet requests answer 503 and no new SSE client can register (which
             // would restart the streamer thread we are about to stop), then drop the
@@ -95,6 +109,7 @@ public final class AddonInit {
             lastDoorObstructions = Set.of();
             holdStateCountdown = 0;
             disruptionCountdown = 0;
+            playerCountdown = 0;
         });
 
         // Which platforms are holding a train right now (yellow holding lights)
@@ -105,6 +120,16 @@ public final class AddonInit {
             // Terrain scanning gets its time-budgeted slice EVERY tick, so it sits ahead
             // of the countdown early-return below. Two field reads when no scan is running.
             TerrainScanner.tick();
+            // …and so does the satellite basemap's, from its own separate scan state:
+            // both can be mid-scan in the same session without touching each other.
+            SatelliteScanner.tick();
+            // The dispatch map's player layer, four times a second. Ahead of the
+            // countdown early-return below for the same reason: it is one list walk,
+            // and with nobody online it is an isEmpty check.
+            if (--playerCountdown <= 0) {
+                playerCountdown = PLAYER_POLL_TICKS;
+                PlayerPositions.capture(server);
+            }
             // Feature 6 shares this ticker (no new per-tick loop): once a second it
             // retires whatever has expired and lets the disruption broadcaster do
             // its (heavily throttled) work. Both calls return after one or two

@@ -59,6 +59,9 @@ body {
 }
 #map.dragging { cursor: grabbing; }
 #map.pointing { cursor: pointer; }
+/* a planner field armed the map: the next click drops a pin (map.js armMapPick) */
+#map.picking { cursor: crosshair; }
+#map.picking.dragging { cursor: crosshair; }
 
 .icon { width: 16px; height: 16px; fill: currentColor; display: block; }
 .icon.sm { width: 13px; height: 13px; }
@@ -86,6 +89,20 @@ body {
 	display: flex; align-items: center; gap: 7px;
 }
 #mapTip .swatch { width: 9px; height: 9px; border-radius: 50%; flex: none; }
+#mapTip .bullet.sm { margin-top: 0; }
+
+/* transient pills centred over the map (pick-a-point hint, satellite nudge) */
+.mappill {
+	position: absolute; left: 50%; transform: translateX(-50%); z-index: 19;
+	bottom: 34px;
+	display: flex; align-items: center; gap: 8px;
+	padding: 8px 15px; border-radius: 999px; border: 1px solid var(--hair);
+	background: var(--card); color: var(--ink);
+	font-size: 12.5px; font-weight: 600; white-space: nowrap;
+	box-shadow: 0 6px 20px var(--shadow-soft);
+	pointer-events: none;
+}
+.mappill.sat { bottom: 78px; color: var(--ink-2); font-weight: 500; }
 
 /* ---------------- planner card ---------------- */
 
@@ -149,6 +166,10 @@ body {
 .ac-row .dots { display: flex; gap: 3px; margin-left: auto; }
 .ac-row .dots i { width: 9px; height: 9px; border-radius: 50%; display: block; }
 .ac-empty { padding: 10px; font-size: 12.5px; color: var(--ink-3); }
+/* the two standing actions above the station matches: pick on the map / my location */
+.ac-row.ac-action { color: var(--accent); font-weight: 700; }
+.ac-row.ac-action .icon { color: var(--accent); }
+.ac-row.ac-action + .ac-row:not(.ac-action) { border-top: 1px solid var(--hair); margin-top: 4px; padding-top: 9px; }
 
 /* ---------------- time bar / prefs ---------------- */
 
@@ -260,6 +281,196 @@ body {
 .badge-14 { width: 14px; height: 14px; border-radius: 3.5px; display: block; flex: none; }
 .livegreen { color: var(--live); font-weight: 700; }
 
+/* ---------------- line view (map.js section 11c) ----------------
+   Takes the option list over while a line is open: bullets + name + frequency, the
+   service chips, and the stop list in order. A stop the line's own express runs past
+   wears the SAME open ring the map draws for it (feature 1), so the two agree. */
+
+.lv { padding-top: 4px; }
+.lv-head { display: flex; align-items: flex-start; gap: 10px; }
+.lv-bullets { display: flex; gap: 4px; flex-wrap: wrap; padding-top: 1px; }
+.lv-title { min-width: 0; flex: 1; }
+.lv-names { font-size: 15px; font-weight: 700; line-height: 1.25; }
+.lv-freq { font-size: 12px; color: var(--ink-3); font-weight: 600; margin-top: 2px; }
+.lv-close {
+	border: 0; background: none; cursor: pointer; color: var(--ink-3);
+	font-family: var(--font); font-size: 19px; line-height: 1; padding: 0 2px;
+}
+.lv-close:hover { color: var(--ink); }
+
+.lv-services { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
+.lv-svc {
+	display: inline-flex; align-items: center; gap: 6px;
+	border: 1px solid var(--hair); border-radius: 999px; padding: 3px 10px 3px 4px;
+	font-size: 11.5px; font-weight: 600; color: var(--ink-2);
+}
+.lv-svc .bullet.sm { margin-top: 0; }
+
+.lv-sectitle {
+	font-size: 10.5px; font-weight: 700; letter-spacing: 1.1px;
+	color: var(--ink-3); text-transform: uppercase; margin: 14px 0 6px;
+	border-top: 1px solid var(--hair); padding-top: 11px;
+}
+.lv-stops { display: flex; flex-direction: column; }
+.lv-stop {
+	display: grid; grid-template-columns: 22px 1fr; gap: 10px;
+	padding: 2px 4px 2px 0; border-radius: 7px; cursor: pointer;
+}
+.lv-stop:hover { background: var(--field); }
+.lv-mark { position: relative; display: flex; justify-content: center; }
+.lv-dot {
+	width: 11px; height: 11px; border-radius: 50%;
+	background: currentColor; color: var(--card);
+	border: 3.5px solid var(--ink); margin-top: 3px; z-index: 1; flex: none;
+}
+/* express-skipped: a smaller, thinner, HOLLOW ring — the map's local-only mark
+   (the rail behind it shows through, exactly as it does on the canvas) */
+.lv-dot.open { width: 9px; height: 9px; border-width: 2px; margin-top: 4px; background: transparent; }
+.lv-rail { position: absolute; top: 13px; bottom: -4px; width: 4px; border-radius: 2px; }
+.lv-body { padding-bottom: 10px; min-width: 0; }
+.lv-name { font-size: 13.5px; font-weight: 700; display: flex; align-items: center; gap: 5px; flex-wrap: wrap; }
+.lv-sub { font-size: 12px; font-weight: 500; color: var(--ink-3); }
+.lv-skip {
+	font-size: 10px; font-weight: 700; letter-spacing: .6px; text-transform: uppercase;
+	color: var(--ink-3); border: 1px solid var(--hair); border-radius: 999px; padding: 1px 6px;
+}
+.lv-ride { font-size: 12px; color: var(--ink-3); margin-top: 2px; }
+
+/* a station-panel bullet is a link into its line's view */
+.bullet.line-bullet { cursor: pointer; }
+.bullet.line-bullet:hover { filter: brightness(1.12); }
+
+/* ---------------- train card + follow pill (map.js section 10a) ----------------
+   Both are pure DOM over the canvas, styled from the same tokens as the planner card,
+   so light and dark come for free. The card is positioned in px by positionTrainCard();
+   `.flip` only tells the pointer which side of the puck the card ended up on. */
+
+.floatcard {
+	position: absolute; z-index: 16; width: 232px;
+	background: var(--card); color: var(--ink);
+	border: 1px solid var(--hair); border-radius: 12px;
+	box-shadow: 0 10px 30px var(--shadow), 0 1px 3px var(--shadow-soft);
+	padding: 11px 12px 12px;
+	font-size: 13px;
+}
+.fc-head { display: flex; align-items: flex-start; gap: 8px; }
+.fc-title { min-width: 0; flex: 1; }
+.fc-dest { font-size: 14px; font-weight: 700; line-height: 1.25; }
+.fc-line { font-size: 11.5px; color: var(--ink-3); font-weight: 600; margin-top: 1px; }
+.fc-swatch { width: 12px; height: 12px; border-radius: 50%; flex: none; margin-top: 3px; }
+.bullet.sm { width: 19px; height: 19px; font-size: 11px; margin-top: 1px; }
+.fc-close {
+	border: 0; background: none; cursor: pointer; color: var(--ink-3);
+	font-family: var(--font); font-size: 17px; line-height: 1;
+	padding: 0 2px; margin: -2px -2px 0 0;
+}
+.fc-close:hover { color: var(--ink); }
+.fc-next {
+	margin-top: 9px; display: flex; align-items: baseline; gap: 6px; flex-wrap: wrap;
+	font-size: 12.5px; color: var(--ink);
+}
+.fc-key { font-size: 10.5px; font-weight: 700; letter-spacing: 1px; color: var(--ink-3); text-transform: uppercase; }
+.fc-plat { font-size: 11.5px; color: var(--ink-2); }
+.fc-facts { margin-top: 5px; font-size: 12px; color: var(--ink-2); }
+.fc-follow {
+	margin-top: 11px; width: 100%; padding: 7px 10px;
+	font-family: var(--font); font-size: 12.5px; font-weight: 700;
+	border: 1px solid var(--accent); border-radius: 999px;
+	background: var(--accent); color: #fff; cursor: pointer;
+}
+.fc-follow:hover { filter: brightness(1.06); }
+.fc-follow.on { background: var(--card); color: var(--accent); }
+
+.followpill {
+	position: absolute; top: 16px; left: 50%; transform: translateX(-50%); z-index: 18;
+	display: flex; align-items: center; gap: 8px;
+	padding: 8px 15px; border-radius: 999px; border: 1px solid var(--hair);
+	background: var(--card); color: var(--ink);
+	font-family: var(--font); font-size: 12.5px; font-weight: 600;
+	box-shadow: 0 6px 20px var(--shadow-soft);
+	cursor: pointer; white-space: nowrap;
+	opacity: 1; transition: opacity .35s ease;
+}
+.followpill:hover { background: var(--field); }
+/* the followed train has gone quiet in the feed: fade while we wait it out */
+.followpill.fading { opacity: .35; }
+.fp-dot { width: 9px; height: 9px; border-radius: 50%; flex: none; }
+
+/* ---------------- station panel (map.js section 10b) ---------------- */
+
+.stpanel {
+	position: absolute; top: 16px; right: 18px; z-index: 14; width: 330px;
+	max-height: calc(100% - 32px); overflow-y: auto;
+	background: var(--card); color: var(--ink);
+	border-radius: 14px;
+	box-shadow: 0 10px 34px var(--shadow), 0 1px 3px var(--shadow-soft);
+	padding: 16px 16px 14px;
+}
+.stpanel::-webkit-scrollbar { width: 0; }
+/* the right edge is crowded — everything that lives there steps aside while the panel
+   is open (all four are LATER siblings of #stationPanel in map.html) */
+.stpanel:not(.hidden) ~ .gear,
+.stpanel:not(.hidden) ~ .setcard,
+.stpanel:not(.hidden) ~ #zoomer { right: 362px; }
+.stpanel:not(.hidden) ~ #attrib { right: 362px; }
+
+.st-head { display: flex; align-items: flex-start; gap: 10px; }
+.st-title { min-width: 0; flex: 1; }
+.st-title h2 {
+	font-size: 17px; font-weight: 700; letter-spacing: .1px; line-height: 1.2;
+	display: flex; align-items: center; gap: 6px; flex-wrap: wrap;
+}
+.st-part { font-size: 12px; color: var(--ink-3); font-weight: 600; margin-top: 2px; }
+.st-bullets { display: flex; gap: 4px; margin-top: 8px; flex-wrap: wrap; }
+.st-close {
+	border: 0; background: none; cursor: pointer; color: var(--ink-3);
+	font-family: var(--font); font-size: 19px; line-height: 1; padding: 0 2px;
+}
+.st-close:hover { color: var(--ink); }
+
+.st-sec { margin-top: 14px; border-top: 1px solid var(--hair); padding-top: 11px; }
+.st-sectitle {
+	font-size: 10.5px; font-weight: 700; letter-spacing: 1.1px;
+	color: var(--ink-3); text-transform: uppercase; margin-bottom: 8px;
+}
+.st-group + .st-group { margin-top: 10px; }
+.st-grouphead {
+	display: flex; gap: 4px; align-items: center; flex-wrap: wrap;
+	padding-bottom: 5px; border-bottom: 2px solid var(--line, var(--hair));
+}
+.st-dep {
+	display: grid; grid-template-columns: 1fr auto auto; gap: 8px; align-items: baseline;
+	padding: 6px 0 5px; font-size: 13px;
+}
+.st-dep + .st-dep { border-top: 1px solid var(--hair); }
+.st-dest { font-weight: 700; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.st-plat { font-size: 11.5px; color: var(--ink-3); }
+.st-when { font-weight: 700; display: inline-flex; align-items: center; gap: 5px; }
+.st-dep.live .st-when { color: var(--live); }
+/* schedule-derived rows are deliberately quieter than live ones */
+.st-dep.sched .st-when { color: var(--ink-2); font-weight: 600; font-style: italic; }
+.st-dep .dot { width: 6px; height: 6px; border-radius: 50%; background: var(--live); flex: none; }
+.st-empty { font-size: 12.5px; color: var(--ink-3); }
+
+.st-exit { font-size: 12.5px; padding: 3px 0; }
+.st-exitdest { color: var(--ink-2); font-weight: 500; }
+.st-accline { font-size: 12.5px; color: var(--ink-2); display: flex; align-items: center; gap: 6px; }
+.st-platlist { display: flex; flex-direction: column; gap: 4px; }
+.st-platrow {
+	display: flex; align-items: center; justify-content: space-between; gap: 8px;
+	font-size: 12.5px; color: var(--ink-2);
+}
+.st-platrow.yes { color: var(--ink); font-weight: 600; }
+.st-no { font-size: 11px; color: var(--ink-3); }
+
+.st-actions { display: flex; gap: 8px; margin-top: 14px; }
+.st-btn {
+	flex: 1; padding: 8px 10px; border-radius: 999px;
+	border: 1px solid var(--hair); background: var(--card); color: var(--ink);
+	font-family: var(--font); font-size: 12.5px; font-weight: 700; cursor: pointer;
+}
+.st-btn:hover { background: var(--field); border-color: var(--ink-3); }
+
 /* ---------------- map chrome ---------------- */
 
 #zoomer {
@@ -317,6 +528,12 @@ body {
 .seg button + button { border-left: 1px solid var(--hair); }
 .seg button.on { background: var(--ink); color: var(--paper); }
 
+.set-select {
+	font-family: var(--font); font-size: 12px; font-weight: 600;
+	border: 1px solid var(--hair); border-radius: 999px; padding: 4px 8px;
+	background: var(--card); color: var(--ink); cursor: pointer; max-width: 130px;
+}
+
 .set-slider { display: flex; align-items: center; gap: 8px; }
 .set-slider input[type="range"] { width: 108px; accent-color: var(--accent); }
 .set-out { font-size: 11.5px; font-weight: 700; color: var(--ink-3); min-width: 30px; text-align: right; }
@@ -339,4 +556,15 @@ body {
 	/* the planner sheet owns the top-left; the gear and its card drop below it */
 	.gear { top: auto; bottom: 152px; }
 	.setcard { top: auto; bottom: 200px; }
+	/* the station panel becomes a bottom sheet — the planner already owns the top */
+	.stpanel {
+		top: auto; bottom: 16px; right: 16px; left: 16px; width: auto; max-height: 46%;
+	}
+	.stpanel:not(.hidden) ~ .gear,
+	.stpanel:not(.hidden) ~ .setcard,
+	.stpanel:not(.hidden) ~ #zoomer,
+	.stpanel:not(.hidden) ~ #attrib { right: 18px; }
+	.stpanel:not(.hidden) ~ #zoomer { bottom: calc(46% + 34px); }
+	.floatcard { width: 210px; }
+	.followpill { font-size: 12px; padding: 7px 13px; }
 }
