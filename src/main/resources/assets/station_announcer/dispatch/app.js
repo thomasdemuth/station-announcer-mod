@@ -2200,7 +2200,7 @@ function renderSegUi() {
 	} else {
 		hint.classList.remove("hidden");
 		hint.textContent = sl.segStations.length < 2
-			? "Click two stations on the left axis to bound the segment"
+			? "Click two stations in either station gutter to bound the segment"
 			: "Every line over this span is shown — click stations to adjust, Segment to exit";
 	}
 }
@@ -2323,8 +2323,8 @@ function initStringlineCanvas() {
 		const sl = state.stringline;
 		const rect = slCanvas.getBoundingClientRect();
 		const x = e.clientX - rect.left, y = e.clientY - rect.top;
-		// Segment mode: clicks in the station gutter toggle the corridor bounds.
-		if (sl.mode === "segment" && sl.layout && x < sl.layout.padL) {
+		// Segment mode: clicks in EITHER station gutter toggle the corridor bounds.
+		if (sl.mode === "segment" && sl.layout && (x < sl.layout.padL || x > sl.layout.padR)) {
 			let best = null, bestD = 10;
 			for (const s of sl.layout.stations) {
 				const d = Math.abs(s.y - y);
@@ -2379,16 +2379,46 @@ function buildGeometry() {
 	}
 	// variant chips: routes toggled off contribute neither platforms nor traces
 	routesUsed = routesUsed.filter((r) => !sl.routeOff.has(r.id));
+	// Axis lookup. FIRST occurrence wins for platform → distance: a circular route lists
+	// its origin platform AGAIN as its final stop, and letting that repeat overwrite the
+	// entry is what snapped a wrapped run's opening stop to the far end of the axis.
 	const platDist = new Map(), staDist = new Map();
 	for (const s of stations) {
-		platDist.set(s.plat, s.dist);
+		if (!platDist.has(s.plat)) platDist.set(s.plat, s.dist);
 		if (s.sta !== "0" && !staDist.has(s.sta)) staDist.set(s.sta, s.dist);
 	}
+	// Sibling routes (the other direction, interlined services) reach the axis by station
+	// id — their platforms are different rails at the same stations. Needed by the live
+	// vehicle tips and the headway rows as well as by the stop tables below.
 	for (const r of routesUsed) {
-		for (const s of r.stations) {
-			if (!platDist.has(s.plat) && staDist.has(s.sta)) platDist.set(s.plat, staDist.get(s.sta));
+		for (const st of r.stations) {
+			if (!platDist.has(st.plat) && staDist.has(st.sta)) platDist.set(st.plat, staDist.get(st.sta));
 		}
 	}
+	// Per-route stop tables: every index a platform occupies along that route, and the
+	// axis distance of each of those stops. A run walks its route's stops in strictly
+	// increasing index order, so matching each departure to the NEXT index carrying its
+	// platform is what tells a loop's closing leg (origin repeated at the end) apart from
+	// the first stop of the following cycle — MTR's own stop index does not reset there.
+	const axisDonorId = seg ? null : base.id;
+	const routeStops = new Map();
+	// Only the routes this chart is about: a route with no table is a cut, which is what
+	// keeps a deps payload that still carries an unselected line off the plot.
+	for (const r of routesUsed) {
+		const byPlat = new Map(), dists = [];
+		for (let i = 0; i < r.stations.length; i++) {
+			const st = r.stations[i];
+			let slots = byPlat.get(st.plat);
+			if (!slots) { slots = []; byPlat.set(st.plat, slots); }
+			slots.push(i);
+			// The axis donor keeps its own per-stop distance (so a repeated station lands
+			// on its own row); every other route maps on by platform, then by station.
+			dists.push(r.id === axisDonorId ? st.dist
+				: platDist.has(st.plat) ? platDist.get(st.plat) : staDist.get(st.sta));
+		}
+		routeStops.set(r.id, { byPlat, dists });
+	}
+	const totalDist = Math.max(1, stations[stations.length - 1].dist);
 
 	const routeById = new Map((sl.axis.routes || []).map((r) => [r.id, r]));
 	const byVeh = new Map();
@@ -2401,12 +2431,35 @@ function buildGeometry() {
 	for (const [veh, rows] of byVeh) {
 		rows.sort((a, b) => a[2] - b[2]);
 		let current = null;
-		let lastStop = -1, lastT = 0;
+		let lastStop = -1, lastT = 0, lastRoute = null, lastIdx = -1, lastDist = -1, prev = null;
+		const cut = () => {
+			current = null;
+			lastStop = -1; lastRoute = null; lastIdx = -1; lastDist = -1; prev = null;
+		};
 		for (const [, plat, t, dwell, dev, stop, routeId] of rows) {
 			if (sl.routeOff.has(routeId)) continue; // variant toggled off
-			const dist = platDist.get(plat);
-			if (dist === undefined) continue; // off this axis (branch / outside the segment)
-			if (!current || stop < lastStop || t - lastT > 20 * 60000) {
+			const table = routeStops.get(routeId);
+			const slots = table && table.byPlat.get(plat);
+			if (!slots) { cut(); continue; } // platform not on this route at all
+			const sameRoute = lastRoute === routeId;
+			// next occurrence along the route; none left ⇒ the vehicle wrapped
+			let idx = sameRoute ? slots.find((i) => i > lastIdx) : undefined;
+			const wrapped = sameRoute && idx === undefined;
+			if (idx === undefined) idx = slots[0];
+			const dist = table.dists[idx];
+			if (dist === undefined) {
+				// Off this axis (branch leg, or outside the segment): the run genuinely
+				// leaves the chart here. Carrying `current` across the gap is what let one
+				// straight line bridge two far-apart rows.
+				cut();
+				continue;
+			}
+			// Backstop for missed recordings: a leap across most of the axis between stops
+			// that are NOT adjacent along the route is a data gap, not an express skip.
+			const jumped = !!current && lastDist >= 0
+				&& Math.abs(dist - lastDist) > totalDist * 0.6
+				&& !(sameRoute && idx === lastIdx + 1);
+			if (!current || wrapped || jumped || stop < lastStop || t - lastT > 20 * 60000) {
 				const route = routeById.get(routeId);
 				current = {
 					veh,
@@ -2420,6 +2473,17 @@ function buildGeometry() {
 					live: false,
 				};
 				traces.push(current);
+				// A cycle boundary is not a data gap: re-seed the new run at the shared
+				// origin stop so the loop's first leg still draws, from the top row down.
+				if (wrapped && prev) {
+					const prevSlots = table.byPlat.get(prev.plat);
+					const pi = prevSlots && prevSlots.find((i) => i < idx);
+					const pd = pi === undefined ? undefined : table.dists[pi];
+					if (pd !== undefined) {
+						current.pts.push([prev.t - (prev.dwell || 0), pd, prev.dev || 0]);
+						current.pts.push([prev.t, pd, prev.dev || 0]);
+					}
+				}
 			}
 			// Third element = deviation at this stop: scheduled time is t − dev,
 			// which is what the hover's dashed schedule ghost re-plots.
@@ -2429,6 +2493,10 @@ function buildGeometry() {
 			current.lastT = t;
 			lastStop = stop;
 			lastT = t;
+			lastRoute = routeId;
+			lastIdx = idx;
+			lastDist = dist;
+			prev = { plat, t, dwell, dev };
 		}
 	}
 	// Headways: gap between consecutive departures of the SAME route at the same
@@ -2437,7 +2505,7 @@ function buildGeometry() {
 	const headways = [];
 	const lastDep = new Map();
 	for (const [, plat, t, , , , routeId] of sl.deps) {
-		if (sl.routeOff.has(routeId)) continue; // variant toggled off
+		if (sl.routeOff.has(routeId) || !routeStops.has(routeId)) continue; // off, or not on this chart
 		const dist = platDist.get(plat);
 		if (dist === undefined) continue;
 		const key = routeId + "|" + plat;
@@ -2450,7 +2518,7 @@ function buildGeometry() {
 
 	return {
 		stations, platDist, traces, headways,
-		total: Math.max(1, stations[stations.length - 1].dist),
+		total: totalDist,
 		lineCount: new Set(routesUsed.map((r) => lineKey(r.name))).size,
 		segment: !!seg,
 	};
@@ -2487,7 +2555,11 @@ function drawStringline() {
 	}
 
 	const us = uiScale();
-	const pad = { l: Math.round(160 * us), r: 14, t: 18, b: Math.round(20 + 10 * us) };
+	// Mirrored gutters: station names read on BOTH sides of the plot, so a trace at the
+	// right-hand (newest) edge can still be traced back to a row without crossing the
+	// whole chart with your eye.
+	const gutter = Math.min(Math.round(160 * us), Math.max(70, Math.floor((w - 120) / 2)));
+	const pad = { l: gutter, r: gutter, t: 18, b: Math.round(20 + 10 * us) };
 	const plotH = h - pad.t - pad.b, plotW = w - pad.l - pad.r;
 	const Y = (dist) => pad.t + (dist / B.total) * plotH;
 	const tNow = now();
@@ -2495,7 +2567,7 @@ function drawStringline() {
 	const liveEdge = sl.endT === null;
 	const t0 = tEnd - sl.windowMin * 60000;
 	const X = (t) => pad.l + ((t - t0) / (tEnd - t0)) * plotW;
-	sl.layout = { padL: pad.l, stations: B.stations.map((s) => ({ sta: s.sta, y: Y(s.dist) })) };
+	sl.layout = { padL: pad.l, padR: w - pad.r, stations: B.stations.map((s) => ({ sta: s.sta, y: Y(s.dist) })) };
 	renderVariantChips();
 
 	// grid: station rows (selected corridor bounds highlighted) + time ticks
@@ -2514,7 +2586,11 @@ function drawStringline() {
 			g.font = (picked ? "700 " : "") + stationFont + "px system-ui";
 			let label = firstLang(s.staName) || firstLang(s.platName) || "?";
 			if (label.length > 22) label = label.slice(0, 21) + "…";
-			g.fillText(label, pad.l - 8, y + stationFont / 3);
+			const ly = y + stationFont / 3;
+			g.textAlign = "right";
+			g.fillText(label, pad.l - 8, ly);
+			g.textAlign = "left";
+			g.fillText(label, w - pad.r + 8, ly);
 			lastLabelY = y;
 		}
 	}
@@ -2578,7 +2654,7 @@ function drawStringline() {
 
 	// hover hit-test
 	sl.hover = null;
-	if (sl.mouse && sl.mouse[0] >= pad.l) {
+	if (sl.mouse && sl.mouse[0] >= pad.l && sl.mouse[0] <= w - pad.r) {
 		let bestD = 7;
 		for (const entry of drawn) {
 			for (let i = 1; i < entry.px.length; i++) {
@@ -2587,6 +2663,14 @@ function drawStringline() {
 			}
 		}
 	}
+
+	// Everything from here to the matching restore() is CLIPPED to the plot rect: a run
+	// whose window edge falls mid-segment used to keep drawing straight through the
+	// station-name gutters.
+	g.save();
+	g.beginPath();
+	g.rect(pad.l, pad.t, plotW, plotH);
+	g.clip();
 
 	// Scheduled-vs-actual, clutter-free: ONLY the hovered run gets its schedule
 	// re-plotted as a dashed ghost (each point shifted left by its deviation —
@@ -2710,9 +2794,14 @@ function drawStringline() {
 		}
 	}
 
+	g.restore();
+
 	g.strokeStyle = border;
 	g.lineWidth = 1;
-	g.beginPath(); g.moveTo(pad.l, pad.t); g.lineTo(pad.l, pad.t + plotH); g.stroke();
+	g.beginPath();
+	g.moveTo(pad.l, pad.t); g.lineTo(pad.l, pad.t + plotH);
+	g.moveTo(w - pad.r, pad.t); g.lineTo(w - pad.r, pad.t + plotH);
+	g.stroke();
 
 	const tip = $("slTip");
 	if (sl.hover && sl.mouse) {
@@ -2853,6 +2942,14 @@ function demoStringline() {
 				{ plat: "pq2", platName: "1", sta: "st3d", staName: "Union Sq", dist: 520 },
 				{ plat: "pq3", platName: "1", sta: "st4d", staName: "Grand Ave", dist: 1030 },
 			] },
+			// circular service: the origin platform is listed AGAIN as the final stop, and
+			// a vehicle runs several cycles without its stop index ever resetting — the
+			// exact shape that used to draw a full-height diagonal at every wrap. It also
+			// dips onto an off-axis yard platform mid-cycle (the bridge-the-gap case).
+			{ id: "rt8", name: "8 Loop||Clockwise", number: "8", color: 0xff6319, hidden: false, stations: [
+				...mkStations("pl", false),
+				{ plat: "pl1", platName: "1", sta: "st1d", staName: staNames[0], dist: 3600 },
+			] },
 		],
 	};
 	const deps = [];
@@ -2877,6 +2974,23 @@ function demoStringline() {
 			const depT = start + i * (80 * 1000 + 15 * 1000);
 			if (depT > t) break;
 			deps.push(["d7_" + n, "pq" + (i + 1), depT, 15 * 1000, (n % 3) * 15000, i, "rt7n"]);
+		}
+	}
+	// loop line: 3 vehicles, 3 continuous cycles each, stop index never resetting
+	for (let n = 0; n < 3; n++) {
+		const veh = "dloop" + n;
+		let depT = t - 88 * 60000 + n * 9 * 60000;
+		let stop = 0;
+		for (let cycle = 0; cycle < 3; cycle++) {
+			for (let i = 0; i < 6; i++) {
+				if (depT > t) break;
+				deps.push([veh, "pl" + (i + 1), depT, 18 * 1000, 0, stop++, "rt8"]);
+				depT += 70 * 1000 + 18 * 1000;
+				if (i === 3) { // off-axis yard stop between Grand Ave and Harbor North
+					deps.push([veh, "pyard", depT, 30 * 1000, 0, stop++, "rt8"]);
+					depT += 60 * 1000;
+				}
+			}
 		}
 	}
 	deps.sort((a, b) => a[2] - b[2]);
