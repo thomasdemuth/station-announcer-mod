@@ -3082,3 +3082,48 @@ drifted olives, direction-named routes). harness.mjs 417, planner.mjs 81.
 
 NOT in-game tested; Baker City first launch auto-scans the whole generated
 world (satellite runs long in background, resumes across restarts).
+
+## Stringline fixes — clipping, mirrored station gutters, loop traces (2026-08-29)
+
+Thomas's three reports off a real Baker City chart (`dispatch/app.js` only; no Java,
+no protocol change):
+
+1. **Traces ran past the station names.** Nothing clipped the plot: a run whose window
+   edge fell mid-segment kept drawing straight into the label gutter. Everything from
+   the schedule ghost through the annotation overlays is now inside one
+   `save()/rect(pad.l, pad.t, plotW, plotH)/clip()` … `restore()`, and the hover
+   hit-test is bounded on the right as well as the left.
+2. **Station names on BOTH sides.** `pad.r` was 14 px; it is now the same gutter as
+   `pad.l` (`min(160·us, max(70, (w−120)/2))` so a narrow window still leaves a plot),
+   the label loop draws each surviving (deconflicted) row right-aligned at `pad.l−8`
+   AND left-aligned at `w−pad.r+8`, both axis rules are stroked, and segment mode
+   accepts station clicks in EITHER gutter (`sl.layout` gained `padR`).
+3. **Runs shooting diagonally across the whole chart.** Three separate causes, all in
+   `buildGeometry`:
+   - `platDist` took the LAST occurrence of a platform. A circular route lists its
+     origin platform again as its final stop, so that platform's axis distance became
+     the BOTTOM row and every cycle's opening stop plotted there. First occurrence wins
+     now.
+   - A departure at a platform not on the axis was `continue`d, so the trace BRIDGED
+     the off-axis leg with one straight line between two far-apart rows. Off-axis now
+     cuts the trace.
+   - The only loop detector was `stop < lastStop`, and MTR's stop index does **not**
+     reset at a cycle boundary (it is the depot chain's index). Traces are now chained
+     by **monotone matching against the route's own stop table** (`routeStops`:
+     platform → every index it occupies, plus that stop's axis distance): each
+     departure takes the next index ABOVE the previous one, and "no index left" is the
+     wrap — cut there, then re-seed the new run at the shared origin stop so the loop's
+     first leg still draws top-down. A backstop cuts a leap over >60 % of the axis
+     between stops that are not adjacent along the route (a data gap, not an express
+     skip). `routeStops` is built only for the ACTIVE routes, so a deps payload that
+     still carries an unselected line no longer leaks onto the plot (found while
+     verifying — demo mode ships every route's deps).
+   The axis donor keeps its own per-stop distance, so a loop axis legitimately shows its
+   origin station twice (top and bottom) and a run reads as one clean top-to-bottom
+   diagonal per cycle.
+
+Demo gained an `rt8` "8 Loop||Clockwise" line — origin platform repeated as the final
+stop, three vehicles × three continuous cycles with a never-resetting stop index, and an
+off-axis yard stop mid-cycle — i.e. all three trace pathologies in one selectable badge.
+Browser-verified at `?demo=1` (wide + 620 px, line mode, loop mode, segment mode from
+the right gutter, zero console errors). NOT in-game tested.
