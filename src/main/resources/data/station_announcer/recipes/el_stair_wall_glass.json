@@ -1,0 +1,21 @@
+{
+ "type": "minecraft:crafting_shaped",
+ "category": "building",
+ "key": {
+  "P": {
+   "item": "minecraft:glass_pane"
+  },
+  "I": {
+   "item": "minecraft:iron_ingot"
+  }
+ },
+ "pattern": [
+  "IP ",
+  "IPI",
+  " PI"
+ ],
+ "result": {
+  "item": "station_announcer:el_stair_wall_glass",
+  "count": 4
+ }
+}

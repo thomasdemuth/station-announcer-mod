@@ -1,0 +1,57 @@
+{
+ "textures": {
+  "green": "station_announcer:block/el2_green"
+ },
+ "elements": [
+  {
+   "from": [
+    6.8,
+    0,
+    0
+   ],
+   "to": [
+    9.2,
+    20,
+    2.4000000000000004
+   ],
+   "faces": {
+    "south": {
+     "uv": [
+      0,
+      0,
+      2.4,
+      16
+     ],
+     "texture": "#green"
+    },
+    "north": {
+     "uv": [
+      0,
+      0,
+      2.4,
+      16
+     ],
+     "texture": "#green"
+    },
+    "east": {
+     "uv": [
+      6.4,
+      0,
+      4,
+      16
+     ],
+     "texture": "#green"
+    },
+    "west": {
+     "uv": [
+      6.4,
+      0,
+      4,
+      16
+     ],
+     "texture": "#green"
+    }
+   }
+  }
+ ]
+}

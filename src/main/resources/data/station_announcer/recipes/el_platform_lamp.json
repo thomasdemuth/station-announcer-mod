@@ -1,0 +1,21 @@
+{
+ "type": "minecraft:crafting_shaped",
+ "category": "building",
+ "key": {
+  "I": {
+   "item": "minecraft:iron_ingot"
+  },
+  "D": {
+   "item": "minecraft:black_dye"
+  }
+ },
+ "pattern": [
+  "I",
+  "D",
+  "I"
+ ],
+ "result": {
+  "item": "station_announcer:el_platform_lamp",
+  "count": 4
+ }
+}

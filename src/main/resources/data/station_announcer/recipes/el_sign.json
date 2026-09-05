@@ -1,0 +1,23 @@
+{
+ "type": "minecraft:crafting_shaped",
+ "category": "building",
+ "key": {
+  "I": {
+   "item": "minecraft:iron_ingot"
+  },
+  "B": {
+   "item": "minecraft:black_dye"
+  },
+  "P": {
+   "item": "minecraft:paper"
+  }
+ },
+ "pattern": [
+  "IBI",
+  "IPI"
+ ],
+ "result": {
+  "item": "station_announcer:el_sign",
+  "count": 2
+ }
+}

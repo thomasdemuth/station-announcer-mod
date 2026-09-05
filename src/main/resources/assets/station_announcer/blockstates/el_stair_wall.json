@@ -1,0 +1,2162 @@
+{
+ "multipart": [
+  {
+   "when": {
+    "facing": "north",
+    "side": "left",
+    "level": "true",
+    "end_up": "true",
+    "end_down": "true"
+   },
+   "apply": {
+    "model": "station_announcer:block/el_stair_wall_arm_lc"
+   }
+  },
+  {
+   "when": {
+    "facing": "north",
+    "side": "left",
+    "bottom": "true",
+    "level": "true",
+    "end_up": "true",
+    "end_down": "true"
+   },
+   "apply": {
+    "model": "station_announcer:block/el_stair_stringer_cc"
+   }
+  },
+  {
+   "when": {
+    "facing": "north",
+    "side": "left",
+    "level": "true",
+    "end_up": "true",
+    "end_down": "false"
+   },
+   "apply": {
+    "model": "station_announcer:block/el_stair_wall_arm_ln"
+   }
+  },
+  {
+   "when": {
+    "facing": "north",
+    "side": "left",
+    "bottom": "true",
+    "level": "true",
+    "end_up": "true",
+    "end_down": "false"
+   },
+   "apply": {
+    "model": "station_announcer:block/el_stair_stringer_cn"
+   }
+  },
+  {
+   "when": {
+    "facing": "north",
+    "side": "left",
+    "level": "true",
+    "end_up": "false",
+    "end_down": "true"
+   },
+   "apply": {
+    "model": "station_announcer:block/el_stair_wall_arm_lc"
+   }
+  },
+  {
+   "when": {
+    "facing": "north",
+    "side": "left",
+    "bottom": "true",
+    "level": "true",
+    "end_up": "false",
+    "end_down": "true"
+   },
+   "apply": {
+    "model": "station_announcer:block/el_stair_stringer_cc"
+   }
+  },
+  {
+   "when": {
+    "facing": "north",
+    "side": "left",
+    "level": "true",
+    "end_up": "false",
+    "end_down": "false"
+   },
+   "apply": {
+    "model": "station_announcer:block/el_stair_wall_arm_ln"
+   }
+  },
+  {
+   "when": {
+    "facing": "north",
+    "side": "left",
+    "bottom": "true",
+    "level": "true",
+    "end_up": "false",
+    "end_down": "false"
+   },
+   "apply": {
+    "model": "station_announcer:block/el_stair_stringer_cn"
+   }
+  },
+  {
+   "when": {
+    "facing": "north",
+    "side": "left",
+    "level": "false",
+    "end_up": "true",
+    "end_down": "true"
+   },
+   "apply": {
+    "model": "station_announcer:block/el_stair_wall_arm_cc"
+   }
+  },
+  {
+   "when": {
+    "facing": "north",
+    "side": "left",
+    "bottom": "true",
+    "level": "false",
+    "end_up": "true",
+    "end_down": "true"
+   },
+   "apply": {
+    "model": "station_announcer:block/el_stair_stringer_cc"
+   }
+  },
+  {
+   "when": {
+    "facing": "north",
+    "side": "left",
+    "level": "false",
+    "end_up": "true",
+    "end_down": "false"
+   },
+   "apply": {
+    "model": "station_announcer:block/el_stair_wall_arm_cn"
+   }
+  },
+  {
+   "when": {
+    "facing": "north",
+    "side": "left",
+    "bottom": "true",
+    "level": "false",
+    "end_up": "true",
+    "end_down": "false"
+   },
+   "apply": {
+    "model": "station_announcer:block/el_stair_stringer_cn"
+   }
+  },
+  {
+   "when": {
+    "facing": "north",
+    "side": "left",
+    "level": "false",
+    "end_up": "false",
+    "end_down": "true"
+   },
+   "apply": {
+    "model": "station_announcer:block/el_stair_wall_arm_nc"
+   }
+  },
+  {
+   "when": {
+    "facing": "north",
+    "side": "left",
+    "bottom": "true",
+    "level": "false",
+    "end_up": "false",
+    "end_down": "true"
+   },
+   "apply": {
+    "model": "station_announcer:block/el_stair_stringer_nc"
+   }
+  },
+  {
+   "when": {
+    "facing": "north",
+    "side": "left",
+    "level": "false",
+    "end_up": "false",
+    "end_down": "false"
+   },
+   "apply": {
+    "model": "station_announcer:block/el_stair_wall_arm_nn"
+   }
+  },
+  {
+   "when": {
+    "facing": "north",
+    "side": "left",
+    "bottom": "true",
+    "level": "false",
+    "end_up": "false",
+    "end_down": "false"
+   },
+   "apply": {
+    "model": "station_announcer:block/el_stair_stringer_nn"
+   }
+  },
+  {
+   "when": {
+    "facing": "north",
+    "side": "left",
+    "level": "true"
+   },
+   "apply": {
+    "model": "station_announcer:block/el_stair_wall_level"
+   }
+  },
+  {
+   "when": {
+    "facing": "north",
+    "side": "left",
+    "bottom": "true",
+    "top": "false"
+   },
+   "apply": {
+    "model": "station_announcer:block/el_stair_post_bottom"
+   }
+  },
+  {
+   "when": {
+    "facing": "north",
+    "side": "left",
+    "bottom": "false",
+    "top": "false"
+   },
+   "apply": {
+    "model": "station_announcer:block/el_stair_post_chain"
+   }
+  },
+  {
+   "when": {
+    "facing": "north",
+    "side": "left",
+    "bottom": "true",
+    "top": "true"
+   },
+   "apply": {
+    "model": "station_announcer:block/el_stair_post_bottom_top"
+   }
+  },
+  {
+   "when": {
+    "facing": "north",
+    "side": "left",
+    "bottom": "false",
+    "top": "true"
+   },
+   "apply": {
+    "model": "station_announcer:block/el_stair_post_chain_top"
+   }
+  },
+  {
+   "when": {
+    "facing": "north",
+    "side": "right",
+    "level": "true",
+    "end_up": "true",
+    "end_down": "true"
+   },
+   "apply": {
+    "model": "station_announcer:block/el_stair_wall_arm_lc_r"
+   }
+  },
+  {
+   "when": {
+    "facing": "north",
+    "side": "right",
+    "bottom": "true",
+    "level": "true",
+    "end_up": "true",
+    "end_down": "true"
+   },
+   "apply": {
+    "model": "station_announcer:block/el_stair_stringer_cc_r"
+   }
+  },
+  {
+   "when": {
+    "facing": "north",
+    "side": "right",
+    "level": "true",
+    "end_up": "true",
+    "end_down": "false"
+   },
+   "apply": {
+    "model": "station_announcer:block/el_stair_wall_arm_ln_r"
+   }
+  },
+  {
+   "when": {
+    "facing": "north",
+    "side": "right",
+    "bottom": "true",
+    "level": "true",
+    "end_up": "true",
+    "end_down": "false"
+   },
+   "apply": {
+    "model": "station_announcer:block/el_stair_stringer_cn_r"
+   }
+  },
+  {
+   "when": {
+    "facing": "north",
+    "side": "right",
+    "level": "true",
+    "end_up": "false",
+    "end_down": "true"
+   },
+   "apply": {
+    "model": "station_announcer:block/el_stair_wall_arm_lc_r"
+   }
+  },
+  {
+   "when": {
+    "facing": "north",
+    "side": "right",
+    "bottom": "true",
+    "level": "true",
+    "end_up": "false",
+    "end_down": "true"
+   },
+   "apply": {
+    "model": "station_announcer:block/el_stair_stringer_cc_r"
+   }
+  },
+  {
+   "when": {
+    "facing": "north",
+    "side": "right",
+    "level": "true",
+    "end_up": "false",
+    "end_down": "false"
+   },
+   "apply": {
+    "model": "station_announcer:block/el_stair_wall_arm_ln_r"
+   }
+  },
+  {
+   "when": {
+    "facing": "north",
+    "side": "right",
+    "bottom": "true",
+    "level": "true",
+    "end_up": "false",
+    "end_down": "false"
+   },
+   "apply": {
+    "model": "station_announcer:block/el_stair_stringer_cn_r"
+   }
+  },
+  {
+   "when": {
+    "facing": "north",
+    "side": "right",
+    "level": "false",
+    "end_up": "true",
+    "end_down": "true"
+   },
+   "apply": {
+    "model": "station_announcer:block/el_stair_wall_arm_cc_r"
+   }
+  },
+  {
+   "when": {
+    "facing": "north",
+    "side": "right",
+    "bottom": "true",
+    "level": "false",
+    "end_up": "true",
+    "end_down": "true"
+   },
+   "apply": {
+    "model": "station_announcer:block/el_stair_stringer_cc_r"
+   }
+  },
+  {
+   "when": {
+    "facing": "north",
+    "side": "right",
+    "level": "false",
+    "end_up": "true",
+    "end_down": "false"
+   },
+   "apply": {
+    "model": "station_announcer:block/el_stair_wall_arm_cn_r"
+   }
+  },
+  {
+   "when": {
+    "facing": "north",
+    "side": "right",
+    "bottom": "true",
+    "level": "false",
+    "end_up": "true",
+    "end_down": "false"
+   },
+   "apply": {
+    "model": "station_announcer:block/el_stair_stringer_cn_r"
+   }
+  },
+  {
+   "when": {
+    "facing": "north",
+    "side": "right",
+    "level": "false",
+    "end_up": "false",
+    "end_down": "true"
+   },
+   "apply": {
+    "model": "station_announcer:block/el_stair_wall_arm_nc_r"
+   }
+  },
+  {
+   "when": {
+    "facing": "north",
+    "side": "right",
+    "bottom": "true",
+    "level": "false",
+    "end_up": "false",
+    "end_down": "true"
+   },
+   "apply": {
+    "model": "station_announcer:block/el_stair_stringer_nc_r"
+   }
+  },
+  {
+   "when": {
+    "facing": "north",
+    "side": "right",
+    "level": "false",
+    "end_up": "false",
+    "end_down": "false"
+   },
+   "apply": {
+    "model": "station_announcer:block/el_stair_wall_arm_nn_r"
+   }
+  },
+  {
+   "when": {
+    "facing": "north",
+    "side": "right",
+    "bottom": "true",
+    "level": "false",
+    "end_up": "false",
+    "end_down": "false"
+   },
+   "apply": {
+    "model": "station_announcer:block/el_stair_stringer_nn_r"
+   }
+  },
+  {
+   "when": {
+    "facing": "north",
+    "side": "right",
+    "level": "true"
+   },
+   "apply": {
+    "model": "station_announcer:block/el_stair_wall_level_r"
+   }
+  },
+  {
+   "when": {
+    "facing": "north",
+    "side": "right",
+    "bottom": "true",
+    "top": "false"
+   },
+   "apply": {
+    "model": "station_announcer:block/el_stair_post_bottom_r"
+   }
+  },
+  {
+   "when": {
+    "facing": "north",
+    "side": "right",
+    "bottom": "false",
+    "top": "false"
+   },
+   "apply": {
+    "model": "station_announcer:block/el_stair_post_chain_r"
+   }
+  },
+  {
+   "when": {
+    "facing": "north",
+    "side": "right",
+    "bottom": "true",
+    "top": "true"
+   },
+   "apply": {
+    "model": "station_announcer:block/el_stair_post_bottom_top_r"
+   }
+  },
+  {
+   "when": {
+    "facing": "north",
+    "side": "right",
+    "bottom": "false",
+    "top": "true"
+   },
+   "apply": {
+    "model": "station_announcer:block/el_stair_post_chain_top_r"
+   }
+  },
+  {
+   "when": {
+    "facing": "east",
+    "side": "left",
+    "level": "true",
+    "end_up": "true",
+    "end_down": "true"
+   },
+   "apply": {
+    "model": "station_announcer:block/el_stair_wall_arm_lc",
+    "y": 90
+   }
+  },
+  {
+   "when": {
+    "facing": "east",
+    "side": "left",
+    "bottom": "true",
+    "level": "true",
+    "end_up": "true",
+    "end_down": "true"
+   },
+   "apply": {
+    "model": "station_announcer:block/el_stair_stringer_cc",
+    "y": 90
+   }
+  },
+  {
+   "when": {
+    "facing": "east",
+    "side": "left",
+    "level": "true",
+    "end_up": "true",
+    "end_down": "false"
+   },
+   "apply": {
+    "model": "station_announcer:block/el_stair_wall_arm_ln",
+    "y": 90
+   }
+  },
+  {
+   "when": {
+    "facing": "east",
+    "side": "left",
+    "bottom": "true",
+    "level": "true",
+    "end_up": "true",
+    "end_down": "false"
+   },
+   "apply": {
+    "model": "station_announcer:block/el_stair_stringer_cn",
+    "y": 90
+   }
+  },
+  {
+   "when": {
+    "facing": "east",
+    "side": "left",
+    "level": "true",
+    "end_up": "false",
+    "end_down": "true"
+   },
+   "apply": {
+    "model": "station_announcer:block/el_stair_wall_arm_lc",
+    "y": 90
+   }
+  },
+  {
+   "when": {
+    "facing": "east",
+    "side": "left",
+    "bottom": "true",
+    "level": "true",
+    "end_up": "false",
+    "end_down": "true"
+   },
+   "apply": {
+    "model": "station_announcer:block/el_stair_stringer_cc",
+    "y": 90
+   }
+  },
+  {
+   "when": {
+    "facing": "east",
+    "side": "left",
+    "level": "true",
+    "end_up": "false",
+    "end_down": "false"
+   },
+   "apply": {
+    "model": "station_announcer:block/el_stair_wall_arm_ln",
+    "y": 90
+   }
+  },
+  {
+   "when": {
+    "facing": "east",
+    "side": "left",
+    "bottom": "true",
+    "level": "true",
+    "end_up": "false",
+    "end_down": "false"
+   },
+   "apply": {
+    "model": "station_announcer:block/el_stair_stringer_cn",
+    "y": 90
+   }
+  },
+  {
+   "when": {
+    "facing": "east",
+    "side": "left",
+    "level": "false",
+    "end_up": "true",
+    "end_down": "true"
+   },
+   "apply": {
+    "model": "station_announcer:block/el_stair_wall_arm_cc",
+    "y": 90
+   }
+  },
+  {
+   "when": {
+    "facing": "east",
+    "side": "left",
+    "bottom": "true",
+    "level": "false",
+    "end_up": "true",
+    "end_down": "true"
+   },
+   "apply": {
+    "model": "station_announcer:block/el_stair_stringer_cc",
+    "y": 90
+   }
+  },
+  {
+   "when": {
+    "facing": "east",
+    "side": "left",
+    "level": "false",
+    "end_up": "true",
+    "end_down": "false"
+   },
+   "apply": {
+    "model": "station_announcer:block/el_stair_wall_arm_cn",
+    "y": 90
+   }
+  },
+  {
+   "when": {
+    "facing": "east",
+    "side": "left",
+    "bottom": "true",
+    "level": "false",
+    "end_up": "true",
+    "end_down": "false"
+   },
+   "apply": {
+    "model": "station_announcer:block/el_stair_stringer_cn",
+    "y": 90
+   }
+  },
+  {
+   "when": {
+    "facing": "east",
+    "side": "left",
+    "level": "false",
+    "end_up": "false",
+    "end_down": "true"
+   },
+   "apply": {
+    "model": "station_announcer:block/el_stair_wall_arm_nc",
+    "y": 90
+   }
+  },
+  {
+   "when": {
+    "facing": "east",
+    "side": "left",
+    "bottom": "true",
+    "level": "false",
+    "end_up": "false",
+    "end_down": "true"
+   },
+   "apply": {
+    "model": "station_announcer:block/el_stair_stringer_nc",
+    "y": 90
+   }
+  },
+  {
+   "when": {
+    "facing": "east",
+    "side": "left",
+    "level": "false",
+    "end_up": "false",
+    "end_down": "false"
+   },
+   "apply": {
+    "model": "station_announcer:block/el_stair_wall_arm_nn",
+    "y": 90
+   }
+  },
+  {
+   "when": {
+    "facing": "east",
+    "side": "left",
+    "bottom": "true",
+    "level": "false",
+    "end_up": "false",
+    "end_down": "false"
+   },
+   "apply": {
+    "model": "station_announcer:block/el_stair_stringer_nn",
+    "y": 90
+   }
+  },
+  {
+   "when": {
+    "facing": "east",
+    "side": "left",
+    "level": "true"
+   },
+   "apply": {
+    "model": "station_announcer:block/el_stair_wall_level",
+    "y": 90
+   }
+  },
+  {
+   "when": {
+    "facing": "east",
+    "side": "left",
+    "bottom": "true",
+    "top": "false"
+   },
+   "apply": {
+    "model": "station_announcer:block/el_stair_post_bottom",
+    "y": 90
+   }
+  },
+  {
+   "when": {
+    "facing": "east",
+    "side": "left",
+    "bottom": "false",
+    "top": "false"
+   },
+   "apply": {
+    "model": "station_announcer:block/el_stair_post_chain",
+    "y": 90
+   }
+  },
+  {
+   "when": {
+    "facing": "east",
+    "side": "left",
+    "bottom": "true",
+    "top": "true"
+   },
+   "apply": {
+    "model": "station_announcer:block/el_stair_post_bottom_top",
+    "y": 90
+   }
+  },
+  {
+   "when": {
+    "facing": "east",
+    "side": "left",
+    "bottom": "false",
+    "top": "true"
+   },
+   "apply": {
+    "model": "station_announcer:block/el_stair_post_chain_top",
+    "y": 90
+   }
+  },
+  {
+   "when": {
+    "facing": "east",
+    "side": "right",
+    "level": "true",
+    "end_up": "true",
+    "end_down": "true"
+   },
+   "apply": {
+    "model": "station_announcer:block/el_stair_wall_arm_lc_r",
+    "y": 90
+   }
+  },
+  {
+   "when": {
+    "facing": "east",
+    "side": "right",
+    "bottom": "true",
+    "level": "true",
+    "end_up": "true",
+    "end_down": "true"
+   },
+   "apply": {
+    "model": "station_announcer:block/el_stair_stringer_cc_r",
+    "y": 90
+   }
+  },
+  {
+   "when": {
+    "facing": "east",
+    "side": "right",
+    "level": "true",
+    "end_up": "true",
+    "end_down": "false"
+   },
+   "apply": {
+    "model": "station_announcer:block/el_stair_wall_arm_ln_r",
+    "y": 90
+   }
+  },
+  {
+   "when": {
+    "facing": "east",
+    "side": "right",
+    "bottom": "true",
+    "level": "true",
+    "end_up": "true",
+    "end_down": "false"
+   },
+   "apply": {
+    "model": "station_announcer:block/el_stair_stringer_cn_r",
+    "y": 90
+   }
+  },
+  {
+   "when": {
+    "facing": "east",
+    "side": "right",
+    "level": "true",
+    "end_up": "false",
+    "end_down": "true"
+   },
+   "apply": {
+    "model": "station_announcer:block/el_stair_wall_arm_lc_r",
+    "y": 90
+   }
+  },
+  {
+   "when": {
+    "facing": "east",
+    "side": "right",
+    "bottom": "true",
+    "level": "true",
+    "end_up": "false",
+    "end_down": "true"
+   },
+   "apply": {
+    "model": "station_announcer:block/el_stair_stringer_cc_r",
+    "y": 90
+   }
+  },
+  {
+   "when": {
+    "facing": "east",
+    "side": "right",
+    "level": "true",
+    "end_up": "false",
+    "end_down": "false"
+   },
+   "apply": {
+    "model": "station_announcer:block/el_stair_wall_arm_ln_r",
+    "y": 90
+   }
+  },
+  {
+   "when": {
+    "facing": "east",
+    "side": "right",
+    "bottom": "true",
+    "level": "true",
+    "end_up": "false",
+    "end_down": "false"
+   },
+   "apply": {
+    "model": "station_announcer:block/el_stair_stringer_cn_r",
+    "y": 90
+   }
+  },
+  {
+   "when": {
+    "facing": "east",
+    "side": "right",
+    "level": "false",
+    "end_up": "true",
+    "end_down": "true"
+   },
+   "apply": {
+    "model": "station_announcer:block/el_stair_wall_arm_cc_r",
+    "y": 90
+   }
+  },
+  {
+   "when": {
+    "facing": "east",
+    "side": "right",
+    "bottom": "true",
+    "level": "false",
+    "end_up": "true",
+    "end_down": "true"
+   },
+   "apply": {
+    "model": "station_announcer:block/el_stair_stringer_cc_r",
+    "y": 90
+   }
+  },
+  {
+   "when": {
+    "facing": "east",
+    "side": "right",
+    "level": "false",
+    "end_up": "true",
+    "end_down": "false"
+   },
+   "apply": {
+    "model": "station_announcer:block/el_stair_wall_arm_cn_r",
+    "y": 90
+   }
+  },
+  {
+   "when": {
+    "facing": "east",
+    "side": "right",
+    "bottom": "true",
+    "level": "false",
+    "end_up": "true",
+    "end_down": "false"
+   },
+   "apply": {
+    "model": "station_announcer:block/el_stair_stringer_cn_r",
+    "y": 90
+   }
+  },
+  {
+   "when": {
+    "facing": "east",
+    "side": "right",
+    "level": "false",
+    "end_up": "false",
+    "end_down": "true"
+   },
+   "apply": {
+    "model": "station_announcer:block/el_stair_wall_arm_nc_r",
+    "y": 90
+   }
+  },
+  {
+   "when": {
+    "facing": "east",
+    "side": "right",
+    "bottom": "true",
+    "level": "false",
+    "end_up": "false",
+    "end_down": "true"
+   },
+   "apply": {
+    "model": "station_announcer:block/el_stair_stringer_nc_r",
+    "y": 90
+   }
+  },
+  {
+   "when": {
+    "facing": "east",
+    "side": "right",
+    "level": "false",
+    "end_up": "false",
+    "end_down": "false"
+   },
+   "apply": {
+    "model": "station_announcer:block/el_stair_wall_arm_nn_r",
+    "y": 90
+   }
+  },
+  {
+   "when": {
+    "facing": "east",
+    "side": "right",
+    "bottom": "true",
+    "level": "false",
+    "end_up": "false",
+    "end_down": "false"
+   },
+   "apply": {
+    "model": "station_announcer:block/el_stair_stringer_nn_r",
+    "y": 90
+   }
+  },
+  {
+   "when": {
+    "facing": "east",
+    "side": "right",
+    "level": "true"
+   },
+   "apply": {
+    "model": "station_announcer:block/el_stair_wall_level_r",
+    "y": 90
+   }
+  },
+  {
+   "when": {
+    "facing": "east",
+    "side": "right",
+    "bottom": "true",
+    "top": "false"
+   },
+   "apply": {
+    "model": "station_announcer:block/el_stair_post_bottom_r",
+    "y": 90
+   }
+  },
+  {
+   "when": {
+    "facing": "east",
+    "side": "right",
+    "bottom": "false",
+    "top": "false"
+   },
+   "apply": {
+    "model": "station_announcer:block/el_stair_post_chain_r",
+    "y": 90
+   }
+  },
+  {
+   "when": {
+    "facing": "east",
+    "side": "right",
+    "bottom": "true",
+    "top": "true"
+   },
+   "apply": {
+    "model": "station_announcer:block/el_stair_post_bottom_top_r",
+    "y": 90
+   }
+  },
+  {
+   "when": {
+    "facing": "east",
+    "side": "right",
+    "bottom": "false",
+    "top": "true"
+   },
+   "apply": {
+    "model": "station_announcer:block/el_stair_post_chain_top_r",
+    "y": 90
+   }
+  },
+  {
+   "when": {
+    "facing": "south",
+    "side": "left",
+    "level": "true",
+    "end_up": "true",
+    "end_down": "true"
+   },
+   "apply": {
+    "model": "station_announcer:block/el_stair_wall_arm_lc",
+    "y": 180
+   }
+  },
+  {
+   "when": {
+    "facing": "south",
+    "side": "left",
+    "bottom": "true",
+    "level": "true",
+    "end_up": "true",
+    "end_down": "true"
+   },
+   "apply": {
+    "model": "station_announcer:block/el_stair_stringer_cc",
+    "y": 180
+   }
+  },
+  {
+   "when": {
+    "facing": "south",
+    "side": "left",
+    "level": "true",
+    "end_up": "true",
+    "end_down": "false"
+   },
+   "apply": {
+    "model": "station_announcer:block/el_stair_wall_arm_ln",
+    "y": 180
+   }
+  },
+  {
+   "when": {
+    "facing": "south",
+    "side": "left",
+    "bottom": "true",
+    "level": "true",
+    "end_up": "true",
+    "end_down": "false"
+   },
+   "apply": {
+    "model": "station_announcer:block/el_stair_stringer_cn",
+    "y": 180
+   }
+  },
+  {
+   "when": {
+    "facing": "south",
+    "side": "left",
+    "level": "true",
+    "end_up": "false",
+    "end_down": "true"
+   },
+   "apply": {
+    "model": "station_announcer:block/el_stair_wall_arm_lc",
+    "y": 180
+   }
+  },
+  {
+   "when": {
+    "facing": "south",
+    "side": "left",
+    "bottom": "true",
+    "level": "true",
+    "end_up": "false",
+    "end_down": "true"
+   },
+   "apply": {
+    "model": "station_announcer:block/el_stair_stringer_cc",
+    "y": 180
+   }
+  },
+  {
+   "when": {
+    "facing": "south",
+    "side": "left",
+    "level": "true",
+    "end_up": "false",
+    "end_down": "false"
+   },
+   "apply": {
+    "model": "station_announcer:block/el_stair_wall_arm_ln",
+    "y": 180
+   }
+  },
+  {
+   "when": {
+    "facing": "south",
+    "side": "left",
+    "bottom": "true",
+    "level": "true",
+    "end_up": "false",
+    "end_down": "false"
+   },
+   "apply": {
+    "model": "station_announcer:block/el_stair_stringer_cn",
+    "y": 180
+   }
+  },
+  {
+   "when": {
+    "facing": "south",
+    "side": "left",
+    "level": "false",
+    "end_up": "true",
+    "end_down": "true"
+   },
+   "apply": {
+    "model": "station_announcer:block/el_stair_wall_arm_cc",
+    "y": 180
+   }
+  },
+  {
+   "when": {
+    "facing": "south",
+    "side": "left",
+    "bottom": "true",
+    "level": "false",
+    "end_up": "true",
+    "end_down": "true"
+   },
+   "apply": {
+    "model": "station_announcer:block/el_stair_stringer_cc",
+    "y": 180
+   }
+  },
+  {
+   "when": {
+    "facing": "south",
+    "side": "left",
+    "level": "false",
+    "end_up": "true",
+    "end_down": "false"
+   },
+   "apply": {
+    "model": "station_announcer:block/el_stair_wall_arm_cn",
+    "y": 180
+   }
+  },
+  {
+   "when": {
+    "facing": "south",
+    "side": "left",
+    "bottom": "true",
+    "level": "false",
+    "end_up": "true",
+    "end_down": "false"
+   },
+   "apply": {
+    "model": "station_announcer:block/el_stair_stringer_cn",
+    "y": 180
+   }
+  },
+  {
+   "when": {
+    "facing": "south",
+    "side": "left",
+    "level": "false",
+    "end_up": "false",
+    "end_down": "true"
+   },
+   "apply": {
+    "model": "station_announcer:block/el_stair_wall_arm_nc",
+    "y": 180
+   }
+  },
+  {
+   "when": {
+    "facing": "south",
+    "side": "left",
+    "bottom": "true",
+    "level": "false",
+    "end_up": "false",
+    "end_down": "true"
+   },
+   "apply": {
+    "model": "station_announcer:block/el_stair_stringer_nc",
+    "y": 180
+   }
+  },
+  {
+   "when": {
+    "facing": "south",
+    "side": "left",
+    "level": "false",
+    "end_up": "false",
+    "end_down": "false"
+   },
+   "apply": {
+    "model": "station_announcer:block/el_stair_wall_arm_nn",
+    "y": 180
+   }
+  },
+  {
+   "when": {
+    "facing": "south",
+    "side": "left",
+    "bottom": "true",
+    "level": "false",
+    "end_up": "false",
+    "end_down": "false"
+   },
+   "apply": {
+    "model": "station_announcer:block/el_stair_stringer_nn",
+    "y": 180
+   }
+  },
+  {
+   "when": {
+    "facing": "south",
+    "side": "left",
+    "level": "true"
+   },
+   "apply": {
+    "model": "station_announcer:block/el_stair_wall_level",
+    "y": 180
+   }
+  },
+  {
+   "when": {
+    "facing": "south",
+    "side": "left",
+    "bottom": "true",
+    "top": "false"
+   },
+   "apply": {
+    "model": "station_announcer:block/el_stair_post_bottom",
+    "y": 180
+   }
+  },
+  {
+   "when": {
+    "facing": "south",
+    "side": "left",
+    "bottom": "false",
+    "top": "false"
+   },
+   "apply": {
+    "model": "station_announcer:block/el_stair_post_chain",
+    "y": 180
+   }
+  },
+  {
+   "when": {
+    "facing": "south",
+    "side": "left",
+    "bottom": "true",
+    "top": "true"
+   },
+   "apply": {
+    "model": "station_announcer:block/el_stair_post_bottom_top",
+    "y": 180
+   }
+  },
+  {
+   "when": {
+    "facing": "south",
+    "side": "left",
+    "bottom": "false",
+    "top": "true"
+   },
+   "apply": {
+    "model": "station_announcer:block/el_stair_post_chain_top",
+    "y": 180
+   }
+  },
+  {
+   "when": {
+    "facing": "south",
+    "side": "right",
+    "level": "true",
+    "end_up": "true",
+    "end_down": "true"
+   },
+   "apply": {
+    "model": "station_announcer:block/el_stair_wall_arm_lc_r",
+    "y": 180
+   }
+  },
+  {
+   "when": {
+    "facing": "south",
+    "side": "right",
+    "bottom": "true",
+    "level": "true",
+    "end_up": "true",
+    "end_down": "true"
+   },
+   "apply": {
+    "model": "station_announcer:block/el_stair_stringer_cc_r",
+    "y": 180
+   }
+  },
+  {
+   "when": {
+    "facing": "south",
+    "side": "right",
+    "level": "true",
+    "end_up": "true",
+    "end_down": "false"
+   },
+   "apply": {
+    "model": "station_announcer:block/el_stair_wall_arm_ln_r",
+    "y": 180
+   }
+  },
+  {
+   "when": {
+    "facing": "south",
+    "side": "right",
+    "bottom": "true",
+    "level": "true",
+    "end_up": "true",
+    "end_down": "false"
+   },
+   "apply": {
+    "model": "station_announcer:block/el_stair_stringer_cn_r",
+    "y": 180
+   }
+  },
+  {
+   "when": {
+    "facing": "south",
+    "side": "right",
+    "level": "true",
+    "end_up": "false",
+    "end_down": "true"
+   },
+   "apply": {
+    "model": "station_announcer:block/el_stair_wall_arm_lc_r",
+    "y": 180
+   }
+  },
+  {
+   "when": {
+    "facing": "south",
+    "side": "right",
+    "bottom": "true",
+    "level": "true",
+    "end_up": "false",
+    "end_down": "true"
+   },
+   "apply": {
+    "model": "station_announcer:block/el_stair_stringer_cc_r",
+    "y": 180
+   }
+  },
+  {
+   "when": {
+    "facing": "south",
+    "side": "right",
+    "level": "true",
+    "end_up": "false",
+    "end_down": "false"
+   },
+   "apply": {
+    "model": "station_announcer:block/el_stair_wall_arm_ln_r",
+    "y": 180
+   }
+  },
+  {
+   "when": {
+    "facing": "south",
+    "side": "right",
+    "bottom": "true",
+    "level": "true",
+    "end_up": "false",
+    "end_down": "false"
+   },
+   "apply": {
+    "model": "station_announcer:block/el_stair_stringer_cn_r",
+    "y": 180
+   }
+  },
+  {
+   "when": {
+    "facing": "south",
+    "side": "right",
+    "level": "false",
+    "end_up": "true",
+    "end_down": "true"
+   },
+   "apply": {
+    "model": "station_announcer:block/el_stair_wall_arm_cc_r",
+    "y": 180
+   }
+  },
+  {
+   "when": {
+    "facing": "south",
+    "side": "right",
+    "bottom": "true",
+    "level": "false",
+    "end_up": "true",
+    "end_down": "true"
+   },
+   "apply": {
+    "model": "station_announcer:block/el_stair_stringer_cc_r",
+    "y": 180
+   }
+  },
+  {
+   "when": {
+    "facing": "south",
+    "side": "right",
+    "level": "false",
+    "end_up": "true",
+    "end_down": "false"
+   },
+   "apply": {
+    "model": "station_announcer:block/el_stair_wall_arm_cn_r",
+    "y": 180
+   }
+  },
+  {
+   "when": {
+    "facing": "south",
+    "side": "right",
+    "bottom": "true",
+    "level": "false",
+    "end_up": "true",
+    "end_down": "false"
+   },
+   "apply": {
+    "model": "station_announcer:block/el_stair_stringer_cn_r",
+    "y": 180
+   }
+  },
+  {
+   "when": {
+    "facing": "south",
+    "side": "right",
+    "level": "false",
+    "end_up": "false",
+    "end_down": "true"
+   },
+   "apply": {
+    "model": "station_announcer:block/el_stair_wall_arm_nc_r",
+    "y": 180
+   }
+  },
+  {
+   "when": {
+    "facing": "south",
+    "side": "right",
+    "bottom": "true",
+    "level": "false",
+    "end_up": "false",
+    "end_down": "true"
+   },
+   "apply": {
+    "model": "station_announcer:block/el_stair_stringer_nc_r",
+    "y": 180
+   }
+  },
+  {
+   "when": {
+    "facing": "south",
+    "side": "right",
+    "level": "false",
+    "end_up": "false",
+    "end_down": "false"
+   },
+   "apply": {
+    "model": "station_announcer:block/el_stair_wall_arm_nn_r",
+    "y": 180
+   }
+  },
+  {
+   "when": {
+    "facing": "south",
+    "side": "right",
+    "bottom": "true",
+    "level": "false",
+    "end_up": "false",
+    "end_down": "false"
+   },
+   "apply": {
+    "model": "station_announcer:block/el_stair_stringer_nn_r",
+    "y": 180
+   }
+  },
+  {
+   "when": {
+    "facing": "south",
+    "side": "right",
+    "level": "true"
+   },
+   "apply": {
+    "model": "station_announcer:block/el_stair_wall_level_r",
+    "y": 180
+   }
+  },
+  {
+   "when": {
+    "facing": "south",
+    "side": "right",
+    "bottom": "true",
+    "top": "false"
+   },
+   "apply": {
+    "model": "station_announcer:block/el_stair_post_bottom_r",
+    "y": 180
+   }
+  },
+  {
+   "when": {
+    "facing": "south",
+    "side": "right",
+    "bottom": "false",
+    "top": "false"
+   },
+   "apply": {
+    "model": "station_announcer:block/el_stair_post_chain_r",
+    "y": 180
+   }
+  },
+  {
+   "when": {
+    "facing": "south",
+    "side": "right",
+    "bottom": "true",
+    "top": "true"
+   },
+   "apply": {
+    "model": "station_announcer:block/el_stair_post_bottom_top_r",
+    "y": 180
+   }
+  },
+  {
+   "when": {
+    "facing": "south",
+    "side": "right",
+    "bottom": "false",
+    "top": "true"
+   },
+   "apply": {
+    "model": "station_announcer:block/el_stair_post_chain_top_r",
+    "y": 180
+   }
+  },
+  {
+   "when": {
+    "facing": "west",
+    "side": "left",
+    "level": "true",
+    "end_up": "true",
+    "end_down": "true"
+   },
+   "apply": {
+    "model": "station_announcer:block/el_stair_wall_arm_lc",
+    "y": 270
+   }
+  },
+  {
+   "when": {
+    "facing": "west",
+    "side": "left",
+    "bottom": "true",
+    "level": "true",
+    "end_up": "true",
+    "end_down": "true"
+   },
+   "apply": {
+    "model": "station_announcer:block/el_stair_stringer_cc",
+    "y": 270
+   }
+  },
+  {
+   "when": {
+    "facing": "west",
+    "side": "left",
+    "level": "true",
+    "end_up": "true",
+    "end_down": "false"
+   },
+   "apply": {
+    "model": "station_announcer:block/el_stair_wall_arm_ln",
+    "y": 270
+   }
+  },
+  {
+   "when": {
+    "facing": "west",
+    "side": "left",
+    "bottom": "true",
+    "level": "true",
+    "end_up": "true",
+    "end_down": "false"
+   },
+   "apply": {
+    "model": "station_announcer:block/el_stair_stringer_cn",
+    "y": 270
+   }
+  },
+  {
+   "when": {
+    "facing": "west",
+    "side": "left",
+    "level": "true",
+    "end_up": "false",
+    "end_down": "true"
+   },
+   "apply": {
+    "model": "station_announcer:block/el_stair_wall_arm_lc",
+    "y": 270
+   }
+  },
+  {
+   "when": {
+    "facing": "west",
+    "side": "left",
+    "bottom": "true",
+    "level": "true",
+    "end_up": "false",
+    "end_down": "true"
+   },
+   "apply": {
+    "model": "station_announcer:block/el_stair_stringer_cc",
+    "y": 270
+   }
+  },
+  {
+   "when": {
+    "facing": "west",
+    "side": "left",
+    "level": "true",
+    "end_up": "false",
+    "end_down": "false"
+   },
+   "apply": {
+    "model": "station_announcer:block/el_stair_wall_arm_ln",
+    "y": 270
+   }
+  },
+  {
+   "when": {
+    "facing": "west",
+    "side": "left",
+    "bottom": "true",
+    "level": "true",
+    "end_up": "false",
+    "end_down": "false"
+   },
+   "apply": {
+    "model": "station_announcer:block/el_stair_stringer_cn",
+    "y": 270
+   }
+  },
+  {
+   "when": {
+    "facing": "west",
+    "side": "left",
+    "level": "false",
+    "end_up": "true",
+    "end_down": "true"
+   },
+   "apply": {
+    "model": "station_announcer:block/el_stair_wall_arm_cc",
+    "y": 270
+   }
+  },
+  {
+   "when": {
+    "facing": "west",
+    "side": "left",
+    "bottom": "true",
+    "level": "false",
+    "end_up": "true",
+    "end_down": "true"
+   },
+   "apply": {
+    "model": "station_announcer:block/el_stair_stringer_cc",
+    "y": 270
+   }
+  },
+  {
+   "when": {
+    "facing": "west",
+    "side": "left",
+    "level": "false",
+    "end_up": "true",
+    "end_down": "false"
+   },
+   "apply": {
+    "model": "station_announcer:block/el_stair_wall_arm_cn",
+    "y": 270
+   }
+  },
+  {
+   "when": {
+    "facing": "west",
+    "side": "left",
+    "bottom": "true",
+    "level": "false",
+    "end_up": "true",
+    "end_down": "false"
+   },
+   "apply": {
+    "model": "station_announcer:block/el_stair_stringer_cn",
+    "y": 270
+   }
+  },
+  {
+   "when": {
+    "facing": "west",
+    "side": "left",
+    "level": "false",
+    "end_up": "false",
+    "end_down": "true"
+   },
+   "apply": {
+    "model": "station_announcer:block/el_stair_wall_arm_nc",
+    "y": 270
+   }
+  },
+  {
+   "when": {
+    "facing": "west",
+    "side": "left",
+    "bottom": "true",
+    "level": "false",
+    "end_up": "false",
+    "end_down": "true"
+   },
+   "apply": {
+    "model": "station_announcer:block/el_stair_stringer_nc",
+    "y": 270
+   }
+  },
+  {
+   "when": {
+    "facing": "west",
+    "side": "left",
+    "level": "false",
+    "end_up": "false",
+    "end_down": "false"
+   },
+   "apply": {
+    "model": "station_announcer:block/el_stair_wall_arm_nn",
+    "y": 270
+   }
+  },
+  {
+   "when": {
+    "facing": "west",
+    "side": "left",
+    "bottom": "true",
+    "level": "false",
+    "end_up": "false",
+    "end_down": "false"
+   },
+   "apply": {
+    "model": "station_announcer:block/el_stair_stringer_nn",
+    "y": 270
+   }
+  },
+  {
+   "when": {
+    "facing": "west",
+    "side": "left",
+    "level": "true"
+   },
+   "apply": {
+    "model": "station_announcer:block/el_stair_wall_level",
+    "y": 270
+   }
+  },
+  {
+   "when": {
+    "facing": "west",
+    "side": "left",
+    "bottom": "true",
+    "top": "false"
+   },
+   "apply": {
+    "model": "station_announcer:block/el_stair_post_bottom",
+    "y": 270
+   }
+  },
+  {
+   "when": {
+    "facing": "west",
+    "side": "left",
+    "bottom": "false",
+    "top": "false"
+   },
+   "apply": {
+    "model": "station_announcer:block/el_stair_post_chain",
+    "y": 270
+   }
+  },
+  {
+   "when": {
+    "facing": "west",
+    "side": "left",
+    "bottom": "true",
+    "top": "true"
+   },
+   "apply": {
+    "model": "station_announcer:block/el_stair_post_bottom_top",
+    "y": 270
+   }
+  },
+  {
+   "when": {
+    "facing": "west",
+    "side": "left",
+    "bottom": "false",
+    "top": "true"
+   },
+   "apply": {
+    "model": "station_announcer:block/el_stair_post_chain_top",
+    "y": 270
+   }
+  },
+  {
+   "when": {
+    "facing": "west",
+    "side": "right",
+    "level": "true",
+    "end_up": "true",
+    "end_down": "true"
+   },
+   "apply": {
+    "model": "station_announcer:block/el_stair_wall_arm_lc_r",
+    "y": 270
+   }
+  },
+  {
+   "when": {
+    "facing": "west",
+    "side": "right",
+    "bottom": "true",
+    "level": "true",
+    "end_up": "true",
+    "end_down": "true"
+   },
+   "apply": {
+    "model": "station_announcer:block/el_stair_stringer_cc_r",
+    "y": 270
+   }
+  },
+  {
+   "when": {
+    "facing": "west",
+    "side": "right",
+    "level": "true",
+    "end_up": "true",
+    "end_down": "false"
+   },
+   "apply": {
+    "model": "station_announcer:block/el_stair_wall_arm_ln_r",
+    "y": 270
+   }
+  },
+  {
+   "when": {
+    "facing": "west",
+    "side": "right",
+    "bottom": "true",
+    "level": "true",
+    "end_up": "true",
+    "end_down": "false"
+   },
+   "apply": {
+    "model": "station_announcer:block/el_stair_stringer_cn_r",
+    "y": 270
+   }
+  },
+  {
+   "when": {
+    "facing": "west",
+    "side": "right",
+    "level": "true",
+    "end_up": "false",
+    "end_down": "true"
+   },
+   "apply": {
+    "model": "station_announcer:block/el_stair_wall_arm_lc_r",
+    "y": 270
+   }
+  },
+  {
+   "when": {
+    "facing": "west",
+    "side": "right",
+    "bottom": "true",
+    "level": "true",
+    "end_up": "false",
+    "end_down": "true"
+   },
+   "apply": {
+    "model": "station_announcer:block/el_stair_stringer_cc_r",
+    "y": 270
+   }
+  },
+  {
+   "when": {
+    "facing": "west",
+    "side": "right",
+    "level": "true",
+    "end_up": "false",
+    "end_down": "false"
+   },
+   "apply": {
+    "model": "station_announcer:block/el_stair_wall_arm_ln_r",
+    "y": 270
+   }
+  },
+  {
+   "when": {
+    "facing": "west",
+    "side": "right",
+    "bottom": "true",
+    "level": "true",
+    "end_up": "false",
+    "end_down": "false"
+   },
+   "apply": {
+    "model": "station_announcer:block/el_stair_stringer_cn_r",
+    "y": 270
+   }
+  },
+  {
+   "when": {
+    "facing": "west",
+    "side": "right",
+    "level": "false",
+    "end_up": "true",
+    "end_down": "true"
+   },
+   "apply": {
+    "model": "station_announcer:block/el_stair_wall_arm_cc_r",
+    "y": 270
+   }
+  },
+  {
+   "when": {
+    "facing": "west",
+    "side": "right",
+    "bottom": "true",
+    "level": "false",
+    "end_up": "true",
+    "end_down": "true"
+   },
+   "apply": {
+    "model": "station_announcer:block/el_stair_stringer_cc_r",
+    "y": 270
+   }
+  },
+  {
+   "when": {
+    "facing": "west",
+    "side": "right",
+    "level": "false",
+    "end_up": "true",
+    "end_down": "false"
+   },
+   "apply": {
+    "model": "station_announcer:block/el_stair_wall_arm_cn_r",
+    "y": 270
+   }
+  },
+  {
+   "when": {
+    "facing": "west",
+    "side": "right",
+    "bottom": "true",
+    "level": "false",
+    "end_up": "true",
+    "end_down": "false"
+   },
+   "apply": {
+    "model": "station_announcer:block/el_stair_stringer_cn_r",
+    "y": 270
+   }
+  },
+  {
+   "when": {
+    "facing": "west",
+    "side": "right",
+    "level": "false",
+    "end_up": "false",
+    "end_down": "true"
+   },
+   "apply": {
+    "model": "station_announcer:block/el_stair_wall_arm_nc_r",
+    "y": 270
+   }
+  },
+  {
+   "when": {
+    "facing": "west",
+    "side": "right",
+    "bottom": "true",
+    "level": "false",
+    "end_up": "false",
+    "end_down": "true"
+   },
+   "apply": {
+    "model": "station_announcer:block/el_stair_stringer_nc_r",
+    "y": 270
+   }
+  },
+  {
+   "when": {
+    "facing": "west",
+    "side": "right",
+    "level": "false",
+    "end_up": "false",
+    "end_down": "false"
+   },
+   "apply": {
+    "model": "station_announcer:block/el_stair_wall_arm_nn_r",
+    "y": 270
+   }
+  },
+  {
+   "when": {
+    "facing": "west",
+    "side": "right",
+    "bottom": "true",
+    "level": "false",
+    "end_up": "false",
+    "end_down": "false"
+   },
+   "apply": {
+    "model": "station_announcer:block/el_stair_stringer_nn_r",
+    "y": 270
+   }
+  },
+  {
+   "when": {
+    "facing": "west",
+    "side": "right",
+    "level": "true"
+   },
+   "apply": {
+    "model": "station_announcer:block/el_stair_wall_level_r",
+    "y": 270
+   }
+  },
+  {
+   "when": {
+    "facing": "west",
+    "side": "right",
+    "bottom": "true",
+    "top": "false"
+   },
+   "apply": {
+    "model": "station_announcer:block/el_stair_post_bottom_r",
+    "y": 270
+   }
+  },
+  {
+   "when": {
+    "facing": "west",
+    "side": "right",
+    "bottom": "false",
+    "top": "false"
+   },
+   "apply": {
+    "model": "station_announcer:block/el_stair_post_chain_r",
+    "y": 270
+   }
+  },
+  {
+   "when": {
+    "facing": "west",
+    "side": "right",
+    "bottom": "true",
+    "top": "true"
+   },
+   "apply": {
+    "model": "station_announcer:block/el_stair_post_bottom_top_r",
+    "y": 270
+   }
+  },
+  {
+   "when": {
+    "facing": "west",
+    "side": "right",
+    "bottom": "false",
+    "top": "true"
+   },
+   "apply": {
+    "model": "station_announcer:block/el_stair_post_chain_top_r",
+    "y": 270
+   }
+  }
+ ]
+}

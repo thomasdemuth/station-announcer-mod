@@ -1,0 +1,1443 @@
+{
+ "multipart": [
+  {
+   "when": {
+    "axis": "x",
+    "side": "pos",
+    "level": "0",
+    "join": "none|valley_pos|valley_neg"
+   },
+   "apply": {
+    "model": "station_announcer:block/el_roof_pos_0"
+   }
+  },
+  {
+   "when": {
+    "axis": "x",
+    "side": "pos",
+    "level": "0",
+    "join": "hip_pos"
+   },
+   "apply": {
+    "model": "station_announcer:block/el_roof_hip_pos_pos_0"
+   }
+  },
+  {
+   "when": {
+    "axis": "x",
+    "side": "pos",
+    "level": "0",
+    "join": "valley_pos"
+   },
+   "apply": {
+    "model": "station_announcer:block/el_roof_neg_0",
+    "y": 90
+   }
+  },
+  {
+   "when": {
+    "axis": "x",
+    "side": "pos",
+    "level": "0",
+    "join": "hip_neg"
+   },
+   "apply": {
+    "model": "station_announcer:block/el_roof_hip_pos_neg_0"
+   }
+  },
+  {
+   "when": {
+    "axis": "x",
+    "side": "pos",
+    "level": "0",
+    "join": "valley_neg"
+   },
+   "apply": {
+    "model": "station_announcer:block/el_roof_pos_0",
+    "y": 90
+   }
+  },
+  {
+   "when": {
+    "axis": "x",
+    "side": "pos",
+    "level": "0",
+    "end_neg": "true"
+   },
+   "apply": {
+    "model": "station_announcer:block/el_roof_end_pos_0_neg"
+   }
+  },
+  {
+   "when": {
+    "axis": "x",
+    "side": "pos",
+    "level": "0",
+    "end_pos": "true"
+   },
+   "apply": {
+    "model": "station_announcer:block/el_roof_end_pos_0_pos"
+   }
+  },
+  {
+   "when": {
+    "axis": "x",
+    "side": "neg",
+    "level": "0",
+    "join": "none|valley_pos|valley_neg"
+   },
+   "apply": {
+    "model": "station_announcer:block/el_roof_neg_0"
+   }
+  },
+  {
+   "when": {
+    "axis": "x",
+    "side": "neg",
+    "level": "0",
+    "join": "hip_pos"
+   },
+   "apply": {
+    "model": "station_announcer:block/el_roof_hip_neg_pos_0"
+   }
+  },
+  {
+   "when": {
+    "axis": "x",
+    "side": "neg",
+    "level": "0",
+    "join": "valley_pos"
+   },
+   "apply": {
+    "model": "station_announcer:block/el_roof_neg_0",
+    "y": 90
+   }
+  },
+  {
+   "when": {
+    "axis": "x",
+    "side": "neg",
+    "level": "0",
+    "join": "hip_neg"
+   },
+   "apply": {
+    "model": "station_announcer:block/el_roof_hip_neg_neg_0"
+   }
+  },
+  {
+   "when": {
+    "axis": "x",
+    "side": "neg",
+    "level": "0",
+    "join": "valley_neg"
+   },
+   "apply": {
+    "model": "station_announcer:block/el_roof_pos_0",
+    "y": 90
+   }
+  },
+  {
+   "when": {
+    "axis": "x",
+    "side": "neg",
+    "level": "0",
+    "end_neg": "true"
+   },
+   "apply": {
+    "model": "station_announcer:block/el_roof_end_neg_0_neg"
+   }
+  },
+  {
+   "when": {
+    "axis": "x",
+    "side": "neg",
+    "level": "0",
+    "end_pos": "true"
+   },
+   "apply": {
+    "model": "station_announcer:block/el_roof_end_neg_0_pos"
+   }
+  },
+  {
+   "when": {
+    "axis": "x",
+    "side": "crown",
+    "level": "0",
+    "join": "none|valley_pos|valley_neg"
+   },
+   "apply": {
+    "model": "station_announcer:block/el_roof_crown_0"
+   }
+  },
+  {
+   "when": {
+    "axis": "x",
+    "side": "crown",
+    "level": "0",
+    "join": "peak"
+   },
+   "apply": {
+    "model": "station_announcer:block/el_roof_peak_0"
+   }
+  },
+  {
+   "when": {
+    "axis": "x",
+    "side": "crown",
+    "level": "0",
+    "join": "peak"
+   },
+   "apply": {
+    "model": "station_announcer:block/el_roof_frieze_pair"
+   }
+  },
+  {
+   "when": {
+    "axis": "x",
+    "side": "crown",
+    "level": "0",
+    "join": "peak"
+   },
+   "apply": {
+    "model": "station_announcer:block/el_roof_frieze_pair",
+    "y": 90
+   }
+  },
+  {
+   "when": {
+    "axis": "x",
+    "side": "crown",
+    "level": "0",
+    "end_neg": "true"
+   },
+   "apply": {
+    "model": "station_announcer:block/el_roof_end_crown_0_neg"
+   }
+  },
+  {
+   "when": {
+    "axis": "x",
+    "side": "crown",
+    "level": "0",
+    "end_pos": "true"
+   },
+   "apply": {
+    "model": "station_announcer:block/el_roof_end_crown_0_pos"
+   }
+  },
+  {
+   "when": {
+    "axis": "x",
+    "side": "pos",
+    "level": "0",
+    "ridge": "true"
+   },
+   "apply": {
+    "model": "station_announcer:block/el_roof_ridge_pos_0"
+   }
+  },
+  {
+   "when": {
+    "axis": "x",
+    "side": "neg",
+    "level": "0",
+    "ridge": "true"
+   },
+   "apply": {
+    "model": "station_announcer:block/el_roof_ridge_neg_0"
+   }
+  },
+  {
+   "when": {
+    "axis": "x",
+    "side": "pos",
+    "level": "1",
+    "join": "none|valley_pos|valley_neg"
+   },
+   "apply": {
+    "model": "station_announcer:block/el_roof_pos_1"
+   }
+  },
+  {
+   "when": {
+    "axis": "x",
+    "side": "pos",
+    "level": "1",
+    "join": "hip_pos"
+   },
+   "apply": {
+    "model": "station_announcer:block/el_roof_hip_pos_pos_1"
+   }
+  },
+  {
+   "when": {
+    "axis": "x",
+    "side": "pos",
+    "level": "1",
+    "join": "valley_pos"
+   },
+   "apply": {
+    "model": "station_announcer:block/el_roof_neg_1",
+    "y": 90
+   }
+  },
+  {
+   "when": {
+    "axis": "x",
+    "side": "pos",
+    "level": "1",
+    "join": "hip_neg"
+   },
+   "apply": {
+    "model": "station_announcer:block/el_roof_hip_pos_neg_1"
+   }
+  },
+  {
+   "when": {
+    "axis": "x",
+    "side": "pos",
+    "level": "1",
+    "join": "valley_neg"
+   },
+   "apply": {
+    "model": "station_announcer:block/el_roof_pos_1",
+    "y": 90
+   }
+  },
+  {
+   "when": {
+    "axis": "x",
+    "side": "pos",
+    "level": "1",
+    "end_neg": "true"
+   },
+   "apply": {
+    "model": "station_announcer:block/el_roof_end_pos_1_neg"
+   }
+  },
+  {
+   "when": {
+    "axis": "x",
+    "side": "pos",
+    "level": "1",
+    "end_pos": "true"
+   },
+   "apply": {
+    "model": "station_announcer:block/el_roof_end_pos_1_pos"
+   }
+  },
+  {
+   "when": {
+    "axis": "x",
+    "side": "neg",
+    "level": "1",
+    "join": "none|valley_pos|valley_neg"
+   },
+   "apply": {
+    "model": "station_announcer:block/el_roof_neg_1"
+   }
+  },
+  {
+   "when": {
+    "axis": "x",
+    "side": "neg",
+    "level": "1",
+    "join": "hip_pos"
+   },
+   "apply": {
+    "model": "station_announcer:block/el_roof_hip_neg_pos_1"
+   }
+  },
+  {
+   "when": {
+    "axis": "x",
+    "side": "neg",
+    "level": "1",
+    "join": "valley_pos"
+   },
+   "apply": {
+    "model": "station_announcer:block/el_roof_neg_1",
+    "y": 90
+   }
+  },
+  {
+   "when": {
+    "axis": "x",
+    "side": "neg",
+    "level": "1",
+    "join": "hip_neg"
+   },
+   "apply": {
+    "model": "station_announcer:block/el_roof_hip_neg_neg_1"
+   }
+  },
+  {
+   "when": {
+    "axis": "x",
+    "side": "neg",
+    "level": "1",
+    "join": "valley_neg"
+   },
+   "apply": {
+    "model": "station_announcer:block/el_roof_pos_1",
+    "y": 90
+   }
+  },
+  {
+   "when": {
+    "axis": "x",
+    "side": "neg",
+    "level": "1",
+    "end_neg": "true"
+   },
+   "apply": {
+    "model": "station_announcer:block/el_roof_end_neg_1_neg"
+   }
+  },
+  {
+   "when": {
+    "axis": "x",
+    "side": "neg",
+    "level": "1",
+    "end_pos": "true"
+   },
+   "apply": {
+    "model": "station_announcer:block/el_roof_end_neg_1_pos"
+   }
+  },
+  {
+   "when": {
+    "axis": "x",
+    "side": "crown",
+    "level": "1",
+    "join": "none|valley_pos|valley_neg"
+   },
+   "apply": {
+    "model": "station_announcer:block/el_roof_crown_1"
+   }
+  },
+  {
+   "when": {
+    "axis": "x",
+    "side": "crown",
+    "level": "1",
+    "join": "peak"
+   },
+   "apply": {
+    "model": "station_announcer:block/el_roof_peak_1"
+   }
+  },
+  {
+   "when": {
+    "axis": "x",
+    "side": "crown",
+    "level": "1",
+    "end_neg": "true"
+   },
+   "apply": {
+    "model": "station_announcer:block/el_roof_end_crown_1_neg"
+   }
+  },
+  {
+   "when": {
+    "axis": "x",
+    "side": "crown",
+    "level": "1",
+    "end_pos": "true"
+   },
+   "apply": {
+    "model": "station_announcer:block/el_roof_end_crown_1_pos"
+   }
+  },
+  {
+   "when": {
+    "axis": "x",
+    "side": "pos",
+    "level": "1",
+    "ridge": "true"
+   },
+   "apply": {
+    "model": "station_announcer:block/el_roof_ridge_pos_1"
+   }
+  },
+  {
+   "when": {
+    "axis": "x",
+    "side": "neg",
+    "level": "1",
+    "ridge": "true"
+   },
+   "apply": {
+    "model": "station_announcer:block/el_roof_ridge_neg_1"
+   }
+  },
+  {
+   "when": {
+    "axis": "x",
+    "side": "pos",
+    "level": "2",
+    "join": "none|valley_pos|valley_neg"
+   },
+   "apply": {
+    "model": "station_announcer:block/el_roof_pos_2"
+   }
+  },
+  {
+   "when": {
+    "axis": "x",
+    "side": "pos",
+    "level": "2",
+    "join": "hip_pos"
+   },
+   "apply": {
+    "model": "station_announcer:block/el_roof_hip_pos_pos_2"
+   }
+  },
+  {
+   "when": {
+    "axis": "x",
+    "side": "pos",
+    "level": "2",
+    "join": "valley_pos"
+   },
+   "apply": {
+    "model": "station_announcer:block/el_roof_neg_2",
+    "y": 90
+   }
+  },
+  {
+   "when": {
+    "axis": "x",
+    "side": "pos",
+    "level": "2",
+    "join": "hip_neg"
+   },
+   "apply": {
+    "model": "station_announcer:block/el_roof_hip_pos_neg_2"
+   }
+  },
+  {
+   "when": {
+    "axis": "x",
+    "side": "pos",
+    "level": "2",
+    "join": "valley_neg"
+   },
+   "apply": {
+    "model": "station_announcer:block/el_roof_pos_2",
+    "y": 90
+   }
+  },
+  {
+   "when": {
+    "axis": "x",
+    "side": "pos",
+    "level": "2",
+    "end_neg": "true"
+   },
+   "apply": {
+    "model": "station_announcer:block/el_roof_end_pos_2_neg"
+   }
+  },
+  {
+   "when": {
+    "axis": "x",
+    "side": "pos",
+    "level": "2",
+    "end_pos": "true"
+   },
+   "apply": {
+    "model": "station_announcer:block/el_roof_end_pos_2_pos"
+   }
+  },
+  {
+   "when": {
+    "axis": "x",
+    "side": "neg",
+    "level": "2",
+    "join": "none|valley_pos|valley_neg"
+   },
+   "apply": {
+    "model": "station_announcer:block/el_roof_neg_2"
+   }
+  },
+  {
+   "when": {
+    "axis": "x",
+    "side": "neg",
+    "level": "2",
+    "join": "hip_pos"
+   },
+   "apply": {
+    "model": "station_announcer:block/el_roof_hip_neg_pos_2"
+   }
+  },
+  {
+   "when": {
+    "axis": "x",
+    "side": "neg",
+    "level": "2",
+    "join": "valley_pos"
+   },
+   "apply": {
+    "model": "station_announcer:block/el_roof_neg_2",
+    "y": 90
+   }
+  },
+  {
+   "when": {
+    "axis": "x",
+    "side": "neg",
+    "level": "2",
+    "join": "hip_neg"
+   },
+   "apply": {
+    "model": "station_announcer:block/el_roof_hip_neg_neg_2"
+   }
+  },
+  {
+   "when": {
+    "axis": "x",
+    "side": "neg",
+    "level": "2",
+    "join": "valley_neg"
+   },
+   "apply": {
+    "model": "station_announcer:block/el_roof_pos_2",
+    "y": 90
+   }
+  },
+  {
+   "when": {
+    "axis": "x",
+    "side": "neg",
+    "level": "2",
+    "end_neg": "true"
+   },
+   "apply": {
+    "model": "station_announcer:block/el_roof_end_neg_2_neg"
+   }
+  },
+  {
+   "when": {
+    "axis": "x",
+    "side": "neg",
+    "level": "2",
+    "end_pos": "true"
+   },
+   "apply": {
+    "model": "station_announcer:block/el_roof_end_neg_2_pos"
+   }
+  },
+  {
+   "when": {
+    "axis": "x",
+    "side": "crown",
+    "level": "2",
+    "join": "none|valley_pos|valley_neg"
+   },
+   "apply": {
+    "model": "station_announcer:block/el_roof_crown_2"
+   }
+  },
+  {
+   "when": {
+    "axis": "x",
+    "side": "crown",
+    "level": "2",
+    "join": "peak"
+   },
+   "apply": {
+    "model": "station_announcer:block/el_roof_peak_2"
+   }
+  },
+  {
+   "when": {
+    "axis": "x",
+    "side": "crown",
+    "level": "2",
+    "end_neg": "true"
+   },
+   "apply": {
+    "model": "station_announcer:block/el_roof_end_crown_2_neg"
+   }
+  },
+  {
+   "when": {
+    "axis": "x",
+    "side": "crown",
+    "level": "2",
+    "end_pos": "true"
+   },
+   "apply": {
+    "model": "station_announcer:block/el_roof_end_crown_2_pos"
+   }
+  },
+  {
+   "when": {
+    "axis": "x",
+    "side": "pos",
+    "level": "2",
+    "ridge": "true"
+   },
+   "apply": {
+    "model": "station_announcer:block/el_roof_ridge_pos_2"
+   }
+  },
+  {
+   "when": {
+    "axis": "x",
+    "side": "neg",
+    "level": "2",
+    "ridge": "true"
+   },
+   "apply": {
+    "model": "station_announcer:block/el_roof_ridge_neg_2"
+   }
+  },
+  {
+   "when": {
+    "axis": "z",
+    "side": "pos",
+    "level": "0",
+    "join": "none|valley_pos|valley_neg"
+   },
+   "apply": {
+    "model": "station_announcer:block/el_roof_pos_0",
+    "y": 90
+   }
+  },
+  {
+   "when": {
+    "axis": "z",
+    "side": "pos",
+    "level": "0",
+    "join": "hip_pos"
+   },
+   "apply": {
+    "model": "station_announcer:block/el_roof_hip_pos_pos_0",
+    "y": 90
+   }
+  },
+  {
+   "when": {
+    "axis": "z",
+    "side": "pos",
+    "level": "0",
+    "join": "valley_pos"
+   },
+   "apply": {
+    "model": "station_announcer:block/el_roof_neg_0",
+    "y": 180
+   }
+  },
+  {
+   "when": {
+    "axis": "z",
+    "side": "pos",
+    "level": "0",
+    "join": "hip_neg"
+   },
+   "apply": {
+    "model": "station_announcer:block/el_roof_hip_pos_neg_0",
+    "y": 90
+   }
+  },
+  {
+   "when": {
+    "axis": "z",
+    "side": "pos",
+    "level": "0",
+    "join": "valley_neg"
+   },
+   "apply": {
+    "model": "station_announcer:block/el_roof_pos_0",
+    "y": 180
+   }
+  },
+  {
+   "when": {
+    "axis": "z",
+    "side": "pos",
+    "level": "0",
+    "end_neg": "true"
+   },
+   "apply": {
+    "model": "station_announcer:block/el_roof_end_pos_0_neg",
+    "y": 90
+   }
+  },
+  {
+   "when": {
+    "axis": "z",
+    "side": "pos",
+    "level": "0",
+    "end_pos": "true"
+   },
+   "apply": {
+    "model": "station_announcer:block/el_roof_end_pos_0_pos",
+    "y": 90
+   }
+  },
+  {
+   "when": {
+    "axis": "z",
+    "side": "neg",
+    "level": "0",
+    "join": "none|valley_pos|valley_neg"
+   },
+   "apply": {
+    "model": "station_announcer:block/el_roof_neg_0",
+    "y": 90
+   }
+  },
+  {
+   "when": {
+    "axis": "z",
+    "side": "neg",
+    "level": "0",
+    "join": "hip_pos"
+   },
+   "apply": {
+    "model": "station_announcer:block/el_roof_hip_neg_pos_0",
+    "y": 90
+   }
+  },
+  {
+   "when": {
+    "axis": "z",
+    "side": "neg",
+    "level": "0",
+    "join": "valley_pos"
+   },
+   "apply": {
+    "model": "station_announcer:block/el_roof_neg_0",
+    "y": 180
+   }
+  },
+  {
+   "when": {
+    "axis": "z",
+    "side": "neg",
+    "level": "0",
+    "join": "hip_neg"
+   },
+   "apply": {
+    "model": "station_announcer:block/el_roof_hip_neg_neg_0",
+    "y": 90
+   }
+  },
+  {
+   "when": {
+    "axis": "z",
+    "side": "neg",
+    "level": "0",
+    "join": "valley_neg"
+   },
+   "apply": {
+    "model": "station_announcer:block/el_roof_pos_0",
+    "y": 180
+   }
+  },
+  {
+   "when": {
+    "axis": "z",
+    "side": "neg",
+    "level": "0",
+    "end_neg": "true"
+   },
+   "apply": {
+    "model": "station_announcer:block/el_roof_end_neg_0_neg",
+    "y": 90
+   }
+  },
+  {
+   "when": {
+    "axis": "z",
+    "side": "neg",
+    "level": "0",
+    "end_pos": "true"
+   },
+   "apply": {
+    "model": "station_announcer:block/el_roof_end_neg_0_pos",
+    "y": 90
+   }
+  },
+  {
+   "when": {
+    "axis": "z",
+    "side": "crown",
+    "level": "0",
+    "join": "none|valley_pos|valley_neg"
+   },
+   "apply": {
+    "model": "station_announcer:block/el_roof_crown_0",
+    "y": 90
+   }
+  },
+  {
+   "when": {
+    "axis": "z",
+    "side": "crown",
+    "level": "0",
+    "join": "peak"
+   },
+   "apply": {
+    "model": "station_announcer:block/el_roof_peak_0",
+    "y": 90
+   }
+  },
+  {
+   "when": {
+    "axis": "z",
+    "side": "crown",
+    "level": "0",
+    "join": "peak"
+   },
+   "apply": {
+    "model": "station_announcer:block/el_roof_frieze_pair",
+    "y": 90
+   }
+  },
+  {
+   "when": {
+    "axis": "z",
+    "side": "crown",
+    "level": "0",
+    "join": "peak"
+   },
+   "apply": {
+    "model": "station_announcer:block/el_roof_frieze_pair",
+    "y": 180
+   }
+  },
+  {
+   "when": {
+    "axis": "z",
+    "side": "crown",
+    "level": "0",
+    "end_neg": "true"
+   },
+   "apply": {
+    "model": "station_announcer:block/el_roof_end_crown_0_neg",
+    "y": 90
+   }
+  },
+  {
+   "when": {
+    "axis": "z",
+    "side": "crown",
+    "level": "0",
+    "end_pos": "true"
+   },
+   "apply": {
+    "model": "station_announcer:block/el_roof_end_crown_0_pos",
+    "y": 90
+   }
+  },
+  {
+   "when": {
+    "axis": "z",
+    "side": "pos",
+    "level": "0",
+    "ridge": "true"
+   },
+   "apply": {
+    "model": "station_announcer:block/el_roof_ridge_pos_0",
+    "y": 90
+   }
+  },
+  {
+   "when": {
+    "axis": "z",
+    "side": "neg",
+    "level": "0",
+    "ridge": "true"
+   },
+   "apply": {
+    "model": "station_announcer:block/el_roof_ridge_neg_0",
+    "y": 90
+   }
+  },
+  {
+   "when": {
+    "axis": "z",
+    "side": "pos",
+    "level": "1",
+    "join": "none|valley_pos|valley_neg"
+   },
+   "apply": {
+    "model": "station_announcer:block/el_roof_pos_1",
+    "y": 90
+   }
+  },
+  {
+   "when": {
+    "axis": "z",
+    "side": "pos",
+    "level": "1",
+    "join": "hip_pos"
+   },
+   "apply": {
+    "model": "station_announcer:block/el_roof_hip_pos_pos_1",
+    "y": 90
+   }
+  },
+  {
+   "when": {
+    "axis": "z",
+    "side": "pos",
+    "level": "1",
+    "join": "valley_pos"
+   },
+   "apply": {
+    "model": "station_announcer:block/el_roof_neg_1",
+    "y": 180
+   }
+  },
+  {
+   "when": {
+    "axis": "z",
+    "side": "pos",
+    "level": "1",
+    "join": "hip_neg"
+   },
+   "apply": {
+    "model": "station_announcer:block/el_roof_hip_pos_neg_1",
+    "y": 90
+   }
+  },
+  {
+   "when": {
+    "axis": "z",
+    "side": "pos",
+    "level": "1",
+    "join": "valley_neg"
+   },
+   "apply": {
+    "model": "station_announcer:block/el_roof_pos_1",
+    "y": 180
+   }
+  },
+  {
+   "when": {
+    "axis": "z",
+    "side": "pos",
+    "level": "1",
+    "end_neg": "true"
+   },
+   "apply": {
+    "model": "station_announcer:block/el_roof_end_pos_1_neg",
+    "y": 90
+   }
+  },
+  {
+   "when": {
+    "axis": "z",
+    "side": "pos",
+    "level": "1",
+    "end_pos": "true"
+   },
+   "apply": {
+    "model": "station_announcer:block/el_roof_end_pos_1_pos",
+    "y": 90
+   }
+  },
+  {
+   "when": {
+    "axis": "z",
+    "side": "neg",
+    "level": "1",
+    "join": "none|valley_pos|valley_neg"
+   },
+   "apply": {
+    "model": "station_announcer:block/el_roof_neg_1",
+    "y": 90
+   }
+  },
+  {
+   "when": {
+    "axis": "z",
+    "side": "neg",
+    "level": "1",
+    "join": "hip_pos"
+   },
+   "apply": {
+    "model": "station_announcer:block/el_roof_hip_neg_pos_1",
+    "y": 90
+   }
+  },
+  {
+   "when": {
+    "axis": "z",
+    "side": "neg",
+    "level": "1",
+    "join": "valley_pos"
+   },
+   "apply": {
+    "model": "station_announcer:block/el_roof_neg_1",
+    "y": 180
+   }
+  },
+  {
+   "when": {
+    "axis": "z",
+    "side": "neg",
+    "level": "1",
+    "join": "hip_neg"
+   },
+   "apply": {
+    "model": "station_announcer:block/el_roof_hip_neg_neg_1",
+    "y": 90
+   }
+  },
+  {
+   "when": {
+    "axis": "z",
+    "side": "neg",
+    "level": "1",
+    "join": "valley_neg"
+   },
+   "apply": {
+    "model": "station_announcer:block/el_roof_pos_1",
+    "y": 180
+   }
+  },
+  {
+   "when": {
+    "axis": "z",
+    "side": "neg",
+    "level": "1",
+    "end_neg": "true"
+   },
+   "apply": {
+    "model": "station_announcer:block/el_roof_end_neg_1_neg",
+    "y": 90
+   }
+  },
+  {
+   "when": {
+    "axis": "z",
+    "side": "neg",
+    "level": "1",
+    "end_pos": "true"
+   },
+   "apply": {
+    "model": "station_announcer:block/el_roof_end_neg_1_pos",
+    "y": 90
+   }
+  },
+  {
+   "when": {
+    "axis": "z",
+    "side": "crown",
+    "level": "1",
+    "join": "none|valley_pos|valley_neg"
+   },
+   "apply": {
+    "model": "station_announcer:block/el_roof_crown_1",
+    "y": 90
+   }
+  },
+  {
+   "when": {
+    "axis": "z",
+    "side": "crown",
+    "level": "1",
+    "join": "peak"
+   },
+   "apply": {
+    "model": "station_announcer:block/el_roof_peak_1",
+    "y": 90
+   }
+  },
+  {
+   "when": {
+    "axis": "z",
+    "side": "crown",
+    "level": "1",
+    "end_neg": "true"
+   },
+   "apply": {
+    "model": "station_announcer:block/el_roof_end_crown_1_neg",
+    "y": 90
+   }
+  },
+  {
+   "when": {
+    "axis": "z",
+    "side": "crown",
+    "level": "1",
+    "end_pos": "true"
+   },
+   "apply": {
+    "model": "station_announcer:block/el_roof_end_crown_1_pos",
+    "y": 90
+   }
+  },
+  {
+   "when": {
+    "axis": "z",
+    "side": "pos",
+    "level": "1",
+    "ridge": "true"
+   },
+   "apply": {
+    "model": "station_announcer:block/el_roof_ridge_pos_1",
+    "y": 90
+   }
+  },
+  {
+   "when": {
+    "axis": "z",
+    "side": "neg",
+    "level": "1",
+    "ridge": "true"
+   },
+   "apply": {
+    "model": "station_announcer:block/el_roof_ridge_neg_1",
+    "y": 90
+   }
+  },
+  {
+   "when": {
+    "axis": "z",
+    "side": "pos",
+    "level": "2",
+    "join": "none|valley_pos|valley_neg"
+   },
+   "apply": {
+    "model": "station_announcer:block/el_roof_pos_2",
+    "y": 90
+   }
+  },
+  {
+   "when": {
+    "axis": "z",
+    "side": "pos",
+    "level": "2",
+    "join": "hip_pos"
+   },
+   "apply": {
+    "model": "station_announcer:block/el_roof_hip_pos_pos_2",
+    "y": 90
+   }
+  },
+  {
+   "when": {
+    "axis": "z",
+    "side": "pos",
+    "level": "2",
+    "join": "valley_pos"
+   },
+   "apply": {
+    "model": "station_announcer:block/el_roof_neg_2",
+    "y": 180
+   }
+  },
+  {
+   "when": {
+    "axis": "z",
+    "side": "pos",
+    "level": "2",
+    "join": "hip_neg"
+   },
+   "apply": {
+    "model": "station_announcer:block/el_roof_hip_pos_neg_2",
+    "y": 90
+   }
+  },
+  {
+   "when": {
+    "axis": "z",
+    "side": "pos",
+    "level": "2",
+    "join": "valley_neg"
+   },
+   "apply": {
+    "model": "station_announcer:block/el_roof_pos_2",
+    "y": 180
+   }
+  },
+  {
+   "when": {
+    "axis": "z",
+    "side": "pos",
+    "level": "2",
+    "end_neg": "true"
+   },
+   "apply": {
+    "model": "station_announcer:block/el_roof_end_pos_2_neg",
+    "y": 90
+   }
+  },
+  {
+   "when": {
+    "axis": "z",
+    "side": "pos",
+    "level": "2",
+    "end_pos": "true"
+   },
+   "apply": {
+    "model": "station_announcer:block/el_roof_end_pos_2_pos",
+    "y": 90
+   }
+  },
+  {
+   "when": {
+    "axis": "z",
+    "side": "neg",
+    "level": "2",
+    "join": "none|valley_pos|valley_neg"
+   },
+   "apply": {
+    "model": "station_announcer:block/el_roof_neg_2",
+    "y": 90
+   }
+  },
+  {
+   "when": {
+    "axis": "z",
+    "side": "neg",
+    "level": "2",
+    "join": "hip_pos"
+   },
+   "apply": {
+    "model": "station_announcer:block/el_roof_hip_neg_pos_2",
+    "y": 90
+   }
+  },
+  {
+   "when": {
+    "axis": "z",
+    "side": "neg",
+    "level": "2",
+    "join": "valley_pos"
+   },
+   "apply": {
+    "model": "station_announcer:block/el_roof_neg_2",
+    "y": 180
+   }
+  },
+  {
+   "when": {
+    "axis": "z",
+    "side": "neg",
+    "level": "2",
+    "join": "hip_neg"
+   },
+   "apply": {
+    "model": "station_announcer:block/el_roof_hip_neg_neg_2",
+    "y": 90
+   }
+  },
+  {
+   "when": {
+    "axis": "z",
+    "side": "neg",
+    "level": "2",
+    "join": "valley_neg"
+   },
+   "apply": {
+    "model": "station_announcer:block/el_roof_pos_2",
+    "y": 180
+   }
+  },
+  {
+   "when": {
+    "axis": "z",
+    "side": "neg",
+    "level": "2",
+    "end_neg": "true"
+   },
+   "apply": {
+    "model": "station_announcer:block/el_roof_end_neg_2_neg",
+    "y": 90
+   }
+  },
+  {
+   "when": {
+    "axis": "z",
+    "side": "neg",
+    "level": "2",
+    "end_pos": "true"
+   },
+   "apply": {
+    "model": "station_announcer:block/el_roof_end_neg_2_pos",
+    "y": 90
+   }
+  },
+  {
+   "when": {
+    "axis": "z",
+    "side": "crown",
+    "level": "2",
+    "join": "none|valley_pos|valley_neg"
+   },
+   "apply": {
+    "model": "station_announcer:block/el_roof_crown_2",
+    "y": 90
+   }
+  },
+  {
+   "when": {
+    "axis": "z",
+    "side": "crown",
+    "level": "2",
+    "join": "peak"
+   },
+   "apply": {
+    "model": "station_announcer:block/el_roof_peak_2",
+    "y": 90
+   }
+  },
+  {
+   "when": {
+    "axis": "z",
+    "side": "crown",
+    "level": "2",
+    "end_neg": "true"
+   },
+   "apply": {
+    "model": "station_announcer:block/el_roof_end_crown_2_neg",
+    "y": 90
+   }
+  },
+  {
+   "when": {
+    "axis": "z",
+    "side": "crown",
+    "level": "2",
+    "end_pos": "true"
+   },
+   "apply": {
+    "model": "station_announcer:block/el_roof_end_crown_2_pos",
+    "y": 90
+   }
+  },
+  {
+   "when": {
+    "axis": "z",
+    "side": "pos",
+    "level": "2",
+    "ridge": "true"
+   },
+   "apply": {
+    "model": "station_announcer:block/el_roof_ridge_pos_2",
+    "y": 90
+   }
+  },
+  {
+   "when": {
+    "axis": "z",
+    "side": "neg",
+    "level": "2",
+    "ridge": "true"
+   },
+   "apply": {
+    "model": "station_announcer:block/el_roof_ridge_neg_2",
+    "y": 90
+   }
+  }
+ ]
+}

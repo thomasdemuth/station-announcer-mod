@@ -1,0 +1,24 @@
+{
+ "type": "minecraft:crafting_shaped",
+ "category": "building",
+ "key": {
+  "R": {
+   "item": "minecraft:red_terracotta"
+  },
+  "I": {
+   "item": "minecraft:iron_bars"
+  },
+  "D": {
+   "item": "minecraft:green_dye"
+  }
+ },
+ "pattern": [
+  "RR ",
+  "IRR",
+  "DI "
+ ],
+ "result": {
+  "item": "station_announcer:el_stair_roof",
+  "count": 4
+ }
+}

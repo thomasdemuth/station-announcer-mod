@@ -1,0 +1,6 @@
+{
+ "parent": "minecraft:item/generated",
+ "textures": {
+  "layer0": "station_announcer:item/el_platform_lamp_head"
+ }
+}

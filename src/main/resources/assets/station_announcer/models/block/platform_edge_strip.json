@@ -1,0 +1,67 @@
+{
+  "textures": {
+    "strip": "station_announcer:block/platform_edge_strip",
+    "particle": "station_announcer:block/platform_edge_strip"
+  },
+  "elements": [
+    {
+      "from": [
+        0,
+        16,
+        0
+      ],
+      "to": [
+        16,
+        16.5,
+        10
+      ],
+      "faces": {
+        "up": {
+          "uv": [
+            0,
+            0,
+            16,
+            10
+          ],
+          "texture": "#strip"
+        },
+        "north": {
+          "uv": [
+            0,
+            10,
+            16,
+            10.5
+          ],
+          "texture": "#strip"
+        },
+        "south": {
+          "uv": [
+            0,
+            10,
+            16,
+            10.5
+          ],
+          "texture": "#strip"
+        },
+        "east": {
+          "uv": [
+            0,
+            10,
+            10,
+            10.5
+          ],
+          "texture": "#strip"
+        },
+        "west": {
+          "uv": [
+            0,
+            10,
+            10,
+            10.5
+          ],
+          "texture": "#strip"
+        }
+      }
+    }
+  ]
+}

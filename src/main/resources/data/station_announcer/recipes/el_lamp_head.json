@@ -1,18 +1,20 @@
 {
-  "type": "minecraft:crafting_shapeless",
-  "category": "building",
-  "ingredients": [
-    {
-      "item": "minecraft:iron_ingot"
-    },
-    {
-      "item": "minecraft:glowstone_dust"
-    },
-    {
-      "item": "minecraft:green_dye"
-    }
-  ],
-  "result": {
-    "item": "station_announcer:el_lamp_head"
+ "type": "minecraft:crafting_shaped",
+ "category": "building",
+ "key": {
+  "I": {
+   "item": "minecraft:iron_ingot"
+  },
+  "G": {
+   "item": "minecraft:glowstone_dust"
   }
+ },
+ "pattern": [
+  "III",
+  " G "
+ ],
+ "result": {
+  "item": "station_announcer:el_lamp_head",
+  "count": 2
+ }
 }

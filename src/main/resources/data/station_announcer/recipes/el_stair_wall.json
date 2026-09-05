@@ -1,0 +1,21 @@
+{
+ "type": "minecraft:crafting_shaped",
+ "category": "building",
+ "key": {
+  "P": {
+   "item": "minecraft:birch_planks"
+  },
+  "I": {
+   "item": "minecraft:iron_ingot"
+  }
+ },
+ "pattern": [
+  "IP ",
+  "IPI",
+  " PI"
+ ],
+ "result": {
+  "item": "station_announcer:el_stair_wall",
+  "count": 4
+ }
+}

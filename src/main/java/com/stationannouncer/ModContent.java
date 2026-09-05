@@ -6,6 +6,10 @@ import com.stationannouncer.block.AnnouncerBlock;
 import com.stationannouncer.block.AnnouncerBlockEntity;
 import com.stationannouncer.block.ControlBoxBlock;
 import com.stationannouncer.block.ConcreteFloorBlock;
+import com.stationannouncer.block.ElRailingBlock;
+import com.stationannouncer.block.ElRoofBlock;
+import com.stationannouncer.block.ElRoofLightBlock;
+import com.stationannouncer.block.ElWallBlock;
 import com.stationannouncer.block.ControlBoxBlockEntity;
 import com.stationannouncer.block.BenchBlock;
 import com.stationannouncer.block.DecorBlock;
@@ -141,7 +145,7 @@ public final class ModContent {
      * three widths are separate blocks purely so the slab size can be chosen
      * per area; they share every texture and model.
      */
-    private static AbstractBlock.Settings floorSettings() {
+    public static AbstractBlock.Settings floorSettings() {
         return AbstractBlock.Settings.create().strength(1.6f, 6.0f).sounds(BlockSoundGroup.STONE);
     }
 
@@ -149,15 +153,17 @@ public final class ModContent {
     public static final Block PLATFORM_TILE_FLOOR_CLEAN = new Block(floorSettings());
 
     /** Concrete slab floors, indexed alongside SLAB_WIDTHS - keep the orders in step. */
-    public static final int[] SLAB_WIDTHS = {2, 3, 4};
+    public static final int[] SLAB_WIDTHS = {1, 2, 3, 4};
     public static final ConcreteFloorBlock[] PLATFORM_CONCRETE_FLOOR = {
-            new ConcreteFloorBlock(floorSettings(), 2),
-            new ConcreteFloorBlock(floorSettings(), 3),
-            new ConcreteFloorBlock(floorSettings(), 4)};
+            new ConcreteFloorBlock(floorSettings(), 1, false),
+            new ConcreteFloorBlock(floorSettings(), 2, false),
+            new ConcreteFloorBlock(floorSettings(), 3, false),
+            new ConcreteFloorBlock(floorSettings(), 4, false)};
     public static final ConcreteFloorBlock[] PLATFORM_CONCRETE_FLOOR_CLEAN = {
-            new ConcreteFloorBlock(floorSettings(), 2),
-            new ConcreteFloorBlock(floorSettings(), 3),
-            new ConcreteFloorBlock(floorSettings(), 4)};
+            new ConcreteFloorBlock(floorSettings(), 1, true),
+            new ConcreteFloorBlock(floorSettings(), 2, true),
+            new ConcreteFloorBlock(floorSettings(), 3, true),
+            new ConcreteFloorBlock(floorSettings(), 4, true)};
 
     /**
      * Trackside warning plates. The GATE variant sits on the block centre
@@ -211,6 +217,79 @@ public final class ModContent {
     public static final BlockItem ENTRANCE_RAILING_ITEM = new BlockItem(ENTRANCE_RAILING, new Item.Settings());
     public static final BlockItem BENCH_ITEM = new BlockItem(BENCH, new Item.Settings());
     public static final BlockItem PLATFORM_BARRIER_ITEM = new BlockItem(PLATFORM_BARRIER, new Item.Settings());
+
+    /** NYC elevated station kit v2 (tools/gen_el2_assets.py). */
+    public static final ElRoofBlock EL_ROOF = new ElRoofBlock(
+            AbstractBlock.Settings.create().strength(2.0f, 6.0f).sounds(BlockSoundGroup.METAL).nonOpaque());
+    public static final BlockItem EL_ROOF_ITEM = new BlockItem(EL_ROOF, new Item.Settings());
+    public static final ElRailingBlock EL_RAILING = new ElRailingBlock(
+            AbstractBlock.Settings.create().strength(2.0f, 6.0f).sounds(BlockSoundGroup.METAL).nonOpaque());
+    public static final BlockItem EL_RAILING_ITEM = new com.stationannouncer.item.EdgeRunItem(EL_RAILING, new Item.Settings());
+    public static final ElWallBlock EL_WALL = new ElWallBlock(
+            AbstractBlock.Settings.create().strength(2.0f, 6.0f).sounds(BlockSoundGroup.METAL).nonOpaque());
+    public static final ElWallBlock EL_WALL_GLASS = new ElWallBlock(
+            AbstractBlock.Settings.create().strength(2.0f, 6.0f).sounds(BlockSoundGroup.GLASS).nonOpaque());
+    public static final ElWallBlock EL_WALL_CREAM = new ElWallBlock(
+            AbstractBlock.Settings.create().strength(2.0f, 6.0f).sounds(BlockSoundGroup.METAL).nonOpaque());
+    public static final ElWallBlock EL_WALL_GREEN = new ElWallBlock(
+            AbstractBlock.Settings.create().strength(2.0f, 6.0f).sounds(BlockSoundGroup.METAL).nonOpaque());
+    public static final ElWallBlock EL_WALL_DOORWAY = new com.stationannouncer.block.ElWallDoorwayBlock(
+            AbstractBlock.Settings.create().strength(2.0f, 6.0f).sounds(BlockSoundGroup.METAL).nonOpaque());
+    public static final BlockItem EL_WALL_DOORWAY_ITEM = new com.stationannouncer.item.EdgeRunItem(EL_WALL_DOORWAY, new Item.Settings());
+    public static final BlockItem EL_WALL_CREAM_ITEM = new com.stationannouncer.item.EdgeRunItem(EL_WALL_CREAM, new Item.Settings());
+    public static final BlockItem EL_WALL_GREEN_ITEM = new com.stationannouncer.item.EdgeRunItem(EL_WALL_GREEN, new Item.Settings());
+    public static final BlockItem EL_WALL_ITEM = new com.stationannouncer.item.EdgeRunItem(EL_WALL, new Item.Settings());
+    public static final BlockItem EL_WALL_GLASS_ITEM = new com.stationannouncer.item.EdgeRunItem(EL_WALL_GLASS, new Item.Settings());
+    public static final FacingDecorBlock EL_LAMP_HEAD = new FacingDecorBlock(
+            AbstractBlock.Settings.create().strength(1.0f).sounds(BlockSoundGroup.METAL).nonOpaque().luminance(state -> 14),
+            Block.createCuboidShape(2.0, 0.0, 0.0, 14.0, 13.0, 8.0));
+    public static final BlockItem EL_LAMP_HEAD_ITEM = new BlockItem(EL_LAMP_HEAD, new Item.Settings());
+    public static final ElRoofLightBlock EL_ROOF_LIGHT = new ElRoofLightBlock(
+            AbstractBlock.Settings.create().strength(1.0f).sounds(BlockSoundGroup.METAL).nonOpaque().luminance(state -> 15),
+            Block.createCuboidShape(6.0, 11.0, 0.0, 10.0, 16.0, 16.0));
+    public static final BlockItem EL_ROOF_LIGHT_ITEM = new BlockItem(EL_ROOF_LIGHT, new Item.Settings());
+    /** El stair family (tools/gen_el2_stairs.py): sloped side courses beside subway_stairs + sloped roof. */
+    public static final com.stationannouncer.block.ElStairSideBlock EL_STAIR_RAILING = new com.stationannouncer.block.ElStairSideBlock(
+            AbstractBlock.Settings.create().strength(2.0f, 6.0f).sounds(BlockSoundGroup.METAL).nonOpaque());
+    public static final com.stationannouncer.block.ElStairSideBlock EL_STAIR_WALL = new com.stationannouncer.block.ElStairSideBlock(
+            AbstractBlock.Settings.create().strength(2.0f, 6.0f).sounds(BlockSoundGroup.METAL).nonOpaque());
+    public static final com.stationannouncer.block.ElStairSideBlock EL_STAIR_WALL_GLASS = new com.stationannouncer.block.ElStairSideBlock(
+            AbstractBlock.Settings.create().strength(2.0f, 6.0f).sounds(BlockSoundGroup.GLASS).nonOpaque());
+    public static final com.stationannouncer.block.ElStairRoofBlock EL_STAIR_ROOF = new com.stationannouncer.block.ElStairRoofBlock(
+            AbstractBlock.Settings.create().strength(2.0f, 6.0f).sounds(BlockSoundGroup.METAL).nonOpaque());
+    public static final com.stationannouncer.block.ElStairSideBlock EL_STAIR_OPEN = new com.stationannouncer.block.ElStairSideBlock(
+            AbstractBlock.Settings.create().strength(2.0f, 6.0f).sounds(BlockSoundGroup.METAL).nonOpaque());
+    public static final BlockItem EL_STAIR_OPEN_ITEM = new com.stationannouncer.item.ElStairSideItem(EL_STAIR_OPEN, new Item.Settings());
+    public static final BlockItem EL_STAIR_RAILING_ITEM = new com.stationannouncer.item.ElStairSideItem(EL_STAIR_RAILING, new Item.Settings());
+    public static final BlockItem EL_STAIR_WALL_ITEM = new com.stationannouncer.item.ElStairSideItem(EL_STAIR_WALL, new Item.Settings());
+    public static final BlockItem EL_STAIR_WALL_GLASS_ITEM = new com.stationannouncer.item.ElStairSideItem(EL_STAIR_WALL_GLASS, new Item.Settings());
+    public static final BlockItem EL_STAIR_ROOF_ITEM = new BlockItem(EL_STAIR_ROOF, new Item.Settings());
+    public static final com.stationannouncer.block.ElLandingRoofBlock EL_LANDING_ROOF = new com.stationannouncer.block.ElLandingRoofBlock(
+            AbstractBlock.Settings.create().strength(2.0f, 6.0f).sounds(BlockSoundGroup.METAL).nonOpaque());
+    public static final BlockItem EL_LANDING_ROOF_ITEM = new BlockItem(EL_LANDING_ROOF, new Item.Settings());
+    /** Thin steel landing deck: walkable top slab, clearance below (tools/gen_el2_stairs.py). */
+    public static final com.stationannouncer.block.DecorBlock EL_STAIR_LANDING = new com.stationannouncer.block.DecorBlock(
+            AbstractBlock.Settings.create().strength(2.0f, 6.0f).sounds(BlockSoundGroup.METAL).nonOpaque(),
+            Block.createCuboidShape(0.0, 11.0, 0.0, 16.0, 16.0, 16.0));
+    public static final BlockItem EL_STAIR_LANDING_ITEM = new BlockItem(EL_STAIR_LANDING, new Item.Settings());
+    /** El kit v2 STRUCTURE (tools/gen_el2_structure.py): street columns, plate girder with knee braces, decks. */
+    public static final com.stationannouncer.mtr.ColumnBlock EL_STREET_COLUMN = new com.stationannouncer.mtr.ColumnBlock(
+            AbstractBlock.Settings.create().strength(3.0f, 6.0f).sounds(BlockSoundGroup.METAL).nonOpaque(),
+            Block.createCuboidShape(3.0, 0.0, 3.0, 13.0, 16.0, 13.0));
+    public static final com.stationannouncer.mtr.ColumnBlock EL_STREET_COLUMN_LATTICE = new com.stationannouncer.mtr.ColumnBlock(
+            AbstractBlock.Settings.create().strength(3.0f, 6.0f).sounds(BlockSoundGroup.METAL).nonOpaque(),
+            Block.createCuboidShape(3.0, 0.0, 3.0, 13.0, 16.0, 13.0));
+    public static final com.stationannouncer.block.ElGirderBlock EL_GIRDER_PLATE = new com.stationannouncer.block.ElGirderBlock(
+            AbstractBlock.Settings.create().strength(3.0f, 6.0f).sounds(BlockSoundGroup.METAL).nonOpaque());
+    public static final com.stationannouncer.block.ElDeckBlock EL_TRACK_DECK = new com.stationannouncer.block.ElDeckBlock(
+            AbstractBlock.Settings.create().strength(3.0f, 6.0f).sounds(BlockSoundGroup.METAL).nonOpaque());
+    public static final com.stationannouncer.block.ElDeckBlock EL_PLATE_DECK = new com.stationannouncer.block.ElDeckBlock(
+            AbstractBlock.Settings.create().strength(3.0f, 6.0f).sounds(BlockSoundGroup.METAL).nonOpaque());
+    public static final BlockItem EL_STREET_COLUMN_ITEM = new BlockItem(EL_STREET_COLUMN, new Item.Settings());
+    public static final BlockItem EL_STREET_COLUMN_LATTICE_ITEM = new BlockItem(EL_STREET_COLUMN_LATTICE, new Item.Settings());
+    public static final BlockItem EL_GIRDER_PLATE_ITEM = new BlockItem(EL_GIRDER_PLATE, new Item.Settings());
+    public static final BlockItem EL_TRACK_DECK_ITEM = new BlockItem(EL_TRACK_DECK, new Item.Settings());
+    public static final BlockItem EL_PLATE_DECK_ITEM = new BlockItem(EL_PLATE_DECK, new Item.Settings());
     public static final BlockItem SUBWAY_STAIRS_ITEM =
             new com.stationannouncer.item.SubwayStairItem(SUBWAY_STAIRS, new Item.Settings());
     public static final BlockItem SUBWAY_STAIRS_OLD_ITEM = new BlockItem(SUBWAY_STAIRS_OLD, new Item.Settings());
@@ -232,11 +311,13 @@ public final class ModContent {
     public static final BlockItem[] PLATFORM_CONCRETE_FLOOR_ITEM = {
             new BlockItem(PLATFORM_CONCRETE_FLOOR[0], new Item.Settings()),
             new BlockItem(PLATFORM_CONCRETE_FLOOR[1], new Item.Settings()),
-            new BlockItem(PLATFORM_CONCRETE_FLOOR[2], new Item.Settings())};
+            new BlockItem(PLATFORM_CONCRETE_FLOOR[2], new Item.Settings()),
+            new BlockItem(PLATFORM_CONCRETE_FLOOR[3], new Item.Settings())};
     public static final BlockItem[] PLATFORM_CONCRETE_FLOOR_CLEAN_ITEM = {
             new BlockItem(PLATFORM_CONCRETE_FLOOR_CLEAN[0], new Item.Settings()),
             new BlockItem(PLATFORM_CONCRETE_FLOOR_CLEAN[1], new Item.Settings()),
-            new BlockItem(PLATFORM_CONCRETE_FLOOR_CLEAN[2], new Item.Settings())};
+            new BlockItem(PLATFORM_CONCRETE_FLOOR_CLEAN[2], new Item.Settings()),
+            new BlockItem(PLATFORM_CONCRETE_FLOOR_CLEAN[3], new Item.Settings())};
 
     public static final BlockItem FARE_MACHINE_ITEM = new BlockItem(FARE_MACHINE, new Item.Settings());
     public static final BlockItem AMBIENCE_BLOCK_ITEM = new BlockItem(AMBIENCE_BLOCK, new Item.Settings());
@@ -341,6 +422,29 @@ public final class ModContent {
         Registry.register(Registries.BLOCK, StationAnnouncer.id("entrance_railing"), ENTRANCE_RAILING);
         Registry.register(Registries.BLOCK, StationAnnouncer.id("bench"), BENCH);
         Registry.register(Registries.BLOCK, StationAnnouncer.id("platform_barrier"), PLATFORM_BARRIER);
+        Registry.register(Registries.BLOCK, StationAnnouncer.id("el_roof"), EL_ROOF);
+        Registry.register(Registries.BLOCK, StationAnnouncer.id("el_railing"), EL_RAILING);
+        Registry.register(Registries.BLOCK, StationAnnouncer.id("el_wall"), EL_WALL);
+        Registry.register(Registries.BLOCK, StationAnnouncer.id("el_wall_glass"), EL_WALL_GLASS);
+        Registry.register(Registries.BLOCK, StationAnnouncer.id("el_wall_cream"), EL_WALL_CREAM);
+        Registry.register(Registries.BLOCK, StationAnnouncer.id("el_wall_green"), EL_WALL_GREEN);
+        Registry.register(Registries.BLOCK, StationAnnouncer.id("el_wall_doorway"), EL_WALL_DOORWAY);
+        Registry.register(Registries.BLOCK, StationAnnouncer.id("el_platform_lamp_head"), EL_LAMP_HEAD);
+        Registry.register(Registries.BLOCK, StationAnnouncer.id("el_roof_light"), EL_ROOF_LIGHT);
+        Registry.register(Registries.BLOCK, StationAnnouncer.id("el_stair_railing"), EL_STAIR_RAILING);
+        Registry.register(Registries.BLOCK, StationAnnouncer.id("el_stair_wall"), EL_STAIR_WALL);
+        Registry.register(Registries.BLOCK, StationAnnouncer.id("el_stair_wall_glass"), EL_STAIR_WALL_GLASS);
+        Registry.register(Registries.BLOCK, StationAnnouncer.id("el_stair_roof"), EL_STAIR_ROOF);
+        Registry.register(Registries.BLOCK, StationAnnouncer.id("el_stair_open"), EL_STAIR_OPEN);
+        Registry.register(Registries.BLOCK, StationAnnouncer.id("el_landing_roof"), EL_LANDING_ROOF);
+        Registry.register(Registries.BLOCK, StationAnnouncer.id("el_stair_landing"), EL_STAIR_LANDING);
+        Registry.register(Registries.BLOCK, StationAnnouncer.id("el_street_column"), EL_STREET_COLUMN);
+        Registry.register(Registries.BLOCK, StationAnnouncer.id("el_street_column_lattice"), EL_STREET_COLUMN_LATTICE);
+        Registry.register(Registries.BLOCK, StationAnnouncer.id("el_girder_plate"), EL_GIRDER_PLATE);
+        Registry.register(Registries.BLOCK, StationAnnouncer.id("el_track_deck"), EL_TRACK_DECK);
+        Registry.register(Registries.BLOCK, StationAnnouncer.id("el_plate_deck"), EL_PLATE_DECK);
+        com.stationannouncer.block.ElGirderBlock.COLUMNS.add(EL_STREET_COLUMN);
+        com.stationannouncer.block.ElGirderBlock.COLUMNS.add(EL_STREET_COLUMN_LATTICE);
         Registry.register(Registries.BLOCK, StationAnnouncer.id("subway_stairs"), SUBWAY_STAIRS);
         Registry.register(Registries.BLOCK, StationAnnouncer.id("subway_stairs_old"), SUBWAY_STAIRS_OLD);
         Registry.register(Registries.BLOCK, StationAnnouncer.id("subway_stair_divider"), SUBWAY_STAIR_DIVIDER);
@@ -377,6 +481,27 @@ public final class ModContent {
         Registry.register(Registries.ITEM, StationAnnouncer.id("entrance_railing"), ENTRANCE_RAILING_ITEM);
         Registry.register(Registries.ITEM, StationAnnouncer.id("bench"), BENCH_ITEM);
         Registry.register(Registries.ITEM, StationAnnouncer.id("platform_barrier"), PLATFORM_BARRIER_ITEM);
+        Registry.register(Registries.ITEM, StationAnnouncer.id("el_roof"), EL_ROOF_ITEM);
+        Registry.register(Registries.ITEM, StationAnnouncer.id("el_railing"), EL_RAILING_ITEM);
+        Registry.register(Registries.ITEM, StationAnnouncer.id("el_wall"), EL_WALL_ITEM);
+        Registry.register(Registries.ITEM, StationAnnouncer.id("el_wall_glass"), EL_WALL_GLASS_ITEM);
+        Registry.register(Registries.ITEM, StationAnnouncer.id("el_wall_cream"), EL_WALL_CREAM_ITEM);
+        Registry.register(Registries.ITEM, StationAnnouncer.id("el_wall_green"), EL_WALL_GREEN_ITEM);
+        Registry.register(Registries.ITEM, StationAnnouncer.id("el_wall_doorway"), EL_WALL_DOORWAY_ITEM);
+        Registry.register(Registries.ITEM, StationAnnouncer.id("el_platform_lamp_head"), EL_LAMP_HEAD_ITEM);
+        Registry.register(Registries.ITEM, StationAnnouncer.id("el_roof_light"), EL_ROOF_LIGHT_ITEM);
+        Registry.register(Registries.ITEM, StationAnnouncer.id("el_stair_railing"), EL_STAIR_RAILING_ITEM);
+        Registry.register(Registries.ITEM, StationAnnouncer.id("el_stair_wall"), EL_STAIR_WALL_ITEM);
+        Registry.register(Registries.ITEM, StationAnnouncer.id("el_stair_wall_glass"), EL_STAIR_WALL_GLASS_ITEM);
+        Registry.register(Registries.ITEM, StationAnnouncer.id("el_stair_roof"), EL_STAIR_ROOF_ITEM);
+        Registry.register(Registries.ITEM, StationAnnouncer.id("el_stair_open"), EL_STAIR_OPEN_ITEM);
+        Registry.register(Registries.ITEM, StationAnnouncer.id("el_landing_roof"), EL_LANDING_ROOF_ITEM);
+        Registry.register(Registries.ITEM, StationAnnouncer.id("el_stair_landing"), EL_STAIR_LANDING_ITEM);
+        Registry.register(Registries.ITEM, StationAnnouncer.id("el_street_column"), EL_STREET_COLUMN_ITEM);
+        Registry.register(Registries.ITEM, StationAnnouncer.id("el_street_column_lattice"), EL_STREET_COLUMN_LATTICE_ITEM);
+        Registry.register(Registries.ITEM, StationAnnouncer.id("el_girder_plate"), EL_GIRDER_PLATE_ITEM);
+        Registry.register(Registries.ITEM, StationAnnouncer.id("el_track_deck"), EL_TRACK_DECK_ITEM);
+        Registry.register(Registries.ITEM, StationAnnouncer.id("el_plate_deck"), EL_PLATE_DECK_ITEM);
         Registry.register(Registries.ITEM, StationAnnouncer.id("subway_stairs"), SUBWAY_STAIRS_ITEM);
         Registry.register(Registries.ITEM, StationAnnouncer.id("subway_stairs_old"), SUBWAY_STAIRS_OLD_ITEM);
         Registry.register(Registries.ITEM, StationAnnouncer.id("subway_stair_divider"), SUBWAY_STAIR_DIVIDER_ITEM);
@@ -434,6 +559,27 @@ public final class ModContent {
         }
         DECORATION_ENTRIES.add(BENCH_ITEM);
         DECORATION_ENTRIES.add(PLATFORM_BARRIER_ITEM);
+        DECORATION_ENTRIES.add(EL_ROOF_ITEM);
+        DECORATION_ENTRIES.add(EL_RAILING_ITEM);
+        DECORATION_ENTRIES.add(EL_WALL_ITEM);
+        DECORATION_ENTRIES.add(EL_WALL_GLASS_ITEM);
+        DECORATION_ENTRIES.add(EL_WALL_CREAM_ITEM);
+        DECORATION_ENTRIES.add(EL_WALL_GREEN_ITEM);
+        DECORATION_ENTRIES.add(EL_WALL_DOORWAY_ITEM);
+        DECORATION_ENTRIES.add(EL_LAMP_HEAD_ITEM);
+        DECORATION_ENTRIES.add(EL_ROOF_LIGHT_ITEM);
+        DECORATION_ENTRIES.add(EL_STAIR_RAILING_ITEM);
+        DECORATION_ENTRIES.add(EL_STAIR_WALL_ITEM);
+        DECORATION_ENTRIES.add(EL_STAIR_WALL_GLASS_ITEM);
+        DECORATION_ENTRIES.add(EL_STAIR_OPEN_ITEM);
+        DECORATION_ENTRIES.add(EL_STAIR_ROOF_ITEM);
+        DECORATION_ENTRIES.add(EL_LANDING_ROOF_ITEM);
+        DECORATION_ENTRIES.add(EL_STAIR_LANDING_ITEM);
+        DECORATION_ENTRIES.add(EL_STREET_COLUMN_ITEM);
+        DECORATION_ENTRIES.add(EL_STREET_COLUMN_LATTICE_ITEM);
+        DECORATION_ENTRIES.add(EL_GIRDER_PLATE_ITEM);
+        DECORATION_ENTRIES.add(EL_TRACK_DECK_ITEM);
+        DECORATION_ENTRIES.add(EL_PLATE_DECK_ITEM);
         DECORATION_ENTRIES.add(ZEBRA_BOARD_WALL_ITEM);
         DECORATION_ENTRIES.add(SUBWAY_STAIRS_ITEM);
         DECORATION_ENTRIES.add(SUBWAY_STAIRS_OLD_ITEM);

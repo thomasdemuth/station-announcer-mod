@@ -67,7 +67,9 @@ public class RailingSignScreen extends Screen {
         this.signBack = decor.isSignBack();
         this.frontRoutes = new ArrayList<>(decor.getFrontRoutes());
         this.backRoutes = new ArrayList<>(decor.getBackRoutes());
-        this.frontDirection = RailingSignBlock.frontOf(decor.getCachedState());
+        this.frontDirection = decor.getCachedState().getBlock() instanceof com.stationannouncer.mtr.ElEntranceSignBlock
+                ? com.stationannouncer.mtr.ElEntranceSignBlock.frontOf(decor.getCachedState())
+                : RailingSignBlock.frontOf(decor.getCachedState());
         this.picker = new RoutePicker(decor.getPos(), StationDecorBlockEntity.MAX_ROUTE_BULLETS, PANEL_WIDTH);
         this.picker.setSelected(frontRoutes);
     }

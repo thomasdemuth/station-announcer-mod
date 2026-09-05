@@ -1,6 +1,7 @@
 package com.stationannouncer.client.mtr;
 
 import com.stationannouncer.mtr.StationDecorBlock;
+import com.stationannouncer.block.FacingDecorBlock;
 import com.stationannouncer.mtr.StationDecorBlockEntity;
 import net.fabricmc.api.EnvType;
 import net.fabricmc.api.Environment;
@@ -83,9 +84,20 @@ public class StationDecorRenderer implements BlockEntityRenderer<StationDecorBlo
             paintElNameBoard(matrices, vertexConsumers, name,
                     entity.getCachedState().get(com.stationannouncer.mtr.ElNameBoardBlock.MOUNT));
         } else if (block instanceof com.stationannouncer.mtr.StationColumnBlock column) {
-            paintColumnBoard(matrices, vertexConsumers, name, column.boardOffset());
+            paintColumnBoard(matrices, vertexConsumers, name, column.boardOffset(),
+                    column.boardWidth(), column.boardHeight());
         } else if (block instanceof com.stationannouncer.mtr.RailingSignBlock) {
             paintRailingSign(entity, matrices, vertexConsumers, name);
+        } else if (block instanceof com.stationannouncer.mtr.ElEntranceSignBlock) {
+            paintEntranceSign(entity, matrices, vertexConsumers, name);
+        } else if (block instanceof com.stationannouncer.mtr.ElWallSignBlock) {
+            // wall course: board y 3..13 on the panel's near face (z 0.2)
+            paintEdgeSign(entity, matrices, vertexConsumers, facing, station, 13.0f, 40, 0.2f,
+                    st -> st.getBlock() instanceof com.stationannouncer.mtr.ElWallSignBlock);
+        } else if (block instanceof com.stationannouncer.mtr.ElRailingSignBlock) {
+            // railing: board y 4..17 between bottom and top rail, panel near face z 0.2
+            paintEdgeSign(entity, matrices, vertexConsumers, facing, station, 17.0f, 52, 0.2f,
+                    st -> st.getBlock() instanceof com.stationannouncer.mtr.ElRailingSignBlock);
         }
         matrices.pop();
     }
@@ -477,6 +489,115 @@ public class StationDecorRenderer implements BlockEntityRenderer<StationDecorBlo
         }
     }
 
+    /**
+     * The lit entrance sign box under a stair hood: model box x 0..16, y 12..22,
+     * z 2..5 (the near side, toward FACING), so the front face sits at local
+     * z -0.375 and the back at -0.1875. Canvas 56 x 40 units. Layout follows
+     * the Van Siclen Av photo: route bullets on the left, the name beside
+     * them; without bullets the name is centred. Each face has its own
+     * on/off flag and bullet list, edited with the brush (RailingSignScreen).
+     */
+    private void paintEntranceSign(StationDecorBlockEntity entity, MatrixStack matrices,
+                                   VertexConsumerProvider vertexConsumers, String autoName) {
+        net.minecraft.client.world.ClientWorld world = net.minecraft.client.MinecraftClient.getInstance().world;
+        if (world == null) {
+            return;
+        }
+        // Adjacent sign cells with the same facing merge into one panel drawn
+        // by the run's first cell (the one with no sign on its negDir side).
+        net.minecraft.util.math.BlockPos pos = entity.getPos();
+        Direction facing = entity.getCachedState().get(FacingDecorBlock.FACING);
+        Direction negDir = facing.rotateYCounterclockwise();
+        Direction posDir = facing.rotateYClockwise();
+        if (isEntranceSign(world.getBlockState(pos.offset(negDir)), facing)) {
+            return;
+        }
+        int run = 1;
+        String custom = entity.getCustomName();
+        boolean front = entity.isSignFront();
+        boolean back = entity.isSignBack();
+        java.util.List<String> frontRoutes = entity.getFrontRoutes();
+        java.util.List<String> backRoutes = entity.getBackRoutes();
+        while (run < MAX_SIGN_RUN && isEntranceSign(world.getBlockState(pos.offset(posDir, run)), facing)) {
+            if (world.getBlockEntity(pos.offset(posDir, run)) instanceof StationDecorBlockEntity other) {
+                if (custom.isEmpty()) {
+                    custom = other.getCustomName();
+                }
+                front &= other.isSignFront();
+                back &= other.isSignBack();
+                if (frontRoutes.isEmpty()) {
+                    frontRoutes = other.getFrontRoutes();
+                }
+                if (backRoutes.isEmpty()) {
+                    backRoutes = other.getBackRoutes();
+                }
+            }
+            run++;
+        }
+        String text = !custom.isEmpty() ? custom : (autoName.isEmpty() ? "Subway" : autoName);
+        float w = 64 * run - 4;                 // 2 px margin at each end of the merged box
+        float h = 40;
+        float halfWidthBlocks = (16 * run - 1) / 32.0f;
+        float centerOffset = (run - 1) / 2.0f;
+        for (int side = 0; side < 2; side++) {
+            boolean on = side == 0 ? front : back;
+            if (!on) {
+                continue;
+            }
+            java.util.List<String> routes = side == 0 ? frontRoutes : backRoutes;
+            matrices.push();
+            if (side == 1) {
+                matrices.multiply(RotationAxis.POSITIVE_Y.rotationDegrees(180.0f));
+            }
+            // front face at local z -0.375 (viewer on -Z); the back face is at
+            // -0.1875 and after the 180-degree turn sits at +0.1875 with its
+            // normal toward the new -Z, so its canvas goes just inside that
+            matrices.translate((side == 0 ? centerOffset : -centerOffset) + halfWidthBlocks, 22.0 / 16.0,
+                    side == 0 ? -0.375 - 0.004 : 0.1875 - 0.004);
+            matrices.scale(-UNIT, -UNIT, UNIT);
+            CanvasPainter painter = new CanvasPainter(matrices, vertexConsumers);
+            painter.quad(1, 1, w - 1, h - 1, 0.0f, 0xFF17171A);
+            int count = routes.size();
+            float left = 5;
+            if (count > 0) {
+                float diameter = Math.min(24, (w - 10 - (count - 1) * 3) / (count + 1.5f));
+                float bx = left + diameter / 2.0f;
+                for (String routeName : routes) {
+                    RouteBullets.Bullet bullet = RouteBullets.bulletFor(routeName);
+                    if (RouteBullets.isNoEntry(routeName)) {
+                        painter.prohibitionBullet(bx, h / 2.0f, diameter / 2.0f, bullet.color());
+                    } else {
+                        painter.circleBullet(bx, h / 2.0f, diameter / 2.0f, bullet.color(), bullet.label(),
+                                RouteBullets.needsDarkText(bullet.color()));
+                    }
+                    bx += diameter + 3;
+                }
+                left = bx - diameter / 2.0f + 2;
+            }
+            float maxWidth = w - left - 4;
+            float size = Math.min(14, maxWidth / Math.max(1, painter.width(text, 1)));
+            if (size < 8 && text.contains(" ")) {
+                java.util.List<String> lines = painter.wrap(text, 9, maxWidth);
+                float ls = lines.size() > 1 ? Math.min(9, maxWidth / Math.max(1,
+                        Math.max(painter.width(lines.get(0), 1), painter.width(lines.get(1), 1)))) : size;
+                painter.text(painter.trimToWidth(lines.get(0), ls, maxWidth), left, h / 2.0f - ls - 1, ls, TEXT_WHITE);
+                if (lines.size() > 1) {
+                    painter.text(painter.trimToWidth(lines.get(1), ls, maxWidth), left, h / 2.0f + 1, ls, TEXT_WHITE);
+                }
+            } else if (count > 0) {
+                painter.text(text, left, h / 2.0f - size / 2.0f, size, TEXT_WHITE);
+            } else {
+                painter.textCentered(text, w / 2.0f, h / 2.0f - size / 2.0f, size, TEXT_WHITE);
+            }
+            matrices.pop();
+        }
+    }
+
+    private static boolean isEntranceSign(net.minecraft.block.BlockState state, Direction facing) {
+        return state.getBlock() instanceof com.stationannouncer.mtr.ElEntranceSignBlock
+                && state.get(FacingDecorBlock.FACING) == facing;
+    }
+
     /** MTR names can be "English|Other Language" — display the first part. */
     private static String firstLang(String raw) {
         if (raw == null) {
@@ -626,7 +747,7 @@ public class StationDecorRenderer implements BlockEntityRenderer<StationDecorBlo
      * the block model and color provider).
      */
     private void paintColumnBoard(MatrixStack matrices, VertexConsumerProvider vertexConsumers,
-                                  String name, float offset) {
+                                  String name, float offset, float width, float height) {
         if (name.isEmpty()) {
             return;
         }
@@ -637,15 +758,76 @@ public class StationDecorRenderer implements BlockEntityRenderer<StationDecorBlo
             if (side == 1) {
                 matrices.multiply(RotationAxis.POSITIVE_Y.rotationDegrees(180.0f));
             }
-            matrices.translate(0.3125, 0.75, -offset - 0.01);
+            // Board centred on the column, top at model y 12 (0.75) for the
+            // 16-tall board; smaller boards keep the same centre line (y 10).
+            float centreY = 0.625f;
+            matrices.translate(width * UNIT / 2.0f, centreY + height * UNIT / 2.0f, -offset - 0.01);
             matrices.scale(-UNIT, -UNIT, UNIT);
             CanvasPainter painter = new CanvasPainter(matrices, vertexConsumers);
-            painter.quad(0, 0, 40, 16, 0.0f, BOARD_BLACK);
+            painter.quad(0, 0, width, height, 0.0f, BOARD_BLACK);
             String text = upperCase(name);
-            float size = Math.min(9, 36 / Math.max(1, painter.width(text, 1)));
-            painter.textCentered(text, 20, 8 - size / 2.0f, size, TEXT_WHITE);
+            float size = Math.min(height * 0.56f, (width - 4) / Math.max(1, painter.width(text, 1)));
+            painter.textCentered(text, width / 2.0f, height / 2.0f - size / 2.0f, size, TEXT_WHITE);
             matrices.pop();
         }
+    }
+
+    // ------------------------------------------------------- el wall sign
+
+    /**
+     * The windscreen name band: one black board across a contiguous run of
+     * sign courses (same facing), on the RIDER (facing) side only. The panel
+     * sits at model z 14.2..15.8; after the caller's translate+rotate the
+     * viewer is on local -Z and model z maps to local z/16 - 0.5, so the
+     * board is painted at 14.2/16 - 0.5 = 0.3875 pushed 0.006 toward the
+     * viewer. The run extends toward facing.rotateYClockwise(), which is
+     * local +X; canvas x grows toward local -X, hence the translate to the
+     * run's far end. Only the run's first segment (nothing at the
+     * counter-clockwise side) draws.
+     */
+    private void paintEdgeSign(StationDecorBlockEntity entity, MatrixStack matrices,
+                               VertexConsumerProvider vertexConsumers, Direction facing, Station station,
+                               float topPx, float heightUnits, float frontPx,
+                               java.util.function.Predicate<net.minecraft.block.BlockState> family) {
+        net.minecraft.client.world.ClientWorld world = net.minecraft.client.MinecraftClient.getInstance().world;
+        if (world == null) {
+            return;
+        }
+        net.minecraft.util.math.BlockPos pos = entity.getPos();
+        Direction negDir = facing.rotateYCounterclockwise();
+        Direction posDir = facing.rotateYClockwise();
+        if (isEdgeSign(world.getBlockState(pos.offset(negDir)), facing, family)) {
+            return;
+        }
+        int run = 1;
+        String custom = entity.getCustomName();
+        while (run < MAX_SIGN_RUN && isEdgeSign(world.getBlockState(pos.offset(posDir, run)), facing, family)) {
+            if (custom.isEmpty() && world.getBlockEntity(pos.offset(posDir, run)) instanceof StationDecorBlockEntity other) {
+                custom = other.getCustomName();
+            }
+            run++;
+        }
+        String text = !custom.isEmpty() ? custom
+                : station != null ? firstLang(station.getName()) : "Subway";
+
+        float panelWidth = 64 * run - 8;
+        float halfWidthBlocks = (16 * run - 2) / 32.0f;
+        float centerOffset = (run - 1) / 2.0f;
+        matrices.push();
+        // Board y 3..13 of the course (40 units tall), 1 px in from the run ends.
+        matrices.translate(centerOffset + halfWidthBlocks, topPx / 16.0, frontPx / 16.0 - 0.5 - 0.006);
+        matrices.scale(-UNIT, -UNIT, UNIT);
+        CanvasPainter painter = new CanvasPainter(matrices, vertexConsumers);
+        painter.quad(0, 0, panelWidth, heightUnits, 0.0f, BOARD_BLACK);
+        float size = Math.min(heightUnits * 0.4f, (panelWidth - 12) / Math.max(1, painter.width(text, 1)));
+        painter.textCentered(text, panelWidth / 2.0f, heightUnits / 2.0f - size / 2.0f, size, TEXT_WHITE);
+        matrices.pop();
+    }
+
+    private static boolean isEdgeSign(net.minecraft.block.BlockState state, Direction facing,
+                                      java.util.function.Predicate<net.minecraft.block.BlockState> family) {
+        return family.test(state)
+                && state.get(com.stationannouncer.block.FacingDecorBlock.FACING) == facing;
     }
 
     // ------------------------------------------------------- el name board

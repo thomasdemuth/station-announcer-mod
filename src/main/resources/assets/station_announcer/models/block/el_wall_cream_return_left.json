@@ -1,0 +1,202 @@
+{
+ "textures": {
+  "green": "station_announcer:block/el2_green",
+  "cream": "station_announcer:block/el2_cream",
+  "glass": "station_announcer:block/el2_wired_glass",
+  "creamr": "station_announcer:block/el2_cream_ridged",
+  "gpanel": "station_announcer:block/el2_green_panel"
+ },
+ "elements": [
+  {
+   "from": [
+    0.2,
+    0,
+    2.4000000000000004
+   ],
+   "to": [
+    2.2,
+    1.6,
+    16
+   ],
+   "faces": {
+    "east": {
+     "uv": [
+      13.6,
+      4,
+      0,
+      5.6
+     ],
+     "texture": "#creamr"
+    },
+    "west": {
+     "uv": [
+      13.6,
+      4,
+      0,
+      5.6
+     ],
+     "texture": "#creamr"
+    },
+    "up": {
+     "uv": [
+      2,
+      0,
+      0,
+      13.6
+     ],
+     "texture": "#creamr"
+    },
+    "down": {
+     "uv": [
+      2,
+      0,
+      0,
+      13.6
+     ],
+     "texture": "#creamr"
+    }
+   }
+  },
+  {
+   "from": [
+    0.2,
+    14.4,
+    2.4000000000000004
+   ],
+   "to": [
+    2.2,
+    16,
+    16
+   ],
+   "faces": {
+    "east": {
+     "uv": [
+      13.6,
+      4,
+      0,
+      5.6
+     ],
+     "texture": "#creamr"
+    },
+    "west": {
+     "uv": [
+      13.6,
+      4,
+      0,
+      5.6
+     ],
+     "texture": "#creamr"
+    },
+    "up": {
+     "uv": [
+      2,
+      0,
+      0,
+      13.6
+     ],
+     "texture": "#creamr"
+    },
+    "down": {
+     "uv": [
+      2,
+      0,
+      0,
+      13.6
+     ],
+     "texture": "#creamr"
+    }
+   }
+  },
+  {
+   "from": [
+    0.6,
+    1.6,
+    2.4000000000000004
+   ],
+   "to": [
+    1.8,
+    14.4,
+    16
+   ],
+   "faces": {
+    "east": {
+     "uv": [
+      13.6,
+      1.6,
+      0,
+      14.4
+     ],
+     "texture": "#creamr"
+    },
+    "west": {
+     "uv": [
+      0,
+      1.6,
+      13.6,
+      14.4
+     ],
+     "texture": "#creamr"
+    }
+   }
+  },
+  {
+   "from": [
+    0,
+    0,
+    13.6
+   ],
+   "to": [
+    2.4,
+    16,
+    16
+   ],
+   "faces": {
+    "south": {
+     "uv": [
+      0,
+      0,
+      2.4,
+      16
+     ],
+     "texture": "#creamr"
+    },
+    "north": {
+     "uv": [
+      0,
+      0,
+      2.4,
+      16
+     ],
+     "texture": "#creamr"
+    },
+    "east": {
+     "uv": [
+      6.4,
+      0,
+      4,
+      16
+     ],
+     "texture": "#creamr"
+    },
+    "west": {
+     "uv": [
+      6.4,
+      0,
+      4,
+      16
+     ],
+     "texture": "#creamr"
+    },
+    "up": {
+     "uv": [
+      2.4,
+      0,
+      0,
+      2.4
+     ],
+     "texture": "#creamr"
+    }
+   }
+  }
+ ]
+}

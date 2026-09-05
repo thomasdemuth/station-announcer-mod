@@ -23,18 +23,36 @@ public class StationColumnBlock extends ColumnBlock implements BlockEntityProvid
      * renderer reads this so slimmer columns (the el family) keep the board
      * hugging their face instead of the iron column's flange plane. */
     private final float boardOffset;
+    /** Name board size in canvas units (64 per block); iron column 40 x 16, el post 24 x 12. */
+    private final float boardWidth;
+    private final float boardHeight;
 
     public StationColumnBlock(Settings settings, VoxelShape northShape) {
         this(settings, northShape, 0.25f);
     }
 
     public StationColumnBlock(Settings settings, VoxelShape northShape, float boardOffset) {
+        this(settings, northShape, boardOffset, 40, 16);
+    }
+
+    public StationColumnBlock(Settings settings, VoxelShape northShape, float boardOffset,
+                              float boardWidth, float boardHeight) {
         super(settings, northShape);
         this.boardOffset = boardOffset;
+        this.boardWidth = boardWidth;
+        this.boardHeight = boardHeight;
     }
 
     public float boardOffset() {
         return boardOffset;
+    }
+
+    public float boardWidth() {
+        return boardWidth;
+    }
+
+    public float boardHeight() {
+        return boardHeight;
     }
 
     @Nullable

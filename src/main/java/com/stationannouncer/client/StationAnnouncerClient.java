@@ -53,6 +53,12 @@ public class StationAnnouncerClient implements ClientModInitializer {
         StationAnnouncerKeys.register();
 
         // The barrier's wire mesh is a cutout texture (alpha holes).
+        BlockRenderLayerMap.INSTANCE.putBlock(ModContent.EL_ROOF, net.minecraft.client.render.RenderLayer.getCutoutMipped());
+        BlockRenderLayerMap.INSTANCE.putBlock(ModContent.EL_WALL_GLASS, net.minecraft.client.render.RenderLayer.getCutoutMipped());
+        BlockRenderLayerMap.INSTANCE.putBlock(ModContent.EL_STREET_COLUMN_LATTICE, net.minecraft.client.render.RenderLayer.getCutoutMipped());
+        BlockRenderLayerMap.INSTANCE.putBlock(ModContent.EL_STAIR_WALL_GLASS, net.minecraft.client.render.RenderLayer.getCutoutMipped());
+        BlockRenderLayerMap.INSTANCE.putBlock(ModContent.EL_STAIR_ROOF, net.minecraft.client.render.RenderLayer.getCutoutMipped());
+        BlockRenderLayerMap.INSTANCE.putBlock(ModContent.EL_LANDING_ROOF, net.minecraft.client.render.RenderLayer.getCutoutMipped());
         BlockRenderLayerMap.INSTANCE.putBlock(ModContent.PLATFORM_BARRIER,
                 net.minecraft.client.render.RenderLayer.getCutoutMipped());
         BlockRenderLayerMap.INSTANCE.putBlock(ModContent.SUBWAY_STAIRS,
@@ -93,6 +99,36 @@ public class StationAnnouncerClient implements ClientModInitializer {
                 if (flag.exists() && flag.delete()) {
                     net.minecraft.client.util.ScreenshotRecorder.saveScreenshot(
                             client.runDirectory, client.getFramebuffer(), text -> {});
+                }
+                // Dev-only helper #2: <runDir>/commands.txt is consumed one line per
+                // tick and sent as chat commands from this player (needs op/cheats),
+                // so a headless rig can place blocks and teleport without a console.
+                java.io.File commands = new java.io.File(client.runDirectory, "commands.txt");
+                if (commands.exists() && client.player != null && (client.player.age % 25) == 0) {
+                    try {
+                        java.util.List<String> lines = java.nio.file.Files.readAllLines(commands.toPath());
+                        java.util.List<String> rest = new java.util.ArrayList<>();
+                        boolean sent = false;
+                        for (String line : lines) {
+                            String cmd = line.strip();
+                            if (cmd.isEmpty()) {
+                                continue;
+                            }
+                            if (!sent) {
+                                client.player.networkHandler.sendChatCommand(
+                                        cmd.startsWith("/") ? cmd.substring(1) : cmd);
+                                sent = true;
+                            } else {
+                                rest.add(line);
+                            }
+                        }
+                        if (rest.isEmpty()) {
+                            commands.delete();
+                        } else {
+                            java.nio.file.Files.write(commands.toPath(), rest);
+                        }
+                    } catch (java.io.IOException ignored) {
+                    }
                 }
             });
         }

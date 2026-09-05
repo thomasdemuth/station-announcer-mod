@@ -1,0 +1,185 @@
+{
+ "textures": {
+  "black": "station_announcer:block/el2_black",
+  "green": "station_announcer:block/el2_green"
+ },
+ "elements": [
+  {
+   "from": [
+    1,
+    5,
+    13.8
+   ],
+   "to": [
+    15,
+    12,
+    15
+   ],
+   "faces": {
+    "north": {
+     "uv": [
+      0,
+      0,
+      14,
+      7
+     ],
+     "texture": "#black"
+    },
+    "up": {
+     "uv": [
+      0,
+      0,
+      14,
+      7
+     ],
+     "texture": "#black"
+    },
+    "down": {
+     "uv": [
+      0,
+      0,
+      14,
+      7
+     ],
+     "texture": "#black"
+    },
+    "east": {
+     "uv": [
+      0,
+      0,
+      14,
+      7
+     ],
+     "texture": "#black"
+    },
+    "west": {
+     "uv": [
+      0,
+      0,
+      14,
+      7
+     ],
+     "texture": "#black"
+    }
+   }
+  },
+  {
+   "from": [
+    2,
+    6,
+    15
+   ],
+   "to": [
+    3.2,
+    11,
+    16
+   ],
+   "faces": {
+    "north": {
+     "uv": [
+      0,
+      0,
+      1.2,
+      5
+     ],
+     "texture": "#green"
+    },
+    "east": {
+     "uv": [
+      0,
+      0,
+      1.2,
+      5
+     ],
+     "texture": "#green"
+    },
+    "west": {
+     "uv": [
+      0,
+      0,
+      1.2,
+      5
+     ],
+     "texture": "#green"
+    },
+    "up": {
+     "uv": [
+      0,
+      0,
+      1.2,
+      5
+     ],
+     "texture": "#green"
+    },
+    "down": {
+     "uv": [
+      0,
+      0,
+      1.2,
+      5
+     ],
+     "texture": "#green"
+    }
+   }
+  },
+  {
+   "from": [
+    12.8,
+    6,
+    15
+   ],
+   "to": [
+    14,
+    11,
+    16
+   ],
+   "faces": {
+    "north": {
+     "uv": [
+      0,
+      0,
+      1.2,
+      5
+     ],
+     "texture": "#green"
+    },
+    "east": {
+     "uv": [
+      0,
+      0,
+      1.2,
+      5
+     ],
+     "texture": "#green"
+    },
+    "west": {
+     "uv": [
+      0,
+      0,
+      1.2,
+      5
+     ],
+     "texture": "#green"
+    },
+    "up": {
+     "uv": [
+      0,
+      0,
+      1.2,
+      5
+     ],
+     "texture": "#green"
+    },
+    "down": {
+     "uv": [
+      0,
+      0,
+      1.2,
+      5
+     ],
+     "texture": "#green"
+    }
+   }
+  }
+ ]
+}

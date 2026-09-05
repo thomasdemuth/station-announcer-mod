@@ -1,0 +1,78 @@
+{
+ "textures": {
+  "green": "station_announcer:block/el2_green",
+  "red": "station_announcer:block/el2_roof_red",
+  "soffit": "station_announcer:block/el2_soffit",
+  "lattice": "station_announcer:block/el2_lattice"
+ },
+ "elements": [
+  {
+   "from": [
+    0,
+    20.354833995939043,
+    14.6
+   ],
+   "to": [
+    16,
+    21.954833995939044,
+    16
+   ],
+   "faces": {
+    "south": {
+     "uv": [
+      0,
+      4,
+      16,
+      5.6
+     ],
+     "texture": "#green"
+    },
+    "north": {
+     "uv": [
+      0,
+      4,
+      16,
+      5.6
+     ],
+     "texture": "#green"
+    },
+    "east": {
+     "uv": [
+      1.4,
+      4,
+      0,
+      5.6
+     ],
+     "texture": "#green"
+    },
+    "west": {
+     "uv": [
+      1.4,
+      4,
+      0,
+      5.6
+     ],
+     "texture": "#green"
+    },
+    "up": {
+     "uv": [
+      16,
+      0,
+      0,
+      1.4
+     ],
+     "texture": "#green"
+    },
+    "down": {
+     "uv": [
+      16,
+      0,
+      0,
+      1.4
+     ],
+     "texture": "#green"
+    }
+   }
+  }
+ ]
+}

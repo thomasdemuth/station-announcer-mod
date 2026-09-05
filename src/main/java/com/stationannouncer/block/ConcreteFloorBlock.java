@@ -36,11 +36,23 @@ public class ConcreteFloorBlock extends Block {
     public static final BooleanProperty JOINT_WEST = BooleanProperty.of("joint_west");
 
     private final int slabBlocks;
+    private final boolean clean;
 
-    public ConcreteFloorBlock(Settings settings, int slabBlocks) {
+    public ConcreteFloorBlock(Settings settings, int slabBlocks, boolean clean) {
         super(settings);
         this.slabBlocks = slabBlocks;
+        this.clean = clean;
         setDefaultState(getDefaultState().with(JOINT_NORTH, false).with(JOINT_WEST, false));
+    }
+
+    /** Slab width in blocks; the joint grid pitch. */
+    public int slabBlocks() {
+        return slabBlocks;
+    }
+
+    /** Fresh (clean) or grimy palette - the platform edge adopts both from its neighbours. */
+    public boolean isClean() {
+        return clean;
     }
 
     @Override

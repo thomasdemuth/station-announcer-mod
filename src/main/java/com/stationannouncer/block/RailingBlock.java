@@ -91,7 +91,8 @@ public class RailingBlock extends Block {
         Block above = world.getBlockState(pos.up()).getBlock();
         return above == ModContent.GLOBE_LAMP_POLE
                 || above == ModContent.GLOBE_LAMP_GREEN
-                || above == ModContent.GLOBE_LAMP_RED;
+                || above == ModContent.GLOBE_LAMP_RED
+                || above instanceof com.stationannouncer.mtr.ElLampPoleBlock;
     }
 
     @Override

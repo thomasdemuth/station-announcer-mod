@@ -1,0 +1,25 @@
+{
+ "multipart": [
+  {
+   "apply": {
+    "model": "station_announcer:block/el_street_column_shaft"
+   }
+  },
+  {
+   "when": {
+    "down": "false"
+   },
+   "apply": {
+    "model": "station_announcer:block/el_street_column_foot"
+   }
+  },
+  {
+   "when": {
+    "up": "false"
+   },
+   "apply": {
+    "model": "station_announcer:block/el_street_column_cap"
+   }
+  }
+ ]
+}

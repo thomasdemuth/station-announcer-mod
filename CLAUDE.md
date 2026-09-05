@@ -295,6 +295,39 @@ Four fixes/features from Thomas's feedback round (his answers, do not re-ask):
   model rebuild (tripod look, reader heads, pictogram plates day+night,
   HEET comb/lintel, signboard straps).
 
+### EL KIT v2 — FARE CONTROL / STAIRS in progress (2026-09-04) — READ `EL_V2_HANDOFF.md` FIRST
+
+Stair family rounds 1-6 built with Thomas testing LIVE in the dev world (rig client as
+`Rig`): stair side courses beside `subway_stairs` (railing / cream wall / glass / posts-only),
+sloped stair roof, flat landing roof + steel landing deck, entrance sign under the hood,
+cream/green/doorway windscreen courses, `el_roof` hip/valley/peak corners, flat item icons,
+sloped hitboxes, corner posts, stairwell-rim wall placement. Play profiles are at 2.4.52;
+the source tree is ahead (deploy 2.4.53 first — see handoff §1). Round detail and every
+rule Thomas set are in `EL_STATION_PLAN.md` "FARE CONTROL / STAIRS" rounds 1-6. Live-test
+loop: model/texture change → copy into build/resources/main + F3+T; Java change → wait for
+his "restart" (Gradle kills his session).
+
+### EL KIT v2 — PLATFORM AREA (2026-09-03) — READ `EL_V2_HANDOFF.md` FIRST — 14 blocks, ALL screenshotted in game on the rig; deployed 2.4.48 (rounds 2-8; walls/railings now in the cell OUTSIDE the platform edge after Thomas's pass: walls at the block edge, rider-side signs, lamp on railing, light runs, roof transitions, v1 items hidden — see EL_STATION_PLAN.md)
+
+Thomas called the 46-block v1 el kit "mostly garbage" and approved a from-scratch
+rebuild: **read the v2 section at the top of `EL_STATION_PLAN.md`** (his rules,
+the block table, the rig recipe). Highlights: `platform_edge` OPENS MTR TRAIN
+DOORS by `implements org.mtr.mod.block.PlatformHelper` (MTR's only door test,
+bytecode-verified) and adopts slab/clean from neighbouring concrete floors;
+`el_roof` is a self-computing gable (SIDE/LEVEL from crosswise neighbours, width
+up to 7, thickness-parity trick against coplanar cell joints, crossNeg(Z)=EAST
+because y=90 maps model -z to world +x); `el_post[_named]`, `el_railing[_sign]`,
+`el_wall[_glass|_sign]`, `el_platform_lamp[_head]`, `el_roof_light`, `el_sign`.
+Generator: `tools/gen_el2_assets.py` (never hand-edit output). v1 `el_*` ids are
+still registered — delete them at the end of the section, after Thomas's pass.
+**Headless rig recipe (new):** dev client hook consumes `run/commands.txt` as
+chat commands (one per 25 ticks; user `Rig` is in run/ops.json) +
+`run/screenshot.flag`; `./gradlew runServer` in the background then `runClient
+--quickPlayMultiplayer localhost:25565 --username Rig`; forceload + tp BEFORE
+fills; `sendCommandFeedback false` so chat does not hide the view. NOT yet
+play-tested by Thomas: door opening with a real train, placement feel, brush
+text on the signs, the hanging `el_sign` (same renderer as the standing one).
+
 ### SYSTEM MAP+ (2026-08-29) — SHIPPED 2.4.37 after four feedback rounds; NOT in-game tested
 
 **Rounds 2–4 (read PROGRESS.md "System Map+" entries for the detail).** Thomas's

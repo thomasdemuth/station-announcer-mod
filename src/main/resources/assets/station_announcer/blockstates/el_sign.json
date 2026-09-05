@@ -1,0 +1,49 @@
+{
+ "variants": {
+  "facing=north,mount=standing": {
+   "model": "station_announcer:block/el_sign_standing"
+  },
+  "facing=north,mount=hanging": {
+   "model": "station_announcer:block/el_sign_hanging"
+  },
+  "facing=north,mount=wall": {
+   "model": "station_announcer:block/el_sign_wall"
+  },
+  "facing=east,mount=standing": {
+   "model": "station_announcer:block/el_sign_standing",
+   "y": 90
+  },
+  "facing=east,mount=hanging": {
+   "model": "station_announcer:block/el_sign_hanging",
+   "y": 90
+  },
+  "facing=east,mount=wall": {
+   "model": "station_announcer:block/el_sign_wall",
+   "y": 90
+  },
+  "facing=south,mount=standing": {
+   "model": "station_announcer:block/el_sign_standing",
+   "y": 180
+  },
+  "facing=south,mount=hanging": {
+   "model": "station_announcer:block/el_sign_hanging",
+   "y": 180
+  },
+  "facing=south,mount=wall": {
+   "model": "station_announcer:block/el_sign_wall",
+   "y": 180
+  },
+  "facing=west,mount=standing": {
+   "model": "station_announcer:block/el_sign_standing",
+   "y": 270
+  },
+  "facing=west,mount=hanging": {
+   "model": "station_announcer:block/el_sign_hanging",
+   "y": 270
+  },
+  "facing=west,mount=wall": {
+   "model": "station_announcer:block/el_sign_wall",
+   "y": 270
+  }
+ }
+}

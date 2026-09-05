@@ -1,0 +1,20 @@
+{
+  "type": "minecraft:crafting_shaped",
+  "category": "building",
+  "key": {
+    "Y": {
+      "item": "minecraft:yellow_dye"
+    },
+    "C": {
+      "item": "station_announcer:platform_concrete_floor_3"
+    }
+  },
+  "pattern": [
+    "YYY",
+    "CCC"
+  ],
+  "result": {
+    "item": "station_announcer:platform_edge",
+    "count": 6
+  }
+}

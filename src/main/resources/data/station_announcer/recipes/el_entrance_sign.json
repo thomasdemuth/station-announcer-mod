@@ -1,0 +1,23 @@
+{
+ "type": "minecraft:crafting_shaped",
+ "category": "building",
+ "key": {
+  "I": {
+   "item": "minecraft:iron_ingot"
+  },
+  "B": {
+   "item": "minecraft:black_dye"
+  },
+  "G": {
+   "item": "minecraft:glowstone_dust"
+  }
+ },
+ "pattern": [
+  "I I",
+  "BGB"
+ ],
+ "result": {
+  "item": "station_announcer:el_entrance_sign",
+  "count": 1
+ }
+}

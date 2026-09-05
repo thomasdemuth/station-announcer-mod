@@ -1,0 +1,61 @@
+{
+ "textures": {
+  "green": "station_announcer:block/el2_green",
+  "cream": "station_announcer:block/el2_cream",
+  "glass": "station_announcer:block/el2_wired_glass",
+  "creamr": "station_announcer:block/el2_cream_ridged",
+  "gpanel": "station_announcer:block/el2_green_panel"
+ },
+ "elements": [
+  {
+   "from": [
+    0,
+    13,
+    0.1999999999999993
+   ],
+   "to": [
+    16,
+    16,
+    2.1999999999999993
+   ],
+   "faces": {
+    "south": {
+     "uv": [
+      0,
+      4,
+      16,
+      7
+     ],
+     "texture": "#green"
+    },
+    "north": {
+     "uv": [
+      0,
+      4,
+      16,
+      7
+     ],
+     "texture": "#green"
+    },
+    "up": {
+     "uv": [
+      16,
+      0,
+      0,
+      2
+     ],
+     "texture": "#green"
+    },
+    "down": {
+     "uv": [
+      16,
+      0,
+      0,
+      2
+     ],
+     "texture": "#green"
+    }
+   }
+  }
+ ]
+}

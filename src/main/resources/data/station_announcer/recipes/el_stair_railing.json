@@ -1,0 +1,24 @@
+{
+ "type": "minecraft:crafting_shaped",
+ "category": "building",
+ "key": {
+  "I": {
+   "item": "minecraft:iron_bars"
+  },
+  "D": {
+   "item": "minecraft:green_dye"
+  },
+  "N": {
+   "item": "minecraft:iron_ingot"
+  }
+ },
+ "pattern": [
+  "II ",
+  "IDI",
+  " NI"
+ ],
+ "result": {
+  "item": "station_announcer:el_stair_railing",
+  "count": 4
+ }
+}

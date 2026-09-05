@@ -1,0 +1,23 @@
+{
+ "type": "minecraft:crafting_shaped",
+ "category": "building",
+ "key": {
+  "P": {
+   "item": "minecraft:birch_planks"
+  },
+  "I": {
+   "item": "minecraft:iron_ingot"
+  },
+  "W": {
+   "item": "minecraft:white_dye"
+  }
+ },
+ "pattern": [
+  "IPI",
+  "IWI"
+ ],
+ "result": {
+  "item": "station_announcer:el_wall_cream",
+  "count": 6
+ }
+}

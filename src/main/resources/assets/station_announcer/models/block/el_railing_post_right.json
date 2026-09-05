@@ -1,0 +1,125 @@
+{
+ "textures": {
+  "green": "station_announcer:block/el2_green"
+ },
+ "elements": [
+  {
+   "from": [
+    13.6,
+    0,
+    0
+   ],
+   "to": [
+    16,
+    20,
+    2.4000000000000004
+   ],
+   "faces": {
+    "south": {
+     "uv": [
+      2.4,
+      0,
+      0,
+      16
+     ],
+     "texture": "#green"
+    },
+    "north": {
+     "uv": [
+      2.4,
+      0,
+      0,
+      16
+     ],
+     "texture": "#green"
+    },
+    "west": {
+     "uv": [
+      6.4,
+      0,
+      4,
+      16
+     ],
+     "texture": "#green"
+    },
+    "east": {
+     "uv": [
+      6.4,
+      0,
+      4,
+      16
+     ],
+     "texture": "#green"
+    }
+   }
+  },
+  {
+   "from": [
+    13.0,
+    20,
+    -0.6000000000000014
+   ],
+   "to": [
+    16.6,
+    21,
+    3.0
+   ],
+   "faces": {
+    "south": {
+     "uv": [
+      7.6,
+      8,
+      4,
+      9
+     ],
+     "texture": "#green"
+    },
+    "north": {
+     "uv": [
+      7.6,
+      8,
+      4,
+      9
+     ],
+     "texture": "#green"
+    },
+    "west": {
+     "uv": [
+      7.6,
+      8,
+      4,
+      9
+     ],
+     "texture": "#green"
+    },
+    "east": {
+     "uv": [
+      7.6,
+      8,
+      4,
+      9
+     ],
+     "texture": "#green"
+    },
+    "up": {
+     "uv": [
+      0,
+      12.4,
+      3.6,
+      16
+     ],
+     "texture": "#green"
+    },
+    "down": {
+     "uv": [
+      0,
+      12.4,
+      3.6,
+      16
+     ],
+     "texture": "#green"
+    }
+   }
+  }
+ ]
+}

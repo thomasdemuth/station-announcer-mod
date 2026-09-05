@@ -1,0 +1,1315 @@
+{
+ "multipart": [
+  {
+   "when": {
+    "facing": "north",
+    "up": "run",
+    "down": "run"
+   },
+   "apply": {
+    "model": "station_announcer:block/el_stair_roof_deck_nn"
+   }
+  },
+  {
+   "when": {
+    "facing": "north",
+    "up": "run",
+    "down": "run",
+    "edge_left": "true"
+   },
+   "apply": {
+    "model": "station_announcer:block/el_stair_roof_frieze_nn"
+   }
+  },
+  {
+   "when": {
+    "facing": "north",
+    "up": "run",
+    "down": "run",
+    "edge_right": "true"
+   },
+   "apply": {
+    "model": "station_announcer:block/el_stair_roof_frieze_nn_r"
+   }
+  },
+  {
+   "when": {
+    "facing": "north",
+    "up": "run",
+    "down": "end"
+   },
+   "apply": {
+    "model": "station_announcer:block/el_stair_roof_deck_nc"
+   }
+  },
+  {
+   "when": {
+    "facing": "north",
+    "up": "run",
+    "down": "end",
+    "edge_left": "true"
+   },
+   "apply": {
+    "model": "station_announcer:block/el_stair_roof_frieze_nc"
+   }
+  },
+  {
+   "when": {
+    "facing": "north",
+    "up": "run",
+    "down": "end",
+    "edge_right": "true"
+   },
+   "apply": {
+    "model": "station_announcer:block/el_stair_roof_frieze_nc_r"
+   }
+  },
+  {
+   "when": {
+    "facing": "north",
+    "up": "run",
+    "down": "landing"
+   },
+   "apply": {
+    "model": "station_announcer:block/el_stair_roof_deck_nl"
+   }
+  },
+  {
+   "when": {
+    "facing": "north",
+    "up": "run",
+    "down": "landing",
+    "edge_left": "true"
+   },
+   "apply": {
+    "model": "station_announcer:block/el_stair_roof_frieze_nl"
+   }
+  },
+  {
+   "when": {
+    "facing": "north",
+    "up": "run",
+    "down": "landing",
+    "edge_right": "true"
+   },
+   "apply": {
+    "model": "station_announcer:block/el_stair_roof_frieze_nl_r"
+   }
+  },
+  {
+   "when": {
+    "facing": "north",
+    "up": "end",
+    "down": "run"
+   },
+   "apply": {
+    "model": "station_announcer:block/el_stair_roof_deck_cn"
+   }
+  },
+  {
+   "when": {
+    "facing": "north",
+    "up": "end",
+    "down": "run",
+    "edge_left": "true"
+   },
+   "apply": {
+    "model": "station_announcer:block/el_stair_roof_frieze_cn"
+   }
+  },
+  {
+   "when": {
+    "facing": "north",
+    "up": "end",
+    "down": "run",
+    "edge_right": "true"
+   },
+   "apply": {
+    "model": "station_announcer:block/el_stair_roof_frieze_cn_r"
+   }
+  },
+  {
+   "when": {
+    "facing": "north",
+    "up": "end",
+    "down": "end"
+   },
+   "apply": {
+    "model": "station_announcer:block/el_stair_roof_deck_cc"
+   }
+  },
+  {
+   "when": {
+    "facing": "north",
+    "up": "end",
+    "down": "end",
+    "edge_left": "true"
+   },
+   "apply": {
+    "model": "station_announcer:block/el_stair_roof_frieze_cc"
+   }
+  },
+  {
+   "when": {
+    "facing": "north",
+    "up": "end",
+    "down": "end",
+    "edge_right": "true"
+   },
+   "apply": {
+    "model": "station_announcer:block/el_stair_roof_frieze_cc_r"
+   }
+  },
+  {
+   "when": {
+    "facing": "north",
+    "up": "end",
+    "down": "landing"
+   },
+   "apply": {
+    "model": "station_announcer:block/el_stair_roof_deck_cl"
+   }
+  },
+  {
+   "when": {
+    "facing": "north",
+    "up": "end",
+    "down": "landing",
+    "edge_left": "true"
+   },
+   "apply": {
+    "model": "station_announcer:block/el_stair_roof_frieze_cl"
+   }
+  },
+  {
+   "when": {
+    "facing": "north",
+    "up": "end",
+    "down": "landing",
+    "edge_right": "true"
+   },
+   "apply": {
+    "model": "station_announcer:block/el_stair_roof_frieze_cl_r"
+   }
+  },
+  {
+   "when": {
+    "facing": "north",
+    "up": "landing",
+    "down": "run"
+   },
+   "apply": {
+    "model": "station_announcer:block/el_stair_roof_deck_cn"
+   }
+  },
+  {
+   "when": {
+    "facing": "north",
+    "up": "landing",
+    "down": "run",
+    "edge_left": "true"
+   },
+   "apply": {
+    "model": "station_announcer:block/el_stair_roof_frieze_cn"
+   }
+  },
+  {
+   "when": {
+    "facing": "north",
+    "up": "landing",
+    "down": "run",
+    "edge_right": "true"
+   },
+   "apply": {
+    "model": "station_announcer:block/el_stair_roof_frieze_cn_r"
+   }
+  },
+  {
+   "when": {
+    "facing": "north",
+    "up": "landing",
+    "down": "end"
+   },
+   "apply": {
+    "model": "station_announcer:block/el_stair_roof_deck_cc"
+   }
+  },
+  {
+   "when": {
+    "facing": "north",
+    "up": "landing",
+    "down": "end",
+    "edge_left": "true"
+   },
+   "apply": {
+    "model": "station_announcer:block/el_stair_roof_frieze_cc"
+   }
+  },
+  {
+   "when": {
+    "facing": "north",
+    "up": "landing",
+    "down": "end",
+    "edge_right": "true"
+   },
+   "apply": {
+    "model": "station_announcer:block/el_stair_roof_frieze_cc_r"
+   }
+  },
+  {
+   "when": {
+    "facing": "north",
+    "up": "landing",
+    "down": "landing"
+   },
+   "apply": {
+    "model": "station_announcer:block/el_stair_roof_deck_cl"
+   }
+  },
+  {
+   "when": {
+    "facing": "north",
+    "up": "landing",
+    "down": "landing",
+    "edge_left": "true"
+   },
+   "apply": {
+    "model": "station_announcer:block/el_stair_roof_frieze_cl"
+   }
+  },
+  {
+   "when": {
+    "facing": "north",
+    "up": "landing",
+    "down": "landing",
+    "edge_right": "true"
+   },
+   "apply": {
+    "model": "station_announcer:block/el_stair_roof_frieze_cl_r"
+   }
+  },
+  {
+   "when": {
+    "facing": "north",
+    "down": "end"
+   },
+   "apply": {
+    "model": "station_announcer:block/el_stair_roof_end_down"
+   }
+  },
+  {
+   "when": {
+    "facing": "north",
+    "up": "end"
+   },
+   "apply": {
+    "model": "station_announcer:block/el_stair_roof_end_up"
+   }
+  },
+  {
+   "when": {
+    "facing": "east",
+    "up": "run",
+    "down": "run"
+   },
+   "apply": {
+    "model": "station_announcer:block/el_stair_roof_deck_nn",
+    "y": 90
+   }
+  },
+  {
+   "when": {
+    "facing": "east",
+    "up": "run",
+    "down": "run",
+    "edge_left": "true"
+   },
+   "apply": {
+    "model": "station_announcer:block/el_stair_roof_frieze_nn",
+    "y": 90
+   }
+  },
+  {
+   "when": {
+    "facing": "east",
+    "up": "run",
+    "down": "run",
+    "edge_right": "true"
+   },
+   "apply": {
+    "model": "station_announcer:block/el_stair_roof_frieze_nn_r",
+    "y": 90
+   }
+  },
+  {
+   "when": {
+    "facing": "east",
+    "up": "run",
+    "down": "end"
+   },
+   "apply": {
+    "model": "station_announcer:block/el_stair_roof_deck_nc",
+    "y": 90
+   }
+  },
+  {
+   "when": {
+    "facing": "east",
+    "up": "run",
+    "down": "end",
+    "edge_left": "true"
+   },
+   "apply": {
+    "model": "station_announcer:block/el_stair_roof_frieze_nc",
+    "y": 90
+   }
+  },
+  {
+   "when": {
+    "facing": "east",
+    "up": "run",
+    "down": "end",
+    "edge_right": "true"
+   },
+   "apply": {
+    "model": "station_announcer:block/el_stair_roof_frieze_nc_r",
+    "y": 90
+   }
+  },
+  {
+   "when": {
+    "facing": "east",
+    "up": "run",
+    "down": "landing"
+   },
+   "apply": {
+    "model": "station_announcer:block/el_stair_roof_deck_nl",
+    "y": 90
+   }
+  },
+  {
+   "when": {
+    "facing": "east",
+    "up": "run",
+    "down": "landing",
+    "edge_left": "true"
+   },
+   "apply": {
+    "model": "station_announcer:block/el_stair_roof_frieze_nl",
+    "y": 90
+   }
+  },
+  {
+   "when": {
+    "facing": "east",
+    "up": "run",
+    "down": "landing",
+    "edge_right": "true"
+   },
+   "apply": {
+    "model": "station_announcer:block/el_stair_roof_frieze_nl_r",
+    "y": 90
+   }
+  },
+  {
+   "when": {
+    "facing": "east",
+    "up": "end",
+    "down": "run"
+   },
+   "apply": {
+    "model": "station_announcer:block/el_stair_roof_deck_cn",
+    "y": 90
+   }
+  },
+  {
+   "when": {
+    "facing": "east",
+    "up": "end",
+    "down": "run",
+    "edge_left": "true"
+   },
+   "apply": {
+    "model": "station_announcer:block/el_stair_roof_frieze_cn",
+    "y": 90
+   }
+  },
+  {
+   "when": {
+    "facing": "east",
+    "up": "end",
+    "down": "run",
+    "edge_right": "true"
+   },
+   "apply": {
+    "model": "station_announcer:block/el_stair_roof_frieze_cn_r",
+    "y": 90
+   }
+  },
+  {
+   "when": {
+    "facing": "east",
+    "up": "end",
+    "down": "end"
+   },
+   "apply": {
+    "model": "station_announcer:block/el_stair_roof_deck_cc",
+    "y": 90
+   }
+  },
+  {
+   "when": {
+    "facing": "east",
+    "up": "end",
+    "down": "end",
+    "edge_left": "true"
+   },
+   "apply": {
+    "model": "station_announcer:block/el_stair_roof_frieze_cc",
+    "y": 90
+   }
+  },
+  {
+   "when": {
+    "facing": "east",
+    "up": "end",
+    "down": "end",
+    "edge_right": "true"
+   },
+   "apply": {
+    "model": "station_announcer:block/el_stair_roof_frieze_cc_r",
+    "y": 90
+   }
+  },
+  {
+   "when": {
+    "facing": "east",
+    "up": "end",
+    "down": "landing"
+   },
+   "apply": {
+    "model": "station_announcer:block/el_stair_roof_deck_cl",
+    "y": 90
+   }
+  },
+  {
+   "when": {
+    "facing": "east",
+    "up": "end",
+    "down": "landing",
+    "edge_left": "true"
+   },
+   "apply": {
+    "model": "station_announcer:block/el_stair_roof_frieze_cl",
+    "y": 90
+   }
+  },
+  {
+   "when": {
+    "facing": "east",
+    "up": "end",
+    "down": "landing",
+    "edge_right": "true"
+   },
+   "apply": {
+    "model": "station_announcer:block/el_stair_roof_frieze_cl_r",
+    "y": 90
+   }
+  },
+  {
+   "when": {
+    "facing": "east",
+    "up": "landing",
+    "down": "run"
+   },
+   "apply": {
+    "model": "station_announcer:block/el_stair_roof_deck_cn",
+    "y": 90
+   }
+  },
+  {
+   "when": {
+    "facing": "east",
+    "up": "landing",
+    "down": "run",
+    "edge_left": "true"
+   },
+   "apply": {
+    "model": "station_announcer:block/el_stair_roof_frieze_cn",
+    "y": 90
+   }
+  },
+  {
+   "when": {
+    "facing": "east",
+    "up": "landing",
+    "down": "run",
+    "edge_right": "true"
+   },
+   "apply": {
+    "model": "station_announcer:block/el_stair_roof_frieze_cn_r",
+    "y": 90
+   }
+  },
+  {
+   "when": {
+    "facing": "east",
+    "up": "landing",
+    "down": "end"
+   },
+   "apply": {
+    "model": "station_announcer:block/el_stair_roof_deck_cc",
+    "y": 90
+   }
+  },
+  {
+   "when": {
+    "facing": "east",
+    "up": "landing",
+    "down": "end",
+    "edge_left": "true"
+   },
+   "apply": {
+    "model": "station_announcer:block/el_stair_roof_frieze_cc",
+    "y": 90
+   }
+  },
+  {
+   "when": {
+    "facing": "east",
+    "up": "landing",
+    "down": "end",
+    "edge_right": "true"
+   },
+   "apply": {
+    "model": "station_announcer:block/el_stair_roof_frieze_cc_r",
+    "y": 90
+   }
+  },
+  {
+   "when": {
+    "facing": "east",
+    "up": "landing",
+    "down": "landing"
+   },
+   "apply": {
+    "model": "station_announcer:block/el_stair_roof_deck_cl",
+    "y": 90
+   }
+  },
+  {
+   "when": {
+    "facing": "east",
+    "up": "landing",
+    "down": "landing",
+    "edge_left": "true"
+   },
+   "apply": {
+    "model": "station_announcer:block/el_stair_roof_frieze_cl",
+    "y": 90
+   }
+  },
+  {
+   "when": {
+    "facing": "east",
+    "up": "landing",
+    "down": "landing",
+    "edge_right": "true"
+   },
+   "apply": {
+    "model": "station_announcer:block/el_stair_roof_frieze_cl_r",
+    "y": 90
+   }
+  },
+  {
+   "when": {
+    "facing": "east",
+    "down": "end"
+   },
+   "apply": {
+    "model": "station_announcer:block/el_stair_roof_end_down",
+    "y": 90
+   }
+  },
+  {
+   "when": {
+    "facing": "east",
+    "up": "end"
+   },
+   "apply": {
+    "model": "station_announcer:block/el_stair_roof_end_up",
+    "y": 90
+   }
+  },
+  {
+   "when": {
+    "facing": "south",
+    "up": "run",
+    "down": "run"
+   },
+   "apply": {
+    "model": "station_announcer:block/el_stair_roof_deck_nn",
+    "y": 180
+   }
+  },
+  {
+   "when": {
+    "facing": "south",
+    "up": "run",
+    "down": "run",
+    "edge_left": "true"
+   },
+   "apply": {
+    "model": "station_announcer:block/el_stair_roof_frieze_nn",
+    "y": 180
+   }
+  },
+  {
+   "when": {
+    "facing": "south",
+    "up": "run",
+    "down": "run",
+    "edge_right": "true"
+   },
+   "apply": {
+    "model": "station_announcer:block/el_stair_roof_frieze_nn_r",
+    "y": 180
+   }
+  },
+  {
+   "when": {
+    "facing": "south",
+    "up": "run",
+    "down": "end"
+   },
+   "apply": {
+    "model": "station_announcer:block/el_stair_roof_deck_nc",
+    "y": 180
+   }
+  },
+  {
+   "when": {
+    "facing": "south",
+    "up": "run",
+    "down": "end",
+    "edge_left": "true"
+   },
+   "apply": {
+    "model": "station_announcer:block/el_stair_roof_frieze_nc",
+    "y": 180
+   }
+  },
+  {
+   "when": {
+    "facing": "south",
+    "up": "run",
+    "down": "end",
+    "edge_right": "true"
+   },
+   "apply": {
+    "model": "station_announcer:block/el_stair_roof_frieze_nc_r",
+    "y": 180
+   }
+  },
+  {
+   "when": {
+    "facing": "south",
+    "up": "run",
+    "down": "landing"
+   },
+   "apply": {
+    "model": "station_announcer:block/el_stair_roof_deck_nl",
+    "y": 180
+   }
+  },
+  {
+   "when": {
+    "facing": "south",
+    "up": "run",
+    "down": "landing",
+    "edge_left": "true"
+   },
+   "apply": {
+    "model": "station_announcer:block/el_stair_roof_frieze_nl",
+    "y": 180
+   }
+  },
+  {
+   "when": {
+    "facing": "south",
+    "up": "run",
+    "down": "landing",
+    "edge_right": "true"
+   },
+   "apply": {
+    "model": "station_announcer:block/el_stair_roof_frieze_nl_r",
+    "y": 180
+   }
+  },
+  {
+   "when": {
+    "facing": "south",
+    "up": "end",
+    "down": "run"
+   },
+   "apply": {
+    "model": "station_announcer:block/el_stair_roof_deck_cn",
+    "y": 180
+   }
+  },
+  {
+   "when": {
+    "facing": "south",
+    "up": "end",
+    "down": "run",
+    "edge_left": "true"
+   },
+   "apply": {
+    "model": "station_announcer:block/el_stair_roof_frieze_cn",
+    "y": 180
+   }
+  },
+  {
+   "when": {
+    "facing": "south",
+    "up": "end",
+    "down": "run",
+    "edge_right": "true"
+   },
+   "apply": {
+    "model": "station_announcer:block/el_stair_roof_frieze_cn_r",
+    "y": 180
+   }
+  },
+  {
+   "when": {
+    "facing": "south",
+    "up": "end",
+    "down": "end"
+   },
+   "apply": {
+    "model": "station_announcer:block/el_stair_roof_deck_cc",
+    "y": 180
+   }
+  },
+  {
+   "when": {
+    "facing": "south",
+    "up": "end",
+    "down": "end",
+    "edge_left": "true"
+   },
+   "apply": {
+    "model": "station_announcer:block/el_stair_roof_frieze_cc",
+    "y": 180
+   }
+  },
+  {
+   "when": {
+    "facing": "south",
+    "up": "end",
+    "down": "end",
+    "edge_right": "true"
+   },
+   "apply": {
+    "model": "station_announcer:block/el_stair_roof_frieze_cc_r",
+    "y": 180
+   }
+  },
+  {
+   "when": {
+    "facing": "south",
+    "up": "end",
+    "down": "landing"
+   },
+   "apply": {
+    "model": "station_announcer:block/el_stair_roof_deck_cl",
+    "y": 180
+   }
+  },
+  {
+   "when": {
+    "facing": "south",
+    "up": "end",
+    "down": "landing",
+    "edge_left": "true"
+   },
+   "apply": {
+    "model": "station_announcer:block/el_stair_roof_frieze_cl",
+    "y": 180
+   }
+  },
+  {
+   "when": {
+    "facing": "south",
+    "up": "end",
+    "down": "landing",
+    "edge_right": "true"
+   },
+   "apply": {
+    "model": "station_announcer:block/el_stair_roof_frieze_cl_r",
+    "y": 180
+   }
+  },
+  {
+   "when": {
+    "facing": "south",
+    "up": "landing",
+    "down": "run"
+   },
+   "apply": {
+    "model": "station_announcer:block/el_stair_roof_deck_cn",
+    "y": 180
+   }
+  },
+  {
+   "when": {
+    "facing": "south",
+    "up": "landing",
+    "down": "run",
+    "edge_left": "true"
+   },
+   "apply": {
+    "model": "station_announcer:block/el_stair_roof_frieze_cn",
+    "y": 180
+   }
+  },
+  {
+   "when": {
+    "facing": "south",
+    "up": "landing",
+    "down": "run",
+    "edge_right": "true"
+   },
+   "apply": {
+    "model": "station_announcer:block/el_stair_roof_frieze_cn_r",
+    "y": 180
+   }
+  },
+  {
+   "when": {
+    "facing": "south",
+    "up": "landing",
+    "down": "end"
+   },
+   "apply": {
+    "model": "station_announcer:block/el_stair_roof_deck_cc",
+    "y": 180
+   }
+  },
+  {
+   "when": {
+    "facing": "south",
+    "up": "landing",
+    "down": "end",
+    "edge_left": "true"
+   },
+   "apply": {
+    "model": "station_announcer:block/el_stair_roof_frieze_cc",
+    "y": 180
+   }
+  },
+  {
+   "when": {
+    "facing": "south",
+    "up": "landing",
+    "down": "end",
+    "edge_right": "true"
+   },
+   "apply": {
+    "model": "station_announcer:block/el_stair_roof_frieze_cc_r",
+    "y": 180
+   }
+  },
+  {
+   "when": {
+    "facing": "south",
+    "up": "landing",
+    "down": "landing"
+   },
+   "apply": {
+    "model": "station_announcer:block/el_stair_roof_deck_cl",
+    "y": 180
+   }
+  },
+  {
+   "when": {
+    "facing": "south",
+    "up": "landing",
+    "down": "landing",
+    "edge_left": "true"
+   },
+   "apply": {
+    "model": "station_announcer:block/el_stair_roof_frieze_cl",
+    "y": 180
+   }
+  },
+  {
+   "when": {
+    "facing": "south",
+    "up": "landing",
+    "down": "landing",
+    "edge_right": "true"
+   },
+   "apply": {
+    "model": "station_announcer:block/el_stair_roof_frieze_cl_r",
+    "y": 180
+   }
+  },
+  {
+   "when": {
+    "facing": "south",
+    "down": "end"
+   },
+   "apply": {
+    "model": "station_announcer:block/el_stair_roof_end_down",
+    "y": 180
+   }
+  },
+  {
+   "when": {
+    "facing": "south",
+    "up": "end"
+   },
+   "apply": {
+    "model": "station_announcer:block/el_stair_roof_end_up",
+    "y": 180
+   }
+  },
+  {
+   "when": {
+    "facing": "west",
+    "up": "run",
+    "down": "run"
+   },
+   "apply": {
+    "model": "station_announcer:block/el_stair_roof_deck_nn",
+    "y": 270
+   }
+  },
+  {
+   "when": {
+    "facing": "west",
+    "up": "run",
+    "down": "run",
+    "edge_left": "true"
+   },
+   "apply": {
+    "model": "station_announcer:block/el_stair_roof_frieze_nn",
+    "y": 270
+   }
+  },
+  {
+   "when": {
+    "facing": "west",
+    "up": "run",
+    "down": "run",
+    "edge_right": "true"
+   },
+   "apply": {
+    "model": "station_announcer:block/el_stair_roof_frieze_nn_r",
+    "y": 270
+   }
+  },
+  {
+   "when": {
+    "facing": "west",
+    "up": "run",
+    "down": "end"
+   },
+   "apply": {
+    "model": "station_announcer:block/el_stair_roof_deck_nc",
+    "y": 270
+   }
+  },
+  {
+   "when": {
+    "facing": "west",
+    "up": "run",
+    "down": "end",
+    "edge_left": "true"
+   },
+   "apply": {
+    "model": "station_announcer:block/el_stair_roof_frieze_nc",
+    "y": 270
+   }
+  },
+  {
+   "when": {
+    "facing": "west",
+    "up": "run",
+    "down": "end",
+    "edge_right": "true"
+   },
+   "apply": {
+    "model": "station_announcer:block/el_stair_roof_frieze_nc_r",
+    "y": 270
+   }
+  },
+  {
+   "when": {
+    "facing": "west",
+    "up": "run",
+    "down": "landing"
+   },
+   "apply": {
+    "model": "station_announcer:block/el_stair_roof_deck_nl",
+    "y": 270
+   }
+  },
+  {
+   "when": {
+    "facing": "west",
+    "up": "run",
+    "down": "landing",
+    "edge_left": "true"
+   },
+   "apply": {
+    "model": "station_announcer:block/el_stair_roof_frieze_nl",
+    "y": 270
+   }
+  },
+  {
+   "when": {
+    "facing": "west",
+    "up": "run",
+    "down": "landing",
+    "edge_right": "true"
+   },
+   "apply": {
+    "model": "station_announcer:block/el_stair_roof_frieze_nl_r",
+    "y": 270
+   }
+  },
+  {
+   "when": {
+    "facing": "west",
+    "up": "end",
+    "down": "run"
+   },
+   "apply": {
+    "model": "station_announcer:block/el_stair_roof_deck_cn",
+    "y": 270
+   }
+  },
+  {
+   "when": {
+    "facing": "west",
+    "up": "end",
+    "down": "run",
+    "edge_left": "true"
+   },
+   "apply": {
+    "model": "station_announcer:block/el_stair_roof_frieze_cn",
+    "y": 270
+   }
+  },
+  {
+   "when": {
+    "facing": "west",
+    "up": "end",
+    "down": "run",
+    "edge_right": "true"
+   },
+   "apply": {
+    "model": "station_announcer:block/el_stair_roof_frieze_cn_r",
+    "y": 270
+   }
+  },
+  {
+   "when": {
+    "facing": "west",
+    "up": "end",
+    "down": "end"
+   },
+   "apply": {
+    "model": "station_announcer:block/el_stair_roof_deck_cc",
+    "y": 270
+   }
+  },
+  {
+   "when": {
+    "facing": "west",
+    "up": "end",
+    "down": "end",
+    "edge_left": "true"
+   },
+   "apply": {
+    "model": "station_announcer:block/el_stair_roof_frieze_cc",
+    "y": 270
+   }
+  },
+  {
+   "when": {
+    "facing": "west",
+    "up": "end",
+    "down": "end",
+    "edge_right": "true"
+   },
+   "apply": {
+    "model": "station_announcer:block/el_stair_roof_frieze_cc_r",
+    "y": 270
+   }
+  },
+  {
+   "when": {
+    "facing": "west",
+    "up": "end",
+    "down": "landing"
+   },
+   "apply": {
+    "model": "station_announcer:block/el_stair_roof_deck_cl",
+    "y": 270
+   }
+  },
+  {
+   "when": {
+    "facing": "west",
+    "up": "end",
+    "down": "landing",
+    "edge_left": "true"
+   },
+   "apply": {
+    "model": "station_announcer:block/el_stair_roof_frieze_cl",
+    "y": 270
+   }
+  },
+  {
+   "when": {
+    "facing": "west",
+    "up": "end",
+    "down": "landing",
+    "edge_right": "true"
+   },
+   "apply": {
+    "model": "station_announcer:block/el_stair_roof_frieze_cl_r",
+    "y": 270
+   }
+  },
+  {
+   "when": {
+    "facing": "west",
+    "up": "landing",
+    "down": "run"
+   },
+   "apply": {
+    "model": "station_announcer:block/el_stair_roof_deck_cn",
+    "y": 270
+   }
+  },
+  {
+   "when": {
+    "facing": "west",
+    "up": "landing",
+    "down": "run",
+    "edge_left": "true"
+   },
+   "apply": {
+    "model": "station_announcer:block/el_stair_roof_frieze_cn",
+    "y": 270
+   }
+  },
+  {
+   "when": {
+    "facing": "west",
+    "up": "landing",
+    "down": "run",
+    "edge_right": "true"
+   },
+   "apply": {
+    "model": "station_announcer:block/el_stair_roof_frieze_cn_r",
+    "y": 270
+   }
+  },
+  {
+   "when": {
+    "facing": "west",
+    "up": "landing",
+    "down": "end"
+   },
+   "apply": {
+    "model": "station_announcer:block/el_stair_roof_deck_cc",
+    "y": 270
+   }
+  },
+  {
+   "when": {
+    "facing": "west",
+    "up": "landing",
+    "down": "end",
+    "edge_left": "true"
+   },
+   "apply": {
+    "model": "station_announcer:block/el_stair_roof_frieze_cc",
+    "y": 270
+   }
+  },
+  {
+   "when": {
+    "facing": "west",
+    "up": "landing",
+    "down": "end",
+    "edge_right": "true"
+   },
+   "apply": {
+    "model": "station_announcer:block/el_stair_roof_frieze_cc_r",
+    "y": 270
+   }
+  },
+  {
+   "when": {
+    "facing": "west",
+    "up": "landing",
+    "down": "landing"
+   },
+   "apply": {
+    "model": "station_announcer:block/el_stair_roof_deck_cl",
+    "y": 270
+   }
+  },
+  {
+   "when": {
+    "facing": "west",
+    "up": "landing",
+    "down": "landing",
+    "edge_left": "true"
+   },
+   "apply": {
+    "model": "station_announcer:block/el_stair_roof_frieze_cl",
+    "y": 270
+   }
+  },
+  {
+   "when": {
+    "facing": "west",
+    "up": "landing",
+    "down": "landing",
+    "edge_right": "true"
+   },
+   "apply": {
+    "model": "station_announcer:block/el_stair_roof_frieze_cl_r",
+    "y": 270
+   }
+  },
+  {
+   "when": {
+    "facing": "west",
+    "down": "end"
+   },
+   "apply": {
+    "model": "station_announcer:block/el_stair_roof_end_down",
+    "y": 270
+   }
+  },
+  {
+   "when": {
+    "facing": "west",
+    "up": "end"
+   },
+   "apply": {
+    "model": "station_announcer:block/el_stair_roof_end_up",
+    "y": 270
+   }
+  }
+ ]
+}

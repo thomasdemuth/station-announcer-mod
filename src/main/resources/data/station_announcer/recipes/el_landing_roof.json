@@ -1,0 +1,20 @@
+{
+ "type": "minecraft:crafting_shaped",
+ "category": "building",
+ "key": {
+  "R": {
+   "item": "minecraft:red_terracotta"
+  },
+  "I": {
+   "item": "minecraft:iron_bars"
+  }
+ },
+ "pattern": [
+  "RRR",
+  "I I"
+ ],
+ "result": {
+  "item": "station_announcer:el_landing_roof",
+  "count": 4
+ }
+}

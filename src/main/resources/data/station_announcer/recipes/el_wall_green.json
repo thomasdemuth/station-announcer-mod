@@ -1,0 +1,20 @@
+{
+ "type": "minecraft:crafting_shaped",
+ "category": "building",
+ "key": {
+  "I": {
+   "item": "minecraft:iron_ingot"
+  },
+  "D": {
+   "item": "minecraft:green_dye"
+  }
+ },
+ "pattern": [
+  "IDI",
+  "IDI"
+ ],
+ "result": {
+  "item": "station_announcer:el_wall_green",
+  "count": 6
+ }
+}

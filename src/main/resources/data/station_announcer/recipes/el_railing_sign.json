@@ -1,0 +1,16 @@
+{
+ "type": "minecraft:crafting_shapeless",
+ "category": "building",
+ "ingredients": [
+  {
+   "item": "station_announcer:el_railing"
+  },
+  {
+   "item": "minecraft:black_dye"
+  }
+ ],
+ "result": {
+  "item": "station_announcer:el_railing_sign",
+  "count": 1
+ }
+}

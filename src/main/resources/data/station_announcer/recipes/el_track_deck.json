@@ -1,0 +1,20 @@
+{
+ "type": "minecraft:crafting_shaped",
+ "category": "building",
+ "key": {
+  "I": {
+   "item": "minecraft:iron_ingot"
+  },
+  "W": {
+   "item": "minecraft:dark_oak_slab"
+  }
+ },
+ "pattern": [
+  "WWW",
+  "I I"
+ ],
+ "result": {
+  "item": "station_announcer:el_track_deck",
+  "count": 6
+ }
+}

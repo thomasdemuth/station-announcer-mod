@@ -107,7 +107,7 @@ S = SIZE / 48.0              # geometry scale; artifact sizes were tuned at 48
 # inside one block (cols 9..22) or straddles a boundary (cols 89..95 + 0..6).
 GROUT = (PITCH // 2 - 1, PITCH // 2)
 GROUT_EDGE = (GROUT[0] - 1, GROUT[1] + 1)   # the tile pixels flanking the grout
-SLAB_SIZES = (2, 3, 4)       # concrete slab widths offered as separate blocks
+SLAB_SIZES = (1, 2, 3, 4)    # concrete slab widths offered as separate blocks
 
 # grime variants per material, and the 8-slot weight table the Java model
 # indexes with a position hash (so light grime is common, gum rare)
@@ -666,6 +666,154 @@ def convert_recipe(name, source, result):
 
 
 # =====================================================================
+# PLATFORM EDGE - the yellow tactile strip along the track side
+# =====================================================================
+#
+# One block, `platform_edge`, whose concrete body is the SAME weighted floor
+# models the concrete floors use (picked by the clean/joint properties the
+# Java block adopts from whatever floor it is placed against), plus a strip
+# element on the FACING edge: 10 model px wide (the NYC 24-inch detectable
+# warning) and 0.5 px proud, the way the real cast tiles sit on the slab.
+# Only the strip is rotated by the blockstate; the concrete body is world-
+# aligned, so the slab joints stay on the world grid across the whole edge.
+#
+# The strip texture is a 96 px square like everything else here (square is
+# the only shape the atlas takes for block textures); rows 0..59 are the top,
+# rows 60..63 the lip the side faces sample.
+
+STRIP_W = 10                                   # model px, of 16
+STRIP_ROWS = STRIP_W * SIZE // 16              # 60 canvas rows
+STRIP_DIRTY = dict(base=(184, 154, 44), dome_lo=-34, dome_hi=22, grime=0.42,
+                   scuffs=6, lip=(150, 124, 30))
+STRIP_CLEAN = dict(base=(212, 180, 50), dome_lo=-30, dome_hi=26, grime=0.14,
+                   scuffs=1, lip=(176, 148, 36))
+
+
+def strip_texture(pal, seed):
+    rng = random.Random(seed)
+    rows = canvas(pal["base"])
+    lf = fractal_noise(rng)
+    for y in range(SIZE):
+        for x in range(SIZE):
+            c = shade(pal["base"], rng.uniform(-6, 6))
+            rows[y][x] = mul(c, 0.94 + 0.10 * (lf[y][x] * 0.5 + 0.5))
+
+    # truncated domes on a square grid: pitch 6 (~2.4 in at this scale),
+    # a 3 px dome with a lit top-left and a shadowed bottom-right rim
+    pitch = 6
+    for cy in range(3, STRIP_ROWS, pitch):
+        for cx in range(3, SIZE, pitch):
+            for oy in range(-1, 2):
+                for ox in range(-1, 2):
+                    if abs(ox) + abs(oy) == 2:
+                        continue
+                    d = pal["dome_hi"] if (ox + oy) < 0 else (pal["dome_lo"] if (ox + oy) > 0 else 4)
+                    blend(rows, cx + ox, cy + oy, shade(pal["base"], d), 0.85)
+            blend(rows, cx + 1, cy + 1, shade(pal["base"], pal["dome_lo"] - 10), 0.6)
+
+    # grime: heaviest toward the track lip (row 0), where boots and the gap
+    # between train and platform leave it; mild scuffs across the field
+    for y in range(STRIP_ROWS):
+        edge = max(0.0, 1.0 - y / 14.0)
+        for x in range(SIZE):
+            g = pal["grime"] * (0.35 + 0.65 * (lf[y][(x * 3) % SIZE] * 0.5 + 0.5)) * (0.5 + edge)
+            if g > 0:
+                blend(rows, x, y, (70, 62, 40), min(0.6, g))
+    for _ in range(pal["scuffs"]):
+        x0, y0 = rng.randrange(SIZE), rng.randrange(STRIP_ROWS)
+        wrap_streak(rows, x0, y0, rng.choice((1, -1)), rng.uniform(-0.3, 0.3),
+                    rng.randint(8, 22), (88, 78, 48), 0.35)
+
+    # the lip rows the vertical faces sample; darker, no domes
+    for y in range(STRIP_ROWS, SIZE):
+        for x in range(SIZE):
+            rows[y][x] = shade(pal["lip"], rng.uniform(-6, 6))
+    return rows
+
+
+def strip_model(name, texture):
+    """The proud strip on the NORTH edge; the blockstate turns it per facing.
+
+    Its end faces at x=0/16 are deliberately NOT cullfaced: between two edge
+    blocks they sit back to back and never show, but at the end of a run the
+    neighbour is a plain floor whose cube stops at y=16 - culling there would
+    leave the strip open-ended.
+    """
+    t = f"{MOD}:block/{texture}"
+    lip = [0, STRIP_W, 16, STRIP_W + 0.5]
+    write_json(os.path.join(MODELS, name + ".json"), {
+        "textures": {"strip": t, "particle": t},
+        "elements": [{
+            "from": [0, 16, 0], "to": [16, 16.5, STRIP_W],
+            "faces": {
+                "up": {"uv": [0, 0, 16, STRIP_W], "texture": "#strip"},
+                "north": {"uv": lip, "texture": "#strip"},
+                "south": {"uv": lip, "texture": "#strip"},
+                "east": {"uv": [0, STRIP_W, STRIP_W, STRIP_W + 0.5], "texture": "#strip"},
+                "west": {"uv": [0, STRIP_W, STRIP_W, STRIP_W + 0.5], "texture": "#strip"},
+            },
+        }],
+    })
+
+
+def platform_edge_assets():
+    strip_model("platform_edge_strip", "platform_edge_strip")
+    strip_model("platform_edge_strip_clean", "platform_edge_strip_clean")
+
+    parts = []
+    for clean, prefix, count, weights in (
+            (False, "platform_concrete_floor", CONCRETE_DIRTY_VARIANTS, CONCRETE_DIRTY_WEIGHTS),
+            (True, "platform_concrete_floor_clean", CONCRETE_CLEAN_VARIANTS, CONCRETE_CLEAN_WEIGHTS)):
+        for combo in range(4):
+            north, west = bool(combo & 1), bool(combo & 2)
+            parts.append({
+                "when": {"clean": str(clean).lower(), "joint_north": str(north).lower(),
+                         "joint_west": str(west).lower()},
+                "apply": [{"model": f"{MOD}:block/{prefix}_c{combo}_{g}", "weight": weights[g]}
+                          for g in range(count)],
+            })
+        strip = "platform_edge_strip_clean" if clean else "platform_edge_strip"
+        for facing, y in (("north", 0), ("east", 90), ("south", 180), ("west", 270)):
+            apply = {"model": f"{MOD}:block/{strip}"}
+            if y:
+                apply["y"] = y
+            parts.append({"when": {"clean": str(clean).lower(), "facing": facing}, "apply": apply})
+    write_json(os.path.join(BLOCKSTATES, "platform_edge.json"), {"multipart": parts})
+
+    # item: the dirty 3-slab body with the strip, as one model
+    top = f"{MOD}:block/platform_concrete_floor_top_c3_0"
+    side = f"{MOD}:block/platform_concrete_floor_side"
+    strip = f"{MOD}:block/platform_edge_strip"
+    lip = [0, STRIP_W, 16, STRIP_W + 0.5]
+    write_json(os.path.join(MODELS, "platform_edge_item.json"), {
+        "parent": "minecraft:block/block",
+        "textures": {"top": top, "side": side, "strip": strip, "particle": side},
+        "elements": [
+            {"from": [0, 0, 0], "to": [16, 16, 16], "faces": {
+                "up": {"texture": "#top"}, "down": {"texture": "#side"},
+                "north": {"texture": "#side"}, "south": {"texture": "#side"},
+                "east": {"texture": "#side"}, "west": {"texture": "#side"}}},
+            {"from": [0, 16, 0], "to": [16, 16.5, STRIP_W], "faces": {
+                "up": {"uv": [0, 0, 16, STRIP_W], "texture": "#strip"},
+                "north": {"uv": lip, "texture": "#strip"},
+                "south": {"uv": lip, "texture": "#strip"},
+                "east": {"uv": [0, STRIP_W, STRIP_W, STRIP_W + 0.5], "texture": "#strip"},
+                "west": {"uv": [0, STRIP_W, STRIP_W, STRIP_W + 0.5], "texture": "#strip"}}},
+        ],
+    })
+    item_model("platform_edge", "platform_edge_item")
+    loot_table("platform_edge")
+    write_json(os.path.join(DATA, "recipes", "platform_edge.json"), {
+        "type": "minecraft:crafting_shaped",
+        "category": "building",
+        "key": {"Y": {"item": "minecraft:yellow_dye"},
+                "C": {"item": f"{MOD}:platform_concrete_floor_3"}},
+        "pattern": ["YYY", "CCC"],
+        "result": {"item": f"{MOD}:platform_edge", "count": 6},
+    })
+
+
+# =====================================================================
 # MAIN
 # =====================================================================
 
@@ -694,6 +842,8 @@ def build_textures():
                     pal, f"{prefix}/{g}", profile, north, west)
         out[f"{prefix}_side"] = concrete_side(pal, f"{prefix}/side")
 
+    out["platform_edge_strip"] = strip_texture(STRIP_DIRTY, "edge/dirty")
+    out["platform_edge_strip_clean"] = strip_texture(STRIP_CLEAN, "edge/clean")
     return out
 
 
@@ -749,6 +899,8 @@ def build_assets(textures):
         loot_table(f"platform_concrete_floor_{n}")
         loot_table(f"platform_concrete_floor_{n}_clean")
 
+    platform_edge_assets()
+
     # ---- recipes
     ring_recipe("platform_tile_floor", "minecraft:smooth_stone", "minecraft:gray_dye",
                 "platform_tile_floor", 8)
@@ -760,7 +912,7 @@ def build_assets(textures):
                 "platform_concrete_floor_3_clean", 8)
     # cycle the slab width in the crafting grid rather than shipping six recipes
     for suffix in ("", "_clean"):
-        for a, b in ((3, 2), (2, 4), (4, 3)):
+        for a, b in ((3, 2), (2, 1), (1, 4), (4, 3)):
             convert_recipe(f"platform_concrete_floor_{b}{suffix}_from_{a}",
                            f"platform_concrete_floor_{a}{suffix}",
                            f"platform_concrete_floor_{b}{suffix}")

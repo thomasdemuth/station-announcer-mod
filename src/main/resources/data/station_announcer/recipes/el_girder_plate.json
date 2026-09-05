@@ -1,0 +1,21 @@
+{
+ "type": "minecraft:crafting_shaped",
+ "category": "building",
+ "key": {
+  "I": {
+   "item": "minecraft:iron_ingot"
+  },
+  "D": {
+   "item": "minecraft:green_dye"
+  }
+ },
+ "pattern": [
+  "III",
+  "IDI",
+  "III"
+ ],
+ "result": {
+  "item": "station_announcer:el_girder_plate",
+  "count": 6
+ }
+}

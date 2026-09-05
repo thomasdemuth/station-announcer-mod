@@ -1,0 +1,118 @@
+{
+ "textures": {
+  "green": "station_announcer:block/el2_green",
+  "cream": "station_announcer:block/el2_cream",
+  "glass": "station_announcer:block/el2_wired_glass"
+ },
+ "elements": [
+  {
+   "from": [
+    13.6,
+    16.0,
+    0
+   ],
+   "to": [
+    16,
+    31.0,
+    2.4
+   ],
+   "faces": {
+    "north": {
+     "uv": [
+      2.4,
+      0,
+      0,
+      15
+     ],
+     "texture": "#green"
+    },
+    "south": {
+     "uv": [
+      2.4,
+      0,
+      0,
+      15
+     ],
+     "texture": "#green"
+    },
+    "west": {
+     "uv": [
+      4,
+      0,
+      6.4,
+      15
+     ],
+     "texture": "#green"
+    },
+    "east": {
+     "uv": [
+      4,
+      0,
+      6.4,
+      15
+     ],
+     "texture": "#green"
+    }
+   }
+  },
+  {
+   "from": [
+    13.6,
+    16.0,
+    6.8
+   ],
+   "to": [
+    16,
+    32.0,
+    9.2
+   ],
+   "faces": {
+    "north": {
+     "uv": [
+      2.4,
+      0,
+      0,
+      16
+     ],
+     "texture": "#green"
+    },
+    "south": {
+     "uv": [
+      2.4,
+      0,
+      0,
+      16
+     ],
+     "texture": "#green"
+    },
+    "west": {
+     "uv": [
+      4,
+      0,
+      6.4,
+      16
+     ],
+     "texture": "#green"
+    },
+    "east": {
+     "uv": [
+      4,
+      0,
+      6.4,
+      16
+     ],
+     "texture": "#green"
+    },
+    "up": {
+     "uv": [
+      2.4,
+      6.8,
+      0,
+      9.2
+     ],
+     "texture": "#green"
+    }
+   }
+  }
+ ]
+}

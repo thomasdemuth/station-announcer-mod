@@ -51,6 +51,11 @@ public class ColumnBlock extends FacingDecorBlock {
     private BlockState withConnections(BlockState state, WorldAccess world, BlockPos pos) {
         return state
                 .with(UP, world.getBlockState(pos.up()).getBlock() instanceof ColumnBlock)
-                .with(DOWN, world.getBlockState(pos.down()).getBlock() instanceof ColumnBlock);
+                .with(DOWN, connectsDown(world.getBlockState(pos.down())));
+    }
+
+    /** What counts as a continuation below (no foot drawn). Subclasses may widen it. */
+    protected boolean connectsDown(BlockState below) {
+        return below.getBlock() instanceof ColumnBlock;
     }
 }

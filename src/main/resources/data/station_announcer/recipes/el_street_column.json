@@ -1,0 +1,21 @@
+{
+ "type": "minecraft:crafting_shaped",
+ "category": "building",
+ "key": {
+  "I": {
+   "item": "minecraft:iron_block"
+  },
+  "D": {
+   "item": "minecraft:green_dye"
+  }
+ },
+ "pattern": [
+  "I",
+  "D",
+  "I"
+ ],
+ "result": {
+  "item": "station_announcer:el_street_column",
+  "count": 6
+ }
+}

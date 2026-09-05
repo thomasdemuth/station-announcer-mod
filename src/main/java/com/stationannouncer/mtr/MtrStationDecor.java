@@ -31,6 +31,8 @@ public final class MtrStationDecor {
         return AbstractBlock.Settings.create().strength(2.0f).sounds(BlockSoundGroup.METAL).nonOpaque();
     }
 
+    /** The door-opening platform edge (implements MTR's PlatformHelper). */
+    public static final PlatformEdgeBlock PLATFORM_EDGE = new PlatformEdgeBlock(ModContent.floorSettings());
     public static final StationDecorBlock STATION_NAME_MOSAIC = new StationDecorBlock(settings(), MOSAIC_SHAPE);
 
     /** Plain and station-tinted columns: pure model blocks, no block entity. */
@@ -114,6 +116,19 @@ public final class MtrStationDecor {
      */
     private static final VoxelShape EL_COLUMN_SHAPE = Block.createCuboidShape(4.7, 0.0, 4.7, 11.3, 16.0, 11.3);
 
+    /** El kit v2 (tools/gen_el2_assets.py): the slim canopy post, plain and station-named. */
+    private static final VoxelShape EL2_POST_SHAPE = Block.createCuboidShape(6.0, 0.0, 6.0, 10.0, 16.0, 10.0);
+    public static final ColumnBlock EL_POST = new ColumnBlock(settings(), EL2_POST_SHAPE);
+    public static final StationColumnBlock EL_POST_NAMED = new StationColumnBlock(settings(), EL2_POST_SHAPE, 0.1625f, 24, 12);
+    public static final ElRailingSignBlock EL_RAILING_SIGN = new ElRailingSignBlock(settings());
+    public static final ElWallSignBlock EL_WALL_SIGN = new ElWallSignBlock(settings());
+    public static final ElNameBoardBlock EL_SIGN = new ElNameBoardBlock(settings(),
+            Block.createCuboidShape(1.0, 0.0, 7.2, 15.0, 13.6, 8.8));
+    /** Lit black entrance sign under the stair hood (tools/gen_el2_stairs.py). */
+    public static final ElEntranceSignBlock EL_ENTRANCE_SIGN = new ElEntranceSignBlock(
+            AbstractBlock.Settings.create().strength(1.0f).sounds(BlockSoundGroup.METAL).nonOpaque().luminance(state -> 12));
+    public static final ElLampPoleBlock EL_LAMP_POLE = new ElLampPoleBlock(settings(),
+            Block.createCuboidShape(6.8, 0.0, 0.0, 9.2, 16.0, 2.4));
     public static final ColumnBlock EL_COLUMN = new ColumnBlock(settings(), EL_COLUMN_SHAPE);
     public static final ColumnBlock EL_COLUMN_SILVER = new ColumnBlock(settings(), EL_COLUMN_SHAPE);
     public static final ColumnBlock EL_COLUMN_STATION = new ColumnBlock(settings(), EL_COLUMN_SHAPE);
@@ -209,7 +224,7 @@ public final class MtrStationDecor {
                     STATION_NAME_MOSAIC, COLUMN_IRON_NAMED, COLUMN_IRON_NAMED_STATION,
                     ENTRANCE_RAILING_SIGN, HOLDING_LIGHT_YELLOW, HOLDING_LIGHT_GREEN,
                     EMPLOYEE_DOOR_MESH, EMPLOYEE_DOOR_BLACK, EMPLOYEE_DOOR_WHITE,
-                    EL_COLUMN_NAMED, EL_COLUMN_NAMED_STATION, EL_NAME_BOARD).build(null);
+                    EL_COLUMN_NAMED, EL_COLUMN_NAMED_STATION, EL_NAME_BOARD, EL_POST_NAMED, EL_RAILING_SIGN, EL_WALL_SIGN, EL_SIGN, EL_ENTRANCE_SIGN).build(null);
 
     /** C2S: the sign name screen saves (pos + custom name; "" = automatic). */
     public static final Identifier UPDATE_DECOR_C2S = StationAnnouncer.id("update_decor");
@@ -334,57 +349,65 @@ public final class MtrStationDecor {
         // The tile-wall set registers itself (blocks, block entity, packet).
         SubwayWalls.register();
 
+        registerBlock("platform_edge", PLATFORM_EDGE, ModContent.DECORATION_ENTRIES);
+        registerBlock("el_post", EL_POST, ModContent.DECORATION_ENTRIES);
+        registerBlock("el_post_named", EL_POST_NAMED, ModContent.DECORATION_ENTRIES);
+        registerEdgeRun("el_railing_sign", EL_RAILING_SIGN);
+        registerEdgeRun("el_wall_sign", EL_WALL_SIGN);
+        registerBlock("el_sign", EL_SIGN, ModContent.DECORATION_ENTRIES);
+        registerBlock("el_entrance_sign", EL_ENTRANCE_SIGN, ModContent.DECORATION_ENTRIES);
+        registerBlock("el_platform_lamp", EL_LAMP_POLE, ModContent.DECORATION_ENTRIES);
         registerBlock("station_name_mosaic", STATION_NAME_MOSAIC, ModContent.DECORATION_ENTRIES);
         registerBlock("column_iron", COLUMN_IRON, ModContent.DECORATION_ENTRIES);
         registerBlock("column_iron_station", COLUMN_IRON_STATION, ModContent.DECORATION_ENTRIES);
         registerBlock("column_iron_named", COLUMN_IRON_NAMED, ModContent.DECORATION_ENTRIES);
         registerBlock("column_iron_named_station", COLUMN_IRON_NAMED_STATION, ModContent.DECORATION_ENTRIES);
-        registerBlock("el_column", EL_COLUMN, ModContent.DECORATION_ENTRIES);
-        registerBlock("el_column_silver", EL_COLUMN_SILVER, ModContent.DECORATION_ENTRIES);
-        registerBlock("el_column_station", EL_COLUMN_STATION, ModContent.DECORATION_ENTRIES);
-        registerBlock("el_column_named", EL_COLUMN_NAMED, ModContent.DECORATION_ENTRIES);
-        registerBlock("el_column_named_station", EL_COLUMN_NAMED_STATION, ModContent.DECORATION_ENTRIES);
-        registerBlock("el_lattice_column", EL_LATTICE_COLUMN, ModContent.DECORATION_ENTRIES);
-        registerBlock("el_lattice_column_silver", EL_LATTICE_COLUMN_SILVER, ModContent.DECORATION_ENTRIES);
-        registerBlock("el_lattice_column_station", EL_LATTICE_COLUMN_STATION, ModContent.DECORATION_ENTRIES);
-        registerBlock("el_girder", EL_GIRDER, ModContent.DECORATION_ENTRIES);
-        registerBlock("el_girder_silver", EL_GIRDER_SILVER, ModContent.DECORATION_ENTRIES);
-        registerBlock("el_girder_station", EL_GIRDER_STATION, ModContent.DECORATION_ENTRIES);
-        registerBlock("el_truss", EL_TRUSS, ModContent.DECORATION_ENTRIES);
-        registerBlock("el_truss_silver", EL_TRUSS_SILVER, ModContent.DECORATION_ENTRIES);
-        registerBlock("el_truss_station", EL_TRUSS_STATION, ModContent.DECORATION_ENTRIES);
-        registerBlock("el_deck_ties", EL_DECK_TIES, ModContent.DECORATION_ENTRIES);
-        registerBlock("el_deck_plate", EL_DECK_PLATE, ModContent.DECORATION_ENTRIES);
-        registerBlock("el_windscreen", EL_WINDSCREEN, ModContent.DECORATION_ENTRIES);
-        registerBlock("el_windscreen_corrugated", EL_WINDSCREEN_CORRUGATED, ModContent.DECORATION_ENTRIES);
-        registerBlock("el_windscreen_glass", EL_WINDSCREEN_GLASS, ModContent.DECORATION_ENTRIES);
-        registerBlock("el_windscreen_mesh", EL_WINDSCREEN_MESH, ModContent.DECORATION_ENTRIES);
-        registerBlock("el_railing_pipe", EL_RAILING_PIPE, ModContent.DECORATION_ENTRIES);
-        registerBlock("el_railing_modern", EL_RAILING_MODERN, ModContent.DECORATION_ENTRIES);
-        registerBlock("el_canopy_post", EL_CANOPY_POST, ModContent.DECORATION_ENTRIES);
-        registerBlock("el_canopy_post_silver", EL_CANOPY_POST_SILVER, ModContent.DECORATION_ENTRIES);
-        registerBlock("el_canopy_flat", EL_CANOPY_FLAT, ModContent.DECORATION_ENTRIES);
-        registerBlock("el_canopy_flat_silver", EL_CANOPY_FLAT_SILVER, ModContent.DECORATION_ENTRIES);
-        registerBlock("el_canopy_gable", EL_CANOPY_GABLE, ModContent.DECORATION_ENTRIES);
-        registerBlock("el_name_board", EL_NAME_BOARD, ModContent.DECORATION_ENTRIES);
-        registerBlock("el_stair_side", EL_STAIR_SIDE, ModContent.DECORATION_ENTRIES);
-        registerBlock("el_stair_canopy", EL_STAIR_CANOPY, ModContent.DECORATION_ENTRIES);
-        registerBlock("el_portal_post", EL_PORTAL_POST, ModContent.DECORATION_ENTRIES);
-        registerBlock("el_portal_header", EL_PORTAL_HEADER, ModContent.DECORATION_ENTRIES);
-        registerBlock("el_house_wall_green", EL_HOUSE_WALL_GREEN, ModContent.DECORATION_ENTRIES);
-        registerBlock("el_house_wall_green_window", EL_HOUSE_WALL_GREEN_WINDOW, ModContent.DECORATION_ENTRIES);
-        registerBlock("el_house_wall_cream", EL_HOUSE_WALL_CREAM, ModContent.DECORATION_ENTRIES);
-        registerBlock("el_house_wall_cream_window", EL_HOUSE_WALL_CREAM_WINDOW, ModContent.DECORATION_ENTRIES);
-        registerBlock("el_wood_platform", EL_WOOD_PLATFORM, ModContent.DECORATION_ENTRIES);
-        registerBlock("el_platform_edge", EL_PLATFORM_EDGE, ModContent.DECORATION_ENTRIES);
-        registerBlock("el_soffit", EL_SOFFIT, ModContent.DECORATION_ENTRIES);
-        registerBlock("el_exit_sign", EL_EXIT_SIGN, ModContent.DECORATION_ENTRIES);
-        registerBlock("el_lamp_gooseneck", EL_LAMP_GOOSENECK, ModContent.DECORATION_ENTRIES);
-        registerBlock("el_lamp_post", EL_LAMP_POST, ModContent.DECORATION_ENTRIES);
-        registerBlock("el_lamp_head", EL_LAMP_HEAD, ModContent.DECORATION_ENTRIES);
-        registerBlock("el_lamp_gooseneck_silver", EL_LAMP_GOOSENECK_SILVER, ModContent.DECORATION_ENTRIES);
-        registerBlock("el_lamp_post_silver", EL_LAMP_POST_SILVER, ModContent.DECORATION_ENTRIES);
-        registerBlock("el_lamp_head_silver", EL_LAMP_HEAD_SILVER, ModContent.DECORATION_ENTRIES);
+        registerBlock("el_column", EL_COLUMN, null);
+        registerBlock("el_column_silver", EL_COLUMN_SILVER, null);
+        registerBlock("el_column_station", EL_COLUMN_STATION, null);
+        registerBlock("el_column_named", EL_COLUMN_NAMED, null);
+        registerBlock("el_column_named_station", EL_COLUMN_NAMED_STATION, null);
+        registerBlock("el_lattice_column", EL_LATTICE_COLUMN, null);
+        registerBlock("el_lattice_column_silver", EL_LATTICE_COLUMN_SILVER, null);
+        registerBlock("el_lattice_column_station", EL_LATTICE_COLUMN_STATION, null);
+        registerBlock("el_girder", EL_GIRDER, null);
+        registerBlock("el_girder_silver", EL_GIRDER_SILVER, null);
+        registerBlock("el_girder_station", EL_GIRDER_STATION, null);
+        registerBlock("el_truss", EL_TRUSS, null);
+        registerBlock("el_truss_silver", EL_TRUSS_SILVER, null);
+        registerBlock("el_truss_station", EL_TRUSS_STATION, null);
+        registerBlock("el_deck_ties", EL_DECK_TIES, null);
+        registerBlock("el_deck_plate", EL_DECK_PLATE, null);
+        registerBlock("el_windscreen", EL_WINDSCREEN, null);
+        registerBlock("el_windscreen_corrugated", EL_WINDSCREEN_CORRUGATED, null);
+        registerBlock("el_windscreen_glass", EL_WINDSCREEN_GLASS, null);
+        registerBlock("el_windscreen_mesh", EL_WINDSCREEN_MESH, null);
+        registerBlock("el_railing_pipe", EL_RAILING_PIPE, null);
+        registerBlock("el_railing_modern", EL_RAILING_MODERN, null);
+        registerBlock("el_canopy_post", EL_CANOPY_POST, null);
+        registerBlock("el_canopy_post_silver", EL_CANOPY_POST_SILVER, null);
+        registerBlock("el_canopy_flat", EL_CANOPY_FLAT, null);
+        registerBlock("el_canopy_flat_silver", EL_CANOPY_FLAT_SILVER, null);
+        registerBlock("el_canopy_gable", EL_CANOPY_GABLE, null);
+        registerBlock("el_name_board", EL_NAME_BOARD, null);
+        registerBlock("el_stair_side", EL_STAIR_SIDE, null);
+        registerBlock("el_stair_canopy", EL_STAIR_CANOPY, null);
+        registerBlock("el_portal_post", EL_PORTAL_POST, null);
+        registerBlock("el_portal_header", EL_PORTAL_HEADER, null);
+        registerBlock("el_house_wall_green", EL_HOUSE_WALL_GREEN, null);
+        registerBlock("el_house_wall_green_window", EL_HOUSE_WALL_GREEN_WINDOW, null);
+        registerBlock("el_house_wall_cream", EL_HOUSE_WALL_CREAM, null);
+        registerBlock("el_house_wall_cream_window", EL_HOUSE_WALL_CREAM_WINDOW, null);
+        registerBlock("el_wood_platform", EL_WOOD_PLATFORM, null);
+        registerBlock("el_platform_edge", EL_PLATFORM_EDGE, null);
+        registerBlock("el_soffit", EL_SOFFIT, null);
+        registerBlock("el_exit_sign", EL_EXIT_SIGN, null);
+        registerBlock("el_lamp_gooseneck", EL_LAMP_GOOSENECK, null);
+        registerBlock("el_lamp_post", EL_LAMP_POST, null);
+        registerBlock("el_lamp_head", EL_LAMP_HEAD, null);
+        registerBlock("el_lamp_gooseneck_silver", EL_LAMP_GOOSENECK_SILVER, null);
+        registerBlock("el_lamp_post_silver", EL_LAMP_POST_SILVER, null);
+        registerBlock("el_lamp_head_silver", EL_LAMP_HEAD_SILVER, null);
         registerBlock("entrance_railing_sign", ENTRANCE_RAILING_SIGN, ModContent.DECORATION_ENTRIES);
         registerBlock("emergency_exit_door", EMERGENCY_EXIT_DOOR, ModContent.DECORATION_ENTRIES);
         registerBlock("employee_door_mesh", EMPLOYEE_DOOR_MESH, ModContent.DECORATION_ENTRIES);
@@ -418,11 +441,20 @@ public final class MtrStationDecor {
     }
 
     /** @param tab which creative tab the block's item belongs in. */
+    private static void registerEdgeRun(String name, Block block) {
+        Registry.register(Registries.BLOCK, StationAnnouncer.id(name), block);
+        BlockItem item = new com.stationannouncer.item.EdgeRunItem(block, new Item.Settings());
+        Registry.register(Registries.ITEM, StationAnnouncer.id(name), item);
+        ModContent.DECORATION_ENTRIES.add(item);
+    }
+
     private static void registerBlock(String name, Block block,
                                       java.util.List<net.minecraft.item.ItemConvertible> tab) {
         Registry.register(Registries.BLOCK, StationAnnouncer.id(name), block);
         BlockItem item = new BlockItem(block, new Item.Settings());
         Registry.register(Registries.ITEM, StationAnnouncer.id(name), item);
-        tab.add(item);
+        if (tab != null) {
+            tab.add(item); // null = registered but hidden (deprecated v1 el kit)
+        }
     }
 }

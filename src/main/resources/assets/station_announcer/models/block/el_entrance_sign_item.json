@@ -1,0 +1,176 @@
+{
+ "textures": {
+  "black": "station_announcer:block/el2_black",
+  "green": "station_announcer:block/el2_green"
+ },
+ "elements": [
+  {
+   "from": [
+    0,
+    12,
+    2
+   ],
+   "to": [
+    16,
+    22,
+    5
+   ],
+   "faces": {
+    "north": {
+     "uv": [
+      0,
+      0,
+      16,
+      10
+     ],
+     "texture": "#black"
+    },
+    "south": {
+     "uv": [
+      0,
+      0,
+      16,
+      10
+     ],
+     "texture": "#black"
+    },
+    "east": {
+     "uv": [
+      0,
+      0,
+      3,
+      10
+     ],
+     "texture": "#black"
+    },
+    "west": {
+     "uv": [
+      0,
+      0,
+      3,
+      10
+     ],
+     "texture": "#black"
+    },
+    "up": {
+     "uv": [
+      0,
+      0,
+      16,
+      3
+     ],
+     "texture": "#black"
+    },
+    "down": {
+     "uv": [
+      0,
+      0,
+      16,
+      3
+     ],
+     "texture": "#black"
+    }
+   }
+  },
+  {
+   "from": [
+    2,
+    22,
+    3
+   ],
+   "to": [
+    3,
+    24.2,
+    4
+   ],
+   "faces": {
+    "north": {
+     "uv": [
+      4,
+      0,
+      5,
+      2.2
+     ],
+     "texture": "#green"
+    },
+    "south": {
+     "uv": [
+      4,
+      0,
+      5,
+      2.2
+     ],
+     "texture": "#green"
+    },
+    "east": {
+     "uv": [
+      4,
+      0,
+      5,
+      2.2
+     ],
+     "texture": "#green"
+    },
+    "west": {
+     "uv": [
+      4,
+      0,
+      5,
+      2.2
+     ],
+     "texture": "#green"
+    }
+   }
+  },
+  {
+   "from": [
+    13,
+    22,
+    3
+   ],
+   "to": [
+    14,
+    24.2,
+    4
+   ],
+   "faces": {
+    "north": {
+     "uv": [
+      4,
+      0,
+      5,
+      2.2
+     ],
+     "texture": "#green"
+    },
+    "south": {
+     "uv": [
+      4,
+      0,
+      5,
+      2.2
+     ],
+     "texture": "#green"
+    },
+    "east": {
+     "uv": [
+      4,
+      0,
+      5,
+      2.2
+     ],
+     "texture": "#green"
+    },
+    "west": {
+     "uv": [
+      4,
+      0,
+      5,
+      2.2
+     ],
+     "texture": "#green"
+    }
+   }
+  }
+ ]
+}

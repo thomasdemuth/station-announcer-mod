@@ -1,0 +1,44 @@
+{
+ "multipart": [
+  {
+   "apply": {
+    "model": "station_announcer:block/el_landing_roof_deck"
+   }
+  },
+  {
+   "when": {
+    "edge_north": "true"
+   },
+   "apply": {
+    "model": "station_announcer:block/el_landing_roof_edge"
+   }
+  },
+  {
+   "when": {
+    "edge_east": "true"
+   },
+   "apply": {
+    "model": "station_announcer:block/el_landing_roof_edge",
+    "y": 90
+   }
+  },
+  {
+   "when": {
+    "edge_south": "true"
+   },
+   "apply": {
+    "model": "station_announcer:block/el_landing_roof_edge",
+    "y": 180
+   }
+  },
+  {
+   "when": {
+    "edge_west": "true"
+   },
+   "apply": {
+    "model": "station_announcer:block/el_landing_roof_edge",
+    "y": 270
+   }
+  }
+ ]
+}

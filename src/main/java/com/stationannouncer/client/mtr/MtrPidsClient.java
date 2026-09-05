@@ -174,7 +174,8 @@ public final class MtrPidsClient {
                 // platform, everything else edits its name text.
                 if (decor.getCachedState().getBlock() instanceof com.stationannouncer.mtr.HoldingLightBlock) {
                     MinecraftClient.getInstance().setScreen(new HoldingLightScreen(decor));
-                } else if (decor.getCachedState().getBlock() instanceof com.stationannouncer.mtr.RailingSignBlock) {
+                } else if (decor.getCachedState().getBlock() instanceof com.stationannouncer.mtr.RailingSignBlock
+                        || decor.getCachedState().getBlock() instanceof com.stationannouncer.mtr.ElEntranceSignBlock) {
                     // Entrance signs have two independently configurable faces
                     // and carry route bullets, so they get their own screen.
                     MinecraftClient.getInstance().setScreen(new RailingSignScreen(decor));

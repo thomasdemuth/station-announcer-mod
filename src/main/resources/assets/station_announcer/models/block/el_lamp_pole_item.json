@@ -1,0 +1,176 @@
+{
+ "textures": {
+  "green": "station_announcer:block/el2_green",
+  "lamp": "station_announcer:block/el2_lamp"
+ },
+ "elements": [
+  {
+   "from": [
+    6.8,
+    0,
+    0
+   ],
+   "to": [
+    9.2,
+    16,
+    2.4000000000000004
+   ],
+   "faces": {
+    "south": {
+     "uv": [
+      0,
+      0,
+      2.4,
+      16
+     ],
+     "texture": "#green"
+    },
+    "north": {
+     "uv": [
+      0,
+      0,
+      2.4,
+      16
+     ],
+     "texture": "#green"
+    },
+    "east": {
+     "uv": [
+      2.4,
+      0,
+      0,
+      16
+     ],
+     "texture": "#green"
+    },
+    "west": {
+     "uv": [
+      2.4,
+      0,
+      0,
+      16
+     ],
+     "texture": "#green"
+    }
+   }
+  },
+  {
+   "from": [
+    4.5,
+    0,
+    0
+   ],
+   "to": [
+    11.5,
+    2,
+    4.699999999999999
+   ],
+   "faces": {
+    "up": {
+     "uv": [
+      11.5,
+      11.3,
+      4.5,
+      16
+     ],
+     "texture": "#green"
+    },
+    "south": {
+     "uv": [
+      0,
+      14,
+      7,
+      16
+     ],
+     "texture": "#green"
+    },
+    "north": {
+     "uv": [
+      0,
+      14,
+      7,
+      16
+     ],
+     "texture": "#green"
+    },
+    "east": {
+     "uv": [
+      4.7,
+      14,
+      0,
+      16
+     ],
+     "texture": "#green"
+    },
+    "west": {
+     "uv": [
+      4.7,
+      14,
+      0,
+      16
+     ],
+     "texture": "#green"
+    }
+   }
+  },
+  {
+   "from": [
+    5.6,
+    2,
+    0
+   ],
+   "to": [
+    10.4,
+    3.4,
+    3.5999999999999996
+   ],
+   "faces": {
+    "up": {
+     "uv": [
+      10.4,
+      12.4,
+      5.6,
+      16
+     ],
+     "texture": "#green"
+    },
+    "south": {
+     "uv": [
+      0,
+      12,
+      4.8,
+      13.4
+     ],
+     "texture": "#green"
+    },
+    "north": {
+     "uv": [
+      0,
+      12,
+      4.8,
+      13.4
+     ],
+     "texture": "#green"
+    },
+    "east": {
+     "uv": [
+      3.6,
+      12,
+      0,
+      13.4
+     ],
+     "texture": "#green"
+    },
+    "west": {
+     "uv": [
+      3.6,
+      12,
+      0,
+      13.4
+     ],
+     "texture": "#green"
+    }
+   }
+  }
+ ]
+}
