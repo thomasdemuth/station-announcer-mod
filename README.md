@@ -491,13 +491,15 @@ MIT — see `LICENSE`.
 Every disruption can carry any number of **service change posters** in the style of the
 MTA's planned-work sheets. From the dashboard's Disruptions board click **Posters** on a
 row, then **New poster** (pre-filled from the disruption) or edit an existing one. The
-editor is a form with a live preview: title bar and logo, the big timing line ("All
-Times", "Weekends"), two date lines, the affected-line bullets, a category rule, then the
-body as an ordered list of blocks — headline, text, subhead, a big directional arrow, a
-rule or a spacer. Click into any text field and use the **Insert** toolbar to drop a line
-bullet, an express diamond, the wheelchair symbol or a small arrow at the cursor (they are
-stored as tokens such as `{b:4}`, `{d:4}`, `{wc}`, `{>}`). Long bodies shrink their text
-to fit the sheet.
+editor is a small design tool: the poster's **structure** on the left (header, one card per
+body block, footer), the **live poster** in the middle (click any part of it to select it),
+and an **inspector** on the right for whatever is selected — title bar and logo, the big
+timing line ("All Times", "Weekends"), two date lines, the affected-line bullets, the
+category, or a body block: headline, text, subhead, a big directional arrow, a rule or a
+spacer. Text blocks are edited in a wrapping text box; the **Insert at cursor** buttons
+drop a line bullet, an express diamond, the wheelchair symbol or a small arrow where the
+caret is (stored as tokens such as `{b:4}`, `{d:4}`, `{wc}`, `{>}`). Long bodies shrink
+their text to fit the sheet; Ctrl+S saves.
 
 To hang one, place a **Service Change Poster** frame (Operations tab, a two-block wall
 plate) and right-click it to pick a poster. The frame keeps its own copy, so the poster

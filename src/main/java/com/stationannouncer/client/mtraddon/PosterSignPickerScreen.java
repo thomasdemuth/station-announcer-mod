@@ -1,5 +1,6 @@
 package com.stationannouncer.client.mtraddon;
 
+import com.stationannouncer.client.mtraddon.FlatUi.ButtonStyle;
 import com.stationannouncer.mtr.ServicePosterBlockEntity;
 import com.stationannouncer.mtraddon.disruption.DisruptionNetworking;
 import com.stationannouncer.mtraddon.disruption.ServicePoster;
@@ -9,36 +10,40 @@ import net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking;
 import net.fabricmc.fabric.api.networking.v1.PacketByteBufs;
 import net.minecraft.client.gui.DrawContext;
 import net.minecraft.client.gui.screen.Screen;
-import net.minecraft.client.gui.widget.ButtonWidget;
 import net.minecraft.network.PacketByteBuf;
-import net.minecraft.screen.ScreenTexts;
 import net.minecraft.text.Text;
+import java.util.ArrayList;
 import java.util.List;
 
 /**
- * Opened by right-clicking a placed poster frame: every poster in the world,
- * grouped under its disruption, with a preview of the hovered one on the right.
- * Clicking a row hangs that poster (the server copies a snapshot into the block
- * entity); "Take poster down" clears the frame.
+ * Opened by right-clicking a placed poster frame: every poster in the world as
+ * a list of cards grouped under their disruptions, with a large preview of the
+ * hovered (else the hung) poster on the right. Clicking a card hangs it; "Take
+ * poster down" clears the frame. Same flat kit as the editor.
  */
 @Environment(EnvType.CLIENT)
 public class PosterSignPickerScreen extends Screen {
+    private static final int PAD = 4;
+    private static final int TOP_BAR = 22;
+    private static final int ROW = 30;
+    private static final int GROUP = 14;
     private static final int LIST_WIDTH = 250;
-    private static final int ROW_HEIGHT = 24;
-    private static final int WIDGET_HEIGHT = 20;
-    private static final int GAP = 4;
 
     private final ServicePosterBlockEntity sign;
     private List<ServicePoster> rows = List.of();
     private int scroll;
 
-    private int listLeft;
-    private int listTop;
-    private int visibleRows;
-    private int titleY;
-    private int previewLeft;
-    private int previewTop;
+    private int listX;
+    private int listY;
+    private int listH;
+    private int previewX;
+    private int previewY;
     private float previewScale;
+    private int contentH;
+    private final List<int[]> hits = new ArrayList<>();
+    private static final int HIT_ROW = 1;
+    private static final int HIT_CLEAR = 2;
+    private static final int HIT_CANCEL = 3;
 
     public PosterSignPickerScreen(ServicePosterBlockEntity sign) {
         super(Text.translatable("gui.station_announcer.posters.sign_title"));
@@ -48,66 +53,64 @@ public class PosterSignPickerScreen extends Screen {
     @Override
     protected void init() {
         rows = ClientPosters.all();
-        previewScale = Math.max(0.7f, Math.min(1.2f, (height - 70) / (float) PosterLayout.MAX_HEIGHT));
-        int previewWidth = Math.round(PosterLayout.WIDTH * previewScale);
-        int total = LIST_WIDTH + 10 + previewWidth;
-        listLeft = Math.max(4, (width - total) / 2);
-        previewLeft = listLeft + LIST_WIDTH + 10;
-
-        int bottomBlock = 12 + (WIDGET_HEIGHT + GAP) * 2;
-        int available = height - 40 - bottomBlock;
-        visibleRows = Math.max(3, Math.min(Math.max(rows.size(), 3), available / ROW_HEIGHT));
-        int listHeight = visibleRows * ROW_HEIGHT;
-        scroll = Math.max(0, Math.min(scroll, Math.max(0, rows.size() * ROW_HEIGHT - listHeight)));
-        int content = listHeight + bottomBlock;
-        int y = Math.max(28, (height - content) / 2);
-        titleY = y - 16;
-        listTop = y;
-        previewTop = Math.max(20, (height - Math.round(PosterLayout.MAX_HEIGHT * previewScale)) / 2);
-        y += listHeight + 14;
-
-        addDrawableChild(ButtonWidget.builder(
-                        Text.translatable("gui.station_announcer.posters.sign_clear"),
-                        button -> {
-                            send(0);
-                            close();
-                        })
-                .dimensions(listLeft, y, LIST_WIDTH, WIDGET_HEIGHT).build());
-        y += WIDGET_HEIGHT + GAP;
-        addDrawableChild(ButtonWidget.builder(ScreenTexts.CANCEL, button -> close())
-                .dimensions(listLeft, y, LIST_WIDTH, WIDGET_HEIGHT).build());
+        listY = TOP_BAR + PAD;
+        listH = height - listY - PAD;
+        previewScale = Math.max(0.5f, Math.min(1.4f, (listH - 16) / (float) PosterLayout.HEIGHT));
+        int previewW = Math.round(PosterLayout.WIDTH * previewScale);
+        int total = LIST_WIDTH + 10 + previewW;
+        listX = Math.max(PAD, (width - total) / 2);
+        previewX = listX + LIST_WIDTH + 10;
+        previewY = listY + 8;
     }
 
-    private int rowAt(double mouseX, double mouseY) {
-        if (mouseX < listLeft || mouseX >= listLeft + LIST_WIDTH
-                || mouseY < listTop || mouseY >= listTop + visibleRows * ROW_HEIGHT) {
-            return -1;
-        }
-        int index = (int) ((mouseY - listTop + scroll) / ROW_HEIGHT);
-        return index >= 0 && index < rows.size() ? index : -1;
+    private void hit(int x, int y, int w, int h, int id, int arg) {
+        hits.add(new int[]{x, y, w, h, id, arg});
     }
 
     @Override
-    public boolean mouseClicked(double mouseX, double mouseY, int button) {
-        int index = rowAt(mouseX, mouseY);
-        if (index >= 0) {
-            send(rows.get(index).id());
-            close();
+    public boolean mouseClicked(double mx, double my, int button) {
+        for (int[] r : hits) {
+            if (!FlatUi.inside(mx, my, r[0], r[1], r[2], r[3])) {
+                continue;
+            }
+            switch (r[4]) {
+                case HIT_ROW -> {
+                    if (r[5] < rows.size()) {
+                        send(rows.get(r[5]).id());
+                        close();
+                    }
+                }
+                case HIT_CLEAR -> {
+                    send(0);
+                    close();
+                }
+                case HIT_CANCEL -> close();
+                default -> {
+                }
+            }
             return true;
         }
-        return super.mouseClicked(mouseX, mouseY, button);
+        return super.mouseClicked(mx, my, button);
     }
 
     @Override
     public boolean mouseScrolled(double mouseX, double mouseY, double horizontalAmount, double verticalAmount) {
-        int listHeight = visibleRows * ROW_HEIGHT;
-        int max = Math.max(0, rows.size() * ROW_HEIGHT - listHeight);
-        if (max > 0 && mouseX >= listLeft && mouseX < listLeft + LIST_WIDTH
-                && mouseY >= listTop && mouseY < listTop + listHeight) {
-            scroll = Math.max(0, Math.min(max, scroll - (int) (verticalAmount * ROW_HEIGHT / 2)));
+        int viewH = listH - 18;
+        int max = Math.max(0, contentH - viewH);
+        if (max > 0 && FlatUi.inside(mouseX, mouseY, listX, listY, LIST_WIDTH, listH)) {
+            scroll = Math.max(0, Math.min(max, scroll - (int) (verticalAmount * ROW / 2)));
             return true;
         }
         return super.mouseScrolled(mouseX, mouseY, horizontalAmount, verticalAmount);
+    }
+
+    @Override
+    public boolean keyPressed(int keyCode, int scanCode, int modifiers) {
+        if (keyCode == 256) {
+            close();
+            return true;
+        }
+        return super.keyPressed(keyCode, scanCode, modifiers);
     }
 
     private void send(long posterId) {
@@ -118,103 +121,115 @@ public class PosterSignPickerScreen extends Screen {
     }
 
     @Override
-    public void render(DrawContext context, int mouseX, int mouseY, float delta) {
-        renderBackground(context, mouseX, mouseY, delta);
+    public void render(DrawContext c, int mx, int my, float delta) {
+        hits.clear();
         rows = ClientPosters.all();
-        super.render(context, mouseX, mouseY, delta);
-        context.drawCenteredTextWithShadow(textRenderer, title, width / 2, titleY, 0xFFFFFF);
+        FlatUi.rect(c, 0, 0, width, height, FlatUi.GROUND);
 
-        int right = listLeft + LIST_WIDTH;
-        int listHeight = visibleRows * ROW_HEIGHT;
-        int bottom = listTop + listHeight;
-        AddonUi.panel(context, listLeft, listTop, right, bottom);
-
-        int hovered = rowAt(mouseX, mouseY);
-        if (rows.isEmpty()) {
-            List<String> lines = List.of(Text.translatable("gui.station_announcer.posters.sign_none").getString());
-            int y = listTop + listHeight / 2 - 4;
-            for (String line : lines) {
-                for (var wrapped : textRenderer.wrapLines(Text.literal(line), LIST_WIDTH - 12)) {
-                    context.drawTextWithShadow(textRenderer, wrapped, listLeft + 6, y, AddonUi.TEXT_FAINT);
-                    y += 10;
-                }
-            }
-        } else {
-            context.enableScissor(listLeft + 1, listTop + 1, right - 1, bottom - 1);
-            long lastDisruption = Long.MIN_VALUE;
-            for (int i = 0; i < rows.size(); i++) {
-                int rowY = listTop + i * ROW_HEIGHT - scroll;
-                ServicePoster poster = rows.get(i);
-                if (rowY + ROW_HEIGHT >= listTop && rowY <= bottom) {
-                    drawRow(context, poster, rowY, i == hovered, poster.disruptionId() != lastDisruption);
-                }
-                lastDisruption = poster.disruptionId();
-            }
-            context.disableScissor();
-            AddonUi.scrollIndicator(context, right, listTop, listHeight, rows.size() * ROW_HEIGHT, scroll);
-        }
-
-        // Status line: what hangs here now.
+        // Top bar.
+        FlatUi.rect(c, 0, 0, width, TOP_BAR, FlatUi.PANE);
+        FlatUi.rect(c, 0, TOP_BAR - 1, width, 1, FlatUi.BORDER);
+        c.drawText(textRenderer, title, PAD + 4, 7, FlatUi.TEXT, false);
         ServicePoster current = ClientPosters.byId(sign.getPosterId());
         boolean detached = current == null && sign.getSnapshot() != null;
         if (current == null) {
             current = sign.getSnapshot();
         }
-        String status = current == null
-                ? Text.translatable("gui.station_announcer.posters.sign_empty").getString()
-                : Text.translatable("gui.station_announcer.posters.sign_current",
-                PosterListScreen.stripTokens(current.preview())).getString();
-        context.drawTextWithShadow(textRenderer, textRenderer.trimToWidth(status, LIST_WIDTH), listLeft, bottom + 2,
-                AddonUi.TEXT_FAINT);
-        if (detached) {
-            context.drawTextWithShadow(textRenderer,
-                    Text.translatable("gui.station_announcer.posters.sign_detached"), listLeft, bottom + 12, AddonUi.TEXT_FAINT);
+        int cancelW = 50;
+        int clearW = 96;
+        int cx = width - PAD - cancelW;
+        int kx = cx - 4 - clearW;
+        FlatUi.button(c, textRenderer, "Take poster down", kx, 2, clearW, FlatUi.BUTTON_HEIGHT, mx, my,
+                ButtonStyle.DANGER, current != null);
+        if (current != null) {
+            hit(kx, 2, clearW, FlatUi.BUTTON_HEIGHT, HIT_CLEAR, 0);
         }
+        FlatUi.button(c, textRenderer, "Cancel", cx, 2, cancelW, FlatUi.BUTTON_HEIGHT, mx, my, ButtonStyle.GHOST);
+        hit(cx, 2, cancelW, FlatUi.BUTTON_HEIGHT, HIT_CANCEL, 0);
 
-        // Preview: the hovered poster, else the current one.
-        ServicePoster shown = hovered >= 0 ? rows.get(hovered) : current;
-        int previewWidth = Math.round(PosterLayout.WIDTH * previewScale);
-        int previewHeight = Math.round(PosterLayout.MAX_HEIGHT * previewScale);
-        context.fill(previewLeft - 3, previewTop - 3, previewLeft + previewWidth + 3, previewTop + previewHeight + 3, 0xFF2A2A30);
-        if (shown != null) {
-            PosterLayout.paint(new PosterLayout.GuiSurface(context, previewLeft, previewTop, previewScale), shown);
+        // List.
+        FlatUi.pane(c, listX, listY, LIST_WIDTH, listH);
+        String status = current == null ? "Empty frame"
+                : detached ? "Hanging a snapshot (its disruption is gone)" : "Hanging: "
+                + PosterListScreen.stripTokens(current.preview()).replace('\n', ' ');
+        FlatUi.heading(c, textRenderer, textRenderer.trimToWidth(status, LIST_WIDTH - 12), listX + 6, listY + 5);
+        int top = listY + 18;
+        int viewH = listH - 18;
+        int hoveredIndex = -1;
+        if (rows.isEmpty()) {
+            c.drawText(textRenderer, "No posters exist yet.", listX + 8, top + 8, FlatUi.TEXT_DIM, false);
+            c.drawText(textRenderer, "Create one from a disruption on the", listX + 8, top + 20, FlatUi.TEXT_FAINT, false);
+            c.drawText(textRenderer, "dashboard's Disruptions board first.", listX + 8, top + 30, FlatUi.TEXT_FAINT, false);
+            contentH = 0;
         } else {
-            context.fill(previewLeft, previewTop, previewLeft + previewWidth, previewTop + previewHeight, 0xFF3A3A40);
-        }
-    }
-
-    private void drawRow(DrawContext context, ServicePoster poster, int rowY, boolean hovered, boolean firstOfGroup) {
-        int right = listLeft + LIST_WIDTH;
-        if (hovered) {
-            context.fill(listLeft + 1, rowY, right - 1, rowY + ROW_HEIGHT, AddonUi.ROW_HOVER);
-        }
-        if (poster.id() == sign.getPosterId()) {
-            context.fill(listLeft + 1, rowY, right - 1, rowY + ROW_HEIGHT, AddonUi.ROW_SELECTED);
-        }
-        context.fill(listLeft + 1, rowY + ROW_HEIGHT - 1, right - 1, rowY + ROW_HEIGHT, AddonUi.ROW_DIVIDER);
-
-        ClientDisruptions.Entry disruption = ClientDisruptions.byId(poster.disruptionId());
-        int x = listLeft + 8;
-        if (disruption != null) {
-            x += AddonUi.chip(context, textRenderer,
-                    Text.translatable(DisruptionsScreen.severityKey(disruption.severity())).getString(),
-                    x, rowY + 2, DisruptionsScreen.severityColor(disruption.severity())) + 4;
-            context.drawTextWithShadow(textRenderer, textRenderer.trimToWidth(disruption.message(), right - x - 6),
-                    x, rowY + 3, AddonUi.TEXT_DIM);
-        } else {
-            context.drawTextWithShadow(textRenderer, "#" + poster.disruptionId(), x, rowY + 3, AddonUi.TEXT_FAINT);
-        }
-        int chipX = listLeft + 8;
-        for (String line : poster.headerLines()) {
-            var bullet = PosterLayout.lineBullet(line);
-            chipX += AddonUi.chip(context, textRenderer, bullet.label(), chipX, rowY + 13, bullet.color()) + 3;
-            if (chipX > right - 80) {
-                break;
+            c.enableScissor(listX + 1, top, listX + LIST_WIDTH - 1, listY + listH - 1);
+            int y = top - scroll;
+            long lastDisruption = Long.MIN_VALUE;
+            for (int i = 0; i < rows.size(); i++) {
+                ServicePoster poster = rows.get(i);
+                if (poster.disruptionId() != lastDisruption) {
+                    lastDisruption = poster.disruptionId();
+                    ClientDisruptions.Entry disruption = ClientDisruptions.byId(poster.disruptionId());
+                    int gx = listX + 6;
+                    if (disruption != null) {
+                        gx += FlatUi.chip(c, textRenderer,
+                                Text.translatable(DisruptionsScreen.severityKey(disruption.severity())).getString(),
+                                gx, y + 1, DisruptionsScreen.severityColor(disruption.severity()), false) + 4;
+                        c.drawText(textRenderer, textRenderer.trimToWidth(disruption.message(), listX + LIST_WIDTH - gx - 6),
+                                gx, y + 3, FlatUi.TEXT_DIM, false);
+                    } else {
+                        c.drawText(textRenderer, "Disruption #" + poster.disruptionId(), gx, y + 3, FlatUi.TEXT_FAINT, false);
+                    }
+                    y += GROUP;
+                }
+                boolean hovered = FlatUi.inside(mx, my, listX + 1, y, LIST_WIDTH - 2, ROW) && my >= top && my < listY + listH;
+                if (hovered) {
+                    hoveredIndex = i;
+                    FlatUi.rect(c, listX + 1, y, LIST_WIDTH - 2, ROW, FlatUi.HOVER);
+                }
+                if (poster.id() == sign.getPosterId()) {
+                    FlatUi.rect(c, listX + 1, y, LIST_WIDTH - 2, ROW, FlatUi.SELECTED);
+                    FlatUi.rect(c, listX + 1, y, 2, ROW, FlatUi.ACCENT);
+                }
+                FlatUi.rect(c, listX + 1, y + ROW - 1, LIST_WIDTH - 2, 1, FlatUi.BORDER);
+                int chipX = listX + 10;
+                chipX += FlatUi.chip(c, textRenderer, poster.kind(), chipX, y + 4, 0xFF2A2A32, false) + 4;
+                for (String line : poster.headerLines()) {
+                    var bullet = PosterLayout.lineBullet(line);
+                    int cw = textRenderer.getWidth(bullet.label()) + 8;
+                    if (chipX + cw > listX + LIST_WIDTH - 8) {
+                        break;
+                    }
+                    chipX += FlatUi.chip(c, textRenderer, bullet.label(), chipX, y + 4, bullet.color(), false) + 3;
+                }
+                c.drawText(textRenderer, textRenderer.trimToWidth(
+                                PosterListScreen.stripTokens(poster.preview()).replace('\n', ' '), LIST_WIDTH - 20),
+                        listX + 10, y + 18, FlatUi.TEXT, false);
+                int visibleTop = Math.max(y, top);
+                int visibleBottom = Math.min(y + ROW, listY + listH - 1);
+                if (visibleBottom > visibleTop) {
+                    hit(listX + 1, visibleTop, LIST_WIDTH - 2, visibleBottom - visibleTop, HIT_ROW, i);
+                }
+                y += ROW;
             }
+            c.disableScissor();
+            contentH = y + scroll - top;
+            FlatUi.scrollThumb(c, listX + LIST_WIDTH, top, viewH, contentH, scroll);
         }
-        context.drawTextWithShadow(textRenderer,
-                textRenderer.trimToWidth(PosterListScreen.stripTokens(poster.preview()), right - chipX - 6),
-                chipX, rowY + 14, AddonUi.TEXT);
+
+        // Preview: the hovered poster, else the hung one.
+        ServicePoster shown = hoveredIndex >= 0 ? rows.get(hoveredIndex) : current;
+        int pw = Math.round(PosterLayout.WIDTH * previewScale);
+        int ph = Math.round(PosterLayout.HEIGHT * previewScale);
+        FlatUi.rect(c, previewX - 2, previewY - 2, pw + 4, ph + 4, 0xFF000000);
+        if (shown != null) {
+            PosterLayout.paint(new PosterLayout.GuiSurface(c, previewX, previewY, previewScale), shown);
+        } else {
+            FlatUi.rect(c, previewX, previewY, pw, ph, 0xFF26262C);
+            String empty = "Hover a poster to preview it";
+            c.drawText(textRenderer, empty, previewX + (pw - textRenderer.getWidth(empty)) / 2, previewY + ph / 2 - 4,
+                    FlatUi.TEXT_FAINT, false);
+        }
     }
 
     @Override

@@ -92,8 +92,21 @@ public final class PosterLayout {
 
     // ================================================================= paint
 
-    /** How a poster lays out: the sheet height it needs and the body text scale it settled on. */
-    public record Metrics(float height, float bodyScale) {
+    /**
+     * How a poster lays out: the sheet height, the body text scale it settled on,
+     * and (after a real paint) each body block's [top, bottom] in canvas units —
+     * what lets the editor select a block by clicking the preview.
+     */
+    public record Metrics(float height, float bodyScale, List<float[]> blockBounds) {
+    }
+
+    /** Where the header band ends and the footer starts, for click mapping. */
+    public static float headerBottom() {
+        return BAND_BOTTOM;
+    }
+
+    public static float footerTop(float height) {
+        return height - FOOTER_HEIGHT;
     }
 
     /**
@@ -104,18 +117,20 @@ public final class PosterLayout {
         Surface measuring = new MeasureSurface(s);
         float bodyTop = bodyTop(measuring, poster);
         for (float scale : BODY_SCALES) {
-            float end = paintBody(measuring, poster, bodyTop, Float.MAX_VALUE, scale);
+            float end = paintBody(measuring, poster, bodyTop, Float.MAX_VALUE, scale, null);
             float height = end + BODY_GAP + FOOTER_HEIGHT;
             if (height <= HEIGHT) {
-                return new Metrics(HEIGHT, scale);
+                return new Metrics(HEIGHT, scale, List.of());
             }
         }
-        return new Metrics(HEIGHT, BODY_SCALES[BODY_SCALES.length - 1]);
+        return new Metrics(HEIGHT, BODY_SCALES[BODY_SCALES.length - 1], List.of());
     }
 
     /** Paints the poster and returns its metrics (the height actually used). */
     public static Metrics paint(Surface s, ServicePoster poster) {
-        Metrics metrics = measure(s, poster);
+        Metrics measured = measure(s, poster);
+        List<float[]> bounds = new ArrayList<>();
+        Metrics metrics = new Metrics(measured.height(), measured.bodyScale(), bounds);
         float height = metrics.height();
         float footerTop = height - FOOTER_HEIGHT;
         // Sheet.
@@ -158,7 +173,7 @@ public final class PosterLayout {
 
         // Category rule + body.
         float bodyTop = bodyTop(s, poster);
-        paintBody(s, poster, bodyTop, footerTop - BODY_GAP, metrics.bodyScale());
+        paintBody(s, poster, bodyTop, footerTop - BODY_GAP, metrics.bodyScale(), bounds);
 
         // Footer.
         s.rect(0, footerTop, WIDTH, height, BLACK, 1);
@@ -191,12 +206,16 @@ public final class PosterLayout {
     }
 
     /** Draws the body blocks from {@code y} down to {@code limit}; returns the y below the last one. */
-    private static float paintBody(Surface s, ServicePoster poster, float y, float limit, float scale) {
+    private static float paintBody(Surface s, ServicePoster poster, float y, float limit, float scale,
+                                   List<float[]> bounds) {
         for (ServicePoster.Block block : poster.blocks()) {
-            if (y >= limit) {
-                break;
+            float top = Math.min(y, limit);
+            if (y < limit) {
+                y = paintBlock(s, block, y, limit, scale);
             }
-            y = paintBlock(s, block, y, limit, scale);
+            if (bounds != null) {
+                bounds.add(new float[]{top, Math.min(y, limit)});
+            }
         }
         return y;
     }
@@ -248,6 +267,13 @@ public final class PosterLayout {
         float space = s.width(" ", size, bold);
         boolean lineEmpty = true;
         for (Item item : items) {
+            if ("\n".equals(item.token())) {
+                // Explicit line break (Enter in the editor).
+                y += lineHeight;
+                x = MARGIN;
+                lineEmpty = true;
+                continue;
+            }
             if (!lineEmpty && x + item.width() > RIGHT) {
                 y += lineHeight;
                 x = MARGIN;
@@ -286,9 +312,15 @@ public final class PosterLayout {
     }
 
     private static void addWords(List<Item> items, Surface s, String run, float size, boolean bold) {
-        for (String word : run.trim().split("\\s+")) {
-            if (!word.isEmpty()) {
-                items.add(new Item(word, null, null, s.width(word, size, bold)));
+        String[] paragraphs = run.split("\n", -1);
+        for (int p = 0; p < paragraphs.length; p++) {
+            if (p > 0) {
+                items.add(new Item(null, "\n", "", 0));
+            }
+            for (String word : paragraphs[p].trim().split("\\s+")) {
+                if (!word.isEmpty()) {
+                    items.add(new Item(word, null, null, s.width(word, size, bold)));
+                }
             }
         }
     }

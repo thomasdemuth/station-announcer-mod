@@ -115,8 +115,15 @@ public class StationAnnouncerClient implements ClientModInitializer {
                                 continue;
                             }
                             if (!sent) {
-                                client.player.networkHandler.sendChatCommand(
-                                        cmd.startsWith("/") ? cmd.substring(1) : cmd);
+                                if (cmd.startsWith("#poster-")) {
+                                    // Dev-only: open the poster screens without a mouse
+                                    // (#poster-list <disruptionId> / #poster-editor <posterId> /
+                                    // #poster-picker <x> <y> <z>) so the rig can screenshot them.
+                                    com.stationannouncer.client.mtraddon.PosterDevHooks.open(client, cmd);
+                                } else {
+                                    client.player.networkHandler.sendChatCommand(
+                                            cmd.startsWith("/") ? cmd.substring(1) : cmd);
+                                }
                                 sent = true;
                             } else {
                                 rest.add(line);

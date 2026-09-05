@@ -324,6 +324,26 @@ after the first cut clipped long posters; an earlier grow-downward variant left 
 plate band under short sheets — full-height sheet with white space is what real posters
 do). Bold = second text pass offset size/16.
 
+**UI OVERHAUL (same day, Thomas: "quite bad because it's using minecraft buttons… don't
+worry about it feeling minecrafty").** The three poster screens are now drawn entirely with
+`client/mtraddon/FlatUi` — a flat dark design-tool kit (panes, flat/primary/danger/ghost
+buttons, chips, segmented control, scroll thumbs) plus `FlatUi.TextBox`, a from-scratch text
+input (word wrap, caret, shift/drag selection, ctrl+A/C/X/V, click-to-place, Enter = newline
+in multi-line boxes; explicit `\n` is honoured by PosterLayout.flow). NO vanilla widgets
+remain: hit-testing is a list of rectangles recorded while drawing (`hits`), so click targets
+always match what was last on screen. Editor = STRUCTURE pane (Header / block cards with type
+tag + snippet, ↑↓× on the selected card, "+ Add block" tile menu) · PREVIEW (live poster; click
+a region to select it — `PosterLayout.Metrics.blockBounds`; selection outlined in accent) ·
+INSPECTOR (header fields + line chips, text block = type segmented + wrapping textarea +
+Insert-at-cursor toolbar, arrow = 3x3 direction pad, footer fields, Delete block). Ctrl+S
+saves, Esc unfocuses then cancels, Tab cycles boxes. **Screens are sized for ~426x266
+logical px** (a Mac at auto GUI scale — the rig client is 2560x1600 → scale 6): pane widths
+drop to 104/172 when width < 560. Dev-rig hooks: lines starting `#poster-` in run/commands.txt
+open the screens headlessly (`#poster-editor <id> [header|footer|<block>]`,
+`#poster-list <disruptionId>`, `#poster-picker x y z`, `#poster-close`) via `PosterDevHooks`.
+The rig's server gradle wrapper can die while the JVM keeps serving, after which server.log
+stops updating — client_restart.sh now waits on client.log's first `[CHAT]` line instead.
+
 **Frame block** `service_poster` (`mtr/ServicePosterBlock`, OPERATIONS tab): door-style
 2-tall wall plate (lower y 1..16, upper y 0..10, z 15..16, FACING = wall behind, lower =
 data half, loot half=lower). Right-click either half → `PosterSignPickerScreen` (every

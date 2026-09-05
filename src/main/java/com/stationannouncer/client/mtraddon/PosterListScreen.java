@@ -1,5 +1,6 @@
 package com.stationannouncer.client.mtraddon;
 
+import com.stationannouncer.client.mtraddon.FlatUi.ButtonStyle;
 import com.stationannouncer.mtraddon.disruption.DisruptionNetworking;
 import com.stationannouncer.mtraddon.disruption.ServicePoster;
 import net.fabricmc.api.EnvType;
@@ -8,41 +9,41 @@ import net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking;
 import net.fabricmc.fabric.api.networking.v1.PacketByteBufs;
 import net.minecraft.client.gui.DrawContext;
 import net.minecraft.client.gui.screen.Screen;
-import net.minecraft.client.gui.widget.ButtonWidget;
 import net.minecraft.network.PacketByteBuf;
-import net.minecraft.screen.ScreenTexts;
 import net.minecraft.text.Text;
+import java.util.ArrayList;
 import java.util.List;
 
 /**
- * The service change posters linked to one disruption: one row per poster
- * (title bar / timing / headline preview / line bullets) with inline Edit,
- * Copy and delete, plus New poster, which starts from a template filled in
- * from the disruption itself. Opened from the Posters action on a disruption
- * row; posters are also what a placed frame block picks from.
+ * The service change posters linked to one disruption, in the flat design-tool
+ * look shared with the editor: a list of poster cards (each with a thumbnail
+ * of the actual poster, its title bar, timing and headline) with Edit / Copy /
+ * delete, and New poster, which starts from a template filled in from the
+ * disruption. Opened from the Posters action on a disruption row.
  */
 @Environment(EnvType.CLIENT)
 public class PosterListScreen extends Screen {
-    private static final int PANEL_WIDTH = 360;
-    private static final int WIDGET_HEIGHT = 20;
-    private static final int ROW_HEIGHT = 30;
-    private static final int GAP = 4;
-
-    private static final int EDIT_WIDTH = 32;
-    private static final int COPY_WIDTH = 32;
-    private static final int DELETE_WIDTH = 14;
-    private static final int ACTIONS_WIDTH = EDIT_WIDTH + COPY_WIDTH + DELETE_WIDTH + 8;
+    private static final int PAD = 4;
+    private static final int TOP_BAR = 22;
+    private static final int ROW = 46;
+    private static final float THUMB_SCALE = 0.19f;
 
     private final Screen parent;
     private final long disruptionId;
     private List<ServicePoster> rows = List.of();
     private int scroll;
 
-    private int listLeft;
-    private int listTop;
-    private int visibleRows;
-    private int titleY;
-    private int summaryY;
+    private int listX;
+    private int listY;
+    private int listW;
+    private int listH;
+    private final List<int[]> hits = new ArrayList<>();
+    private static final int HIT_ROW = 1;
+    private static final int HIT_EDIT = 2;
+    private static final int HIT_COPY = 3;
+    private static final int HIT_DELETE = 4;
+    private static final int HIT_NEW = 5;
+    private static final int HIT_DONE = 6;
 
     public PosterListScreen(long disruptionId, Screen parent) {
         super(Text.translatable("gui.station_announcer.posters.title"));
@@ -53,81 +54,55 @@ public class PosterListScreen extends Screen {
     @Override
     protected void init() {
         rows = ClientPosters.forDisruption(disruptionId);
-        int left = (width - PANEL_WIDTH) / 2;
-        listLeft = left;
-
-        int bottomBlock = 12 + (WIDGET_HEIGHT + GAP) * 2;
-        int available = height - 40 - bottomBlock;
-        visibleRows = Math.max(2, Math.min(Math.max(rows.size(), 2), available / ROW_HEIGHT));
-        int listHeight = visibleRows * ROW_HEIGHT;
-        scroll = Math.max(0, Math.min(scroll, Math.max(0, rows.size() * ROW_HEIGHT - listHeight)));
-
-        int content = listHeight + bottomBlock;
-        int y = Math.max(28, (height - content) / 2);
-        titleY = y - 16;
-        listTop = y;
-        y += listHeight + 2;
-        summaryY = y;
-        y += 12;
-
-        addDrawableChild(ButtonWidget.builder(
-                        Text.translatable("gui.station_announcer.posters.new"),
-                        button -> {
-                            ClientDisruptions.Entry disruption = ClientDisruptions.byId(disruptionId);
-                            if (client != null && disruption != null) {
-                                client.setScreen(new PosterEditScreen(PosterLayout.template(disruption), this));
-                            }
-                        })
-                .dimensions(left, y, PANEL_WIDTH, WIDGET_HEIGHT).build());
-        y += WIDGET_HEIGHT + GAP;
-        addDrawableChild(ButtonWidget.builder(ScreenTexts.DONE, button -> close())
-                .dimensions(left, y, PANEL_WIDTH, WIDGET_HEIGHT).build());
+        listW = Math.min(420, width - PAD * 2);
+        listX = (width - listW) / 2;
+        listY = TOP_BAR + PAD;
+        listH = height - listY - PAD;
     }
 
-    // ------------------------------------------------------------ behaviour
-
-    private int rowAt(double mouseX, double mouseY) {
-        if (mouseX < listLeft || mouseX >= listLeft + PANEL_WIDTH
-                || mouseY < listTop || mouseY >= listTop + visibleRows * ROW_HEIGHT) {
-            return -1;
-        }
-        int index = (int) ((mouseY - listTop + scroll) / ROW_HEIGHT);
-        return index >= 0 && index < rows.size() ? index : -1;
-    }
-
-    private int actionsLeft() {
-        return listLeft + PANEL_WIDTH - ACTIONS_WIDTH;
+    private void hit(int x, int y, int w, int h, int id, int arg) {
+        hits.add(new int[]{x, y, w, h, id, arg});
     }
 
     @Override
-    public boolean mouseClicked(double mouseX, double mouseY, int button) {
-        int index = rowAt(mouseX, mouseY);
-        if (index >= 0) {
-            ServicePoster poster = rows.get(index);
-            int x = actionsLeft();
-            if (mouseX >= x && mouseX < x + EDIT_WIDTH) {
-                edit(poster);
-                return true;
+    public boolean mouseClicked(double mx, double my, int button) {
+        for (int[] r : hits) {
+            if (!FlatUi.inside(mx, my, r[0], r[1], r[2], r[3])) {
+                continue;
             }
-            x += EDIT_WIDTH + 4;
-            if (mouseX >= x && mouseX < x + COPY_WIDTH) {
-                // A copy is a new poster (id 0) with the same content, opened for editing.
-                ServicePoster.Builder draft = new ServicePoster.Builder(poster);
-                draft.id = 0;
-                if (client != null) {
-                    client.setScreen(new PosterEditScreen(draft, this));
+            switch (r[4]) {
+                case HIT_ROW, HIT_EDIT -> {
+                    if (r[5] < rows.size()) {
+                        edit(rows.get(r[5]));
+                    }
                 }
-                return true;
+                case HIT_COPY -> {
+                    if (r[5] < rows.size()) {
+                        ServicePoster.Builder draft = new ServicePoster.Builder(rows.get(r[5]));
+                        draft.id = 0;
+                        if (client != null) {
+                            client.setScreen(new PosterEditScreen(draft, this));
+                        }
+                    }
+                }
+                case HIT_DELETE -> {
+                    if (r[5] < rows.size()) {
+                        sendDelete(rows.get(r[5]).id());
+                    }
+                }
+                case HIT_NEW -> {
+                    ClientDisruptions.Entry disruption = ClientDisruptions.byId(disruptionId);
+                    if (client != null && disruption != null) {
+                        client.setScreen(new PosterEditScreen(PosterLayout.template(disruption), this));
+                    }
+                }
+                case HIT_DONE -> close();
+                default -> {
+                }
             }
-            x += COPY_WIDTH + 4;
-            if (mouseX >= x && mouseX < x + DELETE_WIDTH) {
-                sendDelete(poster.id());
-                return true;
-            }
-            edit(poster);
             return true;
         }
-        return super.mouseClicked(mouseX, mouseY, button);
+        return super.mouseClicked(mx, my, button);
     }
 
     private void edit(ServicePoster poster) {
@@ -138,14 +113,22 @@ public class PosterListScreen extends Screen {
 
     @Override
     public boolean mouseScrolled(double mouseX, double mouseY, double horizontalAmount, double verticalAmount) {
-        int listHeight = visibleRows * ROW_HEIGHT;
-        int max = Math.max(0, rows.size() * ROW_HEIGHT - listHeight);
-        if (max > 0 && mouseX >= listLeft && mouseX < listLeft + PANEL_WIDTH
-                && mouseY >= listTop && mouseY < listTop + listHeight) {
-            scroll = Math.max(0, Math.min(max, scroll - (int) (verticalAmount * ROW_HEIGHT / 2)));
+        int viewH = listH - 18;
+        int max = Math.max(0, rows.size() * ROW - viewH);
+        if (max > 0 && FlatUi.inside(mouseX, mouseY, listX, listY, listW, listH)) {
+            scroll = Math.max(0, Math.min(max, scroll - (int) (verticalAmount * ROW / 2)));
             return true;
         }
         return super.mouseScrolled(mouseX, mouseY, horizontalAmount, verticalAmount);
+    }
+
+    @Override
+    public boolean keyPressed(int keyCode, int scanCode, int modifiers) {
+        if (keyCode == 256) {
+            close();
+            return true;
+        }
+        return super.keyPressed(keyCode, scanCode, modifiers);
     }
 
     @Override
@@ -155,96 +138,104 @@ public class PosterListScreen extends Screen {
         }
     }
 
-    // -------------------------------------------------------------- drawing
-
     @Override
-    public void render(DrawContext context, int mouseX, int mouseY, float delta) {
-        renderBackground(context, mouseX, mouseY, delta);
+    public void render(DrawContext c, int mx, int my, float delta) {
+        hits.clear();
         rows = ClientPosters.forDisruption(disruptionId);
-        super.render(context, mouseX, mouseY, delta);
-        context.drawCenteredTextWithShadow(textRenderer, title, width / 2, titleY, 0xFFFFFF);
+        FlatUi.rect(c, 0, 0, width, height, FlatUi.GROUND);
 
-        int right = listLeft + PANEL_WIDTH;
-        int listHeight = visibleRows * ROW_HEIGHT;
-        int bottom = listTop + listHeight;
-        AddonUi.panel(context, listLeft, listTop, right, bottom);
-
-        if (rows.isEmpty()) {
-            context.drawCenteredTextWithShadow(textRenderer,
-                    Text.translatable("gui.station_announcer.posters.none"),
-                    listLeft + PANEL_WIDTH / 2, listTop + listHeight / 2 - 4, AddonUi.TEXT_FAINT);
-        } else {
-            int hovered = rowAt(mouseX, mouseY);
-            context.enableScissor(listLeft + 1, listTop + 1, right - 1, bottom - 1);
-            for (int i = 0; i < rows.size(); i++) {
-                int rowY = listTop + i * ROW_HEIGHT - scroll;
-                if (rowY + ROW_HEIGHT < listTop || rowY > bottom) {
-                    continue;
-                }
-                drawRow(context, rows.get(i), rowY, i == hovered, mouseX, mouseY);
-            }
-            context.disableScissor();
-            AddonUi.scrollIndicator(context, right, listTop, listHeight, rows.size() * ROW_HEIGHT, scroll);
-        }
-
+        // Top bar.
+        FlatUi.rect(c, 0, 0, width, TOP_BAR, FlatUi.PANE);
+        FlatUi.rect(c, 0, TOP_BAR - 1, width, 1, FlatUi.BORDER);
+        c.drawText(textRenderer, title, PAD + 4, 7, FlatUi.TEXT, false);
         ClientDisruptions.Entry disruption = ClientDisruptions.byId(disruptionId);
-        String summary = Text.translatable("gui.station_announcer.posters.summary", rows.size()).getString();
         if (disruption != null) {
-            summary += " — " + textRenderer.trimToWidth(disruption.message(),
-                    PANEL_WIDTH - textRenderer.getWidth(summary) - 8);
+            int x = PAD + 10 + textRenderer.getWidth(title);
+            c.drawText(textRenderer, textRenderer.trimToWidth("· " + disruption.message(), Math.max(0, width - x - 150)),
+                    x, 7, FlatUi.TEXT_DIM, false);
         }
-        context.drawTextWithShadow(textRenderer, summary, listLeft, summaryY, AddonUi.TEXT_FAINT);
+        int doneW = 50;
+        int newW = 80;
+        int dx = width - PAD - doneW;
+        int nx = dx - 4 - newW;
+        FlatUi.button(c, textRenderer, "+ New poster", nx, 2, newW, FlatUi.BUTTON_HEIGHT, mx, my, ButtonStyle.PRIMARY);
+        hit(nx, 2, newW, FlatUi.BUTTON_HEIGHT, HIT_NEW, 0);
+        FlatUi.button(c, textRenderer, "Done", dx, 2, doneW, FlatUi.BUTTON_HEIGHT, mx, my, ButtonStyle.GHOST);
+        hit(dx, 2, doneW, FlatUi.BUTTON_HEIGHT, HIT_DONE, 0);
+
+        // List pane.
+        FlatUi.pane(c, listX, listY, listW, listH);
+        FlatUi.heading(c, textRenderer, rows.size() + (rows.size() == 1 ? " poster" : " posters"), listX + 6, listY + 5);
+        int top = listY + 18;
+        int viewH = listH - 18;
+        if (rows.isEmpty()) {
+            c.drawText(textRenderer, "No posters yet.", listX + 8, top + 8, FlatUi.TEXT_DIM, false);
+            c.drawText(textRenderer, "New poster starts from this disruption's lines and message.",
+                    listX + 8, top + 20, FlatUi.TEXT_FAINT, false);
+            return;
+        }
+        c.enableScissor(listX + 1, top, listX + listW - 1, listY + listH - 1);
+        for (int i = 0; i < rows.size(); i++) {
+            int y = top + i * ROW - scroll;
+            if (y + ROW < top || y > listY + listH) {
+                continue;
+            }
+            drawRow(c, rows.get(i), i, y, top, mx, my);
+        }
+        c.disableScissor();
+        FlatUi.scrollThumb(c, listX + listW, top, viewH, rows.size() * ROW, scroll);
     }
 
-    private void drawRow(DrawContext context, ServicePoster poster, int rowY, boolean hovered, int mouseX, int mouseY) {
-        int right = listLeft + PANEL_WIDTH;
+    private void drawRow(DrawContext c, ServicePoster poster, int index, int y, int clipTop, int mx, int my) {
+        int x = listX + 1;
+        int w = listW - 2;
+        boolean hovered = FlatUi.inside(mx, my, x, y, w, ROW) && my >= clipTop && my < listY + listH;
         if (hovered) {
-            context.fill(listLeft + 1, rowY, right - 1, rowY + ROW_HEIGHT, AddonUi.ROW_HOVER);
+            FlatUi.rect(c, x, y, w, ROW, FlatUi.HOVER);
         }
-        context.fill(listLeft + 1, rowY + ROW_HEIGHT - 1, right - 1, rowY + ROW_HEIGHT, AddonUi.ROW_DIVIDER);
-        context.fill(listLeft + 1, rowY, listLeft + 4, rowY + ROW_HEIGHT - 1, 0xFF3A3A45);
+        FlatUi.rect(c, x, y + ROW - 1, w, 1, FlatUi.BORDER);
 
-        int textLeft = listLeft + 8;
-        int textRight = actionsLeft() - 6;
+        // Thumbnail of the real poster.
+        int tw = Math.round(PosterLayout.WIDTH * THUMB_SCALE);
+        int th = Math.round(PosterLayout.HEIGHT * THUMB_SCALE);
+        int ty = y + (ROW - th) / 2;
+        FlatUi.rect(c, x + 5, ty - 1, tw + 2, th + 2, 0xFF000000);
+        PosterLayout.paint(new PosterLayout.GuiSurface(c, x + 6, ty, THUMB_SCALE), poster);
 
-        // Line 1: title bar chip, timing, then the headline preview.
-        int x = textLeft;
-        x += AddonUi.chip(context, textRenderer, poster.kind(), x, rowY + 3, 0xFF202024) + 5;
+        int textX = x + 6 + tw + 8;
+        int actionsW = 34 + 34 + 16 + 8;
+        int textW = w - (textX - x) - actionsW - 6;
+        int cx = textX;
+        cx += FlatUi.chip(c, textRenderer, poster.kind(), cx, y + 6, 0xFF2A2A32, false) + 5;
         if (!poster.timing().isEmpty()) {
-            String timing = poster.timing();
-            context.drawTextWithShadow(textRenderer, timing, x, rowY + 4, AddonUi.TEXT_DIM);
-            x += textRenderer.getWidth(timing) + 6;
+            c.drawText(textRenderer, textRenderer.trimToWidth(poster.timing(), Math.max(10, textX + textW - cx)),
+                    cx, y + 8, FlatUi.TEXT_DIM, false);
         }
-        context.drawTextWithShadow(textRenderer,
-                textRenderer.trimToWidth(stripTokens(poster.preview()), Math.max(10, textRight - x)),
-                x, rowY + 4, AddonUi.TEXT);
-
-        // Line 2: the header bullets as chips.
-        int chipX = textLeft;
+        c.drawText(textRenderer, textRenderer.trimToWidth(stripTokens(poster.preview()).replace('\n', ' '), textW),
+                textX, y + 20, FlatUi.TEXT, false);
+        int chipX = textX;
         for (String line : poster.headerLines()) {
             var bullet = PosterLayout.lineBullet(line);
-            int chipWidth = textRenderer.getWidth(bullet.label()) + 8;
-            if (chipX + chipWidth > textRight) {
+            int cw = textRenderer.getWidth(bullet.label()) + 8;
+            if (chipX + cw > textX + textW) {
                 break;
             }
-            chipX += AddonUi.chip(context, textRenderer, bullet.label(), chipX, rowY + 16, bullet.color()) + 3;
+            chipX += FlatUi.chip(c, textRenderer, bullet.label(), chipX, y + 31, bullet.color(), false) + 3;
         }
         if (poster.headerLines().isEmpty()) {
-            context.drawTextWithShadow(textRenderer, poster.category(), chipX, rowY + 18, AddonUi.TEXT_FAINT);
+            c.drawText(textRenderer, textRenderer.trimToWidth(poster.category(), textW), chipX, y + 33, FlatUi.TEXT_FAINT, false);
         }
 
-        int actionX = actionsLeft();
-        int actionY = rowY + (ROW_HEIGHT - 14) / 2;
-        AddonUi.inlineButton(context, textRenderer,
-                Text.translatable("gui.station_announcer.posters.edit").getString(),
-                actionX, actionY, EDIT_WIDTH, 14, mouseX, mouseY, AddonUi.TEXT);
-        actionX += EDIT_WIDTH + 4;
-        AddonUi.inlineButton(context, textRenderer,
-                Text.translatable("gui.station_announcer.posters.duplicate").getString(),
-                actionX, actionY, COPY_WIDTH, 14, mouseX, mouseY, AddonUi.TEXT);
-        actionX += COPY_WIDTH + 4;
-        AddonUi.inlineButton(context, textRenderer, "x",
-                actionX, actionY, DELETE_WIDTH, 14, mouseX, mouseY, AddonUi.DANGER);
+        int ax = x + w - actionsW;
+        int ay = y + (ROW - FlatUi.BUTTON_HEIGHT) / 2;
+        FlatUi.button(c, textRenderer, "Edit", ax, ay, 34, FlatUi.BUTTON_HEIGHT, mx, my, ButtonStyle.FLAT);
+        hit(ax, Math.max(ay, clipTop), 34, FlatUi.BUTTON_HEIGHT, HIT_EDIT, index);
+        FlatUi.button(c, textRenderer, "Copy", ax + 38, ay, 34, FlatUi.BUTTON_HEIGHT, mx, my, ButtonStyle.FLAT);
+        hit(ax + 38, Math.max(ay, clipTop), 34, FlatUi.BUTTON_HEIGHT, HIT_COPY, index);
+        FlatUi.iconButton(c, textRenderer, "×", ax + 76, ay + 1, 16, mx, my, FlatUi.DANGER);
+        hit(ax + 76, Math.max(ay + 1, clipTop), 16, 16, HIT_DELETE, index);
+        int visibleTop = Math.max(y, clipTop);
+        hit(x, visibleTop, w - actionsW, Math.max(0, y + ROW - visibleTop), HIT_ROW, index);
     }
 
     /** Tokens read as their symbol name in a list row: {b:4} → [4]. */
