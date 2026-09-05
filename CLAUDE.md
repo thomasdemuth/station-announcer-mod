@@ -295,6 +295,51 @@ Four fixes/features from Thomas's feedback round (his answers, do not re-ask):
   model rebuild (tripod look, reader heads, pictogram plates day+night,
   HEET comb/lintel, signboard straps).
 
+### SERVICE CHANGE POSTERS (2026-09-05) — per-disruption MTA-style posters + a hangable frame block; 2.4.54
+
+Built from Thomas's two poster mock-ups. Every disruption can own any number of
+**service change posters** (`mtraddon/disruption/ServicePoster` — plain record, JSON +
+packet codec, `Builder` for the editor), stored in AddonStore (`posters`, cascade-deleted
+with their disruption on delete AND expiry), synced wholesale by `addon_posters` S2C
+(`ClientPosters` mirror), edited via `addon_update_poster` C2S (op-gated,
+`disruptions.maxPosters` cap, default 64). Entry point: the **Posters** action on each
+row of `DisruptionsScreen` → `PosterListScreen` (edit / copy / delete / New poster from a
+template pre-filled with the disruption's lines + message) → `PosterEditScreen`:
+scrolling form on the left (title bar + logo, big timing line, two date lines, header
+line bullets as removable chips, category, ordered BODY BLOCKS — headline / text /
+subhead / big arrow (8 directions) / rule / space — with ↑↓x, footer left/right) and a
+LIVE PREVIEW on the right. Inline tokens go into any text field from the fixed
+**Insert** toolbar at the cursor: `{b:LINE}` route bullet, `{d:LINE}` express diamond,
+`{wc}` wheelchair, `{<} {^} {v} {>}` small arrows — LINE is the line name (before MTR's
+`||`), resolved to colour at draw time from simplifiedRoutes, then dashboard routes,
+else grey (`PosterLayout.lineBullet`).
+
+**ONE layout, two surfaces.** `client/mtraddon/PosterLayout` paints onto a `Surface`
+interface; `GuiSurface` (DrawContext, scanline discs/polygons) draws the editor + picker
+previews, `WorldSurface` (debug quads + polygon-offset text via CanvasPainter) draws
+the block — so the preview IS what hangs in the world. Canvas 128×212 units (the sheet
+fills the frame's 15×25 px plate, ≈11×17 in.). Fitting = `measure()`: body text shrinks
+through 1.0/0.9/0.8/0.7/0.6 until the blocks fit above the footer (Thomas's request
+after the first cut clipped long posters; an earlier grow-downward variant left a dark
+plate band under short sheets — full-height sheet with white space is what real posters
+do). Bold = second text pass offset size/16.
+
+**Frame block** `service_poster` (`mtr/ServicePosterBlock`, OPERATIONS tab): door-style
+2-tall wall plate (lower y 1..16, upper y 0..10, z 15..16, FACING = wall behind, lower =
+data half, loot half=lower). Right-click either half → `PosterSignPickerScreen` (every
+poster grouped by disruption, hover preview, "Take poster down") → `addon_set_poster_sign`
+C2S (distance + canPlayerModifyAt) → the BE stores the poster ID **and a JSON SNAPSHOT**
+(`ServicePosterBlockEntity`, NBT `PosterId` + `Poster`). Renderer prefers the live
+mirror, falls back to the snapshot — so a hung poster survives its disruption being
+deleted/expiring. `PosterSignRegistry` (weak set, server) pushes edits into every loaded
+frame. Verified on the rig (screenshots): empty-frame hint, snapshot-only frame,
+two live posters incl. bullets/diamond/wheelchair/inline+big arrows/shrink-to-fit.
+**NOT verified: every GUI** (list, editor, insert toolbar, line popup, picker) — headless
+rig cannot click. Bullets rendered GREY on the rig because its routes have no
+simplified routes and the dashboard data was not synced; in a real world they colour.
+Rig gotcha: a chat command over 256 chars kicks the client ("String too big") — keep
+`/data merge` payloads short.
+
 ### EL KIT v2 — FARE CONTROL / STAIRS in progress (2026-09-04) — READ `EL_V2_HANDOFF.md` FIRST
 
 Stair family rounds 1-6 built with Thomas testing LIVE in the dev world (rig client as

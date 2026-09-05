@@ -112,6 +112,9 @@ public class AddonServerConfig {
         /** Maximum affected lines per disruption. Clamped 1–64. */
         public int maxRoutesPerDisruption = 16;
 
+        /** Maximum stored service change posters across all disruptions. Clamped 1–256. */
+        public int maxPosters = 64;
+
         /**
          * How often the affected-station set is recomputed on the simulator threads
          * when nothing has been edited (it is also recomputed immediately after any
@@ -355,6 +358,7 @@ public class AddonServerConfig {
         disruptions.maxActive = Math.max(1, Math.min(128, disruptions.maxActive));
         disruptions.maxMessageLength = Math.max(16, Math.min(512, disruptions.maxMessageLength));
         disruptions.maxRoutesPerDisruption = Math.max(1, Math.min(64, disruptions.maxRoutesPerDisruption));
+        disruptions.maxPosters = Math.max(1, Math.min(256, disruptions.maxPosters));
         disruptions.stationRescanSeconds = Math.max(30, Math.min(3_600, disruptions.stationRescanSeconds));
         disruptions.displayRefreshSeconds = Math.max(5, Math.min(600, disruptions.displayRefreshSeconds));
         holdRules.holdArrivalCacheMillis = Math.max(50, Math.min(10_000, holdRules.holdArrivalCacheMillis));

@@ -37,8 +37,9 @@ public class DisruptionsScreen extends Screen {
 
     private static final int TOGGLE_WIDTH = 30;
     private static final int EDIT_WIDTH = 32;
+    private static final int POSTERS_WIDTH = 44;
     private static final int DELETE_WIDTH = 14;
-    private static final int ACTIONS_WIDTH = TOGGLE_WIDTH + EDIT_WIDTH + DELETE_WIDTH + 8;
+    private static final int ACTIONS_WIDTH = TOGGLE_WIDTH + EDIT_WIDTH + POSTERS_WIDTH + DELETE_WIDTH + 12;
 
     private static final int SEVERE = 0xFFD23B3B;
     private static final int MAJOR = 0xFFD9822B;
@@ -140,6 +141,13 @@ public class DisruptionsScreen extends Screen {
                 return true;
             }
             x += EDIT_WIDTH + 4;
+            if (mouseX >= x && mouseX < x + POSTERS_WIDTH) {
+                if (client != null) {
+                    client.setScreen(new PosterListScreen(entry.id(), this));
+                }
+                return true;
+            }
+            x += POSTERS_WIDTH + 4;
             if (mouseX >= x && mouseX < x + DELETE_WIDTH) {
                 sendDelete(entry.id());
                 return true;
@@ -277,6 +285,12 @@ public class DisruptionsScreen extends Screen {
                 Text.translatable("gui.station_announcer.disruptions.edit").getString(),
                 actionX, actionY, EDIT_WIDTH, 14, mouseX, mouseY, AddonUi.TEXT);
         actionX += EDIT_WIDTH + 4;
+        int posterCount = ClientPosters.forDisruption(entry.id()).size();
+        AddonUi.inlineButton(context, textRenderer,
+                Text.translatable("gui.station_announcer.disruptions.posters").getString()
+                        + (posterCount > 0 ? " " + posterCount : ""),
+                actionX, actionY, POSTERS_WIDTH, 14, mouseX, mouseY, posterCount > 0 ? AddonUi.TEXT : AddonUi.TEXT_DIM);
+        actionX += POSTERS_WIDTH + 4;
         AddonUi.inlineButton(context, textRenderer, "x",
                 actionX, actionY, DELETE_WIDTH, 14, mouseX, mouseY, AddonUi.DANGER);
     }

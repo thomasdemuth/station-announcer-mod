@@ -226,6 +226,12 @@ public final class MtrStationDecor {
                     EMPLOYEE_DOOR_MESH, EMPLOYEE_DOOR_BLACK, EMPLOYEE_DOOR_WHITE,
                     EL_COLUMN_NAMED, EL_COLUMN_NAMED_STATION, EL_NAME_BOARD, EL_POST_NAMED, EL_RAILING_SIGN, EL_WALL_SIGN, EL_SIGN, EL_ENTRANCE_SIGN).build(null);
 
+    /** Service change poster frame (wall, two-block, lower half = data). */
+    public static final ServicePosterBlock SERVICE_POSTER = new ServicePosterBlock(
+            AbstractBlock.Settings.create().strength(1.0f).sounds(net.minecraft.sound.BlockSoundGroup.METAL).nonOpaque());
+    public static final BlockEntityType<ServicePosterBlockEntity> SERVICE_POSTER_BLOCK_ENTITY =
+            BlockEntityType.Builder.create(ServicePosterBlockEntity::new, SERVICE_POSTER).build(null);
+
     /** C2S: the sign name screen saves (pos + custom name; "" = automatic). */
     public static final Identifier UPDATE_DECOR_C2S = StationAnnouncer.id("update_decor");
 
@@ -413,6 +419,7 @@ public final class MtrStationDecor {
         registerBlock("employee_door_mesh", EMPLOYEE_DOOR_MESH, ModContent.DECORATION_ENTRIES);
         registerBlock("employee_door_black", EMPLOYEE_DOOR_BLACK, ModContent.DECORATION_ENTRIES);
         registerBlock("employee_door_white", EMPLOYEE_DOOR_WHITE, ModContent.DECORATION_ENTRIES);
+        registerBlock("service_poster", SERVICE_POSTER, ModContent.OPERATIONS_ENTRIES);
         registerBlock("turnstile", TURNSTILE, ModContent.DECORATION_ENTRIES);
         registerBlock("turnstile_exit", TURNSTILE_EXIT, ModContent.DECORATION_ENTRIES);
         registerBlock("turnstile_heet", TURNSTILE_HEET, ModContent.DECORATION_ENTRIES);
@@ -427,6 +434,7 @@ public final class MtrStationDecor {
         registerBlock("pids_pole", PIDS_POLE, ModContent.OPERATIONS_ENTRIES);
 
         Registry.register(Registries.BLOCK_ENTITY_TYPE, StationAnnouncer.id("station_decor"), DECOR_BLOCK_ENTITY);
+        Registry.register(Registries.BLOCK_ENTITY_TYPE, StationAnnouncer.id("service_poster"), SERVICE_POSTER_BLOCK_ENTITY);
         Registry.register(Registries.BLOCK_ENTITY_TYPE, StationAnnouncer.id("stop_marker"), STOP_MARKER_BLOCK_ENTITY);
     }
 

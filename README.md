@@ -485,3 +485,21 @@ a small companion mod could:
 ## License
 
 MIT — see `LICENSE`.
+
+### Service change posters
+
+Every disruption can carry any number of **service change posters** in the style of the
+MTA's planned-work sheets. From the dashboard's Disruptions board click **Posters** on a
+row, then **New poster** (pre-filled from the disruption) or edit an existing one. The
+editor is a form with a live preview: title bar and logo, the big timing line ("All
+Times", "Weekends"), two date lines, the affected-line bullets, a category rule, then the
+body as an ordered list of blocks — headline, text, subhead, a big directional arrow, a
+rule or a spacer. Click into any text field and use the **Insert** toolbar to drop a line
+bullet, an express diamond, the wheelchair symbol or a small arrow at the cursor (they are
+stored as tokens such as `{b:4}`, `{d:4}`, `{wc}`, `{>}`). Long bodies shrink their text
+to fit the sheet.
+
+To hang one, place a **Service Change Poster** frame (Operations tab, a two-block wall
+plate) and right-click it to pick a poster. The frame keeps its own copy, so the poster
+stays up even after the disruption is deleted or expires; while the disruption exists,
+edits show on every frame immediately.

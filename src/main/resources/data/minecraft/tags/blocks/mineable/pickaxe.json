@@ -265,6 +265,10 @@
     "station_announcer:el_street_column_lattice",
     "station_announcer:el_girder_plate",
     "station_announcer:el_track_deck",
-    "station_announcer:el_plate_deck"
+    "station_announcer:el_plate_deck",
+    {
+      "id": "station_announcer:service_poster",
+      "required": false
+    }
   ]
 }

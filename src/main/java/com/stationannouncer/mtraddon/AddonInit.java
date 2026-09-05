@@ -179,6 +179,7 @@ public final class AddonInit {
                 if (AddonStore.expireDue(System.currentTimeMillis())) {
                     DisruptionNetworking.broadcastStopChanges(server);
                     DisruptionNetworking.broadcastDisruptions(server);
+                    DisruptionNetworking.broadcastPosters(server); // expired disruptions take their posters
                 }
                 DisruptionBroadcaster.tick(server);
             }
@@ -211,6 +212,7 @@ public final class AddonInit {
             AddonNetworking.syncDispatchInfoTo(sender);
             DisruptionNetworking.syncStopChangesTo(sender);
             DisruptionNetworking.syncDisruptionsTo(sender);
+            DisruptionNetworking.syncPostersTo(sender);
             DepotGroupNetworking.syncDepotGroupsTo(sender);
         });
 

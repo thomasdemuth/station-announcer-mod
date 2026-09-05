@@ -8,6 +8,7 @@ import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
 import com.stationannouncer.StationAnnouncer;
 import com.stationannouncer.mtraddon.disruption.Disruption;
+import com.stationannouncer.mtraddon.disruption.ServicePoster;
 import com.stationannouncer.mtraddon.disruption.StopOverlayEngine;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.util.WorldSavePath;
@@ -79,6 +80,8 @@ public final class AddonStore {
     private static final Map<String, long[]> addedStops = new LinkedHashMap<>();
     /** Feature 6b: disruption id → record. */
     private static final Map<Long, Disruption> disruptions = new LinkedHashMap<>();
+    /** Service change posters: poster id → poster (each linked to one disruption). */
+    private static final Map<Long, ServicePoster> posters = new LinkedHashMap<>();
     /** Depot groups: group id → the group (name + member depot ids in offset order). */
     private static final Map<Long, DepotGroup> depotGroups = new LinkedHashMap<>();
 
@@ -113,6 +116,7 @@ public final class AddonStore {
             disabledStops.clear();
             addedStops.clear();
             disruptions.clear();
+            posters.clear();
             depotGroups.clear();
             DepotGroupEngine.clearRuntimeState();
             // A world without a data file must not inherit a previous world's
@@ -135,6 +139,7 @@ public final class AddonStore {
                     readDisabledStops(root.getAsJsonObject("disabledStops"));
                     readAddedStops(root.getAsJsonObject("addedStops"));
                     readDisruptions(root.getAsJsonObject("disruptions"));
+                    readPosters(root.getAsJsonObject("posters"));
                     readDepotGroups(root.getAsJsonObject("depotGroups"));
                 }
             } catch (Exception e) {
@@ -574,11 +579,97 @@ public final class AddonStore {
             if (disruptions.remove(id) == null) {
                 return;
             }
+            posters.values().removeIf(poster -> poster.disruptionId() == id);
             disruptionCount = disruptions.size();
             recomputeNextExpiry();
         }
         bumpVersion();
         markDirty();
+    }
+
+    // ------------------------------------------- service change posters
+
+    /** Server thread: a copy safe to iterate while building sync packets. */
+    public static Map<Long, ServicePoster> postersView() {
+        synchronized (LOCK) {
+            return new LinkedHashMap<>(posters);
+        }
+    }
+
+    public static ServicePoster poster(long id) {
+        synchronized (LOCK) {
+            return posters.get(id);
+        }
+    }
+
+    public static int posterCount() {
+        synchronized (LOCK) {
+            return posters.size();
+        }
+    }
+
+    /**
+     * Server thread: create or replace one poster. A zero id means "new" and gets
+     * the current time (nudged forward on collision). The poster must belong to
+     * an existing disruption. Returns the stored record, or null when refused
+     * (unknown disruption, or the cap was hit).
+     */
+    public static ServicePoster putPoster(ServicePoster poster, int maxPosters) {
+        ServicePoster stored;
+        synchronized (LOCK) {
+            if (!disruptions.containsKey(poster.disruptionId())) {
+                return null;
+            }
+            long id = poster.id();
+            if (id == 0 || !posters.containsKey(id)) {
+                if (posters.size() >= maxPosters) {
+                    return null;
+                }
+            }
+            if (id == 0) {
+                id = System.currentTimeMillis();
+                while (posters.containsKey(id) || disruptions.containsKey(id)) {
+                    id++;
+                }
+            }
+            stored = poster.withId(id);
+            posters.put(id, stored);
+        }
+        markDirty();
+        return stored;
+    }
+
+    /** Server thread: delete a poster. Returns true when one was removed. */
+    public static boolean removePoster(long id) {
+        synchronized (LOCK) {
+            if (posters.remove(id) == null) {
+                return false;
+            }
+        }
+        markDirty();
+        return true;
+    }
+
+    private static void readPosters(JsonObject json) {
+        if (json == null) {
+            return;
+        }
+        for (Map.Entry<String, JsonElement> entry : json.entrySet()) {
+            try {
+                ServicePoster poster = ServicePoster.fromJson(entry.getValue().getAsJsonObject());
+                long id = Long.parseLong(entry.getKey());
+                if (poster.id() != id) {
+                    poster = poster.withId(id);
+                }
+                // Orphans (the disruption was deleted while the file was being
+                // written) are dropped rather than kept around forever.
+                if (disruptions.containsKey(poster.disruptionId())) {
+                    posters.put(id, poster);
+                }
+            } catch (Exception e) {
+                StationAnnouncer.LOGGER.warn("Skipping malformed poster '{}'", entry.getKey(), e);
+            }
+        }
     }
 
     /**
@@ -608,8 +699,10 @@ public final class AddonStore {
                 }
             }
             for (var iterator = disruptions.entrySet().iterator(); iterator.hasNext(); ) {
-                if (iterator.next().getValue().hasExpired(now)) {
+                Disruption disruption = iterator.next().getValue();
+                if (disruption.hasExpired(now)) {
                     iterator.remove();
+                    posters.values().removeIf(poster -> poster.disruptionId() == disruption.id());
                     disruptionsChanged = true;
                 }
             }
@@ -1093,6 +1186,10 @@ public final class AddonStore {
                 disruptionsJson.add(Long.toString(id), entry);
             });
             root.add("disruptions", disruptionsJson);
+            // Service change posters, keyed by poster id.
+            JsonObject postersJson = new JsonObject();
+            posters.forEach((id, poster) -> postersJson.add(Long.toString(id), poster.toJson()));
+            root.add("posters", postersJson);
             // Depot groups — the "these depots must not dispatch together" sets.
             JsonObject depotGroupsJson = new JsonObject();
             depotGroups.forEach((id, group) -> {

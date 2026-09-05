@@ -124,6 +124,7 @@ public final class AddonClientInit {
             ClientPlatformGroups.clear();
             ClientDispatchInfo.clear();
             ClientDisruptions.clear();
+            ClientPosters.clear();
             ClientStopChanges.clear();
             ClientDepotGroups.clear();
             ClientNav.stop();
@@ -267,6 +268,24 @@ public final class AddonClientInit {
                                 message, List.copyOf(routeIds)));
                     }
                     client.execute(() -> ClientDisruptions.replace(entries));
+                });
+
+        ClientPlayNetworking.registerGlobalReceiver(DisruptionNetworking.POSTERS_S2C,
+                (client, handler, buf, responseSender) -> {
+                    int count = buf.readVarInt();
+                    if (count < 0 || count > com.stationannouncer.mtraddon.disruption.ServicePoster.MAX_SYNC_POSTERS) {
+                        return;
+                    }
+                    List<com.stationannouncer.mtraddon.disruption.ServicePoster> posters = new ArrayList<>(count);
+                    for (int i = 0; i < count; i++) {
+                        com.stationannouncer.mtraddon.disruption.ServicePoster poster =
+                                com.stationannouncer.mtraddon.disruption.ServicePoster.read(buf);
+                        if (poster == null) {
+                            return;
+                        }
+                        posters.add(poster);
+                    }
+                    client.execute(() -> ClientPosters.replace(posters));
                 });
 
         ClientPlayNetworking.registerGlobalReceiver(DisruptionNetworking.STOP_CHANGES_S2C,

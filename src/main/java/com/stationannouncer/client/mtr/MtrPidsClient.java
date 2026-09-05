@@ -96,6 +96,7 @@ public final class MtrPidsClient {
         BlockEntityRendererFactories.register(MtrStationDecor.DECOR_BLOCK_ENTITY, context -> new StationDecorRenderer());
         BlockEntityRendererFactories.register(MtrStationDecor.STOP_MARKER_BLOCK_ENTITY, context -> new StopMarkerRenderer());
         BlockEntityRendererFactories.register(MtrPids.RAILROAD_PIDS_BLOCK_ENTITY, context -> new RailroadPidsRenderer());
+        BlockEntityRendererFactories.register(MtrStationDecor.SERVICE_POSTER_BLOCK_ENTITY, context -> new ServicePosterRenderer());
         BlockEntityRendererFactories.register(MtrPids.RAILROAD_HANGING_BLOCK_ENTITY, context -> new RailroadHangingRenderer());
         BlockEntityRendererFactories.register(MtrPids.RAILROAD_DEPARTURE_BLOCK_ENTITY, context -> new RailroadDepartureRenderer());
         BlockEntityRendererFactories.register(MtrPids.DEPARTURE_BOARD_BLOCK_ENTITY, context -> new DepartureBoardRenderer());
@@ -150,6 +151,12 @@ public final class MtrPidsClient {
 
         // The brush's full PIDS settings screen (the bare-click mini toggle
         // stays on the shared GUI opener below).
+        com.stationannouncer.mtr.MtrPillars.SETTINGS_OPENER = hand -> {
+            net.minecraft.client.MinecraftClient client = net.minecraft.client.MinecraftClient.getInstance();
+            if (client.player != null && client.currentScreen == null) {
+                client.setScreen(new CreatorSettingsScreen(hand, client.player.getStackInHand(hand)));
+            }
+        };
         MtrPids.CONFIG_GUI_OPENER = blockEntity -> {
             if (blockEntity instanceof PidsBlockEntity pids) {
                 MinecraftClient.getInstance().setScreen(new NycPidsScreen(pids));
@@ -163,6 +170,9 @@ public final class MtrPidsClient {
         StationAnnouncer.GUI_OPENER = blockEntity -> {
             if (blockEntity instanceof com.stationannouncer.mtr.DepartureBoardBlockEntity board) {
                 net.minecraft.client.MinecraftClient.getInstance().setScreen(new DepartureBoardScreen(board));
+            } else if (blockEntity instanceof com.stationannouncer.mtr.ServicePosterBlockEntity sign) {
+                MinecraftClient.getInstance().setScreen(
+                        new com.stationannouncer.client.mtraddon.PosterSignPickerScreen(sign));
             } else if (blockEntity instanceof com.stationannouncer.mtr.RailroadPidsBlockEntity railroad) {
                 MinecraftClient.getInstance().setScreen(new RailroadPidsScreen(railroad));
             } else if (blockEntity instanceof com.stationannouncer.mtr.StopMarkerBlockEntity marker) {

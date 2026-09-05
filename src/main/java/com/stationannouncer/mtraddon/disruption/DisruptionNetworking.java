@@ -11,6 +11,8 @@ import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.network.ServerPlayerEntity;
 import net.minecraft.text.Text;
 import net.minecraft.util.Identifier;
+import net.minecraft.util.math.BlockPos;
+import net.minecraft.util.math.Vec3d;
 import org.mtr.core.simulation.Simulator;
 import org.mtr.libraries.it.unimi.dsi.fastutil.objects.ObjectImmutableList;
 import java.util.Map;
@@ -44,6 +46,12 @@ public final class DisruptionNetworking {
     public static final Identifier UPDATE_STOP_CHANGE_C2S = StationAnnouncer.id("addon_update_stop_change");
     public static final Identifier DISRUPTIONS_S2C = StationAnnouncer.id("addon_disruptions");
     public static final Identifier UPDATE_DISRUPTION_C2S = StationAnnouncer.id("addon_update_disruption");
+    /** S2C: every service change poster (full list, replaced wholesale). */
+    public static final Identifier POSTERS_S2C = StationAnnouncer.id("addon_posters");
+    /** C2S: create, replace or delete one poster. */
+    public static final Identifier UPDATE_POSTER_C2S = StationAnnouncer.id("addon_update_poster");
+    /** C2S: hang a poster on (or clear) a placed service_poster block. */
+    public static final Identifier SET_POSTER_SIGN_C2S = StationAnnouncer.id("addon_set_poster_sign");
 
     /** Sanity cap on a stop index in a change key (mirrors the platform-group cap). */
     public static final int MAX_STOP_INDEX = 4_096;
@@ -132,6 +140,7 @@ public final class DisruptionNetworking {
                     if (id != 0) {
                         AddonStore.removeDisruption(id);
                         broadcastDisruptions(server);
+                        broadcastPosters(server); // its posters went with it
                     }
                     return;
                 }
@@ -153,6 +162,60 @@ public final class DisruptionNetworking {
                     return;
                 }
                 broadcastDisruptions(server);
+            });
+        });
+
+        ServerPlayNetworking.registerGlobalReceiver(UPDATE_POSTER_C2S, (server, player, handler, buf, responseSender) -> {
+            boolean delete = buf.readBoolean();
+            long id = buf.readLong();
+            ServicePoster poster = delete ? null : ServicePoster.read(buf);
+            if (!delete && poster == null) {
+                return; // malformed — drop without touching anything
+            }
+
+            server.execute(() -> {
+                AddonServerConfig config = AddonServerConfig.get();
+                if (!config.disruptions.enabled || !player.hasPermissionLevel(config.editPermissionLevel)) {
+                    return;
+                }
+                if (delete) {
+                    if (id != 0 && AddonStore.removePoster(id)) {
+                        broadcastPosters(server);
+                    }
+                    return;
+                }
+                ServicePoster stored = AddonStore.putPoster(poster, config.disruptions.maxPosters);
+                if (stored == null) {
+                    player.sendMessage(Text.translatable("msg.station_announcer.poster.refused",
+                            config.disruptions.maxPosters), true);
+                    return;
+                }
+                // Signs already hanging this poster pick up the edit at once.
+                com.stationannouncer.mtr.PosterSignRegistry.refresh(stored);
+                broadcastPosters(server);
+            });
+        });
+
+        ServerPlayNetworking.registerGlobalReceiver(SET_POSTER_SIGN_C2S, (server, player, handler, buf, responseSender) -> {
+            BlockPos pos = buf.readBlockPos();
+            long posterId = buf.readLong();
+            server.execute(() -> {
+                net.minecraft.server.world.ServerWorld world = player.getServerWorld();
+                if (player.squaredDistanceTo(Vec3d.ofCenter(pos)) > 64.0 * 64.0
+                        || !world.canPlayerModifyAt(player, pos)
+                        || !(world.getBlockEntity(pos) instanceof com.stationannouncer.mtr.ServicePosterBlockEntity sign)) {
+                    return;
+                }
+                if (posterId == 0) {
+                    sign.setPoster(0, null);
+                } else {
+                    ServicePoster poster = AddonStore.poster(posterId);
+                    if (poster == null) {
+                        return;
+                    }
+                    sign.setPoster(posterId, poster);
+                }
+                sign.sync();
             });
         });
     }
@@ -297,6 +360,36 @@ public final class DisruptionNetworking {
             buf.writeVarInt(parsed == null ? 0 : (int) parsed[1]);
             buf.writeLong(entry.getValue()[0]);
             buf.writeLong(entry.getValue().length > 1 ? entry.getValue()[1] : 0);
+        }
+        return buf;
+    }
+
+    /** On join, through the connection event's sender. */
+    public static void syncPostersTo(PacketSender sender) {
+        sender.sendPacket(POSTERS_S2C, buildPostersBuf());
+    }
+
+    public static void broadcastPosters(MinecraftServer server) {
+        for (ServerPlayerEntity player : server.getPlayerManager().getPlayerList()) {
+            ServerPlayNetworking.send(player, POSTERS_S2C, buildPostersBuf());
+        }
+    }
+
+    private static PacketByteBuf buildPostersBuf() {
+        PacketByteBuf buf = PacketByteBufs.create();
+        if (!AddonServerConfig.get().disruptions.enabled) {
+            buf.writeVarInt(0);
+            return buf;
+        }
+        Map<Long, ServicePoster> posters = AddonStore.postersView();
+        int count = Math.min(posters.size(), ServicePoster.MAX_SYNC_POSTERS);
+        buf.writeVarInt(count);
+        int written = 0;
+        for (ServicePoster poster : posters.values()) {
+            if (written++ >= count) {
+                break;
+            }
+            poster.write(buf);
         }
         return buf;
     }
