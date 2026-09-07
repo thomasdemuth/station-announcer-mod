@@ -142,19 +142,6 @@ const MAX_LABEL_BULLETS = 8;
 const BULLET_ZOOM = 0.22;
 /** Below this zoom trains are plain dots in their line colour, not icon pucks. */
 const TRAIN_ICON_ZOOM = 0.3;
-
-/* ---- schematic hub layout: the inflation warp (section 5e) ---- */
-/** Blocks. Stations closer than this chain into one cluster (single linkage). */
-const HUB_LINK = 180;
-/** A cluster needs this many station parts before it counts as a hub worth inflating. */
-const HUB_MIN_STATIONS = 4;
-/** Blocks. The station spacing a hub is inflated toward (≈ the network-wide median). */
-const HUB_TARGET_SPACING = 220;
-/** Never magnify a hub more than this, whatever its spacing asks for. */
-const HUB_MAX_MAG = 2.5;
-/** "Hub spacing" slider bounds: 0 = pure geography, 1 = the computed inflation. */
-const HUB_SPACING_MIN = 0;
-const HUB_SPACING_MAX = 1.6;
 /** Line-thickness multiplier bounds (the settings slider). */
 const LINE_SCALE_MIN = 0.6;
 const LINE_SCALE_MAX = 1.6;
@@ -290,7 +277,6 @@ const state = {
 	labelHits: [],                 // world-space boxes of the drawn station labels
 	chipHits: [],                  // world-space boxes of the bullets drawn after station names -> line view
 	weakLabels: new Map(),         // name word (lower) -> the unique bullet text buildLines gave it
-	warp: null,                    // {hubs:[{cx,cz,r0,R,m}], maxShift} — the hub inflation field (5e)
 	mapPick: null,                 // "from" | "to" while the map is armed to drop a pin (10c)
 	pointNodes: new Map(),         // POINT_FROM/POINT_TO -> {id, xz, y, label} synthetic nodes
 	tracking: null,                // live journey guidance state — trackReduce (section 10d)
@@ -339,7 +325,6 @@ const state = {
 		hideOtherPlayers: false,   // Layers: everybody but me off
 		satBrightness: 1,          // multiplies the theme's satellite alpha, 0.3..1
 		labelScale: 1,             // multiplies every station label's font size, 0.8..1.3
-		hubSpacing: 1,             // strength of the hub inflation warp, 0 (geographic)..1.6
 		hideLabels: false,         // station names off (dots stay; the selection keeps its own)
 	},
 };
@@ -919,7 +904,6 @@ function prepareGeometry() {
 	state.streetPairs = null;      // recomputed once below, then reused by buildGraph
 	buildSegments();
 	buildGlyphs();
-	buildHubWarp();
 	buildWalks();
 	buildStreetLinks();
 	state.plan.graph = null;
@@ -2368,163 +2352,6 @@ let staticCanvas = document.createElement("canvas");
 let staticDirty = true;
 let staticRenderedView = null;    // the view the cached layer was last drawn at
 
-/* ----------------------------------------------------------------------------
- * 5e. SCHEMATIC HUB LAYOUT — the inflation warp
- * --------------------------------------------------------------------------
- * The drawn map is NOT the geographic map: dense clusters of stations (twelve stops in
- * 300 blocks around a hub) are magnified and the ring around them compressed, the way
- * a printed subway map blows up its downtown. It is one smooth vector field W(x, z)
- * applied inside worldToScreen — so lines, stations, labels, trains, players, pins
- * and the basemap tiles all move together and nothing can drift off its river.
- *
- * Per hub: stations within HUB_LINK of each other chain into a cluster; clusters whose
- * discs overlap merge; a cluster of ≥ HUB_MIN_STATIONS parts whose median station
- * spacing s falls short of HUB_TARGET_SPACING is magnified by m = target / s (capped)
- * inside its radius r0, and the displacement (m − 1)·r0 decays with a smoothstep to
- * zero at R = r0 + 3.5(m − 1)r0 + 200 — wide enough that the compression zone's slope
- * stays under 0.43, so even two overlapping hubs never fold the map. Every geometry
- * stays in WORLD units; only the projection warps, and screenToWorld inverts it with a
- * few Newton steps, so hit-testing and map picks stay exact.
- */
-function hubSpacing() {
-	return clamp(Number.isFinite(state.prefs.hubSpacing) ? state.prefs.hubSpacing : 1, HUB_SPACING_MIN, HUB_SPACING_MAX);
-}
-
-function buildHubWarp() {
-	const strength = hubSpacing();
-	state.warp = { hubs: [], maxShift: 0 };
-	if (strength <= 0.001 || state.glyphs.length < HUB_MIN_STATIONS) return;
-	const pts = state.glyphs.map((g) => ({ x: g.x, z: g.z, st: g.stationId }));
-	const n = pts.length;
-	const parent = pts.map((_, i) => i);
-	const find = (i) => { while (parent[i] !== i) { parent[i] = parent[parent[i]]; i = parent[i]; } return i; };
-	for (let i = 0; i < n; i++) {
-		for (let j = i + 1; j < n; j++) {
-			if (Math.hypot(pts[i].x - pts[j].x, pts[i].z - pts[j].z) < HUB_LINK) parent[find(i)] = find(j);
-		}
-	}
-	const groups = new Map();
-	for (let i = 0; i < n; i++) {
-		const r = find(i);
-		if (!groups.has(r)) groups.set(r, []);
-		groups.get(r).push(pts[i]);
-	}
-	const measure = (members) => {
-		const cx = members.reduce((a, p) => a + p.x, 0) / members.length;
-		const cz = members.reduce((a, p) => a + p.z, 0) / members.length;
-		let r0 = 0;
-		for (const p of members) r0 = Math.max(r0, Math.hypot(p.x - cx, p.z - cz));
-		return { members, cx, cz, r0 };
-	};
-	let clusters = [...groups.values()].filter((g) => g.length >= HUB_MIN_STATIONS).map(measure);
-	// merge clusters whose discs overlap: two hubs pushing into each other would fight
-	let merged = true;
-	while (merged && clusters.length > 1) {
-		merged = false;
-		outer: for (let i = 0; i < clusters.length; i++) {
-			for (let j = i + 1; j < clusters.length; j++) {
-				const a = clusters[i], b = clusters[j];
-				if (Math.hypot(a.cx - b.cx, a.cz - b.cz) < a.r0 + b.r0 + 100) {
-					clusters.splice(j, 1);
-					clusters[i] = measure(a.members.concat(b.members));
-					merged = true;
-					break outer;
-				}
-			}
-		}
-	}
-	for (const c of clusters) {
-		// spacing between DISTINCT stations (a split station's own parts sit on top of
-		// each other by design and must not read as crowding)
-		const nn = [];
-		for (const p of c.members) {
-			let best = Infinity;
-			for (const q of c.members) if (q.st !== p.st) best = Math.min(best, Math.hypot(p.x - q.x, p.z - q.z));
-			if (Number.isFinite(best)) nn.push(best);
-		}
-		if (nn.length < 2) continue;
-		nn.sort((a, b) => a - b);
-		const spacing = nn[nn.length >> 1];
-		let m = clamp(HUB_TARGET_SPACING / Math.max(1, spacing), 1, HUB_MAX_MAG);
-		m = 1 + (m - 1) * strength;
-		if (m < 1.08) continue;
-		const r0 = Math.max(80, c.r0 * 1.15);
-		const R = r0 + 3.5 * (m - 1) * r0 + 200;
-		state.warp.hubs.push({ cx: c.cx, cz: c.cz, r0, R, m, stations: c.members.length });
-		state.warp.maxShift = Math.max(state.warp.maxShift, (m - 1) * r0);
-	}
-	state.warp.hubs.sort((a, b) => b.stations - a.stations);
-}
-
-/** Outward displacement of a point at distance d from one hub's centre. */
-function hubShift(h, d) {
-	if (d >= h.R) return 0;
-	if (d <= h.r0) return (h.m - 1) * d;
-	const t = (d - h.r0) / (h.R - h.r0);
-	return (h.m - 1) * h.r0 * (1 - t) * (1 - t) * (1 + 2 * t);
-}
-
-/** World -> map (drawn) coordinates. */
-function warpPoint(x, z) {
-	const w = state.warp;
-	if (!w || !w.hubs.length) return [x, z];
-	let dx = 0, dz = 0;
-	for (const h of w.hubs) {
-		const ex = x - h.cx, ez = z - h.cz;
-		const d = Math.hypot(ex, ez);
-		if (d < 1e-6 || d >= h.R) continue;
-		const k = hubShift(h, d) / d;
-		dx += ex * k;
-		dz += ez * k;
-	}
-	return [x + dx, z + dz];
-}
-
-/** Map -> world coordinates: Newton on the 2-D field (the warp is smooth and never folds). */
-function unwarpPoint(mx, mz) {
-	const w = state.warp;
-	if (!w || !w.hubs.length) return [mx, mz];
-	let x = mx, z = mz;
-	for (let i = 0; i < 8; i++) {
-		const [fx, fz] = warpPoint(x, z);
-		const ex = fx - mx, ez = fz - mz;
-		if (Math.abs(ex) + Math.abs(ez) < 0.02) break;
-		const h = 0.5;
-		const [ax, az] = warpPoint(x + h, z), [bx, bz] = warpPoint(x, z + h);
-		const j11 = (ax - fx) / h, j21 = (az - fz) / h, j12 = (bx - fx) / h, j22 = (bz - fz) / h;
-		const det = j11 * j22 - j12 * j21;
-		if (Math.abs(det) < 1e-9) { x -= ex * 0.4; z -= ez * 0.4; continue; }
-		x -= (j22 * ex - j12 * ez) / det;
-		z -= (-j21 * ex + j11 * ez) / det;
-	}
-	return [x, z];
-}
-
-/** Does any hub's influence disc touch this world box? (basemap tiles outside draw flat) */
-function warpTouches(x0, z0, x1, z1) {
-	const w = state.warp;
-	if (!w || !w.hubs.length) return false;
-	for (const h of w.hubs) {
-		const nx = clamp(h.cx, x0, x1), nz = clamp(h.cz, z0, z1);
-		if (Math.hypot(nx - h.cx, nz - h.cz) < h.R) return true;
-	}
-	return false;
-}
-
-/** Map-space bounding box of every station part — what fitView frames. */
-function warpedNetworkBox() {
-	const b = state.networkBox;
-	if (!b) return null;
-	if (!state.warp || !state.warp.hubs.length || !state.glyphs.length) return b;
-	let minX = Infinity, minZ = Infinity, maxX = -Infinity, maxZ = -Infinity;
-	for (const gl of state.glyphs) {
-		const [x, z] = warpPoint(gl.x, gl.z);
-		minX = Math.min(minX, x); maxX = Math.max(maxX, x);
-		minZ = Math.min(minZ, z); maxZ = Math.max(maxZ, z);
-	}
-	return Number.isFinite(minX) ? { minX, minZ, maxX, maxZ } : b;
-}
-
 function invalidateStatic() { staticDirty = true; }
 
 function resize() {
@@ -2539,26 +2366,17 @@ function resize() {
 	return dpr;
 }
 
-/** state.view.x/z is the MAP-space centre (after the hub warp); the scale is linear there. */
-function mapToScreen(mx, mz) {
+function worldToScreen(x, z) {
 	const v = state.view;
-	return [canvas.clientWidth / 2 + (mx - v.x) * v.scale, canvas.clientHeight / 2 + (mz - v.z) * v.scale];
+	return [canvas.clientWidth / 2 + (x - v.x) * v.scale, canvas.clientHeight / 2 + (z - v.z) * v.scale];
 }
-function screenToMap(sx, sy) {
+function screenToWorld(sx, sy) {
 	const v = state.view;
 	return [v.x + (sx - canvas.clientWidth / 2) / v.scale, v.z + (sy - canvas.clientHeight / 2) / v.scale];
 }
-function worldToScreen(x, z) {
-	const [mx, mz] = warpPoint(x, z);
-	return mapToScreen(mx, mz);
-}
-function screenToWorld(sx, sy) {
-	const [mx, mz] = screenToMap(sx, sy);
-	return unwarpPoint(mx, mz);
-}
 
 function fitView() {
-	const b = warpedNetworkBox();
+	const b = state.networkBox;
 	if (!b) return;
 	const w = canvas.clientWidth || 1280, h = canvas.clientHeight || 800;
 	// leave room for the planner card on the left, then shift the world centre right by
@@ -2673,10 +2491,7 @@ function drawStatic(dpr) {
 
 	// world-space viewport + 25 % margin (the pan fast path blits this cache offset)
 	const v = state.view;
-	// world boxes are tested against a MAP-space viewport: pad it by the warp's largest
-	// displacement so nothing the hub inflation pushed into view is culled away
-	const shift = state.warp ? state.warp.maxShift : 0;
-	const mx = W / v.scale * 0.25 + 8 + shift, mz = H / v.scale * 0.25 + 8 + shift;
+	const mx = W / v.scale * 0.25 + 8, mz = H / v.scale * 0.25 + 8;
 	const vp = {
 		l: v.x - W / 2 / v.scale - mx, r: v.x + W / 2 / v.scale + mx,
 		t: v.z - H / 2 / v.scale - mz, b: v.z + H / 2 / v.scale + mz,
@@ -2748,53 +2563,12 @@ function drawSatellite(g, vp) {
 		if (x1 < vp.l || x0 > vp.r || z1 < vp.t || z0 > vp.b) continue;      // viewport cull
 		const img = satTileImage(tx, tz);
 		if (!img) continue;
-		drawTileWarped(g, img, meta, x0, z0, span);
-	}
-	g.restore();
-}
-
-/**
- * One basemap tile through the hub warp. A tile no hub reaches is one drawImage; a
- * tile inside a hub's influence is cut into a grid of cells (~28 px each on screen,
- * 2..24 a side) and every cell is drawn with the affine map its three corners give —
- * a parallelogram approximation that is invisible for a field this smooth. Cells
- * overdraw by a hair so the grid never shows seams.
- */
-function drawTileWarped(g, img, meta, x0, z0, span) {
-	const x1 = x0 + span, z1 = z0 + span;
-	if (!warpTouches(x0, z0, x1, z1)) {
 		const a = worldToScreen(x0, z0), b = worldToScreen(x1, z1);
 		// round outward by a hair so neighbouring tiles never show a sub-pixel seam
 		const px = Math.floor(a[0]), py = Math.floor(a[1]);
 		g.drawImage(img, px, py, Math.ceil(b[0]) - px, Math.ceil(b[1]) - py);
-		return;
 	}
-	const n = meta.tileSamples || 256;
-	const screenPx = span * state.view.scale;
-	const cells = clamp(Math.round(screenPx / 28), 2, 24);
-	const src = n / cells;
-	const cw = span / cells;
-	const base = typeof g.getTransform === "function" ? g.getTransform() : null;
-	// Sampling stays smooth inside a warped tile whatever the layer asked for: nearest
-	// sampling through a sheared affine map leaves a visible lattice along the cells.
-	const smoothing = g.imageSmoothingEnabled;
-	g.imageSmoothingEnabled = true;
-	for (let j = 0; j < cells; j++) {
-		for (let i = 0; i < cells; i++) {
-			const wx = x0 + cw * i, wz = z0 + cw * j;
-			const p00 = worldToScreen(wx, wz), p10 = worldToScreen(wx + cw, wz), p01 = worldToScreen(wx, wz + cw);
-			const a = (p10[0] - p00[0]) / src, b = (p10[1] - p00[1]) / src;
-			const c = (p01[0] - p00[0]) / src, d = (p01[1] - p00[1]) / src;
-			if (base) g.setTransform(base);
-			g.transform(a, b, c, d, p00[0], p00[1]);
-			// overdraw by a few source pixels: a parallelogram's free corner misses the
-			// true warped corner by a second-order sliver, and antialiased edges let the
-			// paper through as hairline seams otherwise
-			g.drawImage(img, i * src, j * src, src, src, 0, 0, src + 6, src + 6);
-		}
-	}
-	if (base) g.setTransform(base);
-	g.imageSmoothingEnabled = smoothing;
+	g.restore();
 }
 
 /**
@@ -2815,7 +2589,9 @@ function drawMaskMap(g, vp) {
 		if (x1 < vp.l || x0 > vp.r || z1 < vp.t || z0 > vp.b) continue;
 		const cv = maskTileCanvas(tx, tz);
 		if (!cv) continue;
-		drawTileWarped(g, cv, meta, x0, z0, span);
+		const a = worldToScreen(x0, z0), b = worldToScreen(x1, z1);
+		const px = Math.floor(a[0]), py = Math.floor(a[1]);
+		g.drawImage(cv, px, py, Math.ceil(b[0]) - px, Math.ceil(b[1]) - py);
 	}
 	g.restore();
 }
@@ -2933,18 +2709,12 @@ function drawGlyph(g, gl, s, w) {
 	g.lineWidth = (gl.main ? 3 : 2.5) * s * (open ? 0.68 : 1);
 	g.lineJoin = "round";
 	const paint = () => { if (!open) g.fill(); g.stroke(); };
-	gl.drawR = r;
 	if (gl.capsule && gl.colors.length >= 3) {
-		// Big interchange: a large plain circle (NYC-map style), wide enough to cover
-		// the whole bundle of ribbons meeting here — eleven offset lines ending at a
-		// 13 px dot left their ends poking out around it. A capsule stretched across
-		// 3+ bundle slots grew enormous and diagonal instead, so it stays a circle.
-		const gap = Math.max(0.6, w * 0.16);
-		const spread = (gl.colors.length - 1) / 2 * (w + gap);
-		const hubR = Math.max(r * 1.45, spread + r * 0.7);
-		gl.drawR = hubR;
+		// Big interchange: a large plain circle (NYC-map style). A capsule stretched
+		// across 3+ bundle slots grew enormous and diagonal at hub stations and
+		// buried its own label — the play-test "tons of lines just break" shot.
 		g.beginPath();
-		g.arc(sx, sy, hubR, 0, Math.PI * 2);
+		g.arc(sx, sy, r * 1.45, 0, Math.PI * 2);
 		paint();
 	} else if (gl.capsule) {
 		// elongate along the local track direction so the capsule spans the bundle,
@@ -3068,7 +2838,7 @@ function drawLabels(g, vp, sel) {
 		const tw = g.measureText(text).width;
 		const th = size * 1.05;
 		const pad = 7 * s;
-		const r = Math.max(7 * s, gl.drawR || 0);      // a hub's circle is bigger than a dot
+		const r = 7 * s;
 		// Accessibility badge rides INLINE after the name (mock style) so it can
 		// never detach from a decluttered label; its width counts toward collision.
 		const withBadge = gl.accessible && ACCESS_ICON.complete && ACCESS_ICON.naturalWidth > 0
@@ -4053,7 +3823,8 @@ function escapePressed() {
 function locateOrFit() {
 	const p = selfPlayerPos();
 	if (!p) { fitView(); return false; }
-	[state.view.x, state.view.z] = warpPoint(p.x, p.z);
+	state.view.x = p.x;
+	state.view.z = p.z;
 	if (state.view.scale < 0.6) state.view.scale = 0.9;      // "where am I" wants street zoom
 	invalidateStatic();
 	return true;
@@ -4278,10 +4049,9 @@ function followCamera() {
 	if (!next) { renderFollowPill(); if (state.trainCard) renderTrainCard(); return; }
 	if (present) {
 		const rec = state.vehicles.get(next.vehicleId);
-		const [mx, mz] = warpPoint(rec.disp.x, rec.disp.z);
-		if (Math.abs(state.view.x - mx) > 0.01 || Math.abs(state.view.z - mz) > 0.01) {
-			state.view.x = mx;
-			state.view.z = mz;
+		if (Math.abs(state.view.x - rec.disp.x) > 0.01 || Math.abs(state.view.z - rec.disp.z) > 0.01) {
+			state.view.x = rec.disp.x;
+			state.view.z = rec.disp.z;
 			invalidateStatic();
 		}
 	}
@@ -4898,10 +4668,9 @@ function trackCamera() {
 	if (!p) return false;
 	const rec = state.players.get(state.selfPlayer);
 	const at = (rec && rec.disp) || p;
-	const [mx, mz] = warpPoint(at.x, at.z);
-	if (Math.abs(state.view.x - mx) > 0.01 || Math.abs(state.view.z - mz) > 0.01) {
-		state.view.x = mx;
-		state.view.z = mz;
+	if (Math.abs(state.view.x - at.x) > 0.01 || Math.abs(state.view.z - at.z) > 0.01) {
+		state.view.x = at.x;
+		state.view.z = at.z;
 		invalidateStatic();
 	}
 	return true;
@@ -6836,7 +6605,6 @@ function savePrefs() {
 			hideOtherPlayers: !!state.prefs.hideOtherPlayers,
 			satBrightness: clamp(state.prefs.satBrightness || 1, SAT_BRIGHT_MIN, SAT_BRIGHT_MAX),
 			labelScale: labelScale(),
-			hubSpacing: hubSpacing(),
 			hideLabels: !!state.prefs.hideLabels,
 			// the game pairing (section 10e): the token IS the identity, so it is the one
 			// thing here worth keeping — nothing else about the player is stored
@@ -6869,8 +6637,6 @@ function loadPrefs() {
 		? clamp(p.satBrightness, SAT_BRIGHT_MIN, SAT_BRIGHT_MAX) : 1;
 	state.prefs.labelScale = Number.isFinite(p.labelScale)
 		? clamp(p.labelScale, LABEL_SCALE_MIN, LABEL_SCALE_MAX) : 1;
-	state.prefs.hubSpacing = Number.isFinite(p.hubSpacing)
-		? clamp(p.hubSpacing, HUB_SPACING_MIN, HUB_SPACING_MAX) : 1;
 	state.prefs.hideLabels = !!p.hideLabels;
 	// a malformed token is no token: it would only earn an "unknown token" round trip
 	state.nav.token = navTokenValid(p.navToken) ? String(p.navToken) : "";
@@ -7004,16 +6770,6 @@ function labelScale() {
 	return clamp(Number(state.prefs.labelScale) || 1, LABEL_SCALE_MIN, LABEL_SCALE_MAX);
 }
 
-/** The "Hub spacing" slider: rebuilds the warp (geometry stays put) and repaints. */
-function setHubSpacing(v) {
-	const n = Number(v);
-	state.prefs.hubSpacing = clamp(Number.isFinite(n) ? n : 1, HUB_SPACING_MIN, HUB_SPACING_MAX);
-	savePrefs();
-	buildHubWarp();
-	invalidateStatic();
-	return state.prefs.hubSpacing;
-}
-
 function setLabelsHidden(on) {
 	state.prefs.hideLabels = !!on;
 	savePrefs();
@@ -7105,11 +6861,6 @@ function syncSettingsUi() {
 	const lsOut = $("labelScaleOut");
 	if (lsOut) lsOut.textContent = labelScale().toFixed(2).replace(/0$/, "") + "x";
 
-	const hs = $("hubSpacing");
-	if (hs) hs.value = String(hubSpacing());
-	const hsOut = $("hubSpacingOut");
-	if (hsOut) hsOut.textContent = hubSpacing() <= 0.001 ? "Off" : hubSpacing().toFixed(1) + "x";
-
 	syncDimUi();
 }
 
@@ -7164,7 +6915,6 @@ function initSettings() {
 	slider("walkSpeed", WALK_SPEED_MIN, WALK_SPEED_MAX, 0.1, setWalkSpeed);
 	slider("satBright", SAT_BRIGHT_MIN, SAT_BRIGHT_MAX, 0.05, setSatBrightness);
 	slider("labelScale", LABEL_SCALE_MIN, LABEL_SCALE_MAX, 0.05, setLabelScale);
-	slider("hubSpacing", HUB_SPACING_MIN, HUB_SPACING_MAX, 0.1, setHubSpacing);
 	syncSettingsUi();
 	renderLayerList();
 }
