@@ -138,6 +138,14 @@ const STREET_LINK_SCALE = 0.5;
 const STREET_LINK_CHIP_SCALE = 0.8;
 /** Service bullets drawn after a station name before the list is cut. */
 const MAX_LABEL_BULLETS = 8;
+
+/* ---- station parts (section 4b) ---- */
+/** Blocks of height between two platforms before they count as different LEVELS. */
+const PART_LEVEL_DY = 6;
+/** Blocks. Platforms on one level this close (horizontally) share a station dot. */
+const PART_LINK = 24;
+/** Blocks. Another line's ribbon within this of a sample runs BESIDE it (same slot row). */
+const SLOT_TOL = 14;
 /** Below this zoom only interchanges and line ends carry bullets (the overview stays clean). */
 const BULLET_ZOOM = 0.22;
 /** Below this zoom trains are plain dots in their line colour, not icon pucks. */
@@ -934,33 +942,140 @@ function pairKeyOf(a, b) { return a < b ? a + ">" + b : b + ">" + a; }
 /** Every station needs at least one part; stations without mapdata get one from bounds. */
 function ensureParts() {
 	for (const st of state.stations.values()) {
-		if (!st.parts.length) {
-			const b = st.bounds;
-			const pts = st.platformIds.map((id) => state.platforms.get(id)).filter(Boolean).map((p) => p.xz);
-			let x, z;
-			if (b) { x = (b[0] + b[3]) / 2; z = (b[2] + b[5]) / 2; }
-			else if (pts.length) {
-				x = pts.reduce((a, p) => a + p[0], 0) / pts.length;
-				z = pts.reduce((a, p) => a + p[1], 0) / pts.length;
-			} else continue;
-			st.parts = [{ id: st.id + ":0", index: 0, name: null, platforms: st.platformIds.slice(), x, z, y: b ? b[1] : 0 }];
-			for (const pid of st.platformIds) {
-				const pl = state.platforms.get(pid);
-				if (pl) pl.partId = st.parts[0].id;
-			}
-		}
+		splitStationParts(st);
 		// the "main" part carries the station name; the others get a sub-label
 		let main = st.parts[0];
 		for (const p of st.parts) if (p.platforms.length > main.platforms.length) main = p;
 		st.mainPartId = main.id;
+		// a rider reads levels, not block offsets: dots above the main one are the
+		// "Upper level" (and "Top level" above that), below it "Lower level" / "Bottom
+		// level"; a dot on the main level says nothing — its service bullets name it
+		const above = st.parts.filter((p) => p.id !== main.id && (p.y || 0) - (main.y || 0) > PART_LEVEL_DY)
+			.sort((a, b) => a.y - b.y);
+		const below = st.parts.filter((p) => p.id !== main.id && (main.y || 0) - (p.y || 0) > PART_LEVEL_DY)
+			.sort((a, b) => b.y - a.y);
 		for (const p of st.parts) {
 			if (p.id === main.id) { p.sub = null; continue; }
-			const dy = Math.round((p.y || 0) - (main.y || 0));
-			// a rider reads levels, not block offsets: the part above the main one is
-			// "Upper level", the one below "Lower level"
-			p.sub = p.name || (dy ? (dy > 0 ? "Upper level" : "Lower level") : "Part " + (p.index + 1));
+			let level = "";
+			const ia = above.indexOf(p), ib = below.indexOf(p);
+			if (ia >= 0) level = ia === 0 ? "Upper level" : ia === above.length - 1 ? "Top level" : "Level " + (ia + 2);
+			else if (ib >= 0) level = ib === 0 ? "Lower level" : ib === below.length - 1 ? "Bottom level" : "Level -" + (ib + 1);
+			p.sub = p.name || level;
 		}
 		if (main.name) main.sub = null;
+	}
+}
+
+/**
+ * One station, several DOTS (section 4b — Thomas: "show stations like Albany as
+ * multiple station dots connected by a white line with a black outline, so the tram,
+ * metro and intercity services have space to breathe").
+ *
+ * The server's parts chained everything within 40 blocks and 12 of height into one
+ * dot, which is how Albany's four levels (subway at y51/57, light rail at y66 thirty
+ * blocks east, intercity at y70) became a single knot of eleven lines. Here a station's
+ * platforms are regrouped: platforms of ONE LINE (colour) or one route always share a
+ * dot (a line is one dot at a station), and beyond that only platforms on the same
+ * level (within PART_LEVEL_DY) and within PART_LINK blocks of each other merge. Every
+ * pair of dots gets a walk (closest platforms, from the published platform distances),
+ * trimmed to a minimum spanning tree so the bars chain rather than triangulate.
+ */
+function splitStationParts(st) {
+	const platformOf = (id) => { const pl = state.platforms.get(id); return pl && pl.xz ? pl : null; };
+	if (!st.parts.length) {
+		const b = st.bounds;
+		const pts = st.platformIds.map(platformOf).filter(Boolean).map((p) => p.xz);
+		let x, z;
+		if (b) { x = (b[0] + b[3]) / 2; z = (b[2] + b[5]) / 2; }
+		else if (pts.length) {
+			x = pts.reduce((a, p) => a + p[0], 0) / pts.length;
+			z = pts.reduce((a, p) => a + p[1], 0) / pts.length;
+		} else return;
+		st.parts = [{ id: st.id + ":0", index: 0, name: null, platforms: st.platformIds.slice(), x, z, y: b ? b[1] : 0 }];
+	}
+	const hexesOf = (pl) => {
+		const out = new Set();
+		for (const rid of pl.routeIds || []) { const rt = state.routes.get(rid); if (rt && rt.hex) out.add(rt.hex); }
+		return out;
+	};
+	// sub-split each published part; a part that holds together keeps its id
+	let split = false;
+	const parts = [];
+	for (const part of st.parts) {
+		const pls = part.platforms.map(platformOf).filter(Boolean);
+		if (pls.length < 2) { parts.push(part); continue; }
+		const n = pls.length;
+		const parent = pls.map((_, k) => k);
+		const find = (k) => { while (parent[k] !== k) { parent[k] = parent[parent[k]]; k = parent[k]; } return k; };
+		const hexes = pls.map(hexesOf);
+		for (let a = 0; a < n; a++) {
+			for (let b = a + 1; b < n; b++) {
+				const pa = pls[a], pb = pls[b];
+				let same = (pa.routeIds || []).some((r) => (pb.routeIds || []).includes(r));
+				if (!same) for (const h of hexes[a]) if (hexes[b].has(h)) { same = true; break; }
+				if (!same && Math.abs((pa.y || 0) - (pb.y || 0)) <= PART_LEVEL_DY
+					&& Math.hypot(pa.xz[0] - pb.xz[0], pa.xz[1] - pb.xz[1]) <= PART_LINK) same = true;
+				if (same) parent[find(a)] = find(b);
+			}
+		}
+		const groups = new Map();
+		for (let k = 0; k < n; k++) {
+			const r = find(k);
+			if (!groups.has(r)) groups.set(r, []);
+			groups.get(r).push(pls[k]);
+		}
+		if (groups.size < 2) { parts.push(part); continue; }
+		split = true;
+		const subs = [...groups.values()].map((list) => ({
+			platforms: list.map((q) => q.id),
+			x: list.reduce((a, q) => a + q.xz[0], 0) / list.length,
+			z: list.reduce((a, q) => a + q.xz[1], 0) / list.length,
+			y: list.reduce((a, q) => a + (q.y || 0), 0) / list.length,
+		}));
+		// deterministic: the busiest dot first (it inherits the name), then west to east
+		subs.sort((a, b) => b.platforms.length - a.platforms.length || a.x - b.x || a.z - b.z);
+		// platforms without a position (unused sidings) ride with the busiest dot
+		const orphans = part.platforms.filter((id) => !pls.some((q) => q.id === id));
+		subs[0].platforms.push(...orphans);
+		subs.forEach((sub, k) => parts.push({ id: part.id + (k ? "." + k : ""), name: k ? null : part.name || null,
+			platforms: sub.platforms, x: sub.x, z: sub.z, y: sub.y }));
+	}
+	parts.forEach((part, k) => { part.index = k; });
+	st.parts = parts;
+	for (const part of st.parts) for (const pid of part.platforms) {
+		const pl = state.platforms.get(pid);
+		if (pl) pl.partId = part.id;
+	}
+	if (!split) return;                  // the server's own walks still name these parts
+	// walks: closest platform pair per part pair, trimmed to a minimum spanning tree so
+	// the bars chain rather than triangulate
+	const known = new Map();
+	for (const d of st.platformDistances || []) { known.set(d.a + "|" + d.b, d.dist); known.set(d.b + "|" + d.a, d.dist); }
+	const between = (pa, pb) => {
+		let best = Infinity;
+		for (const ia of pa.platforms) for (const ib of pb.platforms) {
+			let d = known.get(ia + "|" + ib);
+			if (d === undefined) {
+				const a = platformOf(ia), b = platformOf(ib);
+				if (!a || !b) continue;
+				d = Math.hypot(a.xz[0] - b.xz[0], a.xz[1] - b.xz[1], (a.y || 0) - (b.y || 0));
+			}
+			best = Math.min(best, d);
+		}
+		return Number.isFinite(best) ? best : Math.hypot(pa.x - pb.x, pa.z - pb.z);
+	};
+	const edges = [];
+	for (let a = 0; a < st.parts.length; a++) for (let b = a + 1; b < st.parts.length; b++) {
+		edges.push({ a, b, dist: between(st.parts[a], st.parts[b]) });
+	}
+	edges.sort((a, b) => a.dist - b.dist);
+	const tree = st.parts.map((_, k) => k);
+	const root = (k) => { while (tree[k] !== k) { tree[k] = tree[tree[k]]; k = tree[k]; } return k; };
+	st.partWalks = [];
+	for (const e of edges) {
+		if (root(e.a) === root(e.b)) continue;
+		tree[root(e.a)] = root(e.b);
+		st.partWalks.push({ a: e.a, b: e.b, dist: Math.round(e.dist * 10) / 10 });
 	}
 }
 
@@ -1887,6 +2002,9 @@ function buildSegments() {
 	/* --- 6. one reference centreline per bundle, so the gap is constant --- */
 	buildDrawGeometry(all);
 
+	/* --- 6b. lateral slots per SAMPLE: the colours actually beside each point --- */
+	assignLocalSlots(drawn);
+
 	/* --- 7. stable paint order + per-colour index for the vehicle snap --- */
 	drawn.sort((a, b) => a.colorInt - b.colorInt || (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
 	state.ribbons = drawn;
@@ -2044,6 +2162,83 @@ function bundleCompanions(drawn) {
 			s.companionSegs.push(o);
 			o.companionSegs.push(s);
 		}
+	}
+}
+
+/**
+ * Lateral slot per DRAW SAMPLE of every ribbon.
+ *
+ * The slot used to be one number per segment, ranked inside that segment's own
+ * companion set — and two overlapping segments could have different sets. North of
+ * Albany, line 1's segment (companions A, D, 1, 2) sat in slot 2 of 4 while line 2's
+ * (companions 1, 2 — its next stop differs, so the containment test disagreed) sat in
+ * slot 1 of 2: the SAME offset, two lines drawn on top of each other. And a colour's
+ * slot changed from one segment to the next, so lines jogged across every station.
+ *
+ * Now every sample of a ribbon looks around it: the distinct colours whose drawn
+ * ribbons pass within SLOT_TOL and run roughly parallel (a crossing line is not a
+ * neighbour) form the row at that point, ranked in colour order, and the sample's
+ * offset is its rank in that row. Overlapping ribbons see the same neighbours, so they
+ * agree; both ends of a station see the same trunk, so a line keeps its lane through
+ * it; a companion joining or leaving ramps the offset over five samples instead of
+ * stepping it. `slotMax` is the widest row along the ribbon.
+ */
+function assignLocalSlots(drawn) {
+	const grid = new Map();
+	const cellOf = (x, z) => Math.floor(x / GRID_CELL) + "," + Math.floor(z / GRID_CELL);
+	for (const s of drawn) {
+		const pts = s.drawPts || s.pts;
+		const samples = sampleAlong(pts, SAMPLE_STEP);
+		for (let i = 0; i < samples.length; i++) {
+			const a = samples[Math.max(0, i - 1)], b = samples[Math.min(samples.length - 1, i + 1)];
+			const dx = b[0] - a[0], dz = b[1] - a[1], l = Math.hypot(dx, dz) || 1;
+			const k = cellOf(samples[i][0], samples[i][1]);
+			let cell = grid.get(k);
+			if (!cell) { cell = []; grid.set(k, cell); }
+			cell.push({ seg: s, p: samples[i], tx: dx / l, tz: dz / l });
+		}
+	}
+	const reach = Math.ceil((SLOT_TOL + SAMPLE_STEP) / GRID_CELL);
+	for (const s of drawn) {
+		const pts = s.drawPts || s.pts;
+		const raw = new Array(pts.length), rows = new Array(pts.length);
+		let widest = 1;
+		for (let i = 0; i < pts.length; i++) {
+			const p = pts[i];
+			const a = pts[Math.max(0, i - 1)], b = pts[Math.min(pts.length - 1, i + 1)];
+			const dx = b[0] - a[0], dz = b[1] - a[1], l = Math.hypot(dx, dz) || 1;
+			const tx = dx / l, tz = dz / l;
+			const row = new Map([[s.hex, s.colorInt]]);
+			const cx = Math.floor(p[0] / GRID_CELL), cz = Math.floor(p[1] / GRID_CELL);
+			const seen = new Set();
+			for (let gi = -reach; gi <= reach; gi++) {
+				for (let gj = -reach; gj <= reach; gj++) {
+					const cell = grid.get((cx + gi) + "," + (cz + gj));
+					if (!cell) continue;
+					for (const o of cell) {
+						if (o.seg === s || o.seg.hex === s.hex || row.has(o.seg.hex) || seen.has(o.seg)) continue;
+						if (Math.abs(o.tx * tx + o.tz * tz) < 0.7) continue;          // crossing, not beside
+						if (Math.hypot(o.p[0] - p[0], o.p[1] - p[1]) > SLOT_TOL + SAMPLE_STEP) continue;
+						seen.add(o.seg);
+						if (pointPolylineDist(p, o.seg.drawPts || o.seg.pts) <= SLOT_TOL) row.set(o.seg.hex, o.seg.colorInt);
+					}
+				}
+			}
+			const order = [...row.entries()].sort((x, y) => x[1] - y[1] || (x[0] < y[0] ? -1 : 1));
+			raw[i] = order.findIndex((c) => c[0] === s.hex) - (order.length - 1) / 2;
+			rows[i] = order.length;
+			widest = Math.max(widest, order.length);
+		}
+		const n = raw.length, slots = new Array(n);
+		for (let i = 0; i < n; i++) {
+			let acc = 0, c = 0;
+			for (let k = -2; k <= 2; k++) { const j = i + k; if (j >= 0 && j < n) { acc += raw[j]; c++; } }
+			slots[i] = acc / c;
+		}
+		s.slots = slots;
+		s.slotMax = widest;
+		s.rowEnds = [rows[0], rows[n - 1]];        // how wide the row is where it meets each part
+		s.count = Math.max(s.count, widest);
 	}
 }
 
@@ -2206,11 +2401,19 @@ function buildGlyphs() {
 			const dl = Math.hypot(dx, dz);
 			const terminals = new Set();
 			for (const hex of colors) if (degree.get(part.id + "|" + hex) === 1) terminals.add(hex);
+			// the widest row of ribbons ARRIVING here (the row at the ribbon's own end, not
+			// its widest point elsewhere): what the dot has to cover
+			let spread = 1;
+			for (const sg of state.ribbons) {
+				if (sg.partA === part.id) spread = Math.max(spread, (sg.rowEnds && sg.rowEnds[0]) || 1);
+				else if (sg.partB === part.id) spread = Math.max(spread, (sg.rowEnds && sg.rowEnds[1]) || 1);
+			}
 			state.glyphs.push({
 				stationId: st.id, partId: part.id,
 				x: part.x, z: part.z,
 				colors: [...colors],
 				terminals,
+				spread,
 				capsule: colors.size >= 2,
 				// the capsule spans the bundle, so it must follow the SCHEMATIC line's
 				// direction here, not the raw platform vectors
@@ -2327,8 +2530,12 @@ function buildWalks() {
 	for (const st of state.stations.values()) {
 		if (st.parts.length < 2) continue;
 		const byId = new Map(st.parts.map((p) => [p.id, p]));
+		// partWalks name parts by INDEX (the server's form, and splitStationParts'); an
+		// id is accepted too. The old lookup only knew ids, so every published walk was
+		// dropped and a split station's dots floated unconnected (Canarsie).
+		const part = (v) => typeof v === "number" ? st.parts[v] : byId.get(v);
 		for (const w of st.partWalks || []) {
-			const a = byId.get(w.a), b = byId.get(w.b);
+			const a = part(w.a), b = part(w.b);
 			if (!a || !b) continue;
 			state.walks.push({ ax: a.x, az: a.z, bx: b.x, bz: b.z, dist: w.dist || dist([a.x, a.z], [b.x, b.z]) });
 		}
@@ -2392,14 +2599,34 @@ function fitView() {
 
 /** World polyline -> screen polyline, dropping points closer than ~1.2 px. */
 function toScreenPath(pts) {
-	const out = [];
+	return toScreenPathIdx(pts).pts;
+}
+
+/** ...plus, for each kept screen point, the index of the world point it came from. */
+function toScreenPathIdx(pts) {
+	const out = [], idx = [];
 	for (let i = 0; i < pts.length; i++) {
 		const p = worldToScreen(pts[i][0], pts[i][1]);
 		if (i === 0 || i === pts.length - 1 || Math.abs(p[0] - out[out.length - 1][0]) + Math.abs(p[1] - out[out.length - 1][1]) > 1.2) {
 			out.push(p);
+			idx.push(i);
 		}
 	}
-	return out;
+	return { pts: out, idx };
+}
+
+/**
+ * A ribbon's drawn screen polyline: its draw points offset laterally by the per-sample
+ * slots (assignLocalSlots), in screen pixels, on the side canonicalOffsetSign fixed.
+ */
+function ribbonScreenPath(rb, unit) {
+	const src = rb.drawPts || rb.pts;
+	const sp = toScreenPathIdx(src);
+	const sign = rb.offSign || 1;
+	if (rb.slots && rb.slots.length === src.length) {
+		return offsetPolyline(sp.pts, sp.idx.map((i) => rb.slots[i] * unit * sign));
+	}
+	return offsetPolyline(sp.pts, (rb.idx - (rb.count - 1) / 2) * unit * sign);
 }
 
 /**
@@ -2420,9 +2647,11 @@ function canonicalOffsetSign(pts) {
 }
 
 function offsetPolyline(pts, d) {
-	if (!d || pts.length < 2) return pts;
+	const perVertex = Array.isArray(d);
+	if ((!perVertex && !d) || pts.length < 2) return pts;
 	const out = [];
 	for (let i = 0; i < pts.length; i++) {
+		const di = perVertex ? d[i] || 0 : d;
 		let nx = 0, ny = 0;
 		if (i > 0) {
 			const dx = pts[i][0] - pts[i - 1][0], dy = pts[i][1] - pts[i - 1][1];
@@ -2445,7 +2674,7 @@ function offsetPolyline(pts, d) {
 			const cos = clamp((ax * bx + ay * by) / (la * lb), -1, 1);
 			miter = Math.min(2.5, 1 / Math.max(0.35, Math.sqrt((1 + cos) / 2)));
 		}
-		out.push([pts[i][0] + nx * d * miter, pts[i][1] + ny * d * miter]);
+		out.push([pts[i][0] + nx * di * miter, pts[i][1] + ny * di * miter]);
 	}
 	return out;
 }
@@ -2605,10 +2834,8 @@ function drawRibbons(g, vp, skipKeys, alpha) {
 		if (skipKeys && skipKeys.has(rb.id)) continue;
 		const bb = rb.drawBbox || rb.bbox;
 		if (bb[2] < vp.l || bb[0] > vp.r || bb[3] < vp.t || bb[1] > vp.b) continue;
-		const pts = toScreenPath(rb.drawPts || rb.pts);
-		if (pts.length < 2) continue;
-		const off = (rb.idx - (rb.count - 1) / 2) * (w + gap) * (rb.offSign || 1);
-		const line = offsetPolyline(pts, off);
+		const line = ribbonScreenPath(rb, w + gap);
+		if (line.length < 2) continue;
 		g.globalAlpha = alpha * (rb.hidden ? 0.35 : 1);
 		g.strokeStyle = rb.hex;
 		g.lineWidth = rb.mode === "boat" ? w * 0.72 : w;
@@ -2619,21 +2846,28 @@ function drawRibbons(g, vp, skipKeys, alpha) {
 	g.globalAlpha = 1;
 }
 
+/**
+ * The interchange bar between a split station's dots: a white bar with the glyph's
+ * black outline, joining the dots the way a printed map joins the platforms of one
+ * station. No walking-distance chip — inside one station the bar IS the message.
+ */
 function drawWalks(g, vp, alpha) {
 	if (!state.walks.length) return;
 	const s = uiScale();
 	g.globalAlpha = alpha;
+	g.lineCap = "round";
+	const inner = 7 * s, outline = 2.4 * s;
 	for (const w of state.walks) {
 		if (Math.max(w.ax, w.bx) < vp.l || Math.min(w.ax, w.bx) > vp.r) continue;
 		if (Math.max(w.az, w.bz) < vp.t || Math.min(w.az, w.bz) > vp.b) continue;
 		const a = worldToScreen(w.ax, w.az), b = worldToScreen(w.bx, w.bz);
-		g.strokeStyle = PALETTE.ink2;
-		g.lineWidth = 3 * s * 0.8;
-		g.lineCap = "round";
-		g.setLineDash([1.5, 7]);
+		if (Math.hypot(a[0] - b[0], a[1] - b[1]) < 2) continue;      // the dots overlap: nothing to join
+		g.strokeStyle = PALETTE.glyphStroke;
+		g.lineWidth = inner + outline * 2;
 		g.beginPath(); g.moveTo(a[0], a[1]); g.lineTo(b[0], b[1]); g.stroke();
-		g.setLineDash([]);
-		if (state.view.scale > 0.25) drawWalkChip(g, (a[0] + b[0]) / 2, (a[1] + b[1]) / 2, fmtMeters(w.dist));
+		g.strokeStyle = PALETTE.glyphFill;
+		g.lineWidth = inner;
+		g.beginPath(); g.moveTo(a[0], a[1]); g.lineTo(b[0], b[1]); g.stroke();
 	}
 	g.globalAlpha = 1;
 }
@@ -2709,12 +2943,16 @@ function drawGlyph(g, gl, s, w) {
 	g.lineWidth = (gl.main ? 3 : 2.5) * s * (open ? 0.68 : 1);
 	g.lineJoin = "round";
 	const paint = () => { if (!open) g.fill(); g.stroke(); };
+	gl.drawR = r;
 	if (gl.capsule && gl.colors.length >= 3) {
-		// Big interchange: a large plain circle (NYC-map style). A capsule stretched
-		// across 3+ bundle slots grew enormous and diagonal at hub stations and
-		// buried its own label — the play-test "tons of lines just break" shot.
+		// Big interchange: a large plain circle (NYC-map style), wide enough to cover
+		// the widest row of ribbons arriving here, so no line end pokes out around it.
+		// A capsule stretched across 3+ slots grew enormous and diagonal instead.
+		const gap = Math.max(0.6, w * 0.16);
+		const hubR = Math.max(r * 1.45, ((gl.spread || gl.colors.length) - 1) / 2 * (w + gap) + r * 0.75);
+		gl.drawR = hubR;
 		g.beginPath();
-		g.arc(sx, sy, r * 1.45, 0, Math.PI * 2);
+		g.arc(sx, sy, hubR, 0, Math.PI * 2);
 		paint();
 	} else if (gl.capsule) {
 		// elongate along the local track direction so the capsule spans the bundle,
@@ -2832,13 +3070,15 @@ function drawLabels(g, vp, sel) {
 		const inJourney = sel && sel.partIds.has(gl.partId);
 		const big = gl.main && gl.weight >= 3;
 		const size = (big ? 15 : gl.main ? 14 : 12.5) * s * labelScale();
-		const text = gl.main ? gl.label : (gl.sub || gl.label);
-		if (!text) continue;
+		// a secondary dot on the same level has no words of its own: its bullets label it;
+		// and below mid zoom no secondary dot spells its level — at network scale a dozen
+		// "Lower level"s are noise beside the station names
+		const text = gl.main ? gl.label : (state.view.scale >= 0.3 ? (gl.sub || "") : "");
 		g.font = (gl.main ? "600 " : "500 ") + size.toFixed(1) + "px " + FONT;
-		const tw = g.measureText(text).width;
+		const tw = text ? g.measureText(text).width : 0;
 		const th = size * 1.05;
 		const pad = 7 * s;
-		const r = 7 * s;
+		const r = Math.max(7 * s, gl.drawR || 0);      // a hub's circle is bigger than a dot
 		// Accessibility badge rides INLINE after the name (mock style) so it can
 		// never detach from a decluttered label; its width counts toward collision.
 		const withBadge = gl.accessible && ACCESS_ICON.complete && ACCESS_ICON.naturalWidth > 0
@@ -2850,8 +3090,9 @@ function drawLabels(g, vp, sel) {
 		const R = size * 0.44;
 		const pitch = R * 2.2;
 		const bulletW = (b) => b.terminal ? R * 2.7 : pitch;
-		const bulletsW = bullets.length ? 3 * s + bullets.reduce((w, b) => w + bulletW(b), 0) : 0;
+		const bulletsW = bullets.length ? (text ? 3 * s : 0) + bullets.reduce((w, b) => w + bulletW(b), 0) : 0;
 		const fullW = tw + (withBadge ? bw + 4 * s : 0) + bulletsW;
+		if (!text && !bullets.length) continue;
 
 		// Candidate anchors. Order depends on the local track direction so the text
 		// starts on the side the ribbon does NOT run through: a vertical trunk gets
@@ -2896,15 +3137,17 @@ function drawLabels(g, vp, sel) {
 		g.miterLimit = 2;
 		g.lineWidth = 4 * s;
 		g.strokeStyle = PALETTE.paper;                // halo, so labels survive over ribbons
-		g.strokeText(text, chosen.x0, chosen.c.y);
-		g.fillStyle = gl.main ? PALETTE.ink : PALETTE.ink2;
-		g.fillText(text, chosen.x0, chosen.c.y);
+		if (text) {
+			g.strokeText(text, chosen.x0, chosen.c.y);
+			g.fillStyle = gl.main ? PALETTE.ink : PALETTE.ink2;
+			g.fillText(text, chosen.x0, chosen.c.y);
+		}
 		if (withBadge) {
 			// inline after the name, centred on its cap height — never orphaned
 			g.drawImage(ACCESS_ICON, chosen.x0 + tw + 4 * s, chosen.c.y - size * 0.36 - bw / 2, bw, bw);
 		}
 		if (bullets.length) {
-			let bx = chosen.x0 + tw + (withBadge ? bw + 4 * s : 0) + 3 * s;
+			let bx = chosen.x0 + tw + (withBadge ? bw + 4 * s : 0) + (text ? 3 * s : 0);
 			const by = chosen.c.y - size * 0.36;
 			for (const b of bullets) {
 				const w = bulletW(b);
@@ -2950,9 +3193,8 @@ function drawJourneyOverlay(g, vp) {
 	for (const pass of [0, 1]) {
 		for (const rb of state.ribbons) {
 			if (!sel.ribbonKeys.has(rb.id)) continue;
-			const pts = toScreenPath(rb.drawPts || rb.pts);
-			if (pts.length < 2) continue;
-			const line = offsetPolyline(pts, (rb.idx - (rb.count - 1) / 2) * (w + gap) * (rb.offSign || 1));
+			const line = ribbonScreenPath(rb, w + gap);
+			if (line.length < 2) continue;
 			if (pass === 0) {
 				g.save();
 				g.globalAlpha = 0.3;
@@ -3683,7 +3925,7 @@ function ribbonAt(sx, sy) {
 	const gap = Math.max(0.6, w * 0.16);
 	let best = null, bestD = Infinity;
 	for (const rb of state.ribbons) {
-		const spread = Math.max(0, rb.count - 1) / 2 * (w + gap);
+		const spread = Math.max(0, (rb.slotMax || rb.count) - 1) / 2 * (w + gap);
 		const tol = (w / 2 + spread + 4) / Math.max(1e-6, state.view.scale);
 		const bb = rb.drawBbox || rb.bbox;
 		if (wx < bb[0] - tol || wx > bb[2] + tol || wz < bb[1] - tol || wz > bb[3] + tol) continue;

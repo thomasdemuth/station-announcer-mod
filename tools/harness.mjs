@@ -945,6 +945,84 @@ check("the demo index advertises the class mask", maskT.demoMeta === true);
 
 const J = (x) => JSON.stringify(x);
 
+/* ---- L. split stations: one dot per level / service group, joined by bars ---- */
+const splitT = run(`(() => {
+  const mk = (id, x, z, y, route) => ({ id, name: id, stationId: "syn", partId: null, xz: [x, z], y, dir: [1, 0], accessible: true, dwellMs: 0, routeIds: [route] });
+  for (const [rid, hex] of [["syn_r1", "#aa0000"], ["syn_r2", "#00aa00"], ["syn_r3", "#0000aa"]]) {
+    state.routes.set(rid, { id: rid, name: rid, hex, color: parseInt(hex.slice(1), 16), platforms: [], mode: "train" });
+  }
+  for (const pl of [mk("syn_p1", 0, 0, 50, "syn_r1"), mk("syn_p2", 10, 0, 50, "syn_r1"), mk("syn_p3", 5, 0, 70, "syn_r2"), mk("syn_p4", 200, 0, 50, "syn_r3")]) state.platforms.set(pl.id, pl);
+  const st = { id: "syn", name: "Syn", display: "Syn", color: 0, hex: "#000000", accessible: true, accessiblePlatforms: [], bounds: null,
+    platformIds: ["syn_p1", "syn_p2", "syn_p3", "syn_p4"], parts: [], partWalks: [], platformDistances: [], exits: [] };
+  state.stations.set("syn", st);
+  const walksBefore = state.walks.length;
+  ensureParts();
+  buildWalks();
+  const parts = st.parts.map(p => ({ id: p.id, n: p.platforms.length, sub: p.sub, y: Math.round(p.y) }));
+  const walks = st.partWalks.slice();
+  const drawn = state.walks.length - walksBefore;
+  const p3 = state.platforms.get("syn_p3").partId, p1 = state.platforms.get("syn_p1").partId, p2 = state.platforms.get("syn_p2").partId;
+  // the old bug: partWalks by INDEX were looked up as ids and dropped
+  const idxWalk = (() => { const t = { id: "t", parts: [{ id: "t:0", x: 0, z: 0, platforms: [] }, { id: "t:1", x: 9, z: 0, platforms: [] }], partWalks: [{ a: 0, b: 1, dist: 9 }] };
+    state.stations.set("t", t); const before = state.walks.length; buildWalks(); const got = state.walks.length - before; state.stations.delete("t"); return got; })();
+  state.stations.delete("syn");
+  for (const id of ["syn_p1", "syn_p2", "syn_p3", "syn_p4"]) state.platforms.delete(id);
+  for (const id of ["syn_r1", "syn_r2", "syn_r3"]) state.routes.delete(id);
+  buildWalks();
+  return { parts, walks, drawn, sameDot: p1 === p2 && p1 !== p3, mainName: st.mainPartId === st.parts[0].id, idxWalk, restored: state.walks.length === walksBefore };
+})()`);
+check("platforms on one level within reach share a dot; another level or a far platform gets its own",
+	splitT.parts.length === 3 && splitT.sameDot === true, JSON.stringify(splitT.parts));
+check("the busiest dot carries the name; the higher one is the Upper level; a same-level one has no words",
+	splitT.mainName === true && splitT.parts.some(p => p.sub === "Upper level") && splitT.parts.some(p => p.sub === ""), JSON.stringify(splitT.parts));
+check("the dots are joined by a spanning tree of walks (2 bars for 3 dots), all drawn",
+	splitT.walks.length === 2 && splitT.drawn === 2, JSON.stringify([splitT.walks, splitT.drawn]));
+check("index-addressed partWalks (the server's form) are drawn — Canarsie's missing bar", splitT.idxWalk === 1, splitT.idxWalk);
+check("...and the synthetic station is gone again", splitT.restored === true);
+
+/* ---- M. lateral slots per sample: overlapping ribbons never share an offset ---- */
+const slotT = run(`(() => {
+  const all = state.ribbons;
+  const missing = all.filter(s => !s.slots || s.slots.length !== (s.drawPts || s.pts).length).length;
+  // two different-colour ribbons running the same corridor: at the closest sample pair
+  // their offsets must differ by about one slot
+  let worst = Infinity, pairs = 0;
+  for (const a of all) for (const b of all) {
+    if (a === b || a.hex === b.hex) continue;
+    const pa = a.drawPts || a.pts, pb = b.drawPts || b.pts;
+    for (let i = 4; i < pa.length - 4; i += 4) {
+      let bestJ = -1, bestD = Infinity;
+      for (let j = 0; j < pb.length; j++) { const d = Math.hypot(pa[i][0] - pb[j][0], pa[i][1] - pb[j][1]); if (d < bestD) { bestD = d; bestJ = j; } }
+      if (bestD > 6) continue;
+      const ta = [pa[i+1][0]-pa[i-1][0], pa[i+1][1]-pa[i-1][1]], tb = [pb[Math.min(pb.length-1,bestJ+1)][0]-pb[Math.max(0,bestJ-1)][0], pb[Math.min(pb.length-1,bestJ+1)][1]-pb[Math.max(0,bestJ-1)][1]];
+      const la = Math.hypot(...ta) || 1, lb = Math.hypot(...tb) || 1;
+      const cos = (ta[0]*tb[0] + ta[1]*tb[1]) / (la * lb);
+      if (Math.abs(cos) < 0.9) continue;
+      // same side convention: offSign * normal(direction) — compare in a shared frame
+      const oa = a.slots[i] * (a.offSign || 1) * Math.sign(cos >= 0 ? 1 : -1);
+      const ob = b.slots[bestJ] * (b.offSign || 1);
+      const gapSlots = Math.abs(oa * (cos >= 0 ? 1 : 1) - ob);
+      pairs++; worst = Math.min(worst, Math.abs(a.slots[i] - b.slots[bestJ] * (cos >= 0 ? 1 : -1) * ((a.offSign||1) * (b.offSign||1))));
+    }
+  }
+  // a colour keeps its lane through a station: the slot at the end of one segment
+  // equals the slot at the start of the next segment of the same colour
+  let jog = 0, throughs = 0;
+  for (const a of all) for (const b of all) {
+    if (a === b || a.hex !== b.hex) continue;
+    const shared = a.partB === b.partA ? [a.slots[a.slots.length - 1] * (a.offSign||1), b.slots[0] * (b.offSign||1)] : null;
+    if (!shared) continue;
+    throughs++; jog = Math.max(jog, Math.abs(shared[0] - shared[1]));
+  }
+  return { missing, pairs, worst, throughs, jog };
+})()`);
+check("every drawn ribbon carries one slot per draw point", slotT.missing === 0, slotT.missing);
+check("overlapping ribbons of different colours sit in different lanes (≥ 0.9 slot apart)",
+	slotT.pairs > 0 && slotT.worst >= 0.9, "pairs " + slotT.pairs + ", closest " + Number(slotT.worst).toFixed(2));
+check("a colour keeps its lane through a station (no jog between consecutive segments)",
+	slotT.throughs > 0 && slotT.jog <= 0.55, "throughs " + slotT.throughs + ", worst jog " + Number(slotT.jog).toFixed(2));
+
+
 /* ==========================================================================
  * THE 2026-08-29 FEATURE SET: express marks, point planning, player GPS,
  * line view, satellite basemap.

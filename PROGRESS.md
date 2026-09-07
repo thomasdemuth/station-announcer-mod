@@ -3266,3 +3266,13 @@ bullets are line-view click targets) replacing the leader chips, which are delet
 trains are colour dots below scale 0.3; split parts say Upper/Lower level. Verified on
 the rig against the real Baker City network (all 20 lines labelled uniquely, terminals
 detected, zero console errors); harness section G/6 rewritten for the new model.
+
+## Map+ hubs round, second attempt (2026-09-07) — 2.4.57
+
+The inflation warp (e5041f7) was reverted at Thomas's request. Real fixes instead:
+per-sample lane assignment for ribbons (overlapping lines of different colours used to
+compute the same offset and draw on top of each other; a colour used to jog across
+stations), stations split into one dot per level / line group with white-outlined
+interchange bars (Albany → metro, light rail, intercity), the dropped-walk bug fixed
+(index vs id), hub dots sized to the arriving row, level names unique, level text
+hidden at overview. Harness sections L and M added; suites green; verified on the rig.

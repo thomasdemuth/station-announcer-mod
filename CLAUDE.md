@@ -342,6 +342,42 @@ destination first; FULL editor from day one; the old text signs migrate onto it.
   server (his ModrinthApp profile has no local saves). Test area: sky over Albany
   (x 0..20, y 147..158, z -66..-50).
 
+### MAP+ HUBS: SPLIT STATIONS, INTERCHANGE BARS, PER-SAMPLE LANES (2026-09-07) — 2.4.57
+
+Thomas REJECTED the first attempt at this round (a geographic "hub inflation" warp,
+committed e5041f7 and reverted d96942d: "warping is not a real solution — investigate
+and fix how these lines are drawn when there are many of them close to each other").
+The investigation (dump of every ribbon meeting Albany) found the real defects, all in
+`map.js`:
+- **Lanes were per SEGMENT.** A ribbon's lateral slot was its rank inside its own
+  companion set, and overlapping segments had different sets (line 1 north of Albany:
+  companions A,D,1,2 → slot 2/4; line 2: companions 1,2 → slot 1/2 — the SAME offset,
+  drawn on top of each other), and a colour's slot changed segment to segment, so lines
+  jogged across every station. Now `assignLocalSlots` ranks every DRAW SAMPLE among the
+  distinct colours whose ribbons pass within SLOT_TOL (14) and run roughly parallel
+  (|cos| ≥ 0.7 — a crossing line is not a neighbour), smoothed over ±2 samples;
+  `ribbonScreenPath` offsets per vertex (`toScreenPathIdx` keeps the index map,
+  `offsetPolyline` accepts an array). `rowEnds` = row width at each end → hub dot size.
+- **One dot per level / service group** (Thomas's design: "multiple station dots
+  connected by a white line with a black outline so tram, metro and intercity have
+  space to breathe"). `splitStationParts` sub-splits each published part: platforms of
+  one LINE (colour) or one route always share a dot; otherwise only same level
+  (PART_LEVEL_DY 6) within PART_LINK 24 blocks merge. Unsplit parts keep their ids
+  (the harness depends on the demo's); split ones become `<id>.k`. Albany → metro
+  (C/E,1,2 at y51–57) · light rail (F,V,M,W,Br at y66, 30 blocks east) · intercity
+  (A,B,D at y70); Ebisu → A/D + "Upper level 3". Walks = closest platform pair per
+  dot pair (published platformDistances), trimmed to a spanning tree. Level names:
+  Upper/Top, Lower/Bottom, Level ±n; a same-level dot has NO words (bullets only);
+  secondary dots print no level text below zoom 0.3.
+- **The bar** (`drawWalks`): white 7 px with the glyph's black outline, no distance
+  chip. **Canarsie's missing bar was a bug**: server partWalks address parts by INDEX
+  and `buildWalks` looked them up by id, dropping every published walk.
+- Hub dots (≥3 colours) are circles sized to the row arriving at them (`gl.spread`
+  from `rowEnds`, `gl.drawR` keeps labels clear).
+Harness sections L (split + walk fix) and M (lanes: overlapping ribbons ≥ 0.9 slot
+apart, no jog through a station). Verified on the rig with the real network.
+NOT done: octilinear (45°) snapping.
+
 ### MAP+ LABELS / BULLETS / TRAINS (2026-09-07) — 2.4.56, verified on the real network
 
 Thomas's order after the scanner rewrite: labels/bullets/trains now, schematic hub
