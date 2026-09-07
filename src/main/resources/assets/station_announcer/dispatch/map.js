@@ -136,8 +136,12 @@ const REF_CONTAIN_FRACTION = 0.85;
 const STREET_LINK_SCALE = 0.5;
 /** ...and at which their "120 m" chip appears. */
 const STREET_LINK_CHIP_SCALE = 0.8;
-/** Bullets a single interlining chip will draw. */
-const MAX_CHIP_BULLETS = 4;
+/** Service bullets drawn after a station name before the list is cut. */
+const MAX_LABEL_BULLETS = 8;
+/** Below this zoom only interchanges and line ends carry bullets (the overview stays clean). */
+const BULLET_ZOOM = 0.22;
+/** Below this zoom trains are plain dots in their line colour, not icon pucks. */
+const TRAIN_ICON_ZOOM = 0.3;
 /** Line-thickness multiplier bounds (the settings slider). */
 const LINE_SCALE_MIN = 0.6;
 const LINE_SCALE_MAX = 1.6;
@@ -243,7 +247,6 @@ const state = {
 	ribbons: [],                   // DRAWN schematic segments (see buildSegments)
 	segByPair: new Map(),          // "hex|partA>partB" -> segment (drawn OR suppressed)
 	segsByColor: new Map(),        // hex -> [drawn segment]
-	bundles: [],                   // interlining chips: [{x, z, nx, nz, colors:[{hex, numbers:[]}]}]
 	glyphs: [],                    // [{stationId, partId, x, z, colors:[hex], capsule, dir, accessible, weight, fullService}]
 	stopMarks: new Map(),          // partId -> full-service? (feature 1, computeStopMarks)
 	walks: [],                     // [{ax, az, bx, bz, dist}]
@@ -272,7 +275,8 @@ const state = {
 	follow: null,                  // {vehicleId, since, lastSeenAt, fading} — followReduce
 	stationPanel: null,            // {stationId, partId} of the open station panel (10b)
 	labelHits: [],                 // world-space boxes of the drawn station labels
-	chipHits: [],                  // world-space boxes of drawn interlining bullets -> line view
+	chipHits: [],                  // world-space boxes of the bullets drawn after station names -> line view
+	weakLabels: new Map(),         // name word (lower) -> the unique bullet text buildLines gave it
 	mapPick: null,                 // "from" | "to" while the map is armed to drop a pin (10c)
 	pointNodes: new Map(),         // POINT_FROM/POINT_TO -> {id, xz, y, label} synthetic nodes
 	tracking: null,                // live journey guidance state — trackReduce (section 10d)
@@ -952,7 +956,9 @@ function ensureParts() {
 		for (const p of st.parts) {
 			if (p.id === main.id) { p.sub = null; continue; }
 			const dy = Math.round((p.y || 0) - (main.y || 0));
-			p.sub = p.name || (dy ? (dy > 0 ? "+" : "−") + Math.abs(dy) + " blocks" : "Part " + (p.index + 1));
+			// a rider reads levels, not block offsets: the part above the main one is
+			// "Upper level", the one below "Lower level"
+			p.sub = p.name || (dy ? (dy > 0 ? "Upper level" : "Lower level") : "Part " + (p.index + 1));
 		}
 		if (main.name) main.sub = null;
 	}
@@ -1123,27 +1129,63 @@ function normalizeServiceLabel(raw) {
 	return stripDirectionTokens(src) || src;
 }
 
-/** Characters of a route NAME used as a bullet when there is no usable number. */
+/** Characters of a route NAME used as a bullet when buildLines has not assigned one. */
 const NAME_BULLET_CHARS = 3;
 
+/** Words of a route name that say what it is rather than which one it is. */
+const GENERIC_NAME_WORDS = new Set(["LINE", "ROUTE", "RAIL", "RAILWAY", "LIGHT", "LRT", "FERRY",
+	"SHUTTLE", "EXPRESS", "LOCAL", "SERVICE", "BUS", "TRAM", "CABLE", "CAR", "LOOP", "METRO",
+	"SUBWAY", "TRAIN", "THE", "LIMITED"]);
+
+/** The word of a route name a bullet should be built from ("Village Light Rail" -> "Village"). */
+function labelSourceWord(name) {
+	const words = stripDirectionTokens(name).split(/\s+/).filter(Boolean);
+	if (!words.length) return "";
+	const specific = words.find((w) => !GENERIC_NAME_WORDS.has(w.toUpperCase()) && !/^\d+$/.test(w));
+	return specific || words[0];
+}
+
 /**
- * The bullet text for one route.
+ * The bullet text for one route, and whether it is a REAL service letter.
  *
- * number -> name -> raw. The middle step is the fix for the hub chip that read
- * "OU IN IN OU": those routes' NUMBERS are bare direction words, so stripping empties
- * them and falling back to the raw number just prints the direction. The route's NAME
- * knows better ("Kransfield Loop OU" -> "Kransfield" -> "Kra"), and because both
- * directions share a name they collapse to ONE bullet. Only a route with neither a
- * usable number nor a usable name keeps its raw label.
+ * number -> short destination -> name word. The number wins when it is not merely a
+ * direction ("IN"/"OU" are how some operators name their two directions). A one- or
+ * two-character destination ("BakerLink||D") is the letter the operator typed in the
+ * wrong box and counts as real too. Otherwise the route's NAME supplies a word, and
+ * buildLines turns each such word into the SHORTEST prefix no other line uses ("Village"
+ * -> "V", "Bridge" -> "Br" when B is taken) so unnumbered lines get a bullet that is
+ * unique across the map instead of a three-letter stub. Both directions share the word,
+ * so they collapse to ONE bullet.
  */
-function routeServiceLabel(rt) {
+function routeLabelInfo(rt) {
 	const num = rt && rt.number != null ? String(rt.number).trim() : "";
 	const fromNum = stripDirectionTokens(num);
-	if (fromNum) return fromNum;
+	if (fromNum) return { label: fromNum, strong: true, word: "" };
+	const dest = stripDirectionTokens(routeDest(rt && rt.name));
+	if (dest && dest.length <= 2 && /^[A-Za-z0-9]+$/.test(dest)) return { label: dest, strong: true, word: "" };
 	const name = (rt && (rt.display || rt.name)) || "";
-	const fromName = stripDirectionTokens(name);
-	if (fromName) return fromName.split(/\s+/)[0].slice(0, NAME_BULLET_CHARS);
-	return num || name || "";
+	const word = labelSourceWord(routeBase(name) || name);
+	if (word) {
+		const assigned = state.weakLabels.get(word.toLowerCase());
+		return { label: assigned || word.slice(0, NAME_BULLET_CHARS), strong: false, word };
+	}
+	return { label: num || name || "", strong: false, word: "" };
+}
+
+/** The bullet text for one route (see routeLabelInfo). */
+function routeServiceLabel(rt) {
+	return routeLabelInfo(rt).label;
+}
+
+/** Express services are written "4*" (a diamond on the map); this is the number inside it. */
+const bulletText = (label) => String(label || "").replace(/\*$/, "");
+const bulletIsExpress = (label) => /\*$/.test(String(label || ""));
+
+/** "4" before "4*" before "4S": the base service first, its express diamond next, then variants. */
+function compareServiceLabels(a, b) {
+	const ba = bulletText(a), bb = bulletText(b);
+	if (ba !== bb) return ba.localeCompare(bb, undefined, { numeric: true, sensitivity: "base" });
+	return (bulletIsExpress(a) ? 1 : 0) - (bulletIsExpress(b) ? 1 : 0);
 }
 
 /* ---- near-identical colours are ONE line (feature: shade drift) ------------
@@ -1192,26 +1234,52 @@ function buildLines() {
 		rt.color = rep;
 		rt.hex = colorHex(rep);
 	}
+	state.weakLabels = new Map();
 	for (const rt of candidateRoutes()) {
 		let line = state.lines.get(rt.hex);
 		if (!line) {
-			line = { hex: rt.hex, colorInt: (rt.color || 0) & 0xFFFFFF, routeIds: [], serviceLabels: [], modes: new Set() };
+			line = { hex: rt.hex, colorInt: (rt.color || 0) & 0xFFFFFF, routeIds: [], serviceLabels: [],
+				modes: new Set(), nameWords: new Set() };
 			state.lines.set(rt.hex, line);
 		}
 		line.routeIds.push(rt.id);
 		line.modes.add(rt.mode || "train");
-		const label = routeServiceLabel(rt);
-		if (label && !line.serviceLabels.some((l) => l.toLowerCase() === label.toLowerCase())) {
+		const info = routeLabelInfo(rt);
+		if (info.strong) {
+			if (!line.serviceLabels.some((l) => l.toLowerCase() === info.label.toLowerCase())) {
+				line.serviceLabels.push(info.label);
+			}
+		} else if (info.word) {
+			line.nameWords.add(info.word);
+		}
+	}
+	// Name-derived bullets: only for lines with NO real service letter (a line whose
+	// other route is lettered never grows a name stub beside it), each the shortest
+	// prefix of its word that no bullet on the map already uses. Deterministic order so
+	// the same network always yields the same letters.
+	const taken = new Set();
+	for (const line of state.lines.values()) for (const l of line.serviceLabels) taken.add(bulletText(l).toLowerCase());
+	const ordered = [...state.lines.values()].sort((a, b) => a.colorInt - b.colorInt || (a.hex < b.hex ? -1 : 1));
+	for (const line of ordered) {
+		if (line.serviceLabels.length) continue;
+		for (const word of [...line.nameWords].sort()) {
+			let label = word;
+			for (let n = 1; n <= word.length; n++) {
+				if (!taken.has(word.slice(0, n).toLowerCase())) { label = word.slice(0, n); break; }
+			}
+			taken.add(label.toLowerCase());
+			state.weakLabels.set(word.toLowerCase(), label);
 			line.serviceLabels.push(label);
 		}
 	}
+	for (const line of state.lines.values()) line.serviceLabels.sort(compareServiceLabels);
 	return state.lines;
 }
 
-/** The bullets a chip draws for one colour. */
+/** The bullets one colour shows ("4", "4*", "4S" …). */
 function lineLabels(hex) {
 	const line = state.lines.get(hex);
-	return line ? line.serviceLabels.slice(0, MAX_CHIP_BULLETS) : [];
+	return line ? line.serviceLabels.slice(0, MAX_LABEL_BULLETS) : [];
 }
 
 /* ----------------------------------------------------------------------------
@@ -1724,7 +1792,6 @@ function buildDrawGeometry(all) {
 
 function buildSegments() {
 	state.ribbons = [];
-	state.bundles = [];
 	state.segByPair = new Map();
 	state.segsByColor = new Map();
 
@@ -1827,7 +1894,6 @@ function buildSegments() {
 		if (!state.segsByColor.has(s.hex)) state.segsByColor.set(s.hex, []);
 		state.segsByColor.get(s.hex).push(s);
 	}
-	buildBundleChips(drawn);
 }
 
 /**
@@ -1982,34 +2048,6 @@ function bundleCompanions(drawn) {
 }
 
 /**
- * Interlining chips: one chip per distinct companion-colour signature, hung off the
- * longest segment carrying it, showing each line's NORMALISED service labels (so a
- * directional pair contributes one bullet, not "IN" and "OU").
- */
-function buildBundleChips(drawn) {
-	const best = new Map();
-	for (const s of drawn) {
-		if (s.count < 2) continue;
-		const sig = s.companions.join(",");
-		const prev = best.get(sig);
-		if (!prev || s.len > prev.len) best.set(sig, s);
-	}
-	state.bundles = [];
-	for (const s of best.values()) {
-		const pts = s.drawPts || s.pts;
-		const m = Math.floor(pts.length / 2);
-		const a = pts[Math.max(0, m - 1)], b = pts[Math.min(pts.length - 1, m + 1)];
-		const dx = b[0] - a[0], dz = b[1] - a[1];
-		const l = Math.hypot(dx, dz) || 1;
-		state.bundles.push({
-			x: pts[m][0], z: pts[m][1],
-			nx: -dz / l, nz: dx / l,            // unit normal: where the chip hangs
-			colors: s.companions.map((hex) => ({ hex, numbers: lineLabels(hex) })),
-		});
-	}
-}
-
-/**
  * The AXIS the drawn lines run along at one station part — what the interchange capsule
  * has to be perpendicular to.
  *
@@ -2127,6 +2165,15 @@ function buildGlyphs() {
 	const shown = new Set(visibleRoutes().map((r) => r.id));
 	const known = new Set(candidateRoutes().map((r) => r.id));
 	state.glyphs = [];
+	// how many drawn segments of each colour touch each part: exactly one = the line
+	// ends there (its terminal bullet)
+	const degree = new Map();
+	for (const sg of state.ribbons) {
+		for (const pid of [sg.partA, sg.partB]) {
+			const k = pid + "|" + sg.hex;
+			degree.set(k, (degree.get(k) || 0) + 1);
+		}
+	}
 	for (const st of state.stations.values()) {
 		for (const part of st.parts) {
 			const colors = new Set();
@@ -2157,10 +2204,13 @@ function buildGlyphs() {
 			// one shared with a visible mode stays
 			if (servedAtAll && !colors.size) continue;
 			const dl = Math.hypot(dx, dz);
+			const terminals = new Set();
+			for (const hex of colors) if (degree.get(part.id + "|" + hex) === 1) terminals.add(hex);
 			state.glyphs.push({
 				stationId: st.id, partId: part.id,
 				x: part.x, z: part.z,
 				colors: [...colors],
+				terminals,
 				capsule: colors.size >= 2,
 				// the capsule spans the bundle, so it must follow the SCHEMATIC line's
 				// direction here, not the raw platform vectors
@@ -2483,9 +2533,6 @@ function drawStatic(dpr) {
 	// 5. station glyphs
 	drawGlyphs(g, vp, sel);
 
-	// interlining bullet clusters (only worth drawing once lines are separable)
-	if (v.scale > 0.35) drawBundleChips(g, vp, sel ? PALETTE.dim : 1);
-
 	// journey overlay: glow + full-strength ribbons, walks, glyphs, origin/destination
 	if (sel) drawJourneyOverlay(g, vp);
 
@@ -2693,49 +2740,51 @@ function drawGlyph(g, gl, s, w) {
 	// misaligned orphan badges (play-test feedback).
 }
 
-function drawBundleChips(g, vp, alpha) {
-	const s = uiScale();
-	g.globalAlpha = alpha;
-	for (const b of state.bundles) {
-		if (b.x < vp.l || b.x > vp.r || b.z < vp.t || b.z > vp.b) continue;
-		const bullets = [];
-		for (const c of b.colors) for (const n of c.numbers) bullets.push({ hex: c.hex, n });
-		if (bullets.length < 2) continue;
-		const shown = bullets.slice(0, MAX_CHIP_BULLETS);
-		const [ax, ay] = worldToScreen(b.x, b.z);
-		const R = 8.5 * s, pitch = 23 * s, h = 28 * s;
-		const w = pitch * (shown.length - 1) + R * 2 + 17 * s;
-		// hang the chip off the bundle on its normal side, with a short leader line
-		const lead = 18 * s;
-		const cx = ax + b.nx * (lead + w / 2), cy = ay + b.nz * (lead + h / 2);
-		g.strokeStyle = PALETTE.leader;
-		g.lineWidth = 1.5;
-		g.beginPath();
-		g.moveTo(ax + b.nx * 6 * s, ay + b.nz * 6 * s);
-		g.lineTo(cx - b.nx * w / 2, cy - b.nz * h / 2);
-		g.stroke();
-		labelObstacles.push([cx - w / 2 - 2, cy - h / 2 - 2, cx + w / 2 + 2, cy + h / 2 + 2]);
-		chipRect(g, cx - w / 2, cy - h / 2, w, h, h / 2);
-		g.font = "700 " + (12 * s).toFixed(1) + "px " + FONT;
-		g.textAlign = "center";
-		g.textBaseline = "middle";
-		shown.forEach((bl, i) => {
-			const bx = cx - w / 2 + 8.5 * s + R + i * pitch;
-			g.fillStyle = bl.hex;
-			g.beginPath(); g.arc(bx, cy, R, 0, Math.PI * 2); g.fill();
-			g.fillStyle = "#fff";      // bullets are always white-on-colour
-			g.fillText(String(bl.n).slice(0, 2), bx, cy + 0.5);
-			// each bullet is a line-view target (feature 4). Kept in WORLD units for the
-			// same reason the label boxes are: a stale blit must not move the hit box.
-			const wa = screenToWorld(bx - R - 2, cy - R - 2), wb = screenToWorld(bx + R + 2, cy + R + 2);
-			state.chipHits.push({
-				hex: bl.hex,
-				box: [Math.min(wa[0], wb[0]), Math.min(wa[1], wb[1]), Math.max(wa[0], wb[0]), Math.max(wa[1], wb[1])],
-			});
-		});
-		g.textBaseline = "alphabetic";
+/**
+ * One service bullet: a disc in the line colour with the service letter/number in
+ * white, or — for an express service written "4*" — the NYC diamond.
+ */
+function drawBullet(g, x, y, R, hex, label) {
+	const express = bulletIsExpress(label);
+	const text = bulletText(label).slice(0, 2);
+	g.fillStyle = hex;
+	g.beginPath();
+	if (express) {
+		const d = R * 1.25;
+		g.moveTo(x, y - d); g.lineTo(x + d, y); g.lineTo(x, y + d); g.lineTo(x - d, y);
+		g.closePath();
+	} else {
+		g.arc(x, y, R, 0, Math.PI * 2);
 	}
-	g.globalAlpha = 1;
+	g.fill();
+	g.fillStyle = "#fff";                      // bullets are always white-on-colour
+	g.font = "700 " + (R * (text.length > 1 ? 1.05 : 1.3)).toFixed(1) + "px " + FONT;
+	g.textAlign = "center";
+	g.textBaseline = "middle";
+	g.fillText(text, x, y + R * 0.05);
+	g.textBaseline = "alphabetic";
+	g.textAlign = "left";
+}
+
+/**
+ * The bullets that follow one station's name: every service of every line calling
+ * there, in colour order. At overview zoom only interchanges and line ends carry
+ * them (the MTA convention — a plain local stop's colour is the line it sits on);
+ * zoomed in, every stop lists its services. A line that ENDS here gets a bigger
+ * bullet, the terminal marker.
+ */
+function labelBullets(gl) {
+	if (!gl.colors || !gl.colors.length) return [];
+	const zoomed = state.view.scale >= BULLET_ZOOM;
+	const interchange = gl.colors.length >= 2;
+	const colorInt = (hex) => { const l = state.lines.get(hex); return l ? l.colorInt : 0; };
+	const out = [];
+	for (const hex of gl.colors.slice().sort((a, b) => colorInt(a) - colorInt(b) || (a < b ? -1 : 1))) {
+		const terminal = !!(gl.terminals && gl.terminals.has(hex));
+		if (!zoomed && !interchange && !terminal) continue;
+		for (const label of lineLabels(hex)) out.push({ hex, label, terminal });
+	}
+	return out.slice(0, MAX_LABEL_BULLETS);
 }
 
 /* ---- labels: greedy decluttering with per-label alignment candidates ---- */
@@ -2795,7 +2844,14 @@ function drawLabels(g, vp, sel) {
 		const withBadge = gl.accessible && ACCESS_ICON.complete && ACCESS_ICON.naturalWidth > 0
 			&& state.view.scale > 0.28;
 		const bw = withBadge ? size * 0.92 : 0;
-		const fullW = tw + (withBadge ? bw + 4 * s : 0);
+		// Service bullets ride inline after the name (and badge), so they can never
+		// detach from a decluttered label and their width counts toward collision.
+		const bullets = labelBullets(gl);
+		const R = size * 0.44;
+		const pitch = R * 2.2;
+		const bulletW = (b) => b.terminal ? R * 2.7 : pitch;
+		const bulletsW = bullets.length ? 3 * s + bullets.reduce((w, b) => w + bulletW(b), 0) : 0;
+		const fullW = tw + (withBadge ? bw + 4 * s : 0) + bulletsW;
 
 		// Candidate anchors. Order depends on the local track direction so the text
 		// starts on the side the ribbon does NOT run through: a vertical trunk gets
@@ -2846,6 +2902,24 @@ function drawLabels(g, vp, sel) {
 		if (withBadge) {
 			// inline after the name, centred on its cap height — never orphaned
 			g.drawImage(ACCESS_ICON, chosen.x0 + tw + 4 * s, chosen.c.y - size * 0.36 - bw / 2, bw, bw);
+		}
+		if (bullets.length) {
+			let bx = chosen.x0 + tw + (withBadge ? bw + 4 * s : 0) + 3 * s;
+			const by = chosen.c.y - size * 0.36;
+			for (const b of bullets) {
+				const w = bulletW(b);
+				const cx = bx + w / 2;
+				drawBullet(g, cx, by, b.terminal ? R * 1.3 : R, b.hex, b.label);
+				// each bullet is a line-view target (feature 4), kept in WORLD units like
+				// the label boxes so a stale blit cannot move the hit box
+				const wa = screenToWorld(cx - w / 2, by - R * 1.4), wb = screenToWorld(cx + w / 2, by + R * 1.4);
+				state.chipHits.push({
+					hex: b.hex,
+					box: [Math.min(wa[0], wb[0]), Math.min(wa[1], wb[1]), Math.max(wa[0], wb[0]), Math.max(wa[1], wb[1])],
+				});
+				bx += w;
+			}
+			g.font = (gl.main ? "600 " : "500 ") + size.toFixed(1) + "px " + FONT;
 		}
 
 		// secondary parts of a split station also name themselves faintly
@@ -3120,17 +3194,29 @@ function drawVehicles() {
 		const followed = !!(state.follow && state.follow.vehicleId === id);
 		const carded = state.trainCard === id;
 
-		const r = 11 * s;
-		ctx.save();
-		ctx.shadowColor = PALETTE.chipShadow;
-		ctx.shadowBlur = 6; ctx.shadowOffsetY = 2;
-		ctx.beginPath(); ctx.arc(sx, sy, r, 0, Math.PI * 2);
-		ctx.fillStyle = PALETTE.chip; ctx.fill();
-		ctx.restore();
-		ctx.lineWidth = 3.2 * s;
-		ctx.strokeStyle = color;
-		ctx.beginPath(); ctx.arc(sx, sy, r, 0, Math.PI * 2); ctx.stroke();
-		drawIcon(ctx, rec.mode === "boat" ? P_BOAT : P_TRAIN, sx, sy, 14 * s, color);
+		// Zoomed out, a train is a small dot in its line colour riding the line — fifty
+		// routes' worth of icon pucks buried every station of the overview. The puck
+		// with the mode icon comes back once the lines are far enough apart to read.
+		const dots = state.view.scale < TRAIN_ICON_ZOOM;
+		const r = (dots ? 4 : 11) * s;
+		if (dots) {
+			ctx.beginPath(); ctx.arc(sx, sy, r, 0, Math.PI * 2);
+			ctx.fillStyle = color; ctx.fill();
+			ctx.lineWidth = 1.5 * s;
+			ctx.strokeStyle = PALETTE.chip;
+			ctx.stroke();
+		} else {
+			ctx.save();
+			ctx.shadowColor = PALETTE.chipShadow;
+			ctx.shadowBlur = 6; ctx.shadowOffsetY = 2;
+			ctx.beginPath(); ctx.arc(sx, sy, r, 0, Math.PI * 2);
+			ctx.fillStyle = PALETTE.chip; ctx.fill();
+			ctx.restore();
+			ctx.lineWidth = 3.2 * s;
+			ctx.strokeStyle = color;
+			ctx.beginPath(); ctx.arc(sx, sy, r, 0, Math.PI * 2); ctx.stroke();
+			drawIcon(ctx, rec.mode === "boat" ? P_BOAT : P_TRAIN, sx, sy, 14 * s, color);
+		}
 		// the puck the card is anchored to (or the camera is riding) wears a halo ring,
 		// so a rider never loses which train they picked
 		if (followed || carded) {
@@ -3510,7 +3596,7 @@ function glyphAt(sx, sy) {
 }
 function trainAt(sx, sy) {
 	if (state.prefs.hideTrains) return null;      // hidden implies untouchable
-	let best = null, bestD = 16 * uiScale();
+	let best = null, bestD = (state.view.scale < TRAIN_ICON_ZOOM ? 9 : 16) * uiScale();
 	for (const [id, rec] of state.vehicles) {
 		if (!rec.screen) continue;
 		const d = Math.hypot(rec.screen[0] - sx, rec.screen[1] - sy);
@@ -3575,7 +3661,7 @@ function labelAt(sx, sy) {
 	return null;
 }
 
-/** An interlining chip's bullet (world boxes, recorded by drawBundleChips). */
+/** A service bullet after a station name (world boxes, recorded by drawLabels). */
 function chipAt(sx, sy) {
 	const [wx, wz] = screenToWorld(sx, sy);
 	for (let i = state.chipHits.length - 1; i >= 0; i--) {

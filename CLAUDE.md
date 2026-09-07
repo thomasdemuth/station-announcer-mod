@@ -342,6 +342,37 @@ destination first; FULL editor from day one; the old text signs migrate onto it.
   server (his ModrinthApp profile has no local saves). Test area: sky over Albany
   (x 0..20, y 147..158, z -66..-50).
 
+### MAP+ LABELS / BULLETS / TRAINS (2026-09-07) — 2.4.56, verified on the real network
+
+Thomas's order after the scanner rewrite: labels/bullets/trains now, schematic hub
+layout later. All in `dispatch/map.js`, harness green:
+- **Service labels are unique per map** (`routeLabelInfo` → `buildLines`): number →
+  a 1–2 char DESTINATION ("BakerLink||D" means the letter was typed in the wrong box) →
+  the route NAME's first non-generic word (GENERIC_NAME_WORDS skips Line/Light/Rail/
+  Ferry/…), turned into the SHORTEST prefix no other bullet uses, in colorInt order
+  (Village→V, Flower→F, Freeman→Fr, Bridge→Br since B exists, Mountain→M, Monorail→Mo,
+  Mangrove→Ma, Snowy→Sn, Stanley→S). A line with any real letter never adds a name stub
+  (BakerLink B: "B" once, not "B"+"Bak"). `state.weakLabels` (word → letter) is what
+  `routeServiceLabel` consults for synthetic route objects (itinerary legs, vehicle
+  callouts). Sorted "4" < "4*" < "4S" (`compareServiceLabels`); a trailing `*` is the
+  EXPRESS DIAMOND (`drawBullet`, `bulletText`/`bulletIsExpress`). Real Baker City result:
+  D · 2/2◆ · V · S · 4/4◆/4S · 1 · W · Fr · F · L/L◆ · B · C/E · Br · Sn · Mo · 3 · 19 ·
+  Ma · A · M.
+- **Bullets ride the station label** (`labelBullets` in `drawLabels`), MTA style: after
+  the name (+ badge), in colour order, width counted in the declutter box, each a
+  line-view click target (`state.chipHits`, same structure as before). Overview
+  (scale < BULLET_ZOOM 0.22): only interchanges and LINE ENDS carry them; zoomed in,
+  every stop does. `gl.terminals` = colours whose drawn segments touch the part exactly
+  once (computed in buildGlyphs from state.ribbons) → bigger terminal bullet.
+  The leader-line interlining chips (`buildBundleChips`/`drawBundleChips`/
+  `state.bundles`) are DELETED.
+- **Trains**: below TRAIN_ICON_ZOOM (0.3) a vehicle is a 4 px dot in its line colour with
+  a paper ring (hit radius 9 px), the icon puck returns zoomed in — 54 routes' pucks had
+  buried every station of the overview.
+- **Split parts** read "Upper level"/"Lower level" instead of "+12 blocks".
+NOT done (deferred by Thomas): the schematic hub layout — Albany is still 11 colours /
+12 stations in ~300 blocks at geographic positions.
+
 ### BASEMAP SCANNER REWRITE (2026-09-07) — rivers/satellite finally work; 2.4.55
 
 **Why:** on the real Baker City world (385 regions, ~275k chunks on disk) the old

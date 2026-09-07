@@ -3254,3 +3254,15 @@ satellite from the colour tiles; demo river now a mask tile; harness J = mask st
 dark, satellite. NOT yet: Thomas's own server (needs a deploy + one launch; the old
 `terrain.json` on disk is ignored, old satellite tiles lack masks until a full
 `/dispatch basemap scan`).
+
+## Map+ labels, bullets, trains (2026-09-07) — 2.4.56
+
+Second of Thomas's three rounds (scanner → labels/bullets/trains → schematic later).
+map.js only. Unique per-map service labels (number → 1–2 char destination → shortest
+unused prefix of the name's specific word; a line with a real letter never adds a name
+stub; "4*" = express diamond; sorted 4 < 4* < 4S); bullets inline after station names
+(interchanges + line ends at overview, everything zoomed in; terminal bullets bigger;
+bullets are line-view click targets) replacing the leader chips, which are deleted;
+trains are colour dots below scale 0.3; split parts say Upper/Lower level. Verified on
+the rig against the real Baker City network (all 20 lines labelled uniquely, terminals
+detected, zero console errors); harness section G/6 rewritten for the new model.

@@ -307,12 +307,34 @@ check("drawn segment endpoints snap to the station-part centroids", run(`(() => 
   return worst;
 })()`) < 1e-6);
 
-/* ---- G. interlining chips carry normalised bullets ---- */
-const chips = run(`state.bundles.map(b => ({ colors: b.colors.map(c => c.hex + ":" + c.numbers.join("/")) }))`);
-check("one chip per bundle signature (green+blue trunk, brown+orange crosstown)",
-	chips.length === 2, JSON.stringify(chips));
-check("chip bullets are normalised service labels",
-	JSON.stringify(chips[0].colors) === '["#0039a6:A/C","#00933c:4/5"]', JSON.stringify(chips[0].colors));
+/* ---- G. service bullets ride the station labels (chips + leaders are gone) ---- */
+const bul = run(`(() => {
+  const inter = state.glyphs.find(g => g.colors.length >= 2);
+  const plain = state.glyphs.find(g => g.colors.length === 1 && !(g.terminals && g.terminals.size));
+  const term = state.glyphs.find(g => g.terminals && g.terminals.size);
+  const badTerm = state.glyphs.filter(g => [...g.terminals].some(h => !g.colors.includes(h))).length;
+  const keep = state.view.scale;
+  state.view.scale = 0.1;
+  const farInter = labelBullets(inter).length, farPlain = labelBullets(plain).length;
+  const farTerm = labelBullets(term).filter(b => b.terminal).length;
+  state.view.scale = 0.5;
+  const nearPlain = labelBullets(plain).length;
+  const colours = new Set(labelBullets(inter).map(b => b.hex)).size;
+  state.view.scale = keep;
+  return { farInter, farPlain, farTerm, nearPlain, colours, badTerm, terminals: state.glyphs.filter(g => g.terminals.size).length,
+    order: ["4S", "4*", "4"].sort(compareServiceLabels), text: bulletText("4*"), express: [bulletIsExpress("4*"), bulletIsExpress("4")],
+    chips: typeof drawBundleChips === "undefined" && state.bundles === undefined };
+})()`);
+check("zoomed out, an interchange lists its lines' bullets but a plain local stop shows none",
+	bul.farInter >= 2 && bul.farPlain === 0, JSON.stringify(bul));
+check("...and a line end keeps its (bigger) terminal bullet at any zoom", bul.farTerm >= 1 && bul.terminals >= 2, JSON.stringify(bul));
+check("zoomed in, every stop lists its services", bul.nearPlain >= 1, bul.nearPlain);
+check("an interchange's bullets span its colours", bul.colours >= 2, bul.colours);
+check("a terminal colour is always one the station is served by", bul.badTerm === 0, bul.badTerm);
+check('services order 4 < 4* < 4S and "4*" is the express diamond of 4',
+	JSON.stringify(bul.order) === '["4","4*","4S"]' && bul.text === "4" && bul.express[0] === true && bul.express[1] === false,
+	JSON.stringify(bul));
+check("the interlining chips are gone", bul.chips === true);
 
 /* ---- offsetPolyline ---- */
 const off = run(`(() => {
@@ -2432,8 +2454,9 @@ const labelChain = run(`(() => ({
   strictEmpty: stripDirectionTokens("OU"),
   strictKeeps: stripDirectionTokens("Ba"),
 }))()`);
-check('a direction-only number falls back to the route NAME ("IN" + Kransfield Loop -> "Kra")',
-	labelChain.bareIn === "Kra", labelChain.bareIn);
+check('a direction-only number falls back to the route NAME, as the unique letter buildLines gave it',
+	labelChain.bareIn === run(`state.weakLabels.get("kransfield")`) && labelChain.bareIn.length <= 2 && /^K/.test(labelChain.bareIn),
+	labelChain.bareIn);
 check("...so both directions of that line show ONE bullet", labelChain.bareIn === labelChain.bareOu, labelChain.bareOu);
 check('a route with nothing else keeps its raw label ("OU" -> "OU")', labelChain.nameless === "OU", labelChain.nameless);
 check("a real number still wins", labelChain.numbered === "4", labelChain.numbered);
@@ -2441,8 +2464,11 @@ check("a nameless-number route uses its name", labelChain.nameOnly === "Air", la
 check("a route named after its direction too still shows something", labelChain.dirName === "IN", labelChain.dirName);
 check("stripDirectionTokens is the STRICT form (no fallback)",
 	labelChain.strictEmpty === "" && labelChain.strictKeeps === "Ba", J([labelChain.strictEmpty, labelChain.strictKeeps]));
-check("the demo's direction-numbered line shows exactly one bullet",
-	J(run(`lineLabels("#7f8200")`)) === '["Kra"]', J(run(`lineLabels("#7f8200")`)));
+check("the demo's direction-numbered line shows exactly one bullet, and no other line uses that letter",
+	run(`lineLabels("#7f8200")`).length === 1 && run(`(() => {
+	  const mine = lineLabels("#7f8200")[0].toLowerCase(); let n = 0;
+	  for (const l of state.lines.values()) for (const s of l.serviceLabels) if (s.toLowerCase() === mine) n++;
+	  return n; })()`) === 1, J(run(`lineLabels("#7f8200")`)));
 
 /* ---- 7. NEAR-IDENTICAL COLOURS ARE ONE LINE ---- */
 const shades = run(`(() => {
