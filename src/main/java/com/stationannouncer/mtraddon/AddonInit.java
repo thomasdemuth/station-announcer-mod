@@ -7,8 +7,7 @@ import com.stationannouncer.mtraddon.dispatch.DispatchRegistry;
 import com.stationannouncer.mtraddon.dispatch.DispatchStreamer;
 import com.stationannouncer.mtraddon.dispatch.DispatchWebSetup;
 import com.stationannouncer.mtraddon.dispatch.PlayerPositions;
-import com.stationannouncer.mtraddon.dispatch.SatelliteScanner;
-import com.stationannouncer.mtraddon.dispatch.TerrainScanner;
+import com.stationannouncer.mtraddon.dispatch.BasemapScanner;
 import com.stationannouncer.mtraddon.disruption.DisruptionBroadcaster;
 import com.stationannouncer.mtraddon.disruption.DisruptionNetworking;
 import com.stationannouncer.mtraddon.disruption.MtrSimulators;
@@ -57,7 +56,7 @@ public final class AddonInit {
      */
     private static final int AUTO_SCAN_DELAY_TICKS = 300;
 
-    /** 0 = waiting out the delay, 1 = terrain pass kicked (waiting for it), 2 = done. */
+    /** 0 = waiting out the delay, 2 = the automatic basemap pass has been kicked (or is off). */
     private static int autoScanStage;
     private static int autoScanCountdown;
 
@@ -78,12 +77,9 @@ public final class AddonInit {
             // MinecraftServer reference for the /dispatch/api/pair|navigate|navstatus
             // endpoints (Jetty workers have no other way to reach the server).
             NavStore.load(server);
-            // Dispatch-map terrain: retains the server (nothing else in the addon does)
-            // and reads whatever water polygons a previous /dispatch terrain scan cached.
-            TerrainScanner.onServerStarted(server);
-            // Satellite basemap: the same lifecycle, its own state machine. Reads only the
-            // per-dimension tile INDEXES here — the PNGs are streamed from disk per request.
-            SatelliteScanner.onServerStarted(server);
+            // Dispatch-map basemap: retains the server and reads only the per-dimension
+            // tile INDEXES here — the PNGs are streamed from disk per request.
+            BasemapScanner.onServerStarted(server);
             // …and arm the once-per-launch automatic scan (see the ticker below).
             autoScanStage = 0;
             autoScanCountdown = AUTO_SCAN_DELAY_TICKS;
@@ -110,10 +106,9 @@ public final class AddonInit {
             NavStore.stop();
             // Flush the queued analytics events and stop the writer before the simulators go.
             AnalyticsRecorder.stop();
-            // Join any in-flight terrain.json write and drop the retained server/world refs.
-            TerrainScanner.onServerStopping();
-            // Join any in-flight tile encode and drop the retained server/world refs.
-            SatelliteScanner.onServerStopping();
+            // Stop the basemap worker (it only publishes whole batches) and drop the
+            // retained server/world refs.
+            BasemapScanner.onServerStopping();
             // The player layer is live-only; nothing to flush, just forget everybody.
             PlayerPositions.clear();
             // Dispatch teardown before MTR's Main.stop(). Clear the registry FIRST so
@@ -148,18 +143,11 @@ public final class AddonInit {
         // second, and only sent when an answer changes — which, with nothing held
         // or stuck, is never: the whole tick is two isEmpty checks.
         ServerTickEvents.END_SERVER_TICK.register(server -> {
-            // Terrain scanning gets its time-budgeted slice EVERY tick, so it sits ahead
-            // of the countdown early-return below. Two field reads when no scan is running.
-            TerrainScanner.tick();
-            // …and so does the satellite basemap's, from its own separate scan state:
-            // both can be mid-scan in the same session without touching each other.
-            SatelliteScanner.tick();
-            // The once-per-launch automatic basemap scan. Three stages, all driven from
-            // here so the two scanners never sample in the same tick: wait out the delay,
-            // kick the terrain pass, then — once the terrain scanner reports itself idle
-            // (its pass done, or a manual scan finished) — kick the satellite pass. Both
-            // passes skip whatever their caches already cover, so on a settled world this
-            // costs two measurements and a couple of log lines.
+            // The basemap scanner works on its own thread; this only pumps its automatic
+            // pass from one dimension to the next. A field read when nothing is queued.
+            BasemapScanner.tick();
+            // The once-per-launch automatic basemap scan: wait out the delay, then kick
+            // the scanner's incremental pass (it runs on its own thread from there).
             if (autoScanStage < 2) {
                 autoScanTick();
             }
@@ -220,33 +208,26 @@ public final class AddonInit {
     }
 
     /**
-     * Server thread, once a tick until stage 2. Runs the two automatic basemap passes in
-     * order and never while a scan (manual or automatic) is in flight — each scanner's
-     * {@code isIdle()} is the whole handshake, so an operator's own
-     * {@code /dispatch terrain scan} simply delays the automatic work instead of
-     * colliding with it.
+     * Server thread, every tick until the pass is kicked. {@code BasemapScanner.isIdle()}
+     * is the whole handshake, so an operator's own {@code /dispatch basemap scan} simply
+     * delays the automatic work instead of colliding with it.
      */
     private static void autoScanTick() {
-        if (autoScanStage == 0) {
-            if (--autoScanCountdown > 0) {
-                return;
-            }
-            if (!AddonServerConfig.get().dispatch.autoScan) {
-                autoScanStage = 2;
-                StationAnnouncer.LOGGER.info("Automatic basemap scanning is off (dispatch.autoScan=false)");
-                return;
-            }
-            if (!TerrainScanner.isIdle()) {
-                return; // a manual scan is running; check again next tick
-            }
-            TerrainScanner.autoScan();
-            autoScanStage = 1;
+        if (autoScanStage != 0) {
             return;
         }
-        // Stage 1: the satellite pass waits for the terrain scanner to go quiet.
-        if (TerrainScanner.isIdle()) {
-            SatelliteScanner.autoScan();
-            autoScanStage = 2;
+        if (--autoScanCountdown > 0) {
+            return;
         }
+        if (!AddonServerConfig.get().dispatch.autoScan) {
+            autoScanStage = 2;
+            StationAnnouncer.LOGGER.info("Automatic basemap scanning is off (dispatch.autoScan=false)");
+            return;
+        }
+        if (!BasemapScanner.isIdle()) {
+            return; // a manual scan is running; check again next tick
+        }
+        BasemapScanner.autoScan();
+        autoScanStage = 2;
     }
 }

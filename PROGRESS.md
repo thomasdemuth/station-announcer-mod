@@ -3229,3 +3229,28 @@ VERIFIED: compile green, dedicated server boots clean in 2.19 s with zero addon
 errors, endpoints unchanged; harness 516 + planner 81 green, including four new
 regression checks asserting every ride ships names, positions, a stop list and
 within-cap fields. Both harnesses now live in `tools/`. NOT re-tested in game.
+
+## Basemap scanner rewrite — rivers and satellite actually appear (2026-09-07)
+
+Thomas: "the current worst part seems to be satellite and terrain generation for
+rivers. its not working." Diagnosed on the rig with a copy of the REAL Baker City
+world (world_baker, 385 regions / ~275k chunks): the old TerrainScanner's whole-world
+pass was 2.0 M samples at ~200/s (2 ms/tick) = 2–3 h with no partial publish and no
+resume, the satellite pass (17 M samples) waited behind it, and `world.getChunk` on
+the proto-chunk perimeter GENERATED chunks — 270,827 → 274,820 after one 4-min run —
+so CONTAIN_SLACK 64 never held and every launch rescanned. Grid resolution was fine
+(8-block grid: 90 % river-area recall vs squaremap; 2-block: 98 %).
+
+Replaced both scanners with `BasemapScanner` (+ `ChunkIndex`): background thread,
+chunk NBT via `ThreadedAnvilChunkStorage.getNbt`, hand-decoded heightmap/palettes,
+non-full chunks skipped, never getChunk; per tile a colour PNG and a class-mask PNG
+(`.m.png`, red = water/forest/snow/sand/grass/land). Progressive publish every 32
+tiles; full refresh via `/dispatch basemap scan` (alias `satellite`), incremental at
+launch. Measured: 334 tiles / 22 M samples in ~100 s on the real world, chunk count
+unchanged after a full refresh. map.js: terrain polygons + `api/terrain` removed;
+schematic water/woodland/snow drawn from the styled mask tiles (per-theme cache),
+satellite from the colour tiles; demo river now a mask tile; harness J = mask styling
+(harness + planner suites green). 2.4.55. Verified in the browser on the rig: light,
+dark, satellite. NOT yet: Thomas's own server (needs a deploy + one launch; the old
+`terrain.json` on disk is ignored, old satellite tiles lack masks until a full
+`/dispatch basemap scan`).

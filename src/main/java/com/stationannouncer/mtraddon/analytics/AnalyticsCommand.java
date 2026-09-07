@@ -6,8 +6,7 @@ import com.mojang.brigadier.context.CommandContext;
 import com.mojang.brigadier.suggestion.Suggestions;
 import com.mojang.brigadier.suggestion.SuggestionsBuilder;
 import com.stationannouncer.mtraddon.AddonServerConfig;
-import com.stationannouncer.mtraddon.dispatch.SatelliteScanner;
-import com.stationannouncer.mtraddon.dispatch.TerrainScanner;
+import com.stationannouncer.mtraddon.dispatch.BasemapScanner;
 import net.fabricmc.fabric.api.command.v2.CommandRegistrationCallback;
 import net.minecraft.server.command.CommandManager;
 import net.minecraft.server.command.ServerCommandSource;
@@ -44,43 +43,32 @@ public final class AnalyticsCommand {
                                         .suggests(AnalyticsCommand::suggestLines)
                                         .executes(context -> run(context,
                                                 StringArgumentType.getString(context, "line")))))
-                        // Dispatch-map terrain: an explicit, time-budgeted world scan for
-                        // water. Same permission gate as the stats board.
-                        .then(CommandManager.literal("terrain")
-                                .then(CommandManager.literal("scan")
-                                        .executes(context -> TerrainScanner.startScan(context.getSource(),
-                                                DEFAULT_TERRAIN_MARGIN))
-                                        .then(CommandManager.argument("margin", IntegerArgumentType.integer(0, 1024))
-                                                .executes(context -> TerrainScanner.startScan(context.getSource(),
-                                                        IntegerArgumentType.getInteger(context, "margin")))))
-                                .then(CommandManager.literal("status")
-                                        .executes(context -> {
-                                            context.getSource().sendFeedback(() -> Text.literal("Terrain: "
-                                                    + TerrainScanner.status()).formatted(Formatting.AQUA), false);
-                                            return 1;
-                                        })))
-                        // The satellite basemap: the same shape of command over the same
-                        // bounding box, 16x denser and rastered to PNG tiles.
-                        .then(CommandManager.literal("satellite")
-                                .then(CommandManager.literal("scan")
-                                        .executes(context -> SatelliteScanner.startScan(context.getSource(),
-                                                DEFAULT_SATELLITE_MARGIN))
-                                        .then(CommandManager.argument("margin", IntegerArgumentType.integer(0, 1024))
-                                                .executes(context -> SatelliteScanner.startScan(context.getSource(),
-                                                        IntegerArgumentType.getInteger(context, "margin")))))
-                                .then(CommandManager.literal("status")
-                                        .executes(context -> {
-                                            context.getSource().sendFeedback(() -> Text.literal("Satellite: "
-                                                    + SatelliteScanner.status()).formatted(Formatting.AQUA), false);
-                                            return 1;
-                                        })))));
+                        // Dispatch-map basemap: a FULL redraw of this dimension's tiles (the
+                        // automatic launch pass only fills in what is missing). "satellite" is
+                        // kept as an alias of the old command name.
+                        .then(basemapCommand("basemap"))
+                        .then(basemapCommand("satellite"))));
     }
 
-    /** How far past the outermost rail/station the terrain scan reaches by default. */
-    private static final int DEFAULT_TERRAIN_MARGIN = 128;
+    private static com.mojang.brigadier.builder.LiteralArgumentBuilder<net.minecraft.server.command.ServerCommandSource>
+    basemapCommand(String name) {
+        return CommandManager.literal(name)
+                .then(CommandManager.literal("scan")
+                        .executes(context -> BasemapScanner.startScan(context.getSource(), DEFAULT_BASEMAP_MARGIN))
+                        .then(CommandManager.argument("margin", IntegerArgumentType.integer(0, 1024))
+                                .executes(context -> BasemapScanner.startScan(context.getSource(),
+                                        IntegerArgumentType.getInteger(context, "margin")))))
+                .then(CommandManager.literal("status")
+                        .executes(context -> {
+                            context.getSource().sendFeedback(() -> Text.literal("Basemap: "
+                                    + BasemapScanner.status()).formatted(Formatting.AQUA), false);
+                            return 1;
+                        }));
+    }
 
-    /** Same default for the satellite basemap; it is snapped up to a whole tile anyway. */
-    private static final int DEFAULT_SATELLITE_MARGIN = 128;
+
+    /** How far past the outermost generated chunk a manual basemap scan reaches. */
+    private static final int DEFAULT_BASEMAP_MARGIN = 128;
 
     /**
      * MTR keys its simulators by {@code "<namespace>/<path>"} (see {@code Init.getWorldId}),

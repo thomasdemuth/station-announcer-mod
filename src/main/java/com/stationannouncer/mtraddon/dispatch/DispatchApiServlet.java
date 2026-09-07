@@ -54,9 +54,7 @@ import java.util.function.Supplier;
  *   <li>{@code mapdata} — the System Map+ payload ({@link DispatchMapData}): per-route
  *       platform order, leg rail chains and durations, station platform clustering,
  *       scheduled headways. Per-dimension 30 s {@link CachedResponse} like network.</li>
- *   <li>{@code terrain} — cached water polygons from the last {@code /dispatch terrain
- *       scan} ({@link TerrainScanner}); empty until a scan has run.</li>
- *   <li>{@code satmeta} — the satellite basemap's tile index ({@link SatelliteScanner}):
+ *   <li>{@code satmeta} — the basemap's tile index ({@link BasemapScanner}):
  *       origin, scale, tile list and bbox; {@code available:false} until a scan has run.</li>
  *   <li>{@code sattile} — one basemap tile as {@code image/png}. Handled before
  *       ServletBase's simulator hop (like {@code analytics}) and read straight off the
@@ -141,9 +139,12 @@ public final class DispatchApiServlet extends ServletBase {
         // and the index lookup is what actually decides whether a tile exists.
         int tx = intParameter(request, "tx", Integer.MIN_VALUE);
         int tz = intParameter(request, "tz", Integer.MIN_VALUE);
+        // kind=mask serves the class-mask tile (water/forest/snow classes in the red
+        // channel) the schematic basemap is styled from; anything else is the colour tile.
+        boolean mask = "mask".equals(request.getParameter("kind"));
         byte[] png = tx == Integer.MIN_VALUE || tz == Integer.MIN_VALUE
                 ? null
-                : SatelliteScanner.tile(simulators.get(dimensionIndex).dimension, tx, tz);
+                : BasemapScanner.tile(simulators.get(dimensionIndex).dimension, tx, tz, mask);
         if (png == null) {
             DispatchStaticServlet.sendText(response, 404, "text/plain;charset=utf-8", "no such tile");
             return true;
@@ -810,16 +811,12 @@ public final class DispatchApiServlet extends ServletBase {
             sendResponse.accept(mapDataResponses
                     .computeIfAbsent(simulator.dimension, key -> new CachedResponse(DispatchMapData::build, 30_000))
                     .get(simulator));
-        } else if ("terrain".equals(endpoint)) {
-            // Water polygons from the last /dispatch terrain scan. The scanner's
-            // snapshot is volatile-immutable, so reading it here is thread-safe and
-            // cheap; empty polygons until a scan has run in this dimension.
-            sendResponse.accept(TerrainScanner.terrainJson(simulator.dimension));
         } else if ("satmeta".equals(endpoint)) {
-            // Where the satellite basemap's tiles are and how they map onto the world.
-            // Same volatile-immutable snapshot rules as terrain; the tiles themselves go
-            // out through the synchronous /sattile branch above, never from here.
-            sendResponse.accept(SatelliteScanner.satelliteJson(simulator.dimension));
+            // Where the basemap's tiles are and how they map onto the world. The
+            // scanner's snapshot is volatile-immutable, so reading it here is thread-safe
+            // and cheap; the tiles themselves go out through the synchronous /sattile
+            // branch above, never from here.
+            sendResponse.accept(BasemapScanner.satelliteJson(simulator.dimension));
         } else {
             JsonObject error = new JsonObject();
             error.addProperty("error", "unknown endpoint: " + endpoint);

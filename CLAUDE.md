@@ -295,6 +295,154 @@ Four fixes/features from Thomas's feedback round (his answers, do not re-ask):
   model rebuild (tripod look, reader heads, pictogram plates day+night,
   HEET comb/lintel, signboard straps).
 
+### MTA SIGN SYSTEM (2026-09-06) — modular NYC signs + unified text-sign layout; 2.4.55 — READ `SIGN_PLAN.md`
+
+Thomas's decisions (do not re-ask): content MODULES inside one panel; font = MTR's
+`mtr:mtr` Noto Sans (no TTF of ours); half AND full height panels, wall/hanging/
+standing; directional + exit (fed by MTR station exits) + station plates + line &
+destination first; FULL editor from day one; the old text signs migrate onto it.
+
+- **Data**: `mtr/sign/SignSpec` (style BLACK/WHITE_BAND/PLAIN, rows of tiles:
+  BULLETS / TEXT / ARROW / STATION_NAME / EXIT / DESTINATION / SPACER — field
+  meanings in its javadoc; ICON tiles deferred, MTR's `drawSign` needs a bridge)
+  + `SignFaces` (front on/off, back SAME/OWN/OFF). JSON on the shared
+  `StationDecorBlockEntity` (`Sign` NBT key, null = never edited), `update_sign`
+  C2S (pos + JSON, 12 KB cap). Everything MTR-derived is stored by NAME (line
+  name, full route name, exit name) and resolved at draw time.
+- **Layout**: `client/mtr/SignLayout.paint(Surface, spec, w, h, SignContext)` on
+  `PosterLayout.Surface` (both surfaces gained a font-id parameter;
+  `CanvasPainter.withFont`). Rows split the panel height; arrows pinned
+  left/right sit on their edge; a too-wide row SHRINKS text+bullets together.
+  Text sizes are CAP HEIGHTS: **MTR's font measures 0.76 units of cap per unit
+  of painter size with the cap line at the draw y** (`CAP_PER_SIZE`/`TOP_PER_SIZE`,
+  measured on the rig — the declared TTF size 12 is NOT the visual height).
+  BLACK style draws the thin white line under the top edge; EXIT tiles are white
+  on the MTA red field; `SignContext` (per pos, 1 s TTL) supplies station name,
+  exits (`Station.getExits()` → name + destinations), station lines, and
+  `destination(route)` = first platform destination override else last stop.
+- **Blocks**: `mta_sign` (full) / `mta_sign_half` (`mtr/MtaSignBlock`, MOUNT
+  wall/hanging/standing from the clicked face, LEFT/RIGHT merge runs by block+
+  facing+mount, rods/posts only at run ends). Plate table (px) is a three-way
+  contract generator ↔ block shapes ↔ `MtaSignPainter`: full 0..16, half wall 4..12
+  / hanging 4..12 / standing 8..16; z 15..16 wall, 7..9 otherwise (double-sided).
+  Assets by `tools/gen_sign_assets.py`. Canvas 64 units/block × run, origin at the
+  run's +x end (viewer's left), standoff 0.004.
+- **Editor**: `SignEditScreen` (FlatUi: Structure / Preview click-to-select /
+  Inspector; Front|Back switch; `SignTemplates` one-click wordings; popups for
+  lines, routes, MTR exits). Right-click (any hand) on mta signs; the MTR brush on
+  the legacy blocks. Dev hooks: `#sign-editor x y z [tile:R:T|row:R|templates|add]`,
+  `#sign-load x y z <file under run/>`, `#sign-close`.
+- **Migration**: `mtr/sign/LegacySigns` derives a sign from the old fields
+  (CustomName / SignFront|Back / RoutesFront|Back) for entrance_railing_sign
+  (name row + bullet row), el_entrance_sign (bullets + name), el_sign / el_name_board
+  / el_wall_sign / el_railing_sign (centred upper-case name, PLAIN style) — old
+  placements draw the same content, now in the MTR font; saving in the editor
+  writes `Sign` and the legacy fields are ignored. `RailingSignScreen` deleted.
+- Rig world is `run/world_baker` — a LOCAL COPY inside the rig, not Thomas's real
+  server (his ModrinthApp profile has no local saves). Test area: sky over Albany
+  (x 0..20, y 147..158, z -66..-50).
+
+### BASEMAP SCANNER REWRITE (2026-09-07) — rivers/satellite finally work; 2.4.55
+
+**Why:** on the real Baker City world (385 regions, ~275k chunks on disk) the old
+TerrainScanner needed 2.0 M samples at ~200/s under its 2 ms/tick budget = 2–3 h with
+NO partial result, and the satellite pass (17 M samples) only started after it; any
+restart began again. Worse, `world.getChunk` on the proto-chunk ring vanilla keeps
+around explored land FINISHED generating those chunks and wrote a new ring: one
+4-minute scan grew the world 270,827 → 274,820 chunks, so every launch saw "grown
+outside the cached box" and rescanned everything. That is why Thomas never saw a river.
+Grid resolution was NOT the problem (8-block grid = 90 % river-area recall vs the
+squaremap render; 2-block = 98 %).
+
+**Now (`mtraddon/dispatch/BasemapScanner` + `ChunkIndex`; TerrainScanner +
+SatelliteScanner deleted):** one daemon thread per scan asks
+`ThreadedAnvilChunkStorage.getNbt(ChunkPos)` (thread-safe IO worker, coherent with
+pending writes) for every chunk the region headers list, decodes `Status` (skip
+anything but `minecraft:full`/`full`), `Heightmaps.MOTION_BLOCKING` (9-bit
+PackedIntegerArray; stored value = y above the top block − bottomY, 0 = empty
+column), and the `sections[].block_states` palettes lazily (palette entries →
+`NbtHelper.toBlockState` through a per-scan cache), then rasters 512-block tiles at
+2 blocks/sample: `<tx>_<tz>.png` = vanilla-map colours (MapColor via
+`state.getMapColor(EmptyBlockView.INSTANCE, ORIGIN)` — safe off-thread; CLEAR descends
+≤4; water depth-banded; slope shading vs the sample north, seed row from the chunk row
+north of the tile) and `<tx>_<tz>.m.png` = CLASS MASK (red channel: 1 water, 2 forest
+= DARK_GREEN map colour, 3 snow, 4 sand, 5 grass, 6 other; alpha 0 = nothing). Chunk
+rows are fetched one ahead of decoding. Publishes every 32 tiles (index.json +
+volatile snapshot; the map's 60 s satmeta refetch picks it up). Never touches
+`getChunk`: measured on the real world, 334 tiles / 22 M samples in ~100 s, chunk
+count on disk unchanged. Manual `/dispatch basemap scan` (alias `satellite`) = full
+refresh (unpublishes + wipes the dimension first, so the map is briefly "not scanned");
+the launch auto pass (`dispatch.autoScan`, 300 ticks after start) draws missing tiles
+only. `/dispatch basemap status`. Pre-1.18 chunks (DataVersion < 2860) are skipped,
+not data-fixed.
+
+**Client (map.js):** `api/terrain` and the water polygons are gone. Schematic basemap
+= `drawMaskMap`: mask tiles fetched via `sattile?…&kind=mask`, styled ONCE per tile per
+theme (`styleMask`: red-channel class → `PALETTE.water/forest/snow`, else transparent so
+the paper shows), drawn with smoothing ON (soft shorelines); satellite = colour tiles
+as before. `satTiles` records carry both kinds (`img/ok` + `mask/maskOk/styled`), one
+shared queue. Demo mode paints a mask tile of its river through the same path
+(`demoMaskTile`, `demoRiverX` shared with `demoSatTile`). harness.mjs section J now
+tests the mask styling. VERIFIED on the rig against the real Baker City world:
+water + woodland under the network in light and dark, satellite tiles, 0 console
+errors outside a deliberate full-refresh window.
+
+**Rig for this work:** `run/server.properties` level-name=`world_baker` (a copy of
+`~/Library/Application Support/minecraft/saves/Baker City - MTR July 2026`), Terralith
+jar in run/mods (the world will not boot without it), RCON on 25575 / `rigpass`
+(scratchpad rcon.py). Loom's runServer wrapper can exit while the JVM keeps serving;
+a second launch then dies on session.lock — check `lsof -i :25565` first.
+
+### TURNSTILES + HEET v2 (2026-09-06/07) — from-scratch rebuild WITH ANIMATION + BLOCKING; awaiting Thomas's verdict, NOT deployed, version still 2.4.54
+
+Thomas: "complete redo… they don't look right… add animation"; answers (do not re-ask): research
+the real hardware myself + show previews, everything was wrong (start from zero), animation =
+**turn AND physically block until paid**, headless rig + screenshots. **Read `TURNSTILE_V2.md`**
+(research sources, dimensions, frame conventions, block table, blocking/animation design, rig
+recipe). Same four ids; every old placement's blockstate resets (FACING meaning changed).
+
+- **Frame**: FACING = the ENTERING rider's direction (`getHorizontalPlayerFacing()`, not its
+  opposite); cabinet on the rider's right (x 11..16), lane x 0..11, the next unit / `turnstile_cap`
+  closes the lane on the rider's LEFT (`TurnstileBaseBlock.laneSide`). `JOIN` = arch bridges to it.
+- **Blocks**: `turnstile`/`turnstile_exit` (`TurnstileBlock`: facing, half, join, open, indicator;
+  BE on the lower half), `turnstile_cap` (end panel + post + arch riser), `turnstile_heet`
+  (`TurnstileHeetBlock`, its own class: facing, **part** lane_lower/lane_upper/comb_lower/comb_upper,
+  open, indicator — a 2 wide × 1 deep × 2 tall multiblock, comb cell on the rider's right, drum
+  canopy drawn by lane_upper up to model y 24; BE on lane_lower; break any cell → whole group,
+  loot gated on lane_lower, creative pulls the data cell silently). INDICATOR on the turnstile
+  UPPER half / HEET comb_upper.
+- **Fare + lock** in `FareLane` (shared Host interface): LOCKED lane = collision wall across BOTH
+  cells (2 blocks — nobody hops it); `onEntityCollision` → cooldown → MTR `passThrough` (unchanged
+  semantics) → GO: `OPEN=true` on the lane cells + `TurnstileBlockEntity.unlock(now, dir, uuid)`;
+  STOP: `deny(now)` rattle. `tickLock` (server BE ticker) re-locks once the rider's centre is > 0.45
+  past the plane in their direction (or 5 s timeout), and ONLY when no entity box overlaps the plane
+  — never closes around a body (the 2026-07 ejection bug). **Bug found on the rig:**
+  `onEntityCollision` receives a REUSED mutable BlockPos and MTR's callback fires ticks later → it
+  pointed at another block, so the first pass-through test never opened; `toImmutable()` first.
+- **Renderer** `client/mtr/TurnstileRenderer`: textured cuboids on `RenderLayer.getSolid()` from
+  the block atlas, shaded by world-space normal. `Sprite.getFrameU/V` take a **0..1 fraction**
+  (the first build passed 0..16 and sampled hazard stripes off a neighbouring sprite). Tripod =
+  exact pyramid geometry (apex (9.45,12.95,8), axis normalize(−1,−1,0), arms rotated about it by
+  θ+120k; θ>0 moves the blocking arm toward −z); HEET rotor = 3 wings × 12 curved bars (R 12 arc,
+  50° sweep, 3 segments each) computed with trig, rest pose one wing into the cage. Turn 8/10
+  ticks smoothstep, deny rattle 6°. Static parts are generator models (`tools/gen_turnstile_assets.py`,
+  19 `ts_*` models / 11 `ts_*` textures; `face_uv()` = vanilla auto-UV wrapped onto the sprite so
+  out-of-block elements never bleed; drum lids use a grain-free `ts_flat` because eight rotated
+  slabs share those planes). gen_gate_assets.py's kick panel / warning gate now use `ts_steel`.
+- **Dev hooks** (run/commands.txt): `#reload` (F3+T headlessly), `#pose x y z [deg]` (hold a
+  barrier at an absolute angle — clock-relative posing failed because the client resyncs time
+  every second even under `/tick freeze`), `#turn/#deny x y z ticksAgo dir`.
+- **Verified on the rig** (screenshots in run/screenshots 2026-09-07 06:54–07:08): all four blocks
+  render at rest from both sides, lamps WAIT/GO/STOP + HEET GO, arch joins + cap, drum band, posed
+  tripod/rotor at 60°/100°, and the full server flow: attempt → OPEN_CONCESSIONARY → lane open →
+  rider crosses → re-lock, on both the turnstile and the HEET. NOT verified: real walking feel
+  (collision wall vs a moving player), the deny rattle live, sounds, item placement of the 2×2
+  HEET, exit-only lane flow, and Thomas's look verdict (he wanted previews first — SHOWN, pending).
+- **Rig hazards this session**: other Claude sessions were editing this same tree (MTA sign
+  feature, BasemapScanner) — a half-written file broke my compile for a while and their Gradle
+  runs killed my runServer/runClient twice. Check `git status` for foreign `??` files before
+  blaming your own change; always `pkill -9 -f "KnotServer|KnotClient"` before a restart.
+
 ### SERVICE CHANGE POSTERS (2026-09-05) — per-disruption MTA-style posters + a hangable frame block; 2.4.54
 
 Built from Thomas's two poster mock-ups. Every disruption can own any number of
@@ -412,13 +560,12 @@ OFFERED in a popup, never auto-switched; scans cover the WHOLE GENERATED WORLD.
   and REJECTED: it dog-legs at stations only one line serves); `canonicalOffsetSign`
   pins a colour to one side; shade-drift merging (per-channel ≤16 → one line);
   service labels normalise number→name→raw ("IN"+"Kransfield Loop" → "Kra").
-- **Whole-world scans** (Dynmap technique): chunk existence from REGION-FILE
-  HEADERS (first 4 KiB, 256 B/region bitmaps, background thread) — discovery loads
-  nothing, sampling never generates. Auto-runs 300 ticks after SERVER_STARTED
-  (`dispatch.autoScan`), terrain then satellite, sequential; terrain skips on bbox
-  containment (+64 slack), satellite diffs missing TILES only and publishes every
-  64 so long scans show progress and resume across restarts. Manual
-  `/dispatch satellite scan` stays a FULL refresh. Nether uses a ceiling probe.
+- **Whole-world scans — REWRITTEN 2026-09-07 as `BasemapScanner`** (see the
+  "BASEMAP SCANNER REWRITE" section above): chunk existence from REGION-FILE
+  HEADERS (`ChunkIndex`), then each chunk's saved NBT read via
+  `ThreadedAnvilChunkStorage.getNbt` on ONE background thread, decoded by hand
+  (heightmap + palettes), non-`full` chunks skipped. TerrainScanner, terrain.json and
+  `/dispatch terrain` are GONE; water comes from the class-mask tiles.
 - **Planner**: time-dependent multi-criteria label-correcting search, states are
   (platform, routeAboard); `throughRuns` (server-emitted from depot.routes order)
   lets a rider stay seated across a collapsed terminus — no wait, no transfer;

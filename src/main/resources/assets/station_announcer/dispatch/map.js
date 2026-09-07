@@ -12,7 +12,7 @@
  *   api/ping                     dimensions + stream cadence
  *   api/network?dimension=N      rails, stations, platforms, routes
  *   api/mapdata?dimension=N      routes with baked legs/durations, station parts + walks
- *   api/terrain?dimension=N      water polygons
+ *   api/satmeta?dimension=N      basemap tile index; sattile?tx&tz[&kind=mask] the tiles
  *   api/stream?dimension=N       SSE: full / delta vehicle frames
  *
  * ?demo=1 builds a synthetic city in JS (no fetches, no SSE) and is the acceptance
@@ -41,7 +41,7 @@ const PREFS_KEY = "sa_mapplus_prefs";
  */
 const THEMES = {
 	light: {
-		paper: "#f6f3ec", water: "#bcd6ea", waterStroke: "#a3c2da",
+		paper: "#f6f3ec", water: "#bcd6ea", forest: "#d9e9cc", snow: "#eef1f4",
 		ink: "#1c1f23", ink2: "#5b6470", ink3: "#8a929c",
 		accent: "#1a73e8", pin: "#d93025", live: "#0f9d58",
 		chip: "#ffffff", chipInk: "#3c434b", chipShadow: "rgba(20,28,40,0.22)",
@@ -55,7 +55,7 @@ const THEMES = {
 		leader: "#9aa2ab", rawRail: "#9aa2ab", dim: 0.15,
 	},
 	dark: {
-		paper: "#101014", water: "#1b2a38", waterStroke: "#24384a",
+		paper: "#101014", water: "#1b2a38", forest: "#161f17", snow: "#1b1e23",
 		ink: "#f2f3f5", ink2: "#aab3bf", ink3: "#79838f",
 		accent: "#6aa8ff", pin: "#ff5f52", live: "#3ddc84",
 		chip: "#1a1b20", chipInk: "#dfe3e8", chipShadow: "rgba(0,0,0,0.55)",
@@ -225,7 +225,6 @@ const state = {
 	/* --- raw payloads --- */
 	network: null,
 	mapdata: null,
-	terrain: null,                 // {polygons: [[[x,z],...], ...]}
 
 	/* --- indexed data --- */
 	throughRuns: [],               // [{from:routeId, to:routeId, platform:platformId}] (mapdata)
@@ -259,8 +258,8 @@ const state = {
 	selfManual: false,             // the rider picked "I am" by hand: it now beats ?player=
 
 	/* --- satellite basemap (feature 5) --- */
-	satmeta: null,                 // {available, scale, tileSamples, originX, originZ, tiles, bbox, scannedAt}
-	satTiles: new Map(),           // "tx,tz" -> {img, ok, failed, queued}
+	satmeta: null,                 // {available, mask, scale, tileSamples, originX, originZ, tiles, bbox, scannedAt}
+	satTiles: new Map(),           // "tx,tz" -> {img, ok, failed, queued, mask, maskOk, maskFailed, maskQueued, styled, styledWith}
 	satQueue: [],
 	satInflight: 0,
 	satHintAt: 0,                  // when the "no scan yet" chip was raised (0 = never)
@@ -467,21 +466,19 @@ async function loadDimension(n) {
 	closeStationPanel();
 	if (state.es) { state.es.close(); state.es = null; }
 
-	// network + mapdata + terrain in parallel — mapdata and terrain are optional, the
-	// map degrades to raw rails / no water rather than failing.
+	// network + mapdata + basemap index in parallel — mapdata and the basemap are
+	// optional, the map degrades to raw rails / plain paper rather than failing.
 	state.satmeta = null;
 	state.satTiles = new Map();
 	state.satQueue = [];
 	state.satInflight = 0;
-	const [net, md, terr, sat] = await Promise.all([
+	const [net, md, sat] = await Promise.all([
 		fetchJson(`${API}/network?dimension=${n}`),
 		fetchJson(`${API}/mapdata?dimension=${n}`).catch(() => null),
-		fetchJson(`${API}/terrain?dimension=${n}`).catch(() => null),
 		fetchJson(`${API}/satmeta?dimension=${n}`).catch(() => null),
 	]);
 	applyNetwork(net);
 	if (md) applyMapdata(md);
-	if (terr) applyTerrain(terr);
 	if (sat) applySatmeta(sat);
 	prepareGeometry();
 	fitView();
@@ -498,21 +495,18 @@ async function fetchJson(url) {
 async function refetchNetwork() {
 	if (DEMO || document.hidden) return;
 	try {
-		// terrain rides along: a /dispatch terrain scan run while the page is open used to
-		// stay invisible until a manual reload, because only loadDimension ever fetched it
-		const [net, md, terr, sat] = await Promise.all([
+		// the basemap index rides along: a scan running while the page is open publishes
+		// new tiles every batch, and this is what makes them appear without a reload
+		const [net, md, sat] = await Promise.all([
 			fetchJson(`${API}/network?dimension=${state.dim}`),
 			fetchJson(`${API}/mapdata?dimension=${state.dim}`).catch(() => null),
-			fetchJson(`${API}/terrain?dimension=${state.dim}`).catch(() => null),
 			fetchJson(`${API}/satmeta?dimension=${state.dim}`).catch(() => null),
 		]);
 		applyNetwork(net);
 		if (md) applyMapdata(md);
-		// only when the scan actually changed: applyTerrain + prepareGeometry repaint the
-		// whole static layer, and an identical polygon set every 60 s is pure churn
-		if (terrainChanged(state.terrain, terr)) applyTerrain(terr);
-		// the satellite index rides the same gate (and throws away every cached bitmap,
-		// so an identical index every 60 s must never be "applied")
+		// only when the index actually changed: applySatmeta throws away every cached
+		// bitmap and repaints the static layer, so an identical index every 60 s must
+		// never be "applied"
 		if (satmetaChanged(state.satmeta, sat)) applySatmeta(sat);
 		prepareGeometry();
 	} catch (e) { /* transient — the stream status covers visibility */ }
@@ -660,27 +654,6 @@ function applyMapdata(md) {
 	state.plan.graph = null;
 }
 
-function applyTerrain(t) {
-	const polys = (t.polygons || []).filter((p) => p && p.length >= 3);
-	state.terrain = polys.length ? { polygons: polys, scannedAt: t.scannedAt || 0 } : null;
-	invalidateStatic();
-}
-
-/**
- * Is this terrain payload worth applying over what is already drawn?
- *
- * The 60 s refetch pulls terrain too, and a water scan almost never changes between
- * cycles — `scannedAt` is the server's own stamp for "this is a different scan", so it
- * is the whole test. Nothing applied yet counts as a change as soon as the payload has
- * any usable polygon (a payload of nothing over nothing is not).
- */
-function terrainChanged(current, payload) {
-	if (!payload) return false;
-	const usable = (payload.polygons || []).filter((p) => p && p.length >= 3).length;
-	if (!current) return usable > 0;
-	return (payload.scannedAt || 0) !== (current.scannedAt || 0);
-}
-
 /* ----------------------------------------------------------------------------
  * 4a. SATELLITE BASEMAP (feature 5) — tile index, tile maths, tile loading
  * --------------------------------------------------------------------------
@@ -744,7 +717,7 @@ function satHasTiles() {
 function satKey(tx, tz) { return tx + "," + tz; }
 
 /**
- * The tile index changed? Same rule as terrain: the server's own `scannedAt` stamp
+ * The tile index changed? The server's own `scannedAt` stamp
  * decides, and a first payload counts as a change as soon as it carries tiles.
  */
 function satmetaChanged(current, payload) {
@@ -765,26 +738,39 @@ function applySatmeta(meta) {
 		originZ: meta.originZ || 0,
 		tiles: (meta.tiles || []).filter((t) => Array.isArray(t) && t.length >= 2),
 		bbox: meta.bbox || null,
+		mask: !!meta.mask,               // this server writes class-mask tiles
+		scanning: !!meta.scanning,
 	};
-	// a rescan invalidates every cached bitmap, not just the index
+	// A changed index invalidates every cached bitmap: a full refresh rewrites tiles
+	// under the same keys, and the only thing the client can tell apart is scannedAt.
 	state.satTiles = new Map();
 	state.satQueue = [];
 	state.satInflight = 0;
-	if (satEnabled()) invalidateStatic();
+	invalidateStatic();                  // either basemap may draw from these tiles
 	maybeSatHint();
 }
 
-/**
- * The bitmap for one tile, or null while it is still coming. Demo mode paints its own
- * (a canvas is a perfectly good drawImage source, so no data URL is needed); the real
- * page fetches `api/sattile`, at most SAT_MAX_INFLIGHT at a time.
- */
-function satTileImage(tx, tz) {
+function satTileRecord(tx, tz) {
 	const key = satKey(tx, tz);
 	let rec = state.satTiles.get(key);
-	if (rec) return rec.ok ? rec.img : null;
-	rec = { img: null, ok: false, failed: false, queued: false };
-	state.satTiles.set(key, rec);
+	if (!rec) {
+		rec = { img: null, ok: false, failed: false, queued: false,
+			mask: null, maskOk: false, maskFailed: false, maskQueued: false,
+			styled: null, styledWith: null };
+		state.satTiles.set(key, rec);
+	}
+	return rec;
+}
+
+/**
+ * The colour (satellite) tile, or null while it is still coming / after a 404. Demo
+ * mode paints its own (a canvas is a perfectly good drawImage source); the real page
+ * fetches `api/sattile`, at most SAT_MAX_INFLIGHT at a time.
+ */
+function satTileImage(tx, tz) {
+	const rec = satTileRecord(tx, tz);
+	if (rec.ok) return rec.img;
+	if (rec.failed || rec.queued) return null;
 	if (DEMO) {
 		try {
 			rec.img = demoSatTile(tx, tz);
@@ -793,35 +779,103 @@ function satTileImage(tx, tz) {
 		return rec.ok ? rec.img : null;
 	}
 	rec.queued = true;
-	state.satQueue.push([tx, tz]);
+	state.satQueue.push([tx, tz, "color"]);
 	pumpSatQueue();
 	return null;
 }
 
+/**
+ * The class-mask tile STYLED for the current theme (a canvas), or null while it loads.
+ * Styling happens once per tile per theme: the mask's red channel is a class code
+ * (1 water, 2 woodland, 3 snow — the server's CLASS_* constants), painted with the
+ * palette's fills; every other class stays transparent so the paper shows through.
+ */
+function maskTileCanvas(tx, tz) {
+	const rec = satTileRecord(tx, tz);
+	if (rec.maskOk) {
+		if (!rec.styled || rec.styledWith !== PALETTE) {
+			rec.styled = styleMask(rec.mask, state.satmeta ? state.satmeta.tileSamples : 256);
+			rec.styledWith = PALETTE;
+		}
+		return rec.styled;
+	}
+	if (rec.maskFailed || rec.maskQueued) return null;
+	if (DEMO) {
+		try {
+			rec.mask = demoMaskTile(tx, tz);
+			rec.maskOk = !!rec.mask;
+		} catch (e) { rec.maskFailed = true; }
+		return rec.maskOk ? maskTileCanvas(tx, tz) : null;
+	}
+	rec.maskQueued = true;
+	state.satQueue.push([tx, tz, "mask"]);
+	pumpSatQueue();
+	return null;
+}
+
+const MASK_WATER = 1, MASK_FOREST = 2, MASK_SNOW = 3;
+
+/** The theme fill for one mask class, or null for "paper shows through". */
+function maskClassColor(cls) {
+	if (cls === MASK_WATER) return PALETTE.water;
+	if (cls === MASK_FOREST) return PALETTE.forest;
+	if (cls === MASK_SNOW) return PALETTE.snow;
+	return null;
+}
+
+function hexRgb(hex) {
+	const h = String(hex || "").replace("#", "");
+	if (h.length !== 6) return null;
+	return [parseInt(h.slice(0, 2), 16), parseInt(h.slice(2, 4), 16), parseInt(h.slice(4, 6), 16)];
+}
+
+/** Mask image → styled canvas (null when the environment has no real 2D context). */
+function styleMask(img, n) {
+	if (!img || typeof document === "undefined") return null;
+	const cv = document.createElement("canvas");
+	cv.width = n; cv.height = n;
+	const g = cv.getContext("2d");
+	if (!g || typeof g.getImageData !== "function") return null;
+	g.drawImage(img, 0, 0, n, n);
+	const data = g.getImageData(0, 0, n, n);
+	if (!data || !data.data) return null;
+	const d = data.data;
+	const fills = [];
+	for (let c = 0; c < 8; c++) fills.push(hexRgb(maskClassColor(c)));
+	for (let i = 0; i < d.length; i += 4) {
+		const f = d[i + 3] ? fills[d[i] < fills.length ? d[i] : 0] : null;
+		if (!f) { d[i + 3] = 0; continue; }
+		d[i] = f[0]; d[i + 1] = f[1]; d[i + 2] = f[2]; d[i + 3] = 255;
+	}
+	g.putImageData(data, 0, 0);
+	return cv;
+}
+
 function pumpSatQueue() {
 	while (state.satInflight < SAT_MAX_INFLIGHT && state.satQueue.length) {
-		const [tx, tz] = state.satQueue.shift();
+		const [tx, tz, kind] = state.satQueue.shift();
 		const rec = state.satTiles.get(satKey(tx, tz));
 		if (!rec) continue;
-		rec.queued = false;
+		const isMask = kind === "mask";
+		if (isMask) rec.maskQueued = false; else rec.queued = false;
 		state.satInflight++;
 		const img = new Image();
 		img.onload = () => {
-			rec.img = img; rec.ok = true;
+			if (isMask) { rec.mask = img; rec.maskOk = true; rec.styled = null; }
+			else { rec.img = img; rec.ok = true; }
 			state.satInflight--;
 			pumpSatQueue();
-			if (satEnabled()) invalidateStatic();
+			invalidateStatic();
 		};
 		img.onerror = () => {
-			rec.failed = true;                 // 404 = never scanned; never retried
+			if (isMask) rec.maskFailed = true; else rec.failed = true;   // 404 = never scanned; never retried
 			state.satInflight--;
 			pumpSatQueue();
 		};
-		img.src = `${API}/sattile?dimension=${state.dim}&tx=${tx}&tz=${tz}`;
+		img.src = `${API}/sattile?dimension=${state.dim}&tx=${tx}&tz=${tz}` + (isMask ? "&kind=mask" : "");
 	}
 }
 
-/** One-time nudge when the rider picks satellite and the server has never scanned. */
 function maybeSatHint() {
 	const el = $("satHint");
 	if (!el || !el.classList) return;
@@ -829,7 +883,7 @@ function maybeSatHint() {
 	if (!need) { el.classList.add("hidden"); return; }
 	if (state.satHintAt) return;               // already shown once this session
 	state.satHintAt = now();
-	el.textContent = "No satellite scan yet — run /dispatch satellite scan";
+	el.textContent = "No basemap scan yet — run /dispatch basemap scan";
 	el.classList.remove("hidden");
 	setTimeout(() => { if (el.classList) el.classList.add("hidden"); }, SAT_HINT_MS);
 }
@@ -2393,13 +2447,13 @@ function drawStatic(dpr) {
 		t: v.z - H / 2 / v.scale - mz, b: v.z + H / 2 / v.scale + mz,
 	};
 
-	// 2. basemap. Satellite imagery goes UNDER everything else, over the paper fill (which
-	//    stays visible wherever the scan has no tile); terrain water is skipped there,
-	//    because the imagery already shows the real water. With satellite SELECTED but
-	//    nothing scanned there is no imagery to show it, so the water polygons stay —
-	//    a blank page would be strictly less map than the rider had a moment ago.
+	// 2. basemap, UNDER everything else, over the paper fill (which stays visible
+	//    wherever the scan has no tile). Satellite = the colour tiles; schematic = the
+	//    same scan's class mask styled as water / woodland / snow. With satellite
+	//    SELECTED but nothing scanned the styled mask is drawn instead — a blank page
+	//    would be strictly less map than the rider had a moment ago.
 	if (satEnabled() && satHasTiles()) drawSatellite(g, vp);
-	else drawWater(g);
+	else drawMaskMap(g, vp);
 
 	const sel = state.selection;
 	const journeyKeys = sel ? sel.ribbonKeys : null;
@@ -2470,23 +2524,28 @@ function drawSatellite(g, vp) {
 	g.restore();
 }
 
-function drawWater(g) {
-	if (!state.terrain) return;
+/**
+ * The schematic basemap: water, woodland and snow from the scan's class mask, styled
+ * in the theme's flat fills. Smoothing stays ON here (unlike the satellite) so a
+ * 2-block mask reads as soft shorelines at every zoom rather than as a staircase.
+ */
+function drawMaskMap(g, vp) {
+	const meta = state.satmeta;
+	if (!meta || !meta.available || !meta.mask || !meta.tiles.length) return;
+	const span = satTileSpan(meta);
 	g.save();
-	g.beginPath();
-	for (const ring of state.terrain.polygons) {
-		const pts = toScreenPath(ring);
-		if (pts.length < 3) continue;
-		g.moveTo(pts[0][0], pts[0][1]);
-		for (let i = 1; i < pts.length; i++) g.lineTo(pts[i][0], pts[i][1]);
-		g.closePath();
+	g.imageSmoothingEnabled = true;
+	for (const t of meta.tiles) {
+		const tx = t[0], tz = t[1];
+		const [x0, z0] = satWorldOf(meta, tx, tz, 0, 0);
+		const x1 = x0 + span, z1 = z0 + span;
+		if (x1 < vp.l || x0 > vp.r || z1 < vp.t || z0 > vp.b) continue;
+		const cv = maskTileCanvas(tx, tz);
+		if (!cv) continue;
+		const a = worldToScreen(x0, z0), b = worldToScreen(x1, z1);
+		const px = Math.floor(a[0]), py = Math.floor(a[1]);
+		g.drawImage(cv, px, py, Math.ceil(b[0]) - px, Math.ceil(b[1]) - py);
 	}
-	g.fillStyle = PALETTE.water;
-	g.fill("evenodd");             // holes and islands come free from even-odd
-	g.strokeStyle = PALETTE.waterStroke;
-	g.lineWidth = 2;
-	g.lineJoin = "round";
-	g.stroke();
 	g.restore();
 }
 
@@ -7669,9 +7728,9 @@ function bootDemo() {
 	state.updateMillis = 333;
 	applyNetwork(demo.network);
 	applyMapdata(demo.mapdata);
-	applyTerrain(demo.terrain);
-	// the satellite index the real server publishes, with origins on the documented
-	// 512-block grid: four tiles covering the demo city (feature 5)
+	// the basemap index the real server publishes, with origins on the documented
+	// 512-block grid: four tiles covering the demo city (feature 5). The demo river
+	// comes from the same class mask the real scanner writes (demoMaskTile).
 	applySatmeta(demoSatmeta());
 	prepareGeometry();
 	fitView();
@@ -8179,19 +8238,7 @@ function buildDemoCity() {
 			 * transfer, and the itinerary must draw as a "Continues as S" note. */
 			throughRuns: [{ from: "rA", to: "rS", platform: "hv_b" }],
 		},
-		terrain: demoTerrain(),
 	};
-}
-
-/** River + harbor as one ring, plus an island ring (even-odd punches it out). */
-function demoTerrain() {
-	const west = smooth([[880, -20], [905, 150], [912, 330], [918, 500], [975, 660],
-		[1120, 780], [1290, 872], [1350, 960], [1362, 1020]], 8);
-	const east = smooth([[1000, -20], [1012, 170], [1022, 330], [1030, 470], [1075, 610],
-		[1180, 700], [1330, 772], [1470, 820], [1640, 848]], 8);
-	const ring = west.concat([[1420, 1020], [1660, 1020], [1660, 860]], east.slice().reverse());
-	const island = smooth([[1450, 912], [1500, 900], [1528, 924], [1505, 950], [1455, 944], [1450, 912]], 6);
-	return { schemaVersion: 1, dimension: "demo:overworld", scannedAt: now(), grid: 4, polygons: [ring, island] };
 }
 
 /**
@@ -8206,14 +8253,50 @@ function demoSatmeta() {
 		scale: 2, tileSamples: 256, originX: 0, originZ: 0,
 		tiles: [[1, 0], [2, 0], [1, 1], [2, 1]],
 		bbox: [512, 0, 1536, 1024],
+		mask: true,
 	};
+}
+
+/** Where the demo river runs: its centre line as a function of z. */
+const demoRiverX = (z) => 940 + 60 * Math.sin(z / 260) + z * 0.30;
+
+/**
+ * One synthetic CLASS-MASK tile in the server's exact encoding (class code in the red
+ * channel, opaque where scanned): water along the demo river, an island in the harbor,
+ * a few woodland patches. Styled by the same maskTileCanvas() path the real tiles use.
+ */
+function demoMaskTile(tx, tz) {
+	const meta = state.satmeta;
+	if (!meta) return null;
+	const n = meta.tileSamples;
+	const cv = document.createElement("canvas");
+	cv.width = n; cv.height = n;
+	const g = cv.getContext("2d");
+	if (!g || typeof g.createImageData !== "function") return null;
+	const img = g.createImageData(n, n);
+	if (!img || !img.data) return null;
+	const d = img.data;
+	for (let pz = 0; pz < n; pz++) {
+		for (let px = 0; px < n; px++) {
+			const [wx, wz] = satWorldOf(meta, tx, tz, px, pz);
+			const o = (pz * n + px) * 4;
+			const dx = Math.abs(wx - demoRiverX(wz));
+			const island = Math.hypot(wx - 1490, wz - 925) < 34;
+			let cls = 6;                                                   // plain land
+			if (dx < 46 && !island) cls = 1;                                // water
+			else if (((wx * 0.004) | 0) % 5 === 0 && ((wz * 0.004) | 0) % 3 === 0) cls = 2; // woodland
+			d[o] = cls; d[o + 1] = 0; d[o + 2] = 0; d[o + 3] = 255;
+		}
+	}
+	g.putImageData(img, 0, 0);
+	return cv;
 }
 
 /**
  * One synthetic tile, painted through the SAME satWorldOf() the renderer places it with —
  * so if the tile maths were wrong the demo's river would visibly disagree with the
- * terrain polygons drawn from world coordinates. Vanilla-ish greens and browns, a river
- * running where demoTerrain()'s water runs, and a canvas returned directly (a canvas is a
+ * schematic basemap's own mask tile of the same river. Vanilla-ish greens and browns, a river
+ * running where demoMaskTile()'s water runs, and a canvas returned directly (a canvas is a
  * valid drawImage source, so nothing has to round-trip through a data URL).
  *
  * Lazy: only ever called while the satellite basemap is actually being drawn.
@@ -8229,8 +8312,7 @@ function demoSatTile(tx, tz) {
 	const img = g.createImageData(n, n);
 	if (!img || !img.data) return null;
 	const d = img.data;
-	// the demo river's centre line as a function of z, matching demoTerrain()'s ring
-	const riverX = (z) => 940 + 60 * Math.sin(z / 260) + z * 0.30;
+	const riverX = demoRiverX;
 	for (let pz = 0; pz < n; pz++) {
 		for (let px = 0; px < n; px++) {
 			const [wx, wz] = satWorldOf(meta, tx, tz, px, pz);

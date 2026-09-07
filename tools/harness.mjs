@@ -904,27 +904,22 @@ check("Esc closes the card, the panel and follow in one go",
 check("...leaving the journey selected", esc.before.sel === true && esc.after.sel === true, JSON.stringify(esc.after));
 check("a second Esc then clears the selection", esc.twice.sel === false, JSON.stringify(esc.twice));
 
-/* ---- J. terrain refetch gate (the 60 s cycle re-fetches terrain now) ---- */
-const terr = run(`(() => {
-  const cur = { polygons: [[[0, 0], [1, 1], [2, 2]]], scannedAt: 100 };
-  const poly = [[[0, 0], [1, 1], [2, 2]]];
-  return {
-    noPayload: terrainChanged(cur, null),
-    identical: terrainChanged(cur, { polygons: poly, scannedAt: 100 }),
-    rescanned: terrainChanged(cur, { polygons: poly, scannedAt: 200 }),
-    firstEver: terrainChanged(null, { polygons: poly, scannedAt: 0 }),
-    firstEverEmpty: terrainChanged(null, { polygons: [], scannedAt: 0 }),
-    firstEverDegenerate: terrainChanged(null, { polygons: [[[0, 0], [1, 1]]], scannedAt: 0 }),
-    clearedByANewScan: terrainChanged(cur, { polygons: [], scannedAt: 300 }),
-  };
+/* ---- J. basemap mask styling (the schematic water/woodland layer) ---- */
+const maskT = run(`(() => {
+  const light = applyTheme("light");
+  const l = [maskClassColor(1), maskClassColor(2), maskClassColor(3), maskClassColor(6), maskClassColor(0)];
+  const dark = applyTheme("dark");
+  const d = [maskClassColor(1), maskClassColor(2)];
+  applyTheme("light");
+  return { l, d, lw: light.water, dw: dark.water, rgb: hexRgb("#bcd6ea"), bad: hexRgb("nope"),
+    noCtx: styleMask({}, 4) === null, demoMeta: !!demoSatmeta().mask };
 })()`);
-check("a failed terrain fetch changes nothing", terr.noPayload === false);
-check("an identical scan is NOT re-applied (no static-layer churn every 60 s)", terr.identical === false);
-check("a newer scannedAt is applied", terr.rescanned === true);
-check("the first scan of a session is applied when it has real polygons",
-	terr.firstEver === true && terr.firstEverEmpty === false && terr.firstEverDegenerate === false,
-	JSON.stringify(terr));
-check("a new scan that found no water is applied too (the water goes away)", terr.clearedByANewScan === true);
+check("mask classes style to the theme's water / woodland / snow, land stays transparent",
+	maskT.l[0] === maskT.lw && maskT.l[1] && maskT.l[2] && maskT.l[3] === null && maskT.l[4] === null, JSON.stringify(maskT.l));
+check("...and follow the theme", maskT.d[0] === maskT.dw && maskT.d[0] !== maskT.l[0]);
+check("hex colours parse to rgb triples", JSON.stringify(maskT.rgb) === "[188,214,234]" && maskT.bad === null);
+check("styling without a real 2D context degrades to null (no throw)", maskT.noCtx === true);
+check("the demo index advertises the class mask", maskT.demoMeta === true);
 
 const J = (x) => JSON.stringify(x);
 
