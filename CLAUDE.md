@@ -342,6 +342,33 @@ destination first; FULL editor from day one; the old text signs migrate onto it.
   server (his ModrinthApp profile has no local saves). Test area: sky over Albany
   (x 0..20, y 147..158, z -66..-50).
 
+### MAP+ SCHEMATIC HUB LAYOUT (2026-09-07) — the inflation warp; 2.4.57
+
+Third of Thomas's rounds. The drawn map is a smooth WARP of geography (`map.js`
+section 5e, `buildHubWarp`/`warpPoint`/`unwarpPoint`): stations within HUB_LINK (180)
+chain into clusters (single linkage), clusters whose discs overlap MERGE, and a cluster
+of ≥ 4 parts whose median distinct-station spacing s < HUB_TARGET_SPACING (220) is
+magnified m = min(220/s, 2.5) inside r0 (= 1.15 × its radius), the displacement
+(m−1)·r0 decaying by a smoothstep to zero at R = r0 + 3.5(m−1)r0 + 200 (compression
+slope < 0.43, so overlapping hubs cannot fold the map). Sum of hub displacements =
+the field. It lives INSIDE `worldToScreen` (`mapToScreen(warpPoint(x,z))`), and
+`screenToWorld` inverts it with Newton (numerical 2×2 Jacobian, < 0.01 block), so
+every geometry stays in world units and hit tests, pins and GPS stay exact.
+`state.view.x/z` is the MAP-space centre — locate/follow/track camera writers go
+through `warpPoint`; `fitView` frames `warpedNetworkBox()`. Viewport culling of world
+bboxes pads the map-space viewport by `state.warp.maxShift`. Basemap tiles go through
+`drawTileWarped`: a tile no hub reaches is one drawImage; inside a hub it is cut into
+2..24² cells (~28 px) each drawn with the affine map of its three corners, overdrawn
+6 source px with smoothing forced on (a nearest-sampled lattice showed otherwise). Hub glyphs (≥3 colours) are circles
+sized to their bundle (`gl.drawR`, labels keep clear of it). Settings → "Hub spacing"
+slider (`prefs.hubSpacing`, 0 = geographic … 1.6) rebuilds the warp only.
+Real Baker City: Albany + Tall Mountain + Shore Line merge into one 24-station hub
+(r0 852, m 1.66, R 3008), Kalamazoo 2.47×, Chalmon 1.99×, Snowy Peaks 2.5×; maxShift
+559. Verified on the rig: schematic + satellite through the warp, labels get room.
+Harness section K covers the profile, inverse, culling helper and the slider.
+NOT done: octilinear (45°) line snapping — Thomas's reference has it; the lines stay
+smooth curves.
+
 ### MAP+ LABELS / BULLETS / TRAINS (2026-09-07) — 2.4.56, verified on the real network
 
 Thomas's order after the scanner rewrite: labels/bullets/trains now, schematic hub
@@ -469,6 +496,17 @@ recipe). Same four ids; every old placement's blockstate resets (FACING meaning 
   rider crosses → re-lock, on both the turnstile and the HEET. NOT verified: real walking feel
   (collision wall vs a moving player), the deny rattle live, sounds, item placement of the 2×2
   HEET, exit-only lane flow, and Thomas's look verdict (he wanted previews first — SHOWN, pending).
+- **Round 2 (2026-09-07, Thomas: "HEET looks great, turnstiles look terrible… textures and
+  geometry wonky", with a render, a 3D print and a 23 St photo as references)**: the low unit
+  is now ONE L-shaped stainless piece — long low body with a dark recessed mechanism cover on
+  the lane side between stiles/rails (tripod boss on it), a 45° chamfered front-top corner
+  (`chamfer_x`: a rotated box whose overshoot is buried — the way to do chamfers in JSON),
+  chisel-topped indicator column x 11..16 z 0..4 (display / two lamps / ENTRY / arrow disc /
+  LCD stacked on a 20×36-texel face), octagonal collar on top, readers mid-lid (OMNY tablet
+  leaning back, swipe rib). The grab-rail arch is drawn by the RENDERER (`drawArch`: 12-segment
+  semicircle R 8 between collar tops at x 13.5 / −2.5, octagonal pipe r 0.6, `ts_flat` sprite —
+  brushed columns on a thin pipe read as rope banding); `ts_arch` model is gone, JOIN just
+  gates the renderer. Poster dropped (not in the references).
 - **Rig hazards this session**: other Claude sessions were editing this same tree (MTA sign
   feature, BasemapScanner) — a half-written file broke my compile for a while and their Gradle
   runs killed my runServer/runClient twice. Check `git status` for foreign `??` files before

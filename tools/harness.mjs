@@ -945,6 +945,55 @@ check("the demo index advertises the class mask", maskT.demoMeta === true);
 
 const J = (x) => JSON.stringify(x);
 
+/* ---- K. the hub inflation warp (schematic hub layout) ---- */
+const warpT = run(`(() => {
+  const keep = state.warp;
+  const demoHubs = keep ? keep.hubs.length : 0;
+  state.warp = { hubs: [{ cx: 0, cz: 0, r0: 100, R: 100 + 3.5 * 100 + 200, m: 2, stations: 5 }], maxShift: 100 };
+  const inner = warpPoint(50, 0), far = warpPoint(900, 0), edge = warpPoint(650, 0);
+  // monotone radial profile: distances never fold back
+  let mono = true, prev = -1;
+  for (let d = 0; d <= 700; d += 5) { const r = Math.hypot(...warpPoint(d * 0.6, d * 0.8)); if (r <= prev) mono = false; prev = r; }
+  const pts = [[37, 61], [120, -40], [300, 250], [640, 10], [-90, -80]];
+  const roundTrip = pts.map(([x, z]) => { const [mx, mz] = warpPoint(x, z); const [bx, bz] = unwarpPoint(mx, mz); return Math.hypot(bx - x, bz - z); });
+  const touches = warpTouches(300, 300, 400, 400), misses = warpTouches(700, 700, 900, 900);
+  const view = { ...state.view };
+  state.view = { x: 0, z: 0, scale: 1 };
+  const s2w = screenToWorld(...worldToScreen(37, 61));
+  state.view = view;
+  state.warp = keep;
+  const strength = hubSpacing();
+  setHubSpacing(0);
+  const offHubs = state.warp.hubs.length, offPoint = warpPoint(37, 61);
+  setHubSpacing(strength);
+  const spacingUp = (() => {
+    if (!keep || !keep.hubs.length) return true;
+    const h = keep.hubs[0];
+    const near = state.glyphs.filter(g => Math.hypot(g.x - h.cx, g.z - h.cz) < h.r0);
+    let before = Infinity, after = Infinity;
+    for (const a of near) for (const b of near) {
+      if (a === b || a.stationId === b.stationId) continue;
+      before = Math.min(before, Math.hypot(a.x - b.x, a.z - b.z));
+      const pa = warpPoint(a.x, a.z), pb = warpPoint(b.x, b.z);
+      after = Math.min(after, Math.hypot(pa[0] - pb[0], pa[1] - pb[1]));
+    }
+    return after >= before * (h.m - 0.01);
+  })();
+  return { demoHubs, inner, far, edge, mono, roundTrip: Math.max(...roundTrip), touches, misses, s2w, offHubs, offPoint, spacingUp,
+    hubsRestored: state.warp.hubs.length === demoHubs };
+})()`);
+check("inside a hub, points are magnified by m about its centre", J(warpT.inner) === J([100, 0]), J(warpT.inner));
+check("outside the influence radius the map is pure geography", J(warpT.far) === J([900, 0]) && J(warpT.edge) === J([650, 0]), J([warpT.far, warpT.edge]));
+check("the radial profile never folds (compression zone slope stays above -1)", warpT.mono === true);
+check("unwarpPoint inverts warpPoint to within a hundredth of a block", warpT.roundTrip < 0.01, warpT.roundTrip);
+check("screenToWorld inverts worldToScreen through the warp",
+	Math.abs(warpT.s2w[0] - 37) < 0.01 && Math.abs(warpT.s2w[1] - 61) < 0.01, J(warpT.s2w));
+check("warpTouches finds boxes inside a hub's influence and ignores the rest", warpT.touches === true && warpT.misses === false);
+check("Hub spacing 0 switches the warp off (pure geography) and 1 restores it",
+	warpT.offHubs === 0 && J(warpT.offPoint) === J([37, 61]) && warpT.hubsRestored === true, J([warpT.offHubs, warpT.offPoint, warpT.hubsRestored]));
+check("the demo's hub stations end up at least m times further apart", warpT.spacingUp === true, "demo hubs: " + warpT.demoHubs);
+
+
 /* ==========================================================================
  * THE 2026-08-29 FEATURE SET: express marks, point planning, player GPS,
  * line view, satellite basemap.
@@ -1242,8 +1291,9 @@ check("players arrive on the stream and resolve to a self dot",
 	gps.found === "Thomas" && gps.p0.x === 640 && gps.p0.z === 470, J([gps.found, gps.p0]));
 check("positions interpolate between 4 Hz samples",
 	Math.abs(gps.mid.x - 650) < 0.6 && gps.p1.x === 660, J([gps.mid, gps.p1]));
-check("locate recentres on the rider instead of fitting the network",
-	gps.located === true && gps.view.x === 660 && gps.view.z === 470, J([gps.located, gps.view]));
+const gpsCentre = run(`warpPoint(660, 470).map(Math.round)`);
+check("locate recentres on the rider (in map space) instead of fitting the network",
+	gps.located === true && gps.view.x === gpsCentre[0] && gps.view.z === gpsCentre[1], J([gps.located, gps.view, gpsCentre]));
 check("a player who stops arriving is dropped", J(gps.after) === J(["Thomas"]), J(gps.after));
 
 const gpsPlan = run(`(() => {
@@ -2018,7 +2068,8 @@ check("tracking selects the journey on the map", drive.selected === "journey", d
 check("...and re-asserts that selection if something clears it", drive.reasserted === true);
 check("'Hide station names' still names the tracked journey's stations",
 	drive.parts > 0 && drive.keptLabel.length === drive.parts, J([drive.parts, drive.keptLabel]));
-check("the camera rides the self dot while aboard", drive.rode === true && J(drive.view) === J([636, 150]), J(drive.view));
+check("the camera rides the self dot while aboard (in map space)",
+	drive.rode === true && J(drive.view) === J(run(`warpPoint(636, 150).map(Math.round)`)), J(drive.view));
 check("...and lets go the moment the rider takes the camera", drive.afterPan === false);
 check("a missed departure raises the re-plan POPUP (never a silent switch)",
 	drive.offer === "invalid" && drive.popupShown === true
@@ -2312,6 +2363,8 @@ const synth = run(`(() => {
   const own = resamplePolyline(off, 32);
   const drawn = projectOntoReference(own, ref);
   const view = { ...state.view };
+  const warpKeep = state.warp;             // this measures the bundle maths, not the hub warp
+  state.warp = null;
   state.view = { x: 130, z: 130, scale: 2 };
   const w = ribbonWidth(), gap = Math.max(0.6, w * 0.16);
   const A = offsetPolyline(toScreenPath(ref), -(w + gap) / 2);
@@ -2319,6 +2372,7 @@ const synth = run(`(() => {
   const Bown = offsetPolyline(toScreenPath(own), (w + gap) / 2);
   const prof = _gapProfile(A, B), rawProf = _gapProfile(A, Bown);
   state.view = view;
+  state.warp = warpKeep;
   invalidateStatic();
   return { nominal: w + gap, prof, rawProf, projected: !!drawn };
 })()`);

@@ -3266,3 +3266,15 @@ bullets are line-view click targets) replacing the leader chips, which are delet
 trains are colour dots below scale 0.3; split parts say Upper/Lower level. Verified on
 the rig against the real Baker City network (all 20 lines labelled uniquely, terminals
 detected, zero console errors); harness section G/6 rewritten for the new model.
+
+## Map+ schematic hub layout — the inflation warp (2026-09-07) — 2.4.57
+
+Third round. One smooth radial-inflation field per hub cluster (single-linkage at 180
+blocks, merged when discs overlap, magnified toward a 220-block median spacing, capped
+2.5×, smoothstep decay so the map never folds), applied inside worldToScreen with a
+Newton inverse in screenToWorld; camera writers and fitView work in map space; basemap
+tiles are drawn as warped affine cells inside hub influence; hub circles sized to their
+bundle; "Hub spacing" slider. Verified on the rig with the real network (24-station
+Albany hub at 1.66×, three smaller hubs 2–2.5×); harness section K added, two camera
+tests and the synthetic-corner gap test adjusted for map space. Not done: octilinear
+snapping.
