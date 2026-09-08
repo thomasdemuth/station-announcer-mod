@@ -329,17 +329,19 @@ public final class SignLayout {
             case 2 -> 0.56f;
             default -> 0.42f;
         };
-        if (lineCount > 1) {
+        if (lineCount > 2) {
+            ratio = Math.min(ratio, 0.23f);
+        } else if (lineCount > 1) {
             ratio = Math.min(ratio, 0.31f);
         }
         return rowHeight * ratio * shrink;
     }
 
-    /** Explicit lines of a text tile (at most two), or a two-line wrap when the row asked for one. */
+    /** Explicit lines of a text tile (at most three), or a two-line wrap when the row asked for one. */
     private static String[] lines(String text, boolean wrap) {
         String[] split = text.split("\n", -1);
         if (split.length > 1) {
-            return split.length > 2 ? new String[]{split[0], split[1]} : split;
+            return split.length > 3 ? new String[]{split[0], split[1], split[2]} : split;
         }
         return wrap ? wrapTwo(text) : split;
     }
@@ -405,13 +407,8 @@ public final class SignLayout {
                 return rowHeight * 0.62f * shrink;
             }
             case STATION_NAME -> {
-                String[] lines = lines(stationText(tile, ctx), fit.wrap());
-                float cap = rowHeight * (lines.length > 1 ? 0.32f : 0.46f) * shrink;
-                float w = 0;
-                for (String line : lines) {
-                    w = Math.max(w, Math.min(fit.maxText(), capWidth(s, line, cap)));
-                }
-                return w;
+                NamePlate plate = namePlate(s, tile, rowHeight, fit, ctx);
+                return plate.width();
             }
             case EXIT -> {
                 return exitWidth(s, tile, rowHeight, shrink, ctx)
@@ -464,11 +461,7 @@ public final class SignLayout {
                 float size = rowHeight * 0.62f * shrink;
                 PosterLayout.bigArrow(s, x + size / 2.0f, cy, tile.num(), size / 40.0f, ink, 2);
             }
-            case STATION_NAME -> {
-                String[] lines = lines(stationText(tile, ctx), fit.wrap());
-                float cap = rowHeight * (lines.length > 1 ? 0.32f : 0.46f) * shrink;
-                paintLines(s, lines, x, cy, cap, ink, fit.maxText(), false);
-            }
+            case STATION_NAME -> paintNamePlate(s, namePlate(s, tile, rowHeight, fit, ctx), x, cy, ink);
             case EXIT -> paintExit(s, tile, x, cy, rowHeight, shrink, ink, ctx, fit.maxText());
             case DESTINATION -> {
                 float d = bulletDiameter(rowHeight, shrink);
@@ -487,7 +480,69 @@ public final class SignLayout {
         }
     }
 
-    /** One or two lines of text vertically centred on {@code cy}, each clipped to {@code maxText}. */
+    // ---------------------------------------------------------- station name
+
+    /**
+     * A station-name tile resolved: its lines, cap height, and whether the
+     * accessibility symbol shows — beside the name on a single row, or under it
+     * on a tall plate (the column plates: "14 / Street" with the wheelchair
+     * below). {@code arg}: "" = symbol when the station is marked step-free in
+     * the addon, "wc" = always, "nowc" = never.
+     */
+    private record NamePlate(String[] lines, float cap, boolean icon, boolean iconBelow, float iconSize,
+                             float textWidth, float maxText) {
+        float width() {
+            if (!icon) {
+                return textWidth;
+            }
+            return iconBelow ? Math.max(textWidth, iconSize) : textWidth + iconSize * 1.35f;
+        }
+    }
+
+    private static boolean showsWheelchair(Tile tile, SignContext ctx) {
+        return switch (tile.arg()) {
+            case "wc" -> true;
+            case "nowc" -> false;
+            default -> ctx != null && ctx.stationAccessible();
+        };
+    }
+
+    private static NamePlate namePlate(Surface s, Tile tile, float rowHeight, Fit fit, SignContext ctx) {
+        float shrink = fit.shrink();
+        String[] lines = lines(stationText(tile, ctx), fit.wrap());
+        boolean icon = showsWheelchair(tile, ctx);
+        boolean below = icon && lines.length > 1 && rowHeight * shrink >= 40;
+        float cap = rowHeight * (below ? 0.26f : lines.length > 1 ? 0.32f : 0.46f) * shrink;
+        float w = 0;
+        for (String line : lines) {
+            w = Math.max(w, Math.min(fit.maxText(), capWidth(s, line, cap)));
+        }
+        float iconSize = below ? rowHeight * 0.22f * shrink : cap * 1.15f;
+        return new NamePlate(lines, cap, icon, below, iconSize, w, fit.maxText());
+    }
+
+    private static void paintNamePlate(Surface s, NamePlate plate, float x, float cy, int ink) {
+        if (!plate.icon()) {
+            paintLines(s, plate.lines(), x, cy, plate.cap(), ink, plate.maxText(), false);
+            return;
+        }
+        if (plate.iconBelow()) {
+            // Text block above, the symbol under it: centre the whole stack on cy.
+            float pitch = plate.cap() * 1.42f;
+            float textHeight = (plate.lines().length - 1) * pitch + plate.cap();
+            float gap = plate.cap() * 0.45f;
+            float total = textHeight + gap + plate.iconSize();
+            float top = cy - total / 2.0f;
+            paintLines(s, plate.lines(), x, top + textHeight / 2.0f, plate.cap(), ink, plate.maxText(), false);
+            PosterLayout.wheelchair(s, x, top + textHeight + gap, plate.iconSize(), 2);
+            return;
+        }
+        paintLines(s, plate.lines(), x, cy, plate.cap(), ink, plate.maxText(), false);
+        PosterLayout.wheelchair(s, x + plate.textWidth() + plate.iconSize() * 0.35f, cy - plate.iconSize() / 2.0f,
+                plate.iconSize(), 2);
+    }
+
+    /** Up to three lines of text vertically centred on {@code cy}, each clipped to {@code maxText}. */
     private static void paintLines(Surface s, String[] lines, float x, float cy, float cap, int ink, float maxText,
                                    boolean tokens) {
         if (lines.length == 1) {
@@ -499,9 +554,9 @@ public final class SignLayout {
             }
             return;
         }
-        float pitch = cap * 1.45f;
-        float top = cy - pitch / 2.0f - cap / 2.0f;
-        for (int i = 0; i < 2; i++) {
+        float pitch = cap * 1.42f;
+        float top = cy - (lines.length - 1) * pitch / 2.0f - cap / 2.0f;
+        for (int i = 0; i < lines.length; i++) {
             String line = clip(s, lines[i], cap, maxText);
             if (tokens) {
                 tokens(s, line, x, top + i * pitch, cap, ink);
@@ -607,51 +662,69 @@ public final class SignLayout {
 
     // ---------------------------------------------------------------- exit
 
-    private static final float EXIT_WORD_RATIO = 0.46f;
-    private static final float EXIT_SMALL_RATIO = 0.22f;
+    /** "Exit" cap height and the street lines' cap height, in row heights. */
+    private static final float EXIT_WORD_RATIO = 0.5f;
+    private static final float EXIT_SMALL_RATIO = 0.19f;
+    /** Side padding inside the red field, in row heights. */
+    private static final float EXIT_PAD = 0.12f;
+    private static final int EXIT_MAX_LINES = 3;
 
-    private record ExitParts(String word, String streets, String corner, String name) {
+    /**
+     * An exit tile resolved, the way the overhead signs are built: the word
+     * "Exit" white on a red field the full height of the row, then the street
+     * lines on the panel itself — one MTR exit destination per line, the corner
+     * note last — and optionally the exit's name in a box.
+     */
+    private record ExitParts(String word, List<String> lines, String name) {
     }
 
     private static ExitParts exitParts(Tile tile, SignContext ctx) {
         SignContext.Exit exit = ctx != null ? ctx.exit(tile.text()) : null;
         String word = tile.hasFlag(SignSpec.EXIT_WORD) ? "Exit" : "";
-        String streets = "";
+        List<String> lines = new ArrayList<>();
+        boolean corner = !tile.arg().isEmpty();
         if (tile.hasFlag(SignSpec.EXIT_STREETS)) {
-            if (exit != null && !exit.destinations().isEmpty()) {
-                streets = String.join(" & ", exit.destinations());
-            } else if (exit == null && !tile.text().isEmpty()) {
-                streets = tile.text(); // no such exit here (yet): show what was typed
+            if (exit != null) {
+                for (String destination : exit.destinations()) {
+                    if (lines.size() < EXIT_MAX_LINES - (corner ? 1 : 0)) {
+                        lines.add(destination);
+                    }
+                }
+            } else if (!tile.text().isEmpty()) {
+                lines.add(tile.text()); // no such exit here (yet): show what was typed
             }
         }
+        if (corner) {
+            lines.add(tile.arg());
+        }
         String name = tile.hasFlag(SignSpec.EXIT_NAME) && exit != null ? exit.name() : "";
-        return new ExitParts(word, streets, tile.arg(), name);
+        return new ExitParts(word, lines, name);
     }
 
-    /** Side padding of the red exit field, in row heights. */
-    private static final float EXIT_PAD = 0.14f;
-
-    private static float exitWidth(Surface s, Tile tile, float rowHeight, float shrink, SignContext ctx) {
-        return exitContentWidth(s, tile, rowHeight, shrink, ctx) + 2 * EXIT_PAD * rowHeight * shrink;
+    private static float exitFieldWidth(Surface s, ExitParts parts, float rowHeight, float shrink) {
+        if (parts.word().isEmpty()) {
+            return 0;
+        }
+        return capWidth(s, parts.word(), rowHeight * EXIT_WORD_RATIO * shrink) + 2 * EXIT_PAD * rowHeight * shrink;
     }
 
-    /** Width of the trimmable street / corner stack alone. */
+    /** Width of the trimmable street stack alone. */
     private static float exitStackWidth(Surface s, Tile tile, float rowHeight, float shrink, SignContext ctx) {
         ExitParts parts = exitParts(tile, ctx);
         float small = rowHeight * EXIT_SMALL_RATIO * shrink;
-        return Math.max(capWidth(s, parts.streets(), small), capWidth(s, parts.corner(), small));
+        float w = 0;
+        for (String line : parts.lines()) {
+            w = Math.max(w, capWidth(s, line, small));
+        }
+        return w;
     }
 
-    private static float exitContentWidth(Surface s, Tile tile, float rowHeight, float shrink, SignContext ctx) {
+    private static float exitWidth(Surface s, Tile tile, float rowHeight, float shrink, SignContext ctx) {
         ExitParts parts = exitParts(tile, ctx);
-        float big = rowHeight * EXIT_WORD_RATIO * shrink;
         float small = rowHeight * EXIT_SMALL_RATIO * shrink;
-        float gap = rowHeight * 0.18f * shrink;
-        float w = 0;
-        if (!parts.word().isEmpty()) {
-            w += capWidth(s, parts.word(), big);
-        }
-        float stack = Math.max(capWidth(s, parts.streets(), small), capWidth(s, parts.corner(), small));
+        float gap = rowHeight * 0.16f * shrink;
+        float w = exitFieldWidth(s, parts, rowHeight, shrink);
+        float stack = exitStackWidth(s, tile, rowHeight, shrink, ctx);
         if (stack > 0) {
             w += (w > 0 ? gap : 0) + stack;
         }
@@ -661,39 +734,28 @@ public final class SignLayout {
         return w;
     }
 
-    private static void paintExit(Surface s, Tile tile, float x, float cy, float rowHeight, float shrink, int panelInk,
+    private static void paintExit(Surface s, Tile tile, float x, float cy, float rowHeight, float shrink, int ink,
                                   SignContext ctx, float maxText) {
-        ExitParts raw = exitParts(tile, ctx);
-        float smallCap = rowHeight * EXIT_SMALL_RATIO * shrink;
-        ExitParts parts = new ExitParts(raw.word(), clip(s, raw.streets(), smallCap, maxText),
-                clip(s, raw.corner(), smallCap, maxText), raw.name());
-        // White on the MTA exit red, whatever the panel style.
-        float pad = EXIT_PAD * rowHeight * shrink;
-        float fieldHalf = rowHeight * 0.44f * shrink;
-        float stackNatural = exitStackWidth(s, tile, rowHeight, shrink, ctx);
-        float contentWidth = exitContentWidth(s, tile, rowHeight, shrink, ctx) - stackNatural
-                + Math.min(maxText, stackNatural);
-        s.rect(x, cy - fieldHalf, x + contentWidth + 2 * pad, cy + fieldHalf, EXIT_RED, 1);
-        int ink = WHITE;
-        x += pad;
+        ExitParts parts = exitParts(tile, ctx);
         float big = rowHeight * EXIT_WORD_RATIO * shrink;
         float small = rowHeight * EXIT_SMALL_RATIO * shrink;
-        float gap = rowHeight * 0.18f * shrink;
+        float gap = rowHeight * 0.16f * shrink;
         if (!parts.word().isEmpty()) {
-            capCentered(s, parts.word(), x, cy, big, ink);
-            x += capWidth(s, parts.word(), big) + gap;
+            // The red field spans the row, whatever the panel style.
+            float fieldWidth = exitFieldWidth(s, parts, rowHeight, shrink);
+            float half = rowHeight / 2.0f - 0.6f;
+            s.rect(x, cy - half, x + fieldWidth, cy + half, EXIT_RED, 1);
+            capCentered(s, parts.word(), x + EXIT_PAD * rowHeight * shrink, cy, big, WHITE);
+            x += fieldWidth + gap;
         }
-        boolean streets = !parts.streets().isEmpty();
-        boolean corner = !parts.corner().isEmpty();
-        float stack = Math.max(capWidth(s, parts.streets(), small), capWidth(s, parts.corner(), small));
-        if (streets || corner) {
-            float pitch = small * 1.5f;
-            if (streets && corner) {
-                cap(s, parts.streets(), x, cy - pitch / 2.0f - small / 2.0f, small, ink);
-                cap(s, parts.corner(), x, cy + pitch / 2.0f - small / 2.0f, small, ink);
-            } else {
-                capCentered(s, streets ? parts.streets() : parts.corner(), x, cy, small, ink);
+        if (!parts.lines().isEmpty()) {
+            String[] lines = new String[parts.lines().size()];
+            float stack = 0;
+            for (int i = 0; i < lines.length; i++) {
+                lines[i] = clip(s, parts.lines().get(i), small, maxText);
+                stack = Math.max(stack, capWidth(s, lines[i], small));
             }
+            paintLines(s, lines, x, cy, small, ink, maxText, false);
             x += stack + gap;
         }
         if (!parts.name().isEmpty()) {
@@ -701,7 +763,8 @@ public final class SignLayout {
             float w = capWidth(s, parts.name(), cap) + cap;
             float h = cap * 1.7f;
             s.rect(x, cy - h / 2.0f, x + w, cy + h / 2.0f, ink, 2);
-            s.rect(x + 0.8f, cy - h / 2.0f + 0.8f, x + w - 0.8f, cy + h / 2.0f - 0.8f, EXIT_RED, 3);
+            s.rect(x + 0.8f, cy - h / 2.0f + 0.8f, x + w - 0.8f, cy + h / 2.0f - 0.8f,
+                    ink == WHITE ? BLACK : PAPER, 3);
             capCentered(s, parts.name(), x + cap / 2.0f, cy, cap, ink);
         }
     }

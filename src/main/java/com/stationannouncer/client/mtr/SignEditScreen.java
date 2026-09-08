@@ -129,6 +129,7 @@ public class SignEditScreen extends Screen {
     private static final int SEG_ARROW_SIDE = 5;
     private static final int SEG_DEST_MODE = 6;
     private static final int SEG_SPACER = 7;
+    private static final int SEG_WHEELCHAIR = 8;
     private static final int TOGGLE_FRONT = 1;
     private static final int TOGGLE_AUTO = 2;
     private static final int TOGGLE_UPPER = 3;
@@ -201,7 +202,7 @@ public class SignEditScreen extends Screen {
 
         TextRenderer font = MinecraftClient.getInstance().textRenderer;
         textBox = new TextBox(font, SignSpec.MAX_TEXT, true);
-        textBox.placeholder = "Sign text. Enter = second line.";
+        textBox.placeholder = "Sign text. Enter = next line (up to 3).";
         textBox.onChange(v -> updateTile(t -> t.withText(v)));
         nameBox = new TextBox(font, SignSpec.MAX_TEXT, false);
         nameBox.placeholder = "(station name)";
@@ -594,6 +595,7 @@ public class SignEditScreen extends Screen {
             case SEG_ARROW_SIDE -> updateTile(t -> t.withArg(chosen == 0 ? "left" : chosen == 2 ? "right" : ""));
             case SEG_DEST_MODE -> updateTile(t -> t.withNum(chosen));
             case SEG_SPACER -> updateTile(t -> t.withNum(chosen == 0 ? 4 : chosen == 1 ? 8 : 16));
+            case SEG_WHEELCHAIR -> updateTile(t -> t.withArg(chosen == 1 ? "wc" : chosen == 2 ? "nowc" : ""));
             default -> {
             }
         }
@@ -1047,7 +1049,12 @@ public class SignEditScreen extends Screen {
                     y += 14;
                     y = field(c, mx, my, "Override (empty = MTR station)", nameBox, x, y, w);
                     y = toggleField(c, mx, my, "Case", tile.num() == 1 ? "UPPER CASE" : "As written", tile.num() == 1, x, y, w, TOGGLE_UPPER);
-                    c.drawText(textRenderer, textRenderer.trimToWidth("Here: " + (ctx.stationName().isEmpty() ? "(no station)" : ctx.stationName()), w), x, y, FlatUi.TEXT_FAINT, false);
+                    y = segmentedField(c, mx, my, "Wheelchair symbol", new String[]{"Auto", "Always", "Never"},
+                            "wc".equals(tile.arg()) ? 1 : "nowc".equals(tile.arg()) ? 2 : 0, x, y, w, SEG_WHEELCHAIR);
+                    c.drawText(textRenderer, textRenderer.trimToWidth("Auto: shows when MTR's station screen marks it step-free", w), x, y, FlatUi.TEXT_FAINT, false);
+                    y += 11;
+                    c.drawText(textRenderer, textRenderer.trimToWidth("Here: " + (ctx.stationName().isEmpty() ? "(no station)" : ctx.stationName()
+                            + (ctx.stationAccessible() ? " (step-free)" : " (not marked step-free)")), w), x, y, FlatUi.TEXT_FAINT, false);
                 }
                 case EXIT -> {
                     FlatUi.heading(c, textRenderer, "Exit", x, y);
@@ -1062,14 +1069,14 @@ public class SignEditScreen extends Screen {
                     hit(x, y, w, FIELD, HIT_PICK, 1, 0);
                     y += FIELD + 3;
                     String streets = exit == null || exit.destinations().isEmpty() ? "no street names set in MTR"
-                            : String.join(" & ", exit.destinations());
-                    c.drawText(textRenderer, textRenderer.trimToWidth("Streets: " + streets, w), x, y, FlatUi.TEXT_FAINT, false);
+                            : String.join(" / ", exit.destinations());
+                    c.drawText(textRenderer, textRenderer.trimToWidth("Lines: " + streets, w), x, y, FlatUi.TEXT_FAINT, false);
                     y += 12;
                     y = toggleField(c, mx, my, "\"Exit\"", tile.hasFlag(SignSpec.EXIT_WORD) ? "Shown" : "Hidden", tile.hasFlag(SignSpec.EXIT_WORD), x, y, w, TOGGLE_EXIT_WORD);
                     y = toggleField(c, mx, my, "Street names", tile.hasFlag(SignSpec.EXIT_STREETS) ? "Shown" : "Hidden", tile.hasFlag(SignSpec.EXIT_STREETS), x, y, w, TOGGLE_EXIT_STREETS);
                     y = toggleField(c, mx, my, "Exit name box", tile.hasFlag(SignSpec.EXIT_NAME) ? "Shown" : "Hidden", tile.hasFlag(SignSpec.EXIT_NAME), x, y, w, TOGGLE_EXIT_NAME);
-                    y = field(c, mx, my, "Corner / note", cornerBox, x, y, w);
-                    c.drawText(textRenderer, textRenderer.trimToWidth("Exits come from MTR's station settings.", w), x, y, FlatUi.TEXT_FAINT, false);
+                    y = field(c, mx, my, "Corner / note (last line)", cornerBox, x, y, w);
+                    c.drawText(textRenderer, textRenderer.trimToWidth("One MTR destination per line, up to three.", w), x, y, FlatUi.TEXT_FAINT, false);
                 }
                 case DESTINATION -> {
                     FlatUi.heading(c, textRenderer, "Line + destination", x, y);

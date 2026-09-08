@@ -47,6 +47,15 @@ public final class SignDevHooks {
                     ClientPlayNetworking.send(MtrStationDecor.UPDATE_SIGN_C2S, buf);
                 }
                 case "#sign-close" -> client.setScreen(null);
+                case "#sign-access" -> {
+                    // Mark the station the player stands in step-free (or clear it) through the addon's packet.
+                    long stationId = MtaSignPainter.context(client.player.getBlockPos()).stationId();
+                    PacketByteBuf buf = PacketByteBufs.create();
+                    buf.writeLong(stationId);
+                    buf.writeBoolean("on".equals(parts[1]));
+                    buf.writeVarInt(0);
+                    ClientPlayNetworking.send(com.stationannouncer.mtraddon.AddonNetworking.UPDATE_ACCESSIBILITY_C2S, buf);
+                }
                 default -> {
                 }
             }

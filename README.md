@@ -196,11 +196,12 @@ points at, and live tiles the station fills in.
   The Bronx →", "Exit →", "Line + destination", a station plate…).
 - Tiles: **Bullets** (pick lines, or "all lines at this station"; express
   service draws a diamond), **Text** (with inline bullets, wheelchair and small
-  arrows; Enter makes a second line), **Arrow** (eight directions, left edge /
-  inline / right edge), **Station** (the MTR station's name, or an override),
-  **Exit** (an exit from MTR's station settings: the word "Exit", its street
-  names, the exit's name in a box, plus a corner note you type — white on the
-  MTA red), **Line + destination** (a route's bullet with "to <terminus>", its
+  arrows; Enter makes a new line, up to three), **Arrow** (eight directions,
+  left edge / inline / right edge), **Station** (the MTR station's name, or an
+  override; shows the wheelchair symbol when the station is marked step-free
+  in its MTR station screen), **Exit** (an exit from MTR's station settings:
+  "Exit" on the red field, its street names one per line, a corner note you
+  type, and optionally the exit's name in a box), **Line + destination** (a route's bullet with "to <terminus>", its
   direction wording, or your own text), **Space**.
 - Styles: black with the thin white line (today's standard), the 1970 white
   panel with a black band, or plain black.

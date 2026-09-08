@@ -36,6 +36,7 @@ public class SignContext {
     private final BlockPos pos;
     private long expiry;
     private String stationName = "";
+    private long stationId;
     private int stationColor = 0xFF1F4D3A;
     private List<Exit> exits = List.of();
     private List<String> stationLines = List.of();
@@ -58,11 +59,13 @@ public class SignContext {
             Station station = MtrDataCache.station(pos);
             if (station == null) {
                 stationName = "";
+                stationId = 0;
                 exits = List.of();
                 stationLines = List.of();
                 return;
             }
             stationName = AddonUi.firstLang(station.getName());
+            stationId = station.getId();
             stationColor = 0xFF000000 | station.getColor();
             List<Exit> found = new ArrayList<>();
             for (StationExit exit : station.getExits()) {
@@ -100,6 +103,18 @@ public class SignContext {
     public int stationColor() {
         refresh();
         return stationColor;
+    }
+
+    /** Whether the addon marks this station step-free (MTR station screen → Accessibility). */
+    public boolean stationAccessible() {
+        refresh();
+        return stationId != 0
+                && com.stationannouncer.client.mtraddon.ClientAccessibility.isAccessibleStation(stationId);
+    }
+
+    public long stationId() {
+        refresh();
+        return stationId;
     }
 
     /** The station's exits in MTR's order. */

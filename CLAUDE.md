@@ -295,7 +295,7 @@ Four fixes/features from Thomas's feedback round (his answers, do not re-ask):
   model rebuild (tripod look, reader heads, pictogram plates day+night,
   HEET comb/lintel, signboard straps).
 
-### MTA SIGN SYSTEM (2026-09-06) — modular NYC signs + unified text-sign layout; shipped in 2.4.57 — READ `SIGN_PLAN.md`
+### MTA SIGN SYSTEM (2026-09-06) — modular NYC signs + unified text-sign layout; shipped in 2.4.57, photo follow-up (wheelchair / 3-line text / red exit field) in 3.1.0 — READ `SIGN_PLAN.md`
 
 Thomas's decisions (do not re-ask): content MODULES inside one panel; font = MTR's
 `mtr:mtr` Noto Sans (no TTF of ours); half AND full height panels, wall/hanging/
@@ -316,8 +316,17 @@ destination first; FULL editor from day one; the old text signs migrate onto it.
   Text sizes are CAP HEIGHTS: **MTR's font measures 0.76 units of cap per unit
   of painter size with the cap line at the draw y** (`CAP_PER_SIZE`/`TOP_PER_SIZE`,
   measured on the rig — the declared TTF size 12 is NOT the visual height).
-  BLACK style draws the thin white line under the top edge; EXIT tiles are white
-  on the MTA red field; `SignContext` (per pos, 1 s TTL) supplies station name,
+  BLACK style draws the thin white line under the top edge. TEXT tiles take up
+  to THREE lines (the "① To South Ferry / Late nights ② to Bklyn / also stops
+  here" photo). EXIT tiles follow Thomas's 14 St photo: "Exit" white on a red
+  field the FULL row height, then the street lines on the panel itself — one
+  MTR exit destination per line, corner note last, max 3 — then the optional
+  name box. STATION_NAME tiles show the WHEELCHAIR symbol when the addon marks
+  the station step-free (`ClientAccessibility.isAccessibleStation`, set from
+  MTR's station screen; tile arg "" auto / "wc" always / "nowc" never) — beside
+  the name on one row, UNDER a two-line name on a tall plate (the column
+  plate look). Dev hook `#sign-access on|off` flips the station the player
+  stands in; `SignContext` (per pos, 1 s TTL) supplies station name,
   exits (`Station.getExits()` → name + destinations), station lines, and
   `destination(route)` = first platform destination override else last stop.
 - **Blocks**: `mta_sign` (full) / `mta_sign_half` (`mtr/MtaSignBlock`, MOUNT

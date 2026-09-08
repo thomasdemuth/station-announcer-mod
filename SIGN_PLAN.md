@@ -301,3 +301,9 @@ Total ≈ 5-7 working days of agent time, gated by Thomas's play passes after 1,
   Legacy signs (entrance railing, el entrance, el boards, el wall/railing sign
   courses) migrated: `LegacySigns` derives a sign from the old fields; brush →
   `SignEditScreen`; `RailingSignScreen` deleted. Shipped in 2.4.57 (deployed to both play profiles 2026-09-07; the version had moved on under a parallel Map+ session).
+- 2026-09-08: Thomas's 14 St photos → STATION_NAME tiles show the wheelchair
+  symbol when the addon marks the station step-free (auto / always / never;
+  under a stacked two-line name on tall plates, beside it otherwise), TEXT tiles
+  take three lines, EXIT tiles = full-height red field + one MTR destination per
+  line + corner note. Rig-verified (round 4 screenshots). Committed and deployed as 3.1.0 (the
+  version had been bumped by the parallel session again).
