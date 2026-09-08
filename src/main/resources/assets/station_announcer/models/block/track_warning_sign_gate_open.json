@@ -3,7 +3,7 @@
   "textures": {
     "sign": "station_announcer:block/track_warning_sign",
     "iron": "station_announcer:block/gate_iron",
-    "steel": "station_announcer:block/turnstile_steel",
+    "steel": "station_announcer:block/ts_steel",
     "particle": "station_announcer:block/track_warning_sign"
   },
   "elements": [

@@ -3,250 +3,285 @@
     {
       "when": {
         "facing": "north",
-        "half": "lower"
+        "part": "lane_lower"
       },
       "apply": {
-        "model": "station_announcer:block/turnstile_heet_lower"
+        "model": "station_announcer:block/ts_heet_lane_lower"
       }
     },
     {
       "when": {
         "facing": "north",
-        "half": "upper"
+        "part": "lane_upper"
       },
       "apply": {
-        "model": "station_announcer:block/turnstile_heet_upper"
+        "model": "station_announcer:block/ts_heet_lane_upper"
       }
     },
     {
       "when": {
         "facing": "north",
-        "half": "upper",
-        "indicator": "off"
+        "part": "comb_lower"
       },
       "apply": {
-        "model": "station_announcer:block/turnstile_heet_lamp_off"
+        "model": "station_announcer:block/ts_heet_comb_lower"
       }
     },
     {
       "when": {
         "facing": "north",
-        "half": "upper",
+        "part": "comb_upper"
+      },
+      "apply": {
+        "model": "station_announcer:block/ts_heet_comb_upper"
+      }
+    },
+    {
+      "when": {
+        "facing": "north",
+        "part": "comb_upper",
         "indicator": "go"
       },
       "apply": {
-        "model": "station_announcer:block/turnstile_heet_lamp_go"
+        "model": "station_announcer:block/ts_heet_lamp_go"
       }
     },
     {
       "when": {
         "facing": "north",
-        "half": "upper",
+        "part": "comb_upper",
         "indicator": "stop"
       },
       "apply": {
-        "model": "station_announcer:block/turnstile_heet_lamp_stop"
+        "model": "station_announcer:block/ts_heet_lamp_stop"
       }
     },
     {
       "when": {
         "facing": "north",
-        "half": "upper",
+        "part": "comb_upper",
         "indicator": "wait"
       },
       "apply": {
-        "model": "station_announcer:block/turnstile_heet_lamp_wait"
+        "model": "station_announcer:block/ts_heet_lamp_wait"
       }
     },
     {
       "when": {
         "facing": "east",
-        "half": "lower"
+        "part": "lane_lower"
       },
       "apply": {
-        "model": "station_announcer:block/turnstile_heet_lower",
+        "model": "station_announcer:block/ts_heet_lane_lower",
         "y": 90
       }
     },
     {
       "when": {
         "facing": "east",
-        "half": "upper"
+        "part": "lane_upper"
       },
       "apply": {
-        "model": "station_announcer:block/turnstile_heet_upper",
+        "model": "station_announcer:block/ts_heet_lane_upper",
         "y": 90
       }
     },
     {
       "when": {
         "facing": "east",
-        "half": "upper",
-        "indicator": "off"
+        "part": "comb_lower"
       },
       "apply": {
-        "model": "station_announcer:block/turnstile_heet_lamp_off",
+        "model": "station_announcer:block/ts_heet_comb_lower",
         "y": 90
       }
     },
     {
       "when": {
         "facing": "east",
-        "half": "upper",
+        "part": "comb_upper"
+      },
+      "apply": {
+        "model": "station_announcer:block/ts_heet_comb_upper",
+        "y": 90
+      }
+    },
+    {
+      "when": {
+        "facing": "east",
+        "part": "comb_upper",
         "indicator": "go"
       },
       "apply": {
-        "model": "station_announcer:block/turnstile_heet_lamp_go",
+        "model": "station_announcer:block/ts_heet_lamp_go",
         "y": 90
       }
     },
     {
       "when": {
         "facing": "east",
-        "half": "upper",
+        "part": "comb_upper",
         "indicator": "stop"
       },
       "apply": {
-        "model": "station_announcer:block/turnstile_heet_lamp_stop",
+        "model": "station_announcer:block/ts_heet_lamp_stop",
         "y": 90
       }
     },
     {
       "when": {
         "facing": "east",
-        "half": "upper",
+        "part": "comb_upper",
         "indicator": "wait"
       },
       "apply": {
-        "model": "station_announcer:block/turnstile_heet_lamp_wait",
+        "model": "station_announcer:block/ts_heet_lamp_wait",
         "y": 90
       }
     },
     {
       "when": {
         "facing": "south",
-        "half": "lower"
+        "part": "lane_lower"
       },
       "apply": {
-        "model": "station_announcer:block/turnstile_heet_lower",
+        "model": "station_announcer:block/ts_heet_lane_lower",
         "y": 180
       }
     },
     {
       "when": {
         "facing": "south",
-        "half": "upper"
+        "part": "lane_upper"
       },
       "apply": {
-        "model": "station_announcer:block/turnstile_heet_upper",
+        "model": "station_announcer:block/ts_heet_lane_upper",
         "y": 180
       }
     },
     {
       "when": {
         "facing": "south",
-        "half": "upper",
-        "indicator": "off"
+        "part": "comb_lower"
       },
       "apply": {
-        "model": "station_announcer:block/turnstile_heet_lamp_off",
+        "model": "station_announcer:block/ts_heet_comb_lower",
         "y": 180
       }
     },
     {
       "when": {
         "facing": "south",
-        "half": "upper",
+        "part": "comb_upper"
+      },
+      "apply": {
+        "model": "station_announcer:block/ts_heet_comb_upper",
+        "y": 180
+      }
+    },
+    {
+      "when": {
+        "facing": "south",
+        "part": "comb_upper",
         "indicator": "go"
       },
       "apply": {
-        "model": "station_announcer:block/turnstile_heet_lamp_go",
+        "model": "station_announcer:block/ts_heet_lamp_go",
         "y": 180
       }
     },
     {
       "when": {
         "facing": "south",
-        "half": "upper",
+        "part": "comb_upper",
         "indicator": "stop"
       },
       "apply": {
-        "model": "station_announcer:block/turnstile_heet_lamp_stop",
+        "model": "station_announcer:block/ts_heet_lamp_stop",
         "y": 180
       }
     },
     {
       "when": {
         "facing": "south",
-        "half": "upper",
+        "part": "comb_upper",
         "indicator": "wait"
       },
       "apply": {
-        "model": "station_announcer:block/turnstile_heet_lamp_wait",
+        "model": "station_announcer:block/ts_heet_lamp_wait",
         "y": 180
       }
     },
     {
       "when": {
         "facing": "west",
-        "half": "lower"
+        "part": "lane_lower"
       },
       "apply": {
-        "model": "station_announcer:block/turnstile_heet_lower",
+        "model": "station_announcer:block/ts_heet_lane_lower",
         "y": 270
       }
     },
     {
       "when": {
         "facing": "west",
-        "half": "upper"
+        "part": "lane_upper"
       },
       "apply": {
-        "model": "station_announcer:block/turnstile_heet_upper",
+        "model": "station_announcer:block/ts_heet_lane_upper",
         "y": 270
       }
     },
     {
       "when": {
         "facing": "west",
-        "half": "upper",
-        "indicator": "off"
+        "part": "comb_lower"
       },
       "apply": {
-        "model": "station_announcer:block/turnstile_heet_lamp_off",
+        "model": "station_announcer:block/ts_heet_comb_lower",
         "y": 270
       }
     },
     {
       "when": {
         "facing": "west",
-        "half": "upper",
+        "part": "comb_upper"
+      },
+      "apply": {
+        "model": "station_announcer:block/ts_heet_comb_upper",
+        "y": 270
+      }
+    },
+    {
+      "when": {
+        "facing": "west",
+        "part": "comb_upper",
         "indicator": "go"
       },
       "apply": {
-        "model": "station_announcer:block/turnstile_heet_lamp_go",
+        "model": "station_announcer:block/ts_heet_lamp_go",
         "y": 270
       }
     },
     {
       "when": {
         "facing": "west",
-        "half": "upper",
+        "part": "comb_upper",
         "indicator": "stop"
       },
       "apply": {
-        "model": "station_announcer:block/turnstile_heet_lamp_stop",
+        "model": "station_announcer:block/ts_heet_lamp_stop",
         "y": 270
       }
     },
     {
       "when": {
         "facing": "west",
-        "half": "upper",
+        "part": "comb_upper",
         "indicator": "wait"
       },
       "apply": {
-        "model": "station_announcer:block/turnstile_heet_lamp_wait",
+        "model": "station_announcer:block/ts_heet_lamp_wait",
         "y": 270
       }
     }

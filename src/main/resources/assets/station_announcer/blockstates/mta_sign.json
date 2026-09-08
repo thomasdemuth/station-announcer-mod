@@ -1,0 +1,121 @@
+{
+ "multipart": [
+  {
+   "when": {
+    "facing": "north",
+    "mount": "wall"
+   },
+   "apply": {
+    "model": "station_announcer:block/mta_sign_full_wall"
+   }
+  },
+  {
+   "when": {
+    "facing": "north",
+    "mount": "hanging"
+   },
+   "apply": {
+    "model": "station_announcer:block/mta_sign_full_hanging"
+   }
+  },
+  {
+   "when": {
+    "facing": "north",
+    "mount": "standing"
+   },
+   "apply": {
+    "model": "station_announcer:block/mta_sign_full_standing"
+   }
+  },
+  {
+   "when": {
+    "facing": "east",
+    "mount": "wall"
+   },
+   "apply": {
+    "model": "station_announcer:block/mta_sign_full_wall",
+    "y": 90
+   }
+  },
+  {
+   "when": {
+    "facing": "east",
+    "mount": "hanging"
+   },
+   "apply": {
+    "model": "station_announcer:block/mta_sign_full_hanging",
+    "y": 90
+   }
+  },
+  {
+   "when": {
+    "facing": "east",
+    "mount": "standing"
+   },
+   "apply": {
+    "model": "station_announcer:block/mta_sign_full_standing",
+    "y": 90
+   }
+  },
+  {
+   "when": {
+    "facing": "south",
+    "mount": "wall"
+   },
+   "apply": {
+    "model": "station_announcer:block/mta_sign_full_wall",
+    "y": 180
+   }
+  },
+  {
+   "when": {
+    "facing": "south",
+    "mount": "hanging"
+   },
+   "apply": {
+    "model": "station_announcer:block/mta_sign_full_hanging",
+    "y": 180
+   }
+  },
+  {
+   "when": {
+    "facing": "south",
+    "mount": "standing"
+   },
+   "apply": {
+    "model": "station_announcer:block/mta_sign_full_standing",
+    "y": 180
+   }
+  },
+  {
+   "when": {
+    "facing": "west",
+    "mount": "wall"
+   },
+   "apply": {
+    "model": "station_announcer:block/mta_sign_full_wall",
+    "y": 270
+   }
+  },
+  {
+   "when": {
+    "facing": "west",
+    "mount": "hanging"
+   },
+   "apply": {
+    "model": "station_announcer:block/mta_sign_full_hanging",
+    "y": 270
+   }
+  },
+  {
+   "when": {
+    "facing": "west",
+    "mount": "standing"
+   },
+   "apply": {
+    "model": "station_announcer:block/mta_sign_full_standing",
+    "y": 270
+   }
+  }
+ ]
+}

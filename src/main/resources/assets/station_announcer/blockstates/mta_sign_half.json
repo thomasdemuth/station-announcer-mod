@@ -1,0 +1,293 @@
+{
+ "multipart": [
+  {
+   "when": {
+    "facing": "north",
+    "mount": "wall"
+   },
+   "apply": {
+    "model": "station_announcer:block/mta_sign_half_wall"
+   }
+  },
+  {
+   "when": {
+    "facing": "north",
+    "mount": "hanging"
+   },
+   "apply": {
+    "model": "station_announcer:block/mta_sign_half_hanging"
+   }
+  },
+  {
+   "when": {
+    "facing": "north",
+    "mount": "standing"
+   },
+   "apply": {
+    "model": "station_announcer:block/mta_sign_half_standing"
+   }
+  },
+  {
+   "when": {
+    "facing": "north",
+    "mount": "hanging",
+    "left": "false"
+   },
+   "apply": {
+    "model": "station_announcer:block/mta_sign_half_hanging_rod_neg"
+   }
+  },
+  {
+   "when": {
+    "facing": "north",
+    "mount": "hanging",
+    "right": "false"
+   },
+   "apply": {
+    "model": "station_announcer:block/mta_sign_half_hanging_rod_pos"
+   }
+  },
+  {
+   "when": {
+    "facing": "north",
+    "mount": "standing",
+    "left": "false"
+   },
+   "apply": {
+    "model": "station_announcer:block/mta_sign_half_standing_post_neg"
+   }
+  },
+  {
+   "when": {
+    "facing": "north",
+    "mount": "standing",
+    "right": "false"
+   },
+   "apply": {
+    "model": "station_announcer:block/mta_sign_half_standing_post_pos"
+   }
+  },
+  {
+   "when": {
+    "facing": "east",
+    "mount": "wall"
+   },
+   "apply": {
+    "model": "station_announcer:block/mta_sign_half_wall",
+    "y": 90
+   }
+  },
+  {
+   "when": {
+    "facing": "east",
+    "mount": "hanging"
+   },
+   "apply": {
+    "model": "station_announcer:block/mta_sign_half_hanging",
+    "y": 90
+   }
+  },
+  {
+   "when": {
+    "facing": "east",
+    "mount": "standing"
+   },
+   "apply": {
+    "model": "station_announcer:block/mta_sign_half_standing",
+    "y": 90
+   }
+  },
+  {
+   "when": {
+    "facing": "east",
+    "mount": "hanging",
+    "left": "false"
+   },
+   "apply": {
+    "model": "station_announcer:block/mta_sign_half_hanging_rod_neg",
+    "y": 90
+   }
+  },
+  {
+   "when": {
+    "facing": "east",
+    "mount": "hanging",
+    "right": "false"
+   },
+   "apply": {
+    "model": "station_announcer:block/mta_sign_half_hanging_rod_pos",
+    "y": 90
+   }
+  },
+  {
+   "when": {
+    "facing": "east",
+    "mount": "standing",
+    "left": "false"
+   },
+   "apply": {
+    "model": "station_announcer:block/mta_sign_half_standing_post_neg",
+    "y": 90
+   }
+  },
+  {
+   "when": {
+    "facing": "east",
+    "mount": "standing",
+    "right": "false"
+   },
+   "apply": {
+    "model": "station_announcer:block/mta_sign_half_standing_post_pos",
+    "y": 90
+   }
+  },
+  {
+   "when": {
+    "facing": "south",
+    "mount": "wall"
+   },
+   "apply": {
+    "model": "station_announcer:block/mta_sign_half_wall",
+    "y": 180
+   }
+  },
+  {
+   "when": {
+    "facing": "south",
+    "mount": "hanging"
+   },
+   "apply": {
+    "model": "station_announcer:block/mta_sign_half_hanging",
+    "y": 180
+   }
+  },
+  {
+   "when": {
+    "facing": "south",
+    "mount": "standing"
+   },
+   "apply": {
+    "model": "station_announcer:block/mta_sign_half_standing",
+    "y": 180
+   }
+  },
+  {
+   "when": {
+    "facing": "south",
+    "mount": "hanging",
+    "left": "false"
+   },
+   "apply": {
+    "model": "station_announcer:block/mta_sign_half_hanging_rod_neg",
+    "y": 180
+   }
+  },
+  {
+   "when": {
+    "facing": "south",
+    "mount": "hanging",
+    "right": "false"
+   },
+   "apply": {
+    "model": "station_announcer:block/mta_sign_half_hanging_rod_pos",
+    "y": 180
+   }
+  },
+  {
+   "when": {
+    "facing": "south",
+    "mount": "standing",
+    "left": "false"
+   },
+   "apply": {
+    "model": "station_announcer:block/mta_sign_half_standing_post_neg",
+    "y": 180
+   }
+  },
+  {
+   "when": {
+    "facing": "south",
+    "mount": "standing",
+    "right": "false"
+   },
+   "apply": {
+    "model": "station_announcer:block/mta_sign_half_standing_post_pos",
+    "y": 180
+   }
+  },
+  {
+   "when": {
+    "facing": "west",
+    "mount": "wall"
+   },
+   "apply": {
+    "model": "station_announcer:block/mta_sign_half_wall",
+    "y": 270
+   }
+  },
+  {
+   "when": {
+    "facing": "west",
+    "mount": "hanging"
+   },
+   "apply": {
+    "model": "station_announcer:block/mta_sign_half_hanging",
+    "y": 270
+   }
+  },
+  {
+   "when": {
+    "facing": "west",
+    "mount": "standing"
+   },
+   "apply": {
+    "model": "station_announcer:block/mta_sign_half_standing",
+    "y": 270
+   }
+  },
+  {
+   "when": {
+    "facing": "west",
+    "mount": "hanging",
+    "left": "false"
+   },
+   "apply": {
+    "model": "station_announcer:block/mta_sign_half_hanging_rod_neg",
+    "y": 270
+   }
+  },
+  {
+   "when": {
+    "facing": "west",
+    "mount": "hanging",
+    "right": "false"
+   },
+   "apply": {
+    "model": "station_announcer:block/mta_sign_half_hanging_rod_pos",
+    "y": 270
+   }
+  },
+  {
+   "when": {
+    "facing": "west",
+    "mount": "standing",
+    "left": "false"
+   },
+   "apply": {
+    "model": "station_announcer:block/mta_sign_half_standing_post_neg",
+    "y": 270
+   }
+  },
+  {
+   "when": {
+    "facing": "west",
+    "mount": "standing",
+    "right": "false"
+   },
+   "apply": {
+    "model": "station_announcer:block/mta_sign_half_standing_post_pos",
+    "y": 270
+   }
+  }
+ ]
+}

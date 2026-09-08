@@ -7,7 +7,6 @@ import net.minecraft.item.ItemPlacementContext;
 import net.minecraft.state.StateManager;
 import net.minecraft.state.property.BooleanProperty;
 import net.minecraft.state.property.EnumProperty;
-import net.minecraft.state.property.Properties;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.util.math.Direction;
 import net.minecraft.util.shape.VoxelShape;
@@ -32,7 +31,8 @@ import java.util.Set;
  * refreshes its axis neighbours itself.
  */
 public class ElGirderBlock extends Block {
-    public static final EnumProperty<Direction.Axis> AXIS = Properties.HORIZONTAL_AXIS;
+    /** Still named "axis" with values x/z (plus the diagonals xz/zx) so old placements load. */
+    public static final EnumProperty<ElRun> AXIS = EnumProperty.of("axis", ElRun.class);
     public static final BooleanProperty BRACED = BooleanProperty.of("braced");
     public static final BooleanProperty BRACE_NEG = BooleanProperty.of("brace_neg");
     public static final BooleanProperty BRACE_POS = BooleanProperty.of("brace_pos");
@@ -42,10 +42,11 @@ public class ElGirderBlock extends Block {
 
     private final VoxelShape shapeX;
     private final VoxelShape shapeZ;
+    private static final VoxelShape FULL = createCuboidShape(0.0, 0.0, 0.0, 16.0, 16.0, 16.0);
 
     public ElGirderBlock(Settings settings) {
         super(settings);
-        setDefaultState(getDefaultState().with(AXIS, Direction.Axis.X).with(BRACED, false)
+        setDefaultState(getDefaultState().with(AXIS, ElRun.X).with(BRACED, false)
                 .with(BRACE_NEG, false).with(BRACE_POS, false));
         this.shapeX = createCuboidShape(0.0, 0.0, 4.0, 16.0, 16.0, 12.0);
         this.shapeZ = createCuboidShape(4.0, 0.0, 0.0, 12.0, 16.0, 16.0);
@@ -58,13 +59,14 @@ public class ElGirderBlock extends Block {
 
     @Override
     public VoxelShape getOutlineShape(BlockState state, BlockView world, BlockPos pos, ShapeContext context) {
-        return state.get(AXIS) == Direction.Axis.X ? shapeX : shapeZ;
+        ElRun run = state.get(AXIS);
+        return run == ElRun.X ? shapeX : run == ElRun.Z ? shapeZ : FULL;
     }
 
     @Nullable
     @Override
     public BlockState getPlacementState(ItemPlacementContext context) {
-        return compute(getDefaultState().with(AXIS, context.getHorizontalPlayerFacing().getAxis()),
+        return compute(getDefaultState().with(AXIS, ElRun.fromYaw(context.getPlayerYaw())),
                 context.getWorld(), context.getBlockPos());
     }
 
@@ -99,35 +101,30 @@ public class ElGirderBlock extends Block {
         }
     }
 
-    private static Direction negative(Direction.Axis axis) {
-        return axis == Direction.Axis.X ? Direction.WEST : Direction.NORTH;
-    }
-
     private static boolean overColumn(WorldAccess world, BlockPos pos) {
         return COLUMNS.contains(world.getBlockState(pos.down()).getBlock());
     }
 
-    private static boolean girderAlong(BlockState state, Direction.Axis axis) {
+    private static boolean girderAlong(BlockState state, ElRun axis) {
         return state.getBlock() instanceof ElGirderBlock && state.get(AXIS) == axis;
     }
 
-    private static BlockState compute(BlockState state, WorldAccess world, BlockPos pos) {
-        Direction.Axis axis = state.get(AXIS);
-        Direction neg = negative(axis);
+    /** The girder's state at {@code pos} given the world around it (also used by the structure creator). */
+    public static BlockState compute(BlockState state, WorldAccess world, BlockPos pos) {
+        ElRun axis = state.get(AXIS);
         boolean braced = overColumn(world, pos);
-        BlockPos negPos = pos.offset(neg);
-        BlockPos posPos = pos.offset(neg.getOpposite());
+        BlockPos negPos = pos.add(axis.back());
+        BlockPos posPos = pos.add(axis.step());
         boolean braceNeg = !braced && girderAlong(world.getBlockState(negPos), axis) && overColumn(world, negPos);
         boolean bracePos = !braced && girderAlong(world.getBlockState(posPos), axis) && overColumn(world, posPos);
         return state.with(BRACED, braced).with(BRACE_NEG, braceNeg).with(BRACE_POS, bracePos);
     }
 
-    private static void refreshNeighbors(World world, BlockPos pos, Direction.Axis axis) {
+    private static void refreshNeighbors(World world, BlockPos pos, ElRun axis) {
         if (world.isClient) {
             return;
         }
-        Direction neg = negative(axis);
-        for (BlockPos other : new BlockPos[]{pos.offset(neg), pos.offset(neg.getOpposite())}) {
+        for (BlockPos other : new BlockPos[]{pos.add(axis.back()), pos.add(axis.step())}) {
             BlockState state = world.getBlockState(other);
             if (state.getBlock() instanceof ElGirderBlock) {
                 BlockState fresh = compute(state, world, other);

@@ -3,7 +3,7 @@
   "textures": {
     "iron": "station_announcer:block/gate_iron",
     "mesh": "station_announcer:block/gate_grille",
-    "steel": "station_announcer:block/turnstile_steel",
+    "steel": "station_announcer:block/ts_steel",
     "header": "station_announcer:block/gate_door_sign_header",
     "pushsign": "station_announcer:block/gate_door_sign_pushbar",
     "particle": "station_announcer:block/gate_iron"

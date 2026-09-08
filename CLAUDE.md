@@ -295,7 +295,7 @@ Four fixes/features from Thomas's feedback round (his answers, do not re-ask):
   model rebuild (tripod look, reader heads, pictogram plates day+night,
   HEET comb/lintel, signboard straps).
 
-### MTA SIGN SYSTEM (2026-09-06) — modular NYC signs + unified text-sign layout; 2.4.55 — READ `SIGN_PLAN.md`
+### MTA SIGN SYSTEM (2026-09-06) — modular NYC signs + unified text-sign layout; shipped in 2.4.57 — READ `SIGN_PLAN.md`
 
 Thomas's decisions (do not re-ask): content MODULES inside one panel; font = MTR's
 `mtr:mtr` Noto Sans (no TTF of ours); half AND full height panels, wall/hanging/
@@ -341,6 +341,17 @@ destination first; FULL editor from day one; the old text signs migrate onto it.
 - Rig world is `run/world_baker` — a LOCAL COPY inside the rig, not Thomas's real
   server (his ModrinthApp profile has no local saves). Test area: sky over Albany
   (x 0..20, y 147..158, z -66..-50).
+
+### RELEASE 3.0.0 (2026-09-08) — `releases/station-announcer-3.0.0+1.20.4.jar`
+
+Thomas: "commit, push and make this release 3.0". Built from the whole working tree
+at that moment, so besides the Map+ rounds below (basemap scanner rewrite, labels/
+bullets/trains, split-station hubs + per-sample lanes) it carries the other sessions'
+in-flight work that was sitting uncommitted: turnstile v2 (`ts_*` models,
+TURNSTILE_V2.md), the MTA sign system (`mta_sign*`, SIGN_PLAN.md), the el structure
+creator + diag models, AGENTS.md. Those were compile-green in the build but NOT
+verified by the Map+ session. Tagged `v3.0.0`. Not deployed to the play profiles
+(deploy_jar.sh needs the game closed).
 
 ### MAP+ HUBS: SPLIT STATIONS, INTERCHANGE BARS, PER-SAMPLE LANES (2026-09-07) — 2.4.57
 

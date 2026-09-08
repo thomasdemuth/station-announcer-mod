@@ -35,10 +35,30 @@ public class CanvasPainter {
     private final VertexConsumerProvider consumers;
     private final TextRenderer font;
 
+    /**
+     * An alternative font (a resource-pack / mod font id such as MTR's
+     * {@code mtr:mtr}); null = the vanilla font. Only {@link #text} and
+     * {@link #width} honour it — the marquees keep the vanilla glyph cache.
+     */
+    @org.jetbrains.annotations.Nullable
+    private net.minecraft.util.Identifier fontId;
+
     public CanvasPainter(MatrixStack matrices, VertexConsumerProvider consumers) {
         this.matrices = matrices;
         this.consumers = consumers;
         this.font = MinecraftClient.getInstance().textRenderer;
+    }
+
+    /** Draws and measures plain text with the given font from now on ({@code null} = vanilla). */
+    public CanvasPainter withFont(@org.jetbrains.annotations.Nullable net.minecraft.util.Identifier fontId) {
+        this.fontId = fontId;
+        return this;
+    }
+
+    /** The string styled in the painter's font, for the Text overloads of the vanilla renderer. */
+    private net.minecraft.text.Text styled(String string) {
+        return net.minecraft.text.Text.literal(string)
+                .setStyle(net.minecraft.text.Style.EMPTY.withFont(fontId));
     }
 
     public void quad(float x1, float y1, float x2, float y2, float z, int argb) {
@@ -86,8 +106,13 @@ public class CanvasPainter {
         matrices.translate(x, y, -1.2f);
         float scale = size / 8.0f;
         matrices.scale(scale, scale, scale);
-        font.draw(string, 0, 0, argb, false, matrices.peek().getPositionMatrix(), consumers,
-                TextRenderer.TextLayerType.POLYGON_OFFSET, 0, FULL_LIGHT);
+        if (fontId != null) {
+            font.draw(styled(string), 0, 0, argb, false, matrices.peek().getPositionMatrix(), consumers,
+                    TextRenderer.TextLayerType.POLYGON_OFFSET, 0, FULL_LIGHT);
+        } else {
+            font.draw(string, 0, 0, argb, false, matrices.peek().getPositionMatrix(), consumers,
+                    TextRenderer.TextLayerType.POLYGON_OFFSET, 0, FULL_LIGHT);
+        }
         matrices.pop();
     }
 
@@ -229,6 +254,9 @@ public class CanvasPainter {
     }
 
     public float width(String string, float size) {
+        if (fontId != null) {
+            return font.getWidth(styled(string)) * size / 8.0f;
+        }
         return font.getWidth(string) * size / 8.0f;
     }
 

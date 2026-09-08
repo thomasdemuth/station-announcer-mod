@@ -115,7 +115,43 @@ public class StationAnnouncerClient implements ClientModInitializer {
                                 continue;
                             }
                             if (!sent) {
-                                if (cmd.startsWith("#poster-")) {
+                                if (cmd.startsWith("#pose ")) {
+                                    // Dev-only: hold a fare barrier at an absolute angle
+                                    // (#pose x y z degrees; omit degrees to release).
+                                    String[] a = cmd.split("\\s+");
+                                    net.minecraft.util.math.BlockPos p = new net.minecraft.util.math.BlockPos(
+                                            Integer.parseInt(a[1]), Integer.parseInt(a[2]), Integer.parseInt(a[3]));
+                                    if (a.length > 4) {
+                                        com.stationannouncer.client.mtr.TurnstileRenderer.DEV_POSE.put(p, Float.parseFloat(a[4]));
+                                    } else {
+                                        com.stationannouncer.client.mtr.TurnstileRenderer.DEV_POSE.remove(p);
+                                    }
+                                } else if (cmd.startsWith("#turn ") || cmd.startsWith("#deny ")) {
+                                    // Dev-only: pose a fare barrier's animation on THIS client
+                                    // (#turn x y z [ticksAgo] [dir] / #deny x y z [ticksAgo]) —
+                                    // freeze ticks first and the pose holds for a screenshot.
+                                    String[] a = cmd.split("\\s+");
+                                    net.minecraft.util.math.BlockPos p = new net.minecraft.util.math.BlockPos(
+                                            Integer.parseInt(a[1]), Integer.parseInt(a[2]), Integer.parseInt(a[3]));
+                                    long ago = a.length > 4 ? Long.parseLong(a[4]) : 4;
+                                    int dir = a.length > 5 ? Integer.parseInt(a[5]) : 1;
+                                    if (client.world.getBlockEntity(p) instanceof com.stationannouncer.mtr.TurnstileBlockEntity be) {
+                                        long now = client.world.getTime();
+                                        if (cmd.startsWith("#turn ")) {
+                                            be.devPose(now - ago, dir, -1);
+                                        } else {
+                                            be.devPose(-1, dir, now - ago);
+                                        }
+                                    }
+                                } else if (cmd.equals("#reload")) {
+                                    // Dev-only: F3+T without a keyboard, so a headless rig can
+                                    // pick up regenerated models/textures copied into build/resources.
+                                    client.reloadResources();
+                                } else if (cmd.startsWith("#sign-")) {
+                                    // Dev-only: the MTA sign editor / loader (#sign-editor x y z,
+                                    // #sign-load x y z <json file>, #sign-close).
+                                    com.stationannouncer.client.mtr.SignDevHooks.open(client, cmd);
+                                } else if (cmd.startsWith("#poster-")) {
                                     // Dev-only: open the poster screens without a mouse
                                     // (#poster-list <disruptionId> / #poster-editor <posterId> /
                                     // #poster-picker <x> <y> <z>) so the rig can screenshot them.

@@ -6,7 +6,7 @@
         "half": "lower"
       },
       "apply": {
-        "model": "station_announcer:block/turnstile_cap_lower"
+        "model": "station_announcer:block/ts_cap_lower"
       }
     },
     {
@@ -15,39 +15,7 @@
         "half": "upper"
       },
       "apply": {
-        "model": "station_announcer:block/turnstile_cap_upper"
-      }
-    },
-    {
-      "when": {
-        "facing": "north",
-        "half": "upper",
-        "right": "true"
-      },
-      "apply": {
-        "model": "station_announcer:block/turnstile_tube_bridge"
-      }
-    },
-    {
-      "when": {
-        "facing": "north",
-        "half": "upper",
-        "right": "false",
-        "wall_right": "true"
-      },
-      "apply": {
-        "model": "station_announcer:block/turnstile_tube_wall_end"
-      }
-    },
-    {
-      "when": {
-        "facing": "north",
-        "half": "upper",
-        "right": "false",
-        "wall_right": "false"
-      },
-      "apply": {
-        "model": "station_announcer:block/turnstile_tube_end"
+        "model": "station_announcer:block/ts_cap_upper"
       }
     },
     {
@@ -56,7 +24,7 @@
         "half": "lower"
       },
       "apply": {
-        "model": "station_announcer:block/turnstile_cap_lower",
+        "model": "station_announcer:block/ts_cap_lower",
         "y": 90
       }
     },
@@ -66,42 +34,7 @@
         "half": "upper"
       },
       "apply": {
-        "model": "station_announcer:block/turnstile_cap_upper",
-        "y": 90
-      }
-    },
-    {
-      "when": {
-        "facing": "east",
-        "half": "upper",
-        "right": "true"
-      },
-      "apply": {
-        "model": "station_announcer:block/turnstile_tube_bridge",
-        "y": 90
-      }
-    },
-    {
-      "when": {
-        "facing": "east",
-        "half": "upper",
-        "right": "false",
-        "wall_right": "true"
-      },
-      "apply": {
-        "model": "station_announcer:block/turnstile_tube_wall_end",
-        "y": 90
-      }
-    },
-    {
-      "when": {
-        "facing": "east",
-        "half": "upper",
-        "right": "false",
-        "wall_right": "false"
-      },
-      "apply": {
-        "model": "station_announcer:block/turnstile_tube_end",
+        "model": "station_announcer:block/ts_cap_upper",
         "y": 90
       }
     },
@@ -111,7 +44,7 @@
         "half": "lower"
       },
       "apply": {
-        "model": "station_announcer:block/turnstile_cap_lower",
+        "model": "station_announcer:block/ts_cap_lower",
         "y": 180
       }
     },
@@ -121,42 +54,7 @@
         "half": "upper"
       },
       "apply": {
-        "model": "station_announcer:block/turnstile_cap_upper",
-        "y": 180
-      }
-    },
-    {
-      "when": {
-        "facing": "south",
-        "half": "upper",
-        "right": "true"
-      },
-      "apply": {
-        "model": "station_announcer:block/turnstile_tube_bridge",
-        "y": 180
-      }
-    },
-    {
-      "when": {
-        "facing": "south",
-        "half": "upper",
-        "right": "false",
-        "wall_right": "true"
-      },
-      "apply": {
-        "model": "station_announcer:block/turnstile_tube_wall_end",
-        "y": 180
-      }
-    },
-    {
-      "when": {
-        "facing": "south",
-        "half": "upper",
-        "right": "false",
-        "wall_right": "false"
-      },
-      "apply": {
-        "model": "station_announcer:block/turnstile_tube_end",
+        "model": "station_announcer:block/ts_cap_upper",
         "y": 180
       }
     },
@@ -166,7 +64,7 @@
         "half": "lower"
       },
       "apply": {
-        "model": "station_announcer:block/turnstile_cap_lower",
+        "model": "station_announcer:block/ts_cap_lower",
         "y": 270
       }
     },
@@ -176,42 +74,7 @@
         "half": "upper"
       },
       "apply": {
-        "model": "station_announcer:block/turnstile_cap_upper",
-        "y": 270
-      }
-    },
-    {
-      "when": {
-        "facing": "west",
-        "half": "upper",
-        "right": "true"
-      },
-      "apply": {
-        "model": "station_announcer:block/turnstile_tube_bridge",
-        "y": 270
-      }
-    },
-    {
-      "when": {
-        "facing": "west",
-        "half": "upper",
-        "right": "false",
-        "wall_right": "true"
-      },
-      "apply": {
-        "model": "station_announcer:block/turnstile_tube_wall_end",
-        "y": 270
-      }
-    },
-    {
-      "when": {
-        "facing": "west",
-        "half": "upper",
-        "right": "false",
-        "wall_right": "false"
-      },
-      "apply": {
-        "model": "station_announcer:block/turnstile_tube_end",
+        "model": "station_announcer:block/ts_cap_upper",
         "y": 270
       }
     }

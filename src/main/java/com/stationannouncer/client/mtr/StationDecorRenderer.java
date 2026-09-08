@@ -53,6 +53,12 @@ public class StationDecorRenderer implements BlockEntityRenderer<StationDecorBlo
             return;
         }
 
+        // MTA-style sign panels resolve their own (cached) station data.
+        if (block instanceof com.stationannouncer.mtr.MtaSignBlock) {
+            MtaSignPainter.paint(entity, matrices, vertexConsumers);
+            return;
+        }
+
         Direction facing;
         if (block instanceof com.stationannouncer.mtr.RailingSignBlock) {
             // The panel plane follows the railing run; the block owns that rule
@@ -81,7 +87,7 @@ public class StationDecorRenderer implements BlockEntityRenderer<StationDecorBlo
                 paintMosaic(matrices, vertexConsumers, mosaic.text(), color, mosaic.run());
             }
         } else if (block instanceof com.stationannouncer.mtr.ElNameBoardBlock) {
-            paintElNameBoard(matrices, vertexConsumers, name,
+            paintElNameBoard(entity, matrices, vertexConsumers,
                     entity.getCachedState().get(com.stationannouncer.mtr.ElNameBoardBlock.MOUNT));
         } else if (block instanceof com.stationannouncer.mtr.StationColumnBlock column) {
             paintColumnBoard(matrices, vertexConsumers, name, column.boardOffset(),
@@ -116,6 +122,7 @@ public class StationDecorRenderer implements BlockEntityRenderer<StationDecorBlo
 
     /** Drops all per-position state (called on disconnect so nothing leaks across worlds). */
     static void clearWorldState() {
+        MtaSignPainter.clear();
         LAST_DEPARTURE.clear();
         SIGN_PANELS.clear();
         RouteBullets.clearCache();
@@ -254,11 +261,7 @@ public class StationDecorRenderer implements BlockEntityRenderer<StationDecorBlo
      * first segment that has any — the same "first one that says something
      * wins" rule the custom name follows.</p>
      */
-    private record SignPanel(int run, String text, boolean front, boolean back,
-                             java.util.List<String> frontRoutes, java.util.List<String> backRoutes) {
-        java.util.List<String> routes(boolean isFront) {
-            return isFront ? frontRoutes : backRoutes;
-        }
+    private record SignPanel(int run, com.stationannouncer.mtr.sign.SignFaces faces) {
     }
 
     /**
@@ -290,37 +293,17 @@ public class StationDecorRenderer implements BlockEntityRenderer<StationDecorBlo
         SignPanel panel;
         // Only the first segment of a contiguous run draws (the merged panel).
         if (world.getBlockState(pos.offset(negDir)).getBlock() instanceof com.stationannouncer.mtr.RailingSignBlock) {
-            panel = new SignPanel(0, "", false, false, java.util.List.of(), java.util.List.of());
+            panel = new SignPanel(0, null);
         } else {
             int run = 1;
             while (run < MAX_SIGN_RUN
                     && world.getBlockState(pos.offset(posDir, run)).getBlock() instanceof com.stationannouncer.mtr.RailingSignBlock) {
                 run++;
             }
-            // A custom name typed on ANY segment of the run wins over the auto name.
-            String custom = entity.getCustomName();
-            boolean front = entity.isSignFront();
-            boolean back = entity.isSignBack();
-            java.util.List<String> frontRoutes = entity.getFrontRoutes();
-            java.util.List<String> backRoutes = entity.getBackRoutes();
-            for (int i = 1; i < run; i++) {
-                if (!(world.getBlockEntity(pos.offset(posDir, i)) instanceof StationDecorBlockEntity other)) {
-                    continue;
-                }
-                if (custom.isEmpty()) {
-                    custom = other.getCustomName();
-                }
-                front &= other.isSignFront();
-                back &= other.isSignBack();
-                if (frontRoutes.isEmpty()) {
-                    frontRoutes = other.getFrontRoutes();
-                }
-                if (backRoutes.isEmpty()) {
-                    backRoutes = other.getBackRoutes();
-                }
-            }
-            panel = new SignPanel(run, !custom.isEmpty() ? custom : (autoName.isEmpty() ? "Subway" : autoName),
-                    front, back, frontRoutes, backRoutes);
+            // The first segment with a saved sign wins; else the merged legacy
+            // fields (a custom name typed on ANY segment beats the auto name).
+            panel = new SignPanel(run, MtaSignPainter.legacyFaces(world, pos, posDir, run,
+                    com.stationannouncer.mtr.sign.LegacySigns.Kind.RAILING));
         }
         SIGN_PANELS.put(pos.asLong(), panel);
         return panel;
@@ -367,13 +350,14 @@ public class StationDecorRenderer implements BlockEntityRenderer<StationDecorBlo
         if (panel.run() == 0) {
             return; // not the first segment of the run: the first one draws it all
         }
-        boolean front = panel.front();
-        boolean back = panel.back();
+        com.stationannouncer.mtr.sign.SignSpec frontSpec = panel.faces().frontSpec();
+        com.stationannouncer.mtr.sign.SignSpec backSpec = panel.faces().backSpec();
+        boolean front = frontSpec != null;
+        boolean back = backSpec != null;
         if (!front && !back) {
             return; // both faces off: a plain railing segment
         }
         int run = panel.run();
-        String text = panel.text();
 
         float panelWidth = 64 * run - 8;           // canvas units (1 px margin each end)
         float halfWidthBlocks = (16 * run - 2) / 32.0f;
@@ -405,8 +389,10 @@ public class StationDecorRenderer implements BlockEntityRenderer<StationDecorBlo
                         BOARD_BLACK);
             }
             if (thisSide) {
-                painter.quad(1, 1, panelWidth - 1, 47, -KEYLINE_STANDOFF, 0xFF17171A);
-                paintRailingFace(painter, text, panel.routes(side == 0), panelWidth);
+                // The face is one canvas unit inside the slab's edge all round.
+                matrices.translate(1, 1, -KEYLINE_STANDOFF);
+                MtaSignPainter.paintFace(matrices, vertexConsumers, side == 0 ? frontSpec : backSpec,
+                        panelWidth - 2, 46, pos);
             }
             matrices.pop();
         }
@@ -495,7 +481,7 @@ public class StationDecorRenderer implements BlockEntityRenderer<StationDecorBlo
      * z -0.375 and the back at -0.1875. Canvas 56 x 40 units. Layout follows
      * the Van Siclen Av photo: route bullets on the left, the name beside
      * them; without bullets the name is centred. Each face has its own
-     * on/off flag and bullet list, edited with the brush (RailingSignScreen).
+     * on/off flag and bullet list, now edited in the sign editor (SignEditScreen).
      */
     private void paintEntranceSign(StationDecorBlockEntity entity, MatrixStack matrices,
                                    VertexConsumerProvider vertexConsumers, String autoName) {
@@ -513,38 +499,20 @@ public class StationDecorRenderer implements BlockEntityRenderer<StationDecorBlo
             return;
         }
         int run = 1;
-        String custom = entity.getCustomName();
-        boolean front = entity.isSignFront();
-        boolean back = entity.isSignBack();
-        java.util.List<String> frontRoutes = entity.getFrontRoutes();
-        java.util.List<String> backRoutes = entity.getBackRoutes();
         while (run < MAX_SIGN_RUN && isEntranceSign(world.getBlockState(pos.offset(posDir, run)), facing)) {
-            if (world.getBlockEntity(pos.offset(posDir, run)) instanceof StationDecorBlockEntity other) {
-                if (custom.isEmpty()) {
-                    custom = other.getCustomName();
-                }
-                front &= other.isSignFront();
-                back &= other.isSignBack();
-                if (frontRoutes.isEmpty()) {
-                    frontRoutes = other.getFrontRoutes();
-                }
-                if (backRoutes.isEmpty()) {
-                    backRoutes = other.getBackRoutes();
-                }
-            }
             run++;
         }
-        String text = !custom.isEmpty() ? custom : (autoName.isEmpty() ? "Subway" : autoName);
+        com.stationannouncer.mtr.sign.SignFaces faces = MtaSignPainter.legacyFaces(world, pos, posDir, run,
+                com.stationannouncer.mtr.sign.LegacySigns.Kind.ENTRANCE);
         float w = 64 * run - 4;                 // 2 px margin at each end of the merged box
         float h = 40;
         float halfWidthBlocks = (16 * run - 1) / 32.0f;
         float centerOffset = (run - 1) / 2.0f;
         for (int side = 0; side < 2; side++) {
-            boolean on = side == 0 ? front : back;
-            if (!on) {
+            com.stationannouncer.mtr.sign.SignSpec spec = side == 0 ? faces.frontSpec() : faces.backSpec();
+            if (spec == null) {
                 continue;
             }
-            java.util.List<String> routes = side == 0 ? frontRoutes : backRoutes;
             matrices.push();
             if (side == 1) {
                 matrices.multiply(RotationAxis.POSITIVE_Y.rotationDegrees(180.0f));
@@ -555,40 +523,8 @@ public class StationDecorRenderer implements BlockEntityRenderer<StationDecorBlo
             matrices.translate((side == 0 ? centerOffset : -centerOffset) + halfWidthBlocks, 22.0 / 16.0,
                     side == 0 ? -0.375 - 0.004 : 0.1875 - 0.004);
             matrices.scale(-UNIT, -UNIT, UNIT);
-            CanvasPainter painter = new CanvasPainter(matrices, vertexConsumers);
-            painter.quad(1, 1, w - 1, h - 1, 0.0f, 0xFF17171A);
-            int count = routes.size();
-            float left = 5;
-            if (count > 0) {
-                float diameter = Math.min(24, (w - 10 - (count - 1) * 3) / (count + 1.5f));
-                float bx = left + diameter / 2.0f;
-                for (String routeName : routes) {
-                    RouteBullets.Bullet bullet = RouteBullets.bulletFor(routeName);
-                    if (RouteBullets.isNoEntry(routeName)) {
-                        painter.prohibitionBullet(bx, h / 2.0f, diameter / 2.0f, bullet.color());
-                    } else {
-                        painter.circleBullet(bx, h / 2.0f, diameter / 2.0f, bullet.color(), bullet.label(),
-                                RouteBullets.needsDarkText(bullet.color()));
-                    }
-                    bx += diameter + 3;
-                }
-                left = bx - diameter / 2.0f + 2;
-            }
-            float maxWidth = w - left - 4;
-            float size = Math.min(14, maxWidth / Math.max(1, painter.width(text, 1)));
-            if (size < 8 && text.contains(" ")) {
-                java.util.List<String> lines = painter.wrap(text, 9, maxWidth);
-                float ls = lines.size() > 1 ? Math.min(9, maxWidth / Math.max(1,
-                        Math.max(painter.width(lines.get(0), 1), painter.width(lines.get(1), 1)))) : size;
-                painter.text(painter.trimToWidth(lines.get(0), ls, maxWidth), left, h / 2.0f - ls - 1, ls, TEXT_WHITE);
-                if (lines.size() > 1) {
-                    painter.text(painter.trimToWidth(lines.get(1), ls, maxWidth), left, h / 2.0f + 1, ls, TEXT_WHITE);
-                }
-            } else if (count > 0) {
-                painter.text(text, left, h / 2.0f - size / 2.0f, size, TEXT_WHITE);
-            } else {
-                painter.textCentered(text, w / 2.0f, h / 2.0f - size / 2.0f, size, TEXT_WHITE);
-            }
+            matrices.translate(1, 1, 0);
+            MtaSignPainter.paintFace(matrices, vertexConsumers, spec, w - 2, h - 2, pos);
             matrices.pop();
         }
     }
@@ -800,15 +736,11 @@ public class StationDecorRenderer implements BlockEntityRenderer<StationDecorBlo
             return;
         }
         int run = 1;
-        String custom = entity.getCustomName();
         while (run < MAX_SIGN_RUN && isEdgeSign(world.getBlockState(pos.offset(posDir, run)), facing, family)) {
-            if (custom.isEmpty() && world.getBlockEntity(pos.offset(posDir, run)) instanceof StationDecorBlockEntity other) {
-                custom = other.getCustomName();
-            }
             run++;
         }
-        String text = !custom.isEmpty() ? custom
-                : station != null ? firstLang(station.getName()) : "Subway";
+        com.stationannouncer.mtr.sign.SignSpec spec = MtaSignPainter.legacyFaces(world, pos, posDir, run,
+                com.stationannouncer.mtr.sign.LegacySigns.Kind.BOARD).frontSpec();
 
         float panelWidth = 64 * run - 8;
         float halfWidthBlocks = (16 * run - 2) / 32.0f;
@@ -817,10 +749,7 @@ public class StationDecorRenderer implements BlockEntityRenderer<StationDecorBlo
         // Board y 3..13 of the course (40 units tall), 1 px in from the run ends.
         matrices.translate(centerOffset + halfWidthBlocks, topPx / 16.0, frontPx / 16.0 - 0.5 - 0.006);
         matrices.scale(-UNIT, -UNIT, UNIT);
-        CanvasPainter painter = new CanvasPainter(matrices, vertexConsumers);
-        painter.quad(0, 0, panelWidth, heightUnits, 0.0f, BOARD_BLACK);
-        float size = Math.min(heightUnits * 0.4f, (panelWidth - 12) / Math.max(1, painter.width(text, 1)));
-        painter.textCentered(text, panelWidth / 2.0f, heightUnits / 2.0f - size / 2.0f, size, TEXT_WHITE);
+        MtaSignPainter.paintFace(matrices, vertexConsumers, spec, panelWidth, heightUnits, pos);
         matrices.pop();
     }
 
@@ -857,11 +786,10 @@ public class StationDecorRenderer implements BlockEntityRenderer<StationDecorBlo
      * the far face. The wall plate is NOT centred (it is against the wall),
      * which is exactly why it is drawn one-sided.
      */
-    private void paintElNameBoard(MatrixStack matrices, VertexConsumerProvider vertexConsumers,
-                                  String name, com.stationannouncer.mtr.ElNameBoardBlock.Mount mount) {
-        if (name.isEmpty()) {
-            return;
-        }
+    private void paintElNameBoard(StationDecorBlockEntity entity, MatrixStack matrices,
+                                  VertexConsumerProvider vertexConsumers,
+                                  com.stationannouncer.mtr.ElNameBoardBlock.Mount mount) {
+        com.stationannouncer.mtr.sign.SignFaces faces = com.stationannouncer.mtr.sign.LegacySigns.of(entity);
         boolean wall = mount == com.stationannouncer.mtr.ElNameBoardBlock.Mount.WALL;
         float top = mount == com.stationannouncer.mtr.ElNameBoardBlock.Mount.STANDING ? 13.0f : 12.0f;
         float front = wall ? 13.8f : 7.4f;
@@ -873,10 +801,8 @@ public class StationDecorRenderer implements BlockEntityRenderer<StationDecorBlo
             }
             matrices.translate(0.4375, top / 16.0f, front / 16.0f - 0.5 - 0.008);
             matrices.scale(-UNIT, -UNIT, UNIT);
-            CanvasPainter painter = new CanvasPainter(matrices, vertexConsumers);
-            String text = upperCase(name);
-            float size = Math.min(11, 50 / Math.max(1, painter.width(text, 1)));
-            painter.textCentered(text, 28, 14 - size / 2.0f, size, TEXT_WHITE);
+            MtaSignPainter.paintFace(matrices, vertexConsumers, side == 0 ? faces.frontSpec() : faces.backSpec(),
+                    56, 28, entity.getPos());
             matrices.pop();
         }
     }

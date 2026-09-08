@@ -297,6 +297,74 @@ into build/resources/main and reloaded with F3+T). Fixed from his live feedback:
 STILL OPEN: Thomas's "stairs cut through the platform" stair house needs an in-game pass
 with the rim placement; deploy 2.4.53 after his next restart.
 
+### STRUCTURE, round 1 (2026-09-05, 2.4.53 dev tree): columns, girder, decks, diagonals, creators
+
+Thomas: "let's work on structure now"; then "supports for curved and graded track
+first", settings menu for the creators + a 3D preview. Generator module
+`tools/gen_el2_structure.py` (called from gen_el2_assets.main(); verify covers its
+blockstates incl. `variants` files now). All rig-screenshotted (bent from the street,
+underside, diagonal run + ribbon); the creators need real node clicks - Thomas tests.
+
+- LEVEL RULE (probed on the rig with `execute ... run say` lines read back from
+  server.log): an MTR rail-node cell and the platform floor beside it share one y
+  (both -60 on a -61 ground). So the deck the rails lie on is one block BELOW the
+  platform floor; the floor sits on a closed deck at that lower level. Stack, street
+  up: `el_street_column` x N -> `el_girder_plate` (bent) -> decks -> rail nodes +
+  platform floors.
+- `el_street_column` / `el_street_column_lattice` (`mtr/ColumnBlock`, shape 3..13):
+  10 px built-up box, four 2 px riveted corner angles + recessed web plates with a
+  mid-height batten (lattice: X-laced cutout panels instead); stack bottom = concrete
+  pedestal + bolted base plate + shoe; stack top = three-step flared bearing cap to
+  y 15.9.
+- `el_girder_plate` (`block/ElGirderBlock`): 8 px flanges with rivet rows, web
+  recessed 3 px, stiffener angles at both ends (pair into a splice) + mid. KNEE
+  BRACES: BRACED (column below, `ElGirderBlock.COLUMNS`) draws the gusset roots;
+  BRACE_NEG/POS (the run neighbour stands over a column) draws the outer half:
+  a 45-degree bar (rotation about z) + 1.5 px stepped web, spanning a block and a
+  half. Those flags depend on a block two cells away, so the girder refreshes its
+  run neighbours itself (onBlockAdded / onStateReplaced / neighborUpdate from
+  below). `compute()` is public for the creator. Every flange/web/stringer carries
+  END FACES (buried at joints, close a run end - Thomas's "texture gaps").
+- `el_track_deck` / `el_plate_deck` (`block/ElDeckBlock`): two full-depth I-beam
+  stringers sitting straight on the cross girder (bearing blocks at every joint were
+  tried and read as a forest of stubs), splice ribs at the ends, a diaphragm reaching
+  INTO both webs; ties on a 4 px pitch / a closed riveted pan (diamond plate on top,
+  cullface sides + isSideInvisible against its own kind). Top-slab collision.
+- DIAGONAL RUNS: `ElRun` enum {x, z, xz (south-east), zx (north-east)} replaces
+  HORIZONTAL_AXIS on girder + decks; the property is still "axis" with x/z so old
+  cells load. A diagonal cell's members are authored 22.63 px long (-3.31..19.31) and
+  turned about y at the cell centre: **-45 maps model +x to SOUTH-EAST in Minecraft**
+  (right-handed about +y; the offline renderer has the opposite sign - a +45 "fix"
+  cost an hour; the isolated-cell-with-stone-markers test is what settles such
+  questions, oblique shots misled twice). zx = the same model under blockstate
+  y=90 (east -> south, so SE -> SW = the NE line). Ties: 6 per diagonal cell; the
+  band spans the full 22.63 so crosswise cells abut and along-run cells meet end to
+  end. An element cannot turn about two axes, so the diagonal brace is a staircase
+  of boxes instead of the 45-degree bar. Collision on diagonal decks = stepped
+  DIAMOND top slab overhanging 6 px into the neighbours (vanilla checks one block
+  past the entity box, the fence rule) so the skipped cells of a diagonal ribbon
+  carry the player. Hand placement picks the run from the player yaw (8 sectors).
+- CREATORS: `el_structure_creator` (`mtr/ItemElStructureCreator`, base
+  ItemNodeModifierSelectableBlockBase(false,0,0)): pass 1 walks the rail at 0.25
+  steps laying a track-deck ribbon one block under the rail (cell run = nearest of 8
+  directions from the perpendicular, crosswise offsets step sqrt2 on diagonals),
+  pass 2 drops a bent every N blocks (columns top-down with UP computed, then the
+  cross girder via compute()). `pillar_creator` = one configurable ItemPillarCreator
+  (the ten fixed ids stay registered, hidden). Settings in item NBT
+  (`CreatorSettings`: Width odd 1..9, Spacing 2..16, Lattice, Girder), written by the
+  server from `update_creator` C2S; right-click in the air (`useWithoutResult`) opens
+  `CreatorSettingsScreen` via `MtrPillars.SETTINGS_OPENER` (installed in
+  MtrPidsClient). The screen's right half is `CreatorPreview`: one span built from
+  real block states and drawn with `BlockRenderManager.renderBlockAsEntity` into
+  the DrawContext's vertex consumers (scissored, GUI depth lighting, turntable +
+  drag). NOT yet exercised in game: the screen, the packet, both creators' build
+  passes (the headless rig cannot click nodes).
+- Rig lessons: Axiom 5.4.2 lives in `run/mods` for the dev rig (both JVMs load it);
+  a SECOND Claude session (service posters) shared this working tree and this rig
+  client at the same time - it broke one restart (its screens were not written yet)
+  and its GUI sat in front of my cameras; check `git status` for foreign files
+  before blaming a batch. `${G}[axis=x]` not `$G[...]` in zsh probe scripts.
+
 Still to do in the platform section: Thomas's in-game pass (door opening with a
 real train, placement feel, sign text via brush), then delete the v1 ids that
 these replace. Then fare control / stairs.

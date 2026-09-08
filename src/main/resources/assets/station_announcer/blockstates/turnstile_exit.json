@@ -6,16 +6,7 @@
         "half": "lower"
       },
       "apply": {
-        "model": "station_announcer:block/turnstile_cabinet"
-      }
-    },
-    {
-      "when": {
-        "facing": "north",
-        "half": "lower"
-      },
-      "apply": {
-        "model": "station_announcer:block/turnstile_arm"
+        "model": "station_announcer:block/ts_cabinet"
       }
     },
     {
@@ -24,17 +15,7 @@
         "half": "upper"
       },
       "apply": {
-        "model": "station_announcer:block/turnstile_upper_exit"
-      }
-    },
-    {
-      "when": {
-        "facing": "north",
-        "half": "upper",
-        "indicator": "off"
-      },
-      "apply": {
-        "model": "station_announcer:block/turnstile_exit_lamp_off"
+        "model": "station_announcer:block/ts_upper_exit"
       }
     },
     {
@@ -44,7 +25,7 @@
         "indicator": "go"
       },
       "apply": {
-        "model": "station_announcer:block/turnstile_exit_lamp_go"
+        "model": "station_announcer:block/ts_lamp_exit_go"
       }
     },
     {
@@ -54,7 +35,7 @@
         "indicator": "stop"
       },
       "apply": {
-        "model": "station_announcer:block/turnstile_exit_lamp_stop"
+        "model": "station_announcer:block/ts_lamp_exit_stop"
       }
     },
     {
@@ -64,39 +45,7 @@
         "indicator": "wait"
       },
       "apply": {
-        "model": "station_announcer:block/turnstile_exit_lamp_wait"
-      }
-    },
-    {
-      "when": {
-        "facing": "north",
-        "half": "upper",
-        "right": "true"
-      },
-      "apply": {
-        "model": "station_announcer:block/turnstile_tube_bridge_exit"
-      }
-    },
-    {
-      "when": {
-        "facing": "north",
-        "half": "upper",
-        "right": "false",
-        "wall_right": "true"
-      },
-      "apply": {
-        "model": "station_announcer:block/turnstile_tube_wall_end"
-      }
-    },
-    {
-      "when": {
-        "facing": "north",
-        "half": "upper",
-        "right": "false",
-        "wall_right": "false"
-      },
-      "apply": {
-        "model": "station_announcer:block/turnstile_tube_end"
+        "model": "station_announcer:block/ts_lamp_exit_wait"
       }
     },
     {
@@ -105,17 +54,7 @@
         "half": "lower"
       },
       "apply": {
-        "model": "station_announcer:block/turnstile_cabinet",
-        "y": 90
-      }
-    },
-    {
-      "when": {
-        "facing": "east",
-        "half": "lower"
-      },
-      "apply": {
-        "model": "station_announcer:block/turnstile_arm",
+        "model": "station_announcer:block/ts_cabinet",
         "y": 90
       }
     },
@@ -125,18 +64,7 @@
         "half": "upper"
       },
       "apply": {
-        "model": "station_announcer:block/turnstile_upper_exit",
-        "y": 90
-      }
-    },
-    {
-      "when": {
-        "facing": "east",
-        "half": "upper",
-        "indicator": "off"
-      },
-      "apply": {
-        "model": "station_announcer:block/turnstile_exit_lamp_off",
+        "model": "station_announcer:block/ts_upper_exit",
         "y": 90
       }
     },
@@ -147,7 +75,7 @@
         "indicator": "go"
       },
       "apply": {
-        "model": "station_announcer:block/turnstile_exit_lamp_go",
+        "model": "station_announcer:block/ts_lamp_exit_go",
         "y": 90
       }
     },
@@ -158,7 +86,7 @@
         "indicator": "stop"
       },
       "apply": {
-        "model": "station_announcer:block/turnstile_exit_lamp_stop",
+        "model": "station_announcer:block/ts_lamp_exit_stop",
         "y": 90
       }
     },
@@ -169,42 +97,7 @@
         "indicator": "wait"
       },
       "apply": {
-        "model": "station_announcer:block/turnstile_exit_lamp_wait",
-        "y": 90
-      }
-    },
-    {
-      "when": {
-        "facing": "east",
-        "half": "upper",
-        "right": "true"
-      },
-      "apply": {
-        "model": "station_announcer:block/turnstile_tube_bridge_exit",
-        "y": 90
-      }
-    },
-    {
-      "when": {
-        "facing": "east",
-        "half": "upper",
-        "right": "false",
-        "wall_right": "true"
-      },
-      "apply": {
-        "model": "station_announcer:block/turnstile_tube_wall_end",
-        "y": 90
-      }
-    },
-    {
-      "when": {
-        "facing": "east",
-        "half": "upper",
-        "right": "false",
-        "wall_right": "false"
-      },
-      "apply": {
-        "model": "station_announcer:block/turnstile_tube_end",
+        "model": "station_announcer:block/ts_lamp_exit_wait",
         "y": 90
       }
     },
@@ -214,17 +107,7 @@
         "half": "lower"
       },
       "apply": {
-        "model": "station_announcer:block/turnstile_cabinet",
-        "y": 180
-      }
-    },
-    {
-      "when": {
-        "facing": "south",
-        "half": "lower"
-      },
-      "apply": {
-        "model": "station_announcer:block/turnstile_arm",
+        "model": "station_announcer:block/ts_cabinet",
         "y": 180
       }
     },
@@ -234,18 +117,7 @@
         "half": "upper"
       },
       "apply": {
-        "model": "station_announcer:block/turnstile_upper_exit",
-        "y": 180
-      }
-    },
-    {
-      "when": {
-        "facing": "south",
-        "half": "upper",
-        "indicator": "off"
-      },
-      "apply": {
-        "model": "station_announcer:block/turnstile_exit_lamp_off",
+        "model": "station_announcer:block/ts_upper_exit",
         "y": 180
       }
     },
@@ -256,7 +128,7 @@
         "indicator": "go"
       },
       "apply": {
-        "model": "station_announcer:block/turnstile_exit_lamp_go",
+        "model": "station_announcer:block/ts_lamp_exit_go",
         "y": 180
       }
     },
@@ -267,7 +139,7 @@
         "indicator": "stop"
       },
       "apply": {
-        "model": "station_announcer:block/turnstile_exit_lamp_stop",
+        "model": "station_announcer:block/ts_lamp_exit_stop",
         "y": 180
       }
     },
@@ -278,42 +150,7 @@
         "indicator": "wait"
       },
       "apply": {
-        "model": "station_announcer:block/turnstile_exit_lamp_wait",
-        "y": 180
-      }
-    },
-    {
-      "when": {
-        "facing": "south",
-        "half": "upper",
-        "right": "true"
-      },
-      "apply": {
-        "model": "station_announcer:block/turnstile_tube_bridge_exit",
-        "y": 180
-      }
-    },
-    {
-      "when": {
-        "facing": "south",
-        "half": "upper",
-        "right": "false",
-        "wall_right": "true"
-      },
-      "apply": {
-        "model": "station_announcer:block/turnstile_tube_wall_end",
-        "y": 180
-      }
-    },
-    {
-      "when": {
-        "facing": "south",
-        "half": "upper",
-        "right": "false",
-        "wall_right": "false"
-      },
-      "apply": {
-        "model": "station_announcer:block/turnstile_tube_end",
+        "model": "station_announcer:block/ts_lamp_exit_wait",
         "y": 180
       }
     },
@@ -323,17 +160,7 @@
         "half": "lower"
       },
       "apply": {
-        "model": "station_announcer:block/turnstile_cabinet",
-        "y": 270
-      }
-    },
-    {
-      "when": {
-        "facing": "west",
-        "half": "lower"
-      },
-      "apply": {
-        "model": "station_announcer:block/turnstile_arm",
+        "model": "station_announcer:block/ts_cabinet",
         "y": 270
       }
     },
@@ -343,18 +170,7 @@
         "half": "upper"
       },
       "apply": {
-        "model": "station_announcer:block/turnstile_upper_exit",
-        "y": 270
-      }
-    },
-    {
-      "when": {
-        "facing": "west",
-        "half": "upper",
-        "indicator": "off"
-      },
-      "apply": {
-        "model": "station_announcer:block/turnstile_exit_lamp_off",
+        "model": "station_announcer:block/ts_upper_exit",
         "y": 270
       }
     },
@@ -365,7 +181,7 @@
         "indicator": "go"
       },
       "apply": {
-        "model": "station_announcer:block/turnstile_exit_lamp_go",
+        "model": "station_announcer:block/ts_lamp_exit_go",
         "y": 270
       }
     },
@@ -376,7 +192,7 @@
         "indicator": "stop"
       },
       "apply": {
-        "model": "station_announcer:block/turnstile_exit_lamp_stop",
+        "model": "station_announcer:block/ts_lamp_exit_stop",
         "y": 270
       }
     },
@@ -387,42 +203,7 @@
         "indicator": "wait"
       },
       "apply": {
-        "model": "station_announcer:block/turnstile_exit_lamp_wait",
-        "y": 270
-      }
-    },
-    {
-      "when": {
-        "facing": "west",
-        "half": "upper",
-        "right": "true"
-      },
-      "apply": {
-        "model": "station_announcer:block/turnstile_tube_bridge_exit",
-        "y": 270
-      }
-    },
-    {
-      "when": {
-        "facing": "west",
-        "half": "upper",
-        "right": "false",
-        "wall_right": "true"
-      },
-      "apply": {
-        "model": "station_announcer:block/turnstile_tube_wall_end",
-        "y": 270
-      }
-    },
-    {
-      "when": {
-        "facing": "west",
-        "half": "upper",
-        "right": "false",
-        "wall_right": "false"
-      },
-      "apply": {
-        "model": "station_announcer:block/turnstile_tube_end",
+        "model": "station_announcer:block/ts_lamp_exit_wait",
         "y": 270
       }
     }

@@ -73,6 +73,80 @@
     "model": "station_announcer:block/el_girder_brace_pos",
     "y": 90
    }
+  },
+  {
+   "when": {
+    "axis": "xz"
+   },
+   "apply": {
+    "model": "station_announcer:block/el_girder_plate_body_diag"
+   }
+  },
+  {
+   "when": {
+    "axis": "xz",
+    "braced": "true"
+   },
+   "apply": {
+    "model": "station_announcer:block/el_girder_brace_here_diag"
+   }
+  },
+  {
+   "when": {
+    "axis": "xz",
+    "brace_neg": "true"
+   },
+   "apply": {
+    "model": "station_announcer:block/el_girder_brace_neg_diag"
+   }
+  },
+  {
+   "when": {
+    "axis": "xz",
+    "brace_pos": "true"
+   },
+   "apply": {
+    "model": "station_announcer:block/el_girder_brace_pos_diag"
+   }
+  },
+  {
+   "when": {
+    "axis": "zx"
+   },
+   "apply": {
+    "model": "station_announcer:block/el_girder_plate_body_diag",
+    "y": 90
+   }
+  },
+  {
+   "when": {
+    "axis": "zx",
+    "braced": "true"
+   },
+   "apply": {
+    "model": "station_announcer:block/el_girder_brace_here_diag",
+    "y": 90
+   }
+  },
+  {
+   "when": {
+    "axis": "zx",
+    "brace_neg": "true"
+   },
+   "apply": {
+    "model": "station_announcer:block/el_girder_brace_neg_diag",
+    "y": 90
+   }
+  },
+  {
+   "when": {
+    "axis": "zx",
+    "brace_pos": "true"
+   },
+   "apply": {
+    "model": "station_announcer:block/el_girder_brace_pos_diag",
+    "y": 90
+   }
   }
  ]
 }

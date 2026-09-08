@@ -66,6 +66,13 @@ public final class MtrPidsClient {
     }
 
     public static void register() {
+        // Fare array: perforated HEET cage + transparent-cornered lamp plates.
+        net.fabricmc.fabric.api.blockrenderlayer.v1.BlockRenderLayerMap.INSTANCE.putBlocks(
+                net.minecraft.client.render.RenderLayer.getCutoutMipped(),
+                com.stationannouncer.mtr.MtrStationDecor.TURNSTILE,
+                com.stationannouncer.mtr.MtrStationDecor.TURNSTILE_EXIT,
+                com.stationannouncer.mtr.MtrStationDecor.TURNSTILE_HEET,
+                com.stationannouncer.mtr.MtrStationDecor.TURNSTILE_CAP);
         // The exit door's upper half is a wire-mesh window (alpha holes),
         // and the mesh employee door is wire mesh top and bottom.
         net.fabricmc.fabric.api.blockrenderlayer.v1.BlockRenderLayerMap.INSTANCE.putBlock(
@@ -97,6 +104,7 @@ public final class MtrPidsClient {
         BlockEntityRendererFactories.register(MtrStationDecor.STOP_MARKER_BLOCK_ENTITY, context -> new StopMarkerRenderer());
         BlockEntityRendererFactories.register(MtrPids.RAILROAD_PIDS_BLOCK_ENTITY, context -> new RailroadPidsRenderer());
         BlockEntityRendererFactories.register(MtrStationDecor.SERVICE_POSTER_BLOCK_ENTITY, context -> new ServicePosterRenderer());
+        BlockEntityRendererFactories.register(MtrStationDecor.TURNSTILE_BLOCK_ENTITY, context -> new TurnstileRenderer());
         BlockEntityRendererFactories.register(MtrPids.RAILROAD_HANGING_BLOCK_ENTITY, context -> new RailroadHangingRenderer());
         BlockEntityRendererFactories.register(MtrPids.RAILROAD_DEPARTURE_BLOCK_ENTITY, context -> new RailroadDepartureRenderer());
         BlockEntityRendererFactories.register(MtrPids.DEPARTURE_BOARD_BLOCK_ENTITY, context -> new DepartureBoardRenderer());
@@ -184,11 +192,13 @@ public final class MtrPidsClient {
                 // platform, everything else edits its name text.
                 if (decor.getCachedState().getBlock() instanceof com.stationannouncer.mtr.HoldingLightBlock) {
                     MinecraftClient.getInstance().setScreen(new HoldingLightScreen(decor));
-                } else if (decor.getCachedState().getBlock() instanceof com.stationannouncer.mtr.RailingSignBlock
-                        || decor.getCachedState().getBlock() instanceof com.stationannouncer.mtr.ElEntranceSignBlock) {
-                    // Entrance signs have two independently configurable faces
-                    // and carry route bullets, so they get their own screen.
-                    MinecraftClient.getInstance().setScreen(new RailingSignScreen(decor));
+                } else if (decor.getCachedState().getBlock() instanceof com.stationannouncer.mtr.MtaSignBlock) {
+                    MinecraftClient.getInstance().setScreen(new SignEditScreen(decor));
+                } else if (com.stationannouncer.mtr.sign.LegacySigns.kindOf(decor.getCachedState().getBlock())
+                        != com.stationannouncer.mtr.sign.LegacySigns.Kind.NONE) {
+                    // The older text signs (entrance railing / el entrance / el
+                    // boards) now edit and draw through the MTA sign system.
+                    MinecraftClient.getInstance().setScreen(new SignEditScreen(decor));
                 } else {
                     MinecraftClient.getInstance().setScreen(new StationSignScreen(decor));
                 }

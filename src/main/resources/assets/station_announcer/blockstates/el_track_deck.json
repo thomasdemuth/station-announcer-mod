@@ -6,6 +6,13 @@
   "axis=z": {
    "model": "station_announcer:block/el_track_deck",
    "y": 90
+  },
+  "axis=xz": {
+   "model": "station_announcer:block/el_track_deck_diag"
+  },
+  "axis=zx": {
+   "model": "station_announcer:block/el_track_deck_diag",
+   "y": 90
   }
  }
 }

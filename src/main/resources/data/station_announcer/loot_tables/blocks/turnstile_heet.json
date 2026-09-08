@@ -14,7 +14,7 @@
           "condition": "minecraft:block_state_property",
           "block": "station_announcer:turnstile_heet",
           "properties": {
-            "half": "lower"
+            "part": "lane_lower"
           }
         },
         {

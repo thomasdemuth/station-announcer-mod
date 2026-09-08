@@ -10,7 +10,6 @@ import net.minecraft.entity.LivingEntity;
 import net.minecraft.item.ItemPlacementContext;
 import net.minecraft.item.ItemStack;
 import net.minecraft.state.StateManager;
-import net.minecraft.state.property.BooleanProperty;
 import net.minecraft.state.property.DirectionProperty;
 import net.minecraft.state.property.EnumProperty;
 import net.minecraft.state.property.Properties;
@@ -23,37 +22,32 @@ import net.minecraft.world.WorldAccess;
 import org.jetbrains.annotations.Nullable;
 
 /**
- * Shared machinery for the fare-control units (turnstile and end cap):
- * two-block-tall door-style multiblocks that detect the neighboring unit on
- * their right (along the row, facing-relative) so the overhead tubing knows
- * whether to bridge across to the next unit or end in a cap.
+ * Shared machinery for the low fare-array units (turnstile lanes and the
+ * array end cap): two-block-tall door-style multiblocks.
+ *
+ * <p>Frame conventions (v2, 2026-09-06): {@link #FACING} is the direction an
+ * ENTERING rider walks (unpaid to paid), set from where the placer looks.
+ * The cabinet stands on the rider's right; the lane opens to the rider's
+ * LEFT, where the next unit's cabinet (or the end cap) closes it — that
+ * neighbour is {@link #laneSide(BlockState)}.
  */
 public abstract class TurnstileBaseBlock extends Block {
     public static final DirectionProperty FACING = Properties.HORIZONTAL_FACING;
     public static final EnumProperty<DoubleBlockHalf> HALF = Properties.DOUBLE_BLOCK_HALF;
-    /** Another fare-control unit continues to the right (facing-relative). */
-    public static final BooleanProperty RIGHT = BooleanProperty.of("right");
-    /** No unit to the right, but a solid wall — the tube run ends in a
-     * mounting collar against it instead of the curled elbow drop. */
-    public static final BooleanProperty WALL_RIGHT = BooleanProperty.of("wall_right");
 
     protected TurnstileBaseBlock(Settings settings) {
         super(settings);
-        setDefaultState(getDefaultState()
-                .with(FACING, Direction.NORTH)
-                .with(HALF, DoubleBlockHalf.LOWER)
-                .with(RIGHT, false)
-                .with(WALL_RIGHT, false));
+        setDefaultState(getDefaultState().with(FACING, Direction.NORTH).with(HALF, DoubleBlockHalf.LOWER));
     }
 
     @Override
     protected void appendProperties(StateManager.Builder<Block, BlockState> builder) {
-        builder.add(FACING, HALF, RIGHT, WALL_RIGHT);
+        builder.add(FACING, HALF);
     }
 
-    /** Direction along the row toward this unit's neighbor side. */
-    protected static Direction rightDirection(BlockState state) {
-        return state.get(FACING).rotateYClockwise();
+    /** Direction from this unit toward the neighbour that closes its lane (rider's left). */
+    public static Direction laneSide(BlockState state) {
+        return state.get(FACING).rotateYCounterclockwise();
     }
 
     @Nullable
@@ -65,16 +59,16 @@ public abstract class TurnstileBaseBlock extends Block {
             return null; // needs two blocks of room
         }
         BlockState state = getDefaultState()
-                .with(FACING, context.getHorizontalPlayerFacing().getOpposite())
+                .with(FACING, context.getHorizontalPlayerFacing())
                 .with(HALF, DoubleBlockHalf.LOWER);
-        return withRow(state, world, pos);
+        return withNeighbours(state, world, pos);
     }
 
     @Override
     public void onPlaced(World world, BlockPos pos, BlockState state, @Nullable LivingEntity placer, ItemStack itemStack) {
         super.onPlaced(world, pos, state, placer, itemStack);
         BlockState upper = state.with(HALF, DoubleBlockHalf.UPPER);
-        world.setBlockState(pos.up(), withRow(upper, world, pos.up()), Block.NOTIFY_ALL);
+        world.setBlockState(pos.up(), withNeighbours(upper, world, pos.up()), Block.NOTIFY_ALL);
     }
 
     @Override
@@ -87,38 +81,18 @@ public abstract class TurnstileBaseBlock extends Block {
                 && (!neighborState.isOf(this) || neighborState.get(HALF) == half)) {
             return Blocks.AIR.getDefaultState();
         }
-        return withRow(state, world, pos);
+        return withNeighbours(state, world, pos);
     }
 
-    /** Recomputes both row properties: the neighbouring unit, or failing
-     * that whether a solid wall closes the row on the right. */
-    private BlockState withRow(BlockState state, WorldAccess world, BlockPos pos) {
-        boolean right = connectsRight(state, world, pos);
-        boolean wall = false;
-        if (!right && joinsRow()) {
-            Direction toWall = rightDirection(state);
-            BlockPos wallPos = pos.offset(toWall);
-            wall = world.getBlockState(wallPos).isSideSolidFullSquare(world, wallPos, toWall.getOpposite());
-        }
-        return state.with(RIGHT, right).with(WALL_RIGHT, wall);
+    /** Hook for row-dependent properties (the lane's arch join); the cap has none. */
+    protected BlockState withNeighbours(BlockState state, WorldAccess world, BlockPos pos) {
+        return state;
     }
 
-    /**
-     * Whether this unit takes part in a fare array row (shared overhead tubing).
-     * The full-height gate is a self-contained cage, so it opts out and its
-     * neighbors end their tube runs against it with a cap.
-     */
-    protected boolean joinsRow() {
-        return true;
-    }
-
-    /** True when the same-half block of another fare-control unit with the same facing sits to the right. */
-    private boolean connectsRight(BlockState state, WorldAccess world, BlockPos pos) {
-        if (!joinsRow()) {
-            return false;
-        }
-        BlockState neighbor = world.getBlockState(pos.offset(rightDirection(state)));
-        return neighbor.getBlock() instanceof TurnstileBaseBlock other && other.joinsRow()
+    /** True when the same-half block of another fare-array unit with the same facing sits on the lane side. */
+    protected static boolean joinsLaneSide(BlockState state, WorldAccess world, BlockPos pos) {
+        BlockState neighbor = world.getBlockState(pos.offset(laneSide(state)));
+        return neighbor.getBlock() instanceof TurnstileBaseBlock
                 && neighbor.get(HALF) == state.get(HALF)
                 && neighbor.get(FACING) == state.get(FACING);
     }
@@ -128,8 +102,8 @@ public abstract class TurnstileBaseBlock extends Block {
         return shapes[state.get(FACING).getHorizontal()];
     }
 
-    /** Builds the four rotations of a NORTH-facing shape (indexed by Direction.getHorizontal()). */
-    protected static VoxelShape[] rotations(VoxelShape north) {
+    /** Builds the four rotations of a NORTH-frame shape (indexed by Direction.getHorizontal()). */
+    public static VoxelShape[] rotations(VoxelShape north) {
         VoxelShape east = FacingDecorBlock.rotateClockwise(north);
         VoxelShape south = FacingDecorBlock.rotateClockwise(east);
         VoxelShape west = FacingDecorBlock.rotateClockwise(south);

@@ -1,0 +1,23 @@
+{
+ "type": "minecraft:crafting_shaped",
+ "category": "building",
+ "key": {
+  "I": {
+   "item": "minecraft:iron_ingot"
+  },
+  "B": {
+   "item": "minecraft:black_dye"
+  },
+  "P": {
+   "item": "minecraft:paper"
+  }
+ },
+ "pattern": [
+  "I I",
+  "BPB"
+ ],
+ "result": {
+  "item": "station_announcer:mta_sign_half",
+  "count": 2
+ }
+}

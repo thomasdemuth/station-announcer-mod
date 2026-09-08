@@ -1,4 +1,4 @@
-# EL KIT v2 — HANDOFF (2026-09-04, mid FARE CONTROL / STAIRS section)
+# EL KIT v2 — HANDOFF (2026-09-05, STRUCTURE section round 1 built; stairs section paused)
 
 Read this first, then `EL_STATION_PLAN.md` (v2 section at the top: platform rounds 1-8,
 then "FARE CONTROL / STAIRS" rounds 1-6 with every decision), then the generators
@@ -10,21 +10,21 @@ refs, uv ranges).
 
 ## 1. Where things stand
 
-- **Play profiles have 2.4.52** (deployed via `tools/deploy_jar.sh`). The source tree is
-  AHEAD of it: rounds 5-6 (icons, hitboxes, corner posts, doorway course, stairwell-rim
-  placement, post stubs, stacked-course fixes) are compiled into the DEV world only.
-  **First job: bump `mod_version` to 2.4.53, `./gradlew build`, `tools/deploy_jar.sh`**
-  (refuses while Thomas's real game is open — ask him to close it).
-- **Working tree is uncommitted** (Thomas never asked for a commit; commit only when he does).
-- **Thomas is testing live in the dev world** (see §6). He sends screenshots + one-line
-  asks; the loop is: fix → if model/texture only, copy into `build/resources/main/...`
-  and tell him **F3+T**; if Java, wait for his word "restart", then `rig_restart.sh`.
-  NEVER run Gradle while the dev world is up (kills both JVMs = his session).
-- **Last Java batch is NOT yet compiled** (rig was up): stacked courses inherit
-  FACING/SIDE + LEVEL from the course below; `ElStairSideItem` FAILs when the outside
-  column is blocked; `ElWallDoorwayBlock`; `EdgeRunItem` stairwell-rim placement. Expect
-  to compile these at the next restart — if `rig_restart.sh` prints SERVER FAILED, read
-  its server.log for the javac error.
+- **Play profiles have 2.4.53** (deployed 2026-09-05 morning; the rounds 5-6 stair batch
+  compiled first try). Repo pushed to GitHub at that point (commit f649a57).
+- **Dev tree is AHEAD again**: STRUCTURE round 1 (see EL_STATION_PLAN.md "STRUCTURE,
+  round 1") - street columns, plate girder with self-computing knee braces, track /
+  plate decks, DIAGONAL runs (`ElRun`), the configurable Pillar Creator + El Structure
+  Creator with the settings screen and 3D preview. Compiled and rig-verified for the
+  blocks; the creators and the screen are NOT yet exercised in game. Not deployed,
+  not committed. Next deploy = bump to 2.4.54, build, deploy_jar.sh, commit + push.
+- A SECOND session (service-change posters: `ServicePoster*`, `Poster*Screen`,
+  `ClientPosters`, addon store edits) works in the same tree and the same rig client.
+  Do not touch its files; if a build fails on `Poster*` symbols, that session is
+  mid-write - wait, do not "fix".
+- **Thomas tests live in the dev world** (§6). Model/texture: copy into
+  `build/resources/main/...` + F3+T. Java: wait for his "restart", then `rig_restart.sh`
+  (Gradle kills both JVMs = his session).
 
 ## 2. Thomas's rules (do not re-ask)
 
@@ -92,6 +92,13 @@ course, `el_roof` on top.
 
 ## 5. Open items / what Thomas may ask next
 
+0. STRUCTURE follow-ups: Thomas to try both creators (node clicks) + the settings
+   screen/preview; diagonal brace look; lattice truss girder + sway bracing between
+   columns (offered); platform-edge fascia if the concrete face reads fat; then PAINT
+   (station tint / per-station override - brainstorm in the 2026-09-05 chat: PAINT
+   {green, tinted} property, tint-base textures, per-station override in the
+   Dispatch UI, brush repaint of a whole run).
+
 1. Deploy 2.4.53 (see §1) and confirm the not-yet-compiled batch builds.
 2. Stair house in-game pass: rim-wall placement feel, doorway, roof on the house; the
    sides of a stair cutting through the slab should be solid (`el_stair_wall`).
@@ -103,6 +110,13 @@ course, `el_roof` on top.
    deleting the 46 v1 ids.
 
 ## 6. The dev world / rig (scratchpad of this session; recreate if gone)
+
+Structure scenes (scratchpad `ab3d844a-...`): `st_struct.txt` (two bents + decks +
+floors, x 259-273 z 302-316, street y 99), `st_diag.txt` (diagonal girder run + zx
+deck ribbon, x 276-290). Axiom 5.4.2 is in `run/mods` (copied from the Essential
+profile). Probe blocks with `/execute if block X Y Z <id>[prop=v] run say TAG` lines in
+a scene and grep `[Rig]` in server.log; in zsh write `${G}[...]`, never `$G[...]`.
+Camera shots fail while the client's chat screen is open - ask Thomas to press Esc.
 
 Scratchpad: `/private/tmp/claude-501/-Users-thomasdemuth-Documents-Coding-Projects-Station-Announcer-Mod/<session>/scratchpad/`
 with `rig_restart.sh` (kills JVMs, `./gradlew runServer` bg, `runClient

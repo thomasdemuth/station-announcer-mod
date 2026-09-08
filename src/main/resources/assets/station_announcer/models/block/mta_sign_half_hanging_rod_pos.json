@@ -1,0 +1,76 @@
+{
+ "textures": {
+  "plate": "station_announcer:block/mta_sign_plate",
+  "steel": "station_announcer:block/mta_sign_steel"
+ },
+ "elements": [
+  {
+   "from": [
+    13.5,
+    12,
+    7.5
+   ],
+   "to": [
+    14.5,
+    16,
+    8.5
+   ],
+   "faces": {
+    "north": {
+     "uv": [
+      0,
+      0,
+      1,
+      4
+     ],
+     "texture": "#steel"
+    },
+    "south": {
+     "uv": [
+      0,
+      0,
+      1,
+      4
+     ],
+     "texture": "#steel"
+    },
+    "east": {
+     "uv": [
+      0,
+      0,
+      1,
+      4
+     ],
+     "texture": "#steel"
+    },
+    "west": {
+     "uv": [
+      0,
+      0,
+      1,
+      4
+     ],
+     "texture": "#steel"
+    },
+    "up": {
+     "uv": [
+      0,
+      0,
+      1,
+      4
+     ],
+     "texture": "#steel"
+    },
+    "down": {
+     "uv": [
+      0,
+      0,
+      1,
+      4
+     ],
+     "texture": "#steel"
+    }
+   }
+  }
+ ]
+}

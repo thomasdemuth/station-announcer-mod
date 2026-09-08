@@ -80,6 +80,15 @@ public class StationDecorBlockEntity extends BlockEntity {
     private List<String> frontRoutes = List.of();
     private List<String> backRoutes = List.of();
 
+    /**
+     * MTA-style sign content (the {@code mta_sign} blocks, and any of the older
+     * text signs once edited in the sign editor). Null = never set: the
+     * renderer then derives a sign from the legacy fields above, so every
+     * placement from before the sign system draws exactly as it always did.
+     */
+    @Nullable
+    private com.stationannouncer.mtr.sign.SignFaces sign;
+
     public StationDecorBlockEntity(BlockPos pos, BlockState state) {
         super(MtrStationDecor.DECOR_BLOCK_ENTITY, pos, state);
     }
@@ -95,6 +104,9 @@ public class StationDecorBlockEntity extends BlockEntity {
         nbt.putBoolean("SignBack", signBack);
         nbt.put("RoutesFront", routeList(frontRoutes));
         nbt.put("RoutesBack", routeList(backRoutes));
+        if (sign != null) {
+            nbt.putString("Sign", sign.toJson().toString());
+        }
     }
 
     private static NbtList routeList(List<String> routes) {
@@ -120,6 +132,19 @@ public class StationDecorBlockEntity extends BlockEntity {
         setSignBack(!nbt.contains("SignBack") || nbt.getBoolean("SignBack"));
         setFrontRoutes(readRoutes(nbt, "RoutesFront"));
         setBackRoutes(readRoutes(nbt, "RoutesBack"));
+        sign = nbt.contains("Sign") ? com.stationannouncer.mtr.sign.SignFaces.parse(nbt.getString("Sign")) : null;
+    }
+
+    // ------------------------------------------------------------ signs
+
+    /** The MTA-style sign on this block, or null when it was never edited as one. */
+    @Nullable
+    public com.stationannouncer.mtr.sign.SignFaces getSign() {
+        return sign;
+    }
+
+    public void setSign(@Nullable com.stationannouncer.mtr.sign.SignFaces sign) {
+        this.sign = sign;
     }
 
     private static List<String> readRoutes(NbtCompound nbt, String key) {

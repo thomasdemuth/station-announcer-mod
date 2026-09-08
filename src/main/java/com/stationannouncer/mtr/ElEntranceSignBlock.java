@@ -21,7 +21,7 @@ import org.jetbrains.annotations.Nullable;
  * edge, FACING the street; two straps reach the hood's frieze chord. Data
  * rides the shared {@link StationDecorBlockEntity} exactly like the entrance
  * railing sign: custom name, both faces on/off, route bullets per face - the
- * MTR brush opens {@code RailingSignScreen}. Both faces are painted by
+ * MTR brush opens the sign editor ({@code SignEditScreen}). Both faces are painted by
  * {@code StationDecorRenderer.paintEntranceSign}.
  */
 public class ElEntranceSignBlock extends FacingDecorBlock implements BlockEntityProvider {

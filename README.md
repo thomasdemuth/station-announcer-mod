@@ -180,6 +180,36 @@ The concrete and tile platform floors above are the intended walking surface.
   the wall you click, and its sloped runs attach to whichever side of the block
   actually has a wall.
 
+### Subway signs (requires MTR, new in 2.4.57)
+
+The black MTA-style wayfinding signs, built from modules the way the real
+Vignelli/Unimark system is: route bullets, text, an arrow pinned to the edge it
+points at, and live tiles the station fills in.
+
+- **Subway Sign** (full block height) and **Subway Sign (half height)**, both
+  in three mounts picked by where you click: on a wall, hanging from a ceiling,
+  or standing on a rail. Side-by-side panels with the same mount merge into one
+  long sign. Hanging and standing signs are double-sided.
+- **Right-click** a sign to open the editor: rows of tiles on the left, a live
+  preview in the middle (click it to select), the selected tile's settings on
+  the right. **Templates…** fills a face with the standard wordings ("Uptown &
+  The Bronx →", "Exit →", "Line + destination", a station plate…).
+- Tiles: **Bullets** (pick lines, or "all lines at this station"; express
+  service draws a diamond), **Text** (with inline bullets, wheelchair and small
+  arrows; Enter makes a second line), **Arrow** (eight directions, left edge /
+  inline / right edge), **Station** (the MTR station's name, or an override),
+  **Exit** (an exit from MTR's station settings: the word "Exit", its street
+  names, the exit's name in a box, plus a corner note you type — white on the
+  MTA red), **Line + destination** (a route's bullet with "to <terminus>", its
+  direction wording, or your own text), **Space**.
+- Styles: black with the thin white line (today's standard), the 1970 white
+  panel with a black band, or plain black.
+- Everything is stored by name: rename a line, repaint it, change an exit's
+  streets or a route's terminus in MTR and every sign follows.
+- The older text signs — the entrance railing sign, the el entrance sign and
+  the el station boards — now use the same editor and typeface. Old placements
+  keep their content.
+
 ### Railroad PIDS (requires MTR, new in 2.3)
 
 Commuter-railroad departure boards, drawn at twice the resolution of the subway PIDS so

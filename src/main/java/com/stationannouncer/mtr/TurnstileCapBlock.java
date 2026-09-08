@@ -5,12 +5,13 @@ import net.minecraft.block.ShapeContext;
 import net.minecraft.block.enums.DoubleBlockHalf;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.util.shape.VoxelShape;
+import net.minecraft.util.shape.VoxelShapes;
 import net.minecraft.world.BlockView;
 
 /**
- * The solid end housing that closes off a turnstile row (and terminates the
- * overhead tubing). Purely structural — the lanes themselves are
- * {@link TurnstileBlock}s.
+ * Array end: the stainless end panel that closes the last lane, with a post
+ * carrying the arch riser the neighbouring turnstile's arch lands on. Placed
+ * in the cell on the last turnstile's lane side, facing the same way.
  */
 public class TurnstileCapBlock extends TurnstileBaseBlock {
     private final VoxelShape[] lowerShape;
@@ -18,14 +19,14 @@ public class TurnstileCapBlock extends TurnstileBaseBlock {
 
     public TurnstileCapBlock(Settings settings) {
         super(settings);
-        this.lowerShape = rotations(createCuboidShape(0.0, 0.0, 1.0, 8.0, 16.0, 15.0));
-        this.upperShape = rotations(createCuboidShape(0.0, 0.0, 2.0, 8.0, 8.0, 14.0));
+        this.lowerShape = rotations(createCuboidShape(11, 0, 0, 16, 16, 16));
+        this.upperShape = rotations(VoxelShapes.union(
+                createCuboidShape(11, 0, 0, 16, 11, 4),
+                createCuboidShape(12, 11, 0, 15, 14, 3)).simplify());
     }
 
     @Override
     public VoxelShape getOutlineShape(BlockState state, BlockView world, BlockPos pos, ShapeContext context) {
-        return state.get(HALF) == DoubleBlockHalf.UPPER
-                ? rotated(upperShape, state)
-                : rotated(lowerShape, state);
+        return state.get(HALF) == DoubleBlockHalf.UPPER ? rotated(upperShape, state) : rotated(lowerShape, state);
     }
 }

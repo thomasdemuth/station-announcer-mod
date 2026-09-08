@@ -1,29 +1,31 @@
 #!/usr/bin/env python3
-"""Regenerates every turnstile asset: textures, models, blockstates, item
-icons, loot tables and recipes for the fare-array family — `turnstile`,
-`turnstile_exit`, `turnstile_heet` and `turnstile_cap`.
+"""Fare-array family v2 (2026-09-06, from-scratch rebuild): every texture,
+model, blockstate, item icon and loot table for `turnstile`, `turnstile_exit`,
+`turnstile_cap` and `turnstile_heet`.
 
 Run from anywhere:  python3 tools/gen_turnstile_assets.py [--preview DIR]
 
-Design rules honoured here (learned elsewhere in this repo the hard way):
-- Vertical-only shading on textures that tile across stacked blocks (the
-  globe-pole lesson); the arm/tube cylinder gradients live in zones sampled
-  by EXPLICIT uv slices, never auto-UV.
-- Interior uv slices only — never let a face's window touch a sprite edge
-  (the pink-line atlas-bleed lesson).
-- No two elements share an exact plane unless the buried face is omitted
-  (platform-barrier lesson); the cabinet plinth is proud and the body's
-  down face is omitted against it.
-- Every when-key in a blockstate is checked against the block's declared
-  properties (the purple-box lesson) by verify() at the end of main().
+Built to the real hardware (see TURNSTILE_V2.md for the photo/drawing
+research). Scale is 1 block = 1 m (1 px = 6.25 cm), everything authored in
+the NORTH frame: an ENTERING rider walks toward -z, the unpaid side is +z,
+the cabinet is on the rider's RIGHT (x 11..16), the lane is x 0..11 and the
+next unit's cabinet closes it at x = 0. The MOVING parts (tripod, HEET rotor)
+are NOT here — TurnstileRenderer draws them from the block entity.
 
-The INDICATOR lamp is four separate models (off/go/stop/wait) selected by
-the blockstate — the upper model carries no lens at all, so the lamp never
-z-fights itself.
+Contracts honoured (each learned the hard way elsewhere in this repo):
+- every face carries an explicit uv inside 0..16 (auto-UV bleeds the atlas
+  for elements outside the block; `face_uv()` reproduces vanilla's auto-UV
+  and wraps it back onto the sprite);
+- steel textures vary VERTICALLY only (stacked/adjacent faces sampling the
+  same window never band);
+- no two elements share a plane unless the buried face is omitted;
+- verify() checks every blockstate when-key against the Java property sets
+  and every model face's uv.
 """
 
 import argparse
 import json
+import math
 import os
 import sys
 
@@ -37,246 +39,289 @@ DATA = os.path.join(ROOT, "src/main/resources/data")
 MOD = "station_announcer"
 
 # ---------------------------------------------------------------- palette --
-STEEL = (168, 170, 172, 255)
-STEEL_LIT = (206, 208, 211, 255)
-STEEL_BRIGHT = (228, 230, 233, 255)
-STEEL_DARK = (128, 130, 133, 255)
-STEEL_SHADOW = (96, 98, 101, 255)
-KICK = (52, 53, 55, 255)
-PILLAR = (16, 17, 18, 255)          # the black reader pillar
-PILLAR_LIT = (36, 38, 40, 255)
-SCREEN = (24, 34, 46, 255)
-SCREEN_GLOW = (58, 92, 128, 255)
-SLOT = (232, 232, 228, 255)
-TAP = (222, 168, 24, 255)           # yellow tap target
-TAP_DARK = (160, 118, 12, 255)
-RUBBER = (28, 28, 30, 255)
-RUBBER_LIT = (52, 52, 56, 255)
-RED = (190, 24, 28, 255)
-WHITE = (240, 240, 238, 255)
-LAMP_OFF = (26, 30, 27, 255)
-GO = (44, 168, 74, 255)
-GO_CORE = (140, 245, 160, 255)
-STOP = (186, 30, 32, 255)
-STOP_CORE = (255, 128, 118, 255)
-WAIT = (214, 150, 24, 255)
-WAIT_CORE = (255, 214, 120, 255)
+STEEL = (172, 174, 178, 255)
+STEEL_LIT = (204, 206, 210, 255)
+STEEL_BRIGHT = (226, 228, 232, 255)
+STEEL_DARK = (136, 138, 142, 255)
+STEEL_SHADOW = (104, 106, 110, 255)
+PLINTH = (62, 64, 67, 255)
+PLINTH_LIT = (84, 86, 90, 255)
+BLACK = (14, 15, 16, 255)
+PANEL = (28, 29, 31, 255)
+WHITE = (242, 242, 240, 255)
+GREEN = (0, 147, 60, 255)
+GREEN_LIT = (70, 214, 110, 255)
+GREEN_CORE = (190, 255, 200, 255)
+RED = (204, 22, 30, 255)
+RED_LIT = (255, 70, 70, 255)
+RED_CORE = (255, 200, 200, 255)
+AMBER = (240, 170, 30, 255)
+AMBER_CORE = (255, 230, 150, 255)
+LAMP_OFF = (40, 44, 42, 255)
+DISPLAY = (16, 22, 18, 255)
+DISPLAY_GREEN = (80, 230, 120, 255)
+OMNY_BLUE = (60, 120, 255, 255)
+POSTER_BLUE = (0, 57, 166, 255)
+POSTER_YELLOW = (252, 204, 10, 255)
+CLEAR = (0, 0, 0, 0)
 
 
-def brushed(rows, x0, y0, x1, y1, base=STEEL, seed=0):
-    """Brushed stainless: fine vertical streaks, deterministic, tileable.
-    Wider tonal range than the first pass (user: "too flat") — bright grain
-    lines and occasional deep seams, still strictly per-column so stacked
-    faces sampling the same window never band at a block seam."""
-    tones = [base, STEEL_LIT, base, STEEL_DARK, base, STEEL_BRIGHT, base,
-             STEEL_LIT, base, base, STEEL_DARK, base]
+# --------------------------------------------------------------- textures --
+def brushed(rows, x0, y0, x1, y1, base=STEEL, lit=STEEL_LIT, dark=STEEL_DARK,
+            bright=STEEL_BRIGHT, seam=STEEL_SHADOW, seed=0):
+    """#4 satin stainless: per-COLUMN tones only (vertical grain), so a face
+    sampling any window of it never bands against its neighbours."""
+    tones = [base, lit, base, dark, base, bright, base, lit, base, base, dark, base, lit]
     for x in range(x0, x1):
         t = tones[(x * 7 + seed * 3) % len(tones)]
-        if (x * 11 + seed) % 13 == 5:
-            t = STEEL_SHADOW                 # deep brushed seam
+        if (x * 11 + seed) % 17 == 5:
+            t = seam
         for y in range(y0, y1):
             rows[y][x] = t
 
 
-# ---------------------------------------------------------------- textures --
 def tex_steel():
-    """Generic brushed stainless, 32px, vertical-only variation."""
     rows = pk.canvas(32, 32, STEEL)
     brushed(rows, 0, 0, 32, 32)
     return rows
 
 
-def tex_face(exit_variant):
-    """The dressing texture. 32px. Layout (pixels):
-    - x0..10  y0..20: reader-pillar FRONT, north/approach strip (10 model px tall)
-    - x10..20 y0..20: reader-pillar front, south strip
-    - x20..32 y0..20: pillar SIDE (plain black with a seam)
-    - x0..32  y20..32: dark plinth/kick band (plinth + arm housing dress)
-    The exit variant paints the white-on-red no-entry bar on the NORTH strip:
-    that side is the wrong way through an exit-only lane."""
-    rows = pk.canvas(32, 32, PILLAR)
-    for sx in (0, 10):
-        pk.rect(rows, sx, 0, sx + 10, 20, PILLAR)
-        pk.rect(rows, sx, 0, sx + 1, 20, PILLAR_LIT)      # lit edge column
-        pk.rect(rows, sx + 9, 0, sx + 10, 20, (10, 10, 11, 255))
-        # screen window: recessed bezel, glowing scanlined panel
-        pk.rect(rows, sx + 1, 1, sx + 9, 7, (8, 8, 9, 255))
-        pk.rect(rows, sx + 2, 2, sx + 8, 6, SCREEN)
-        for y in range(2, 6, 2):
-            pk.rect(rows, sx + 2, y, sx + 8, y + 1, SCREEN_GLOW)
-        pk.rect(rows, sx + 2, 2, sx + 3, 6, (40, 62, 88, 255))
-        # card slot: steel throat with a lit lip and insert arrows
-        pk.rect(rows, sx + 2, 8, sx + 8, 10, (8, 8, 9, 255))
-        pk.rect(rows, sx + 3, 8, sx + 7, 9, SLOT)
-        rows[9][sx + 4] = SLOT
-        rows[9][sx + 6] = SLOT
-        # yellow tap target: concentric rings around a bright core
-        pk.rect(rows, sx + 2, 11, sx + 8, 17, TAP_DARK)
-        pk.rect(rows, sx + 3, 12, sx + 7, 16, TAP)
-        pk.rect(rows, sx + 4, 13, sx + 6, 15, TAP_DARK)
-        rows[14][sx + 5] = WHITE
-        rows[13][sx + 5] = TAP
+def tex_steel_dark():
+    rows = pk.canvas(32, 32, PLINTH)
+    brushed(rows, 0, 0, 32, 32, base=PLINTH, lit=PLINTH_LIT, dark=(50, 52, 55, 255),
+            bright=(96, 98, 102, 255), seam=(40, 42, 44, 255), seed=3)
+    return rows
+
+
+def tex_flat():
+    """Grain-free steel: the drum canopy lids (eight rotated slabs share those
+    planes, any grain would show eight seams) and the renderer's tubes."""
+    return pk.canvas(32, 32, (184, 186, 190, 255))
+
+
+def tex_perf():
+    """16-gauge perforated sheet: 1-texel holes on a staggered 2-texel grid
+    (2 texels per model px — the drawing's 1/4 in holes on 7/16 centres are
+    sub-pixel, this is the coarsest pattern that still reads as perforation)."""
+    rows = pk.canvas(32, 32, STEEL)
+    brushed(rows, 0, 0, 32, 32, base=(160, 162, 166, 255), seed=5)
+    for y in range(32):
+        for x in range(32):
+            if (x + (y // 2) * 1) % 2 == 0 and y % 2 == 0:
+                rows[y][x] = CLEAR
+    return rows
+
+
+def seams(rows, cols=(), rowlines=(), colour=(120, 122, 126, 255), x0=0, x1=32, y0=0, y1=32):
+    """Panel seam lines (1 texel) — the only non-vertical detail steel gets;
+    seams sit where panel joints are on the real cabinet."""
+    for c in cols:
+        pk.vline(rows, c, y0, y1, colour)
+    for r in rowlines:
+        pk.hline(rows, r, colour, x0, x1)
+
+
+def tex_cabinet():
+    """Cabinet SIDE faces (auto-UV, 2 texels/px): brushed stainless with the
+    real cabinet's panel joints — a horizontal seam at y 12 (row 8) and
+    verticals at z 4 / z 12 — plus a few fastener dots."""
+    rows = tex_steel()
+    seams(rows, cols=(8, 24), rowlines=(8,))
+    for (x, y) in ((4, 4), (28, 4), (4, 28), (28, 28), (16, 12)):
+        rows[y][x] = (110, 112, 116, 255)
+    return rows
+
+
+def tex_cabinet_end():
+    """Approach end (south face, texels u 22..32 v 0..30): a recessed label
+    plate low on the face (the "Special entry" plate spot) and a seam."""
+    rows = tex_steel()
+    brushed(rows, 22, 0, 32, 32, seed=2)
+    seams(rows, rowlines=(8,), x0=22, x1=32)
+    pk.rect(rows, 24, 18, 30, 26, (118, 120, 124, 255))
+    pk.rect(rows, 25, 19, 29, 25, (150, 152, 156, 255))
+    pk.rect(rows, 25, 20, 29, 21, (40, 120, 60, 255))
+    return rows
+
+
+def tex_recess():
+    """The dark mechanism cover recessed into the lane side under the tripod."""
+    rows = pk.canvas(32, 32, (26, 27, 29, 255))
+    brushed(rows, 0, 0, 32, 32, base=(26, 27, 29, 255), lit=(34, 35, 38, 255), dark=(20, 21, 23, 255),
+            bright=(40, 41, 44, 255), seam=(16, 17, 18, 255), seed=11)
+    return rows
+
+
+def tex_reader():
+    """Reader unit on the cabinet top. OMNY tablet face at u 0..8 v 0..12
+    (black, blue corner lights, tap glyph); reader box top at u 16..32
+    v 24..32 (MetroCard swipe track with arrows, yellow decal)."""
+    rows = tex_steel()
+    pk.rect(rows, 0, 0, 8, 12, PANEL)
+    pk.rect(rows, 1, 1, 7, 11, (10, 12, 20, 255))
+    for (x, y) in ((1, 1), (6, 1), (1, 10), (6, 10)):
+        rows[y][x] = OMNY_BLUE
+        rows[y][x + (1 if x == 1 else -1)] = OMNY_BLUE
+        rows[y + (1 if y == 1 else -1)][x] = OMNY_BLUE
+    pk.rect(rows, 3, 4, 5, 8, WHITE)
+    rows[6][4] = (10, 12, 20, 255)
+    # swipe track
+    pk.rect(rows, 16, 24, 32, 32, (150, 152, 156, 255))
+    pk.rect(rows, 17, 27, 31, 29, (40, 42, 46, 255))
+    for x in (19, 23, 27):
+        rows[26][x] = BLACK
+        rows[30][x] = BLACK
+    pk.rect(rows, 28, 25, 31, 27, POSTER_YELLOW)
+    return rows
+
+
+def _indicator_face(rows, u0, v0, label="ENTRY"):
+    """Indicator stack on a 20 x 36 texel face (4 texels/px, 5 x 9 px):
+    display window, two dark lamp discs, label plate, arrow disc, LCD."""
+    brushed(rows, u0, v0, u0 + 20, v0 + 36, seed=4)
+    cx = u0 + 10
+    pk.rect(rows, u0 + 2, v0 + 1, u0 + 18, v0 + 7, BLACK)          # display window
+    pk.rect(rows, u0 + 3, v0 + 2, u0 + 17, v0 + 6, DISPLAY)
+    for cy in (v0 + 10, v0 + 16):                                  # lamps (dark at rest)
+        pk.disc(rows, cx, cy, 3, (60, 62, 66, 255))
+        pk.disc(rows, cx, cy, 2, LAMP_OFF)
+    pk.rect(rows, u0 + 1, v0 + 20, u0 + 19, v0 + 26, BLACK)         # label plate
+    pk.text_centred(rows, cx, v0 + 21, label[:5], WHITE, 1, 1)
+    pk.disc(rows, cx, v0 + 30, 3, GREEN)                            # arrow disc
+    for i in range(3):
+        rows[v0 + 29 + i][cx - 1 + i] = (240, 120, 40, 255)
+    rows[v0 + 31][cx + 1] = (240, 120, 40, 255)
+    rows[v0 + 30][cx + 1] = (240, 120, 40, 255)
+    pk.rect(rows, u0 + 4, v0 + 34, u0 + 16, v0 + 36, DISPLAY)       # LCD strip
+
+
+def _exit_face(rows, u0, v0):
+    """Paid-side face: black EXIT label + the green disc with the orange arrow."""
+    brushed(rows, u0, v0, u0 + 20, v0 + 36, seed=6)
+    cx = u0 + 10
+    pk.rect(rows, u0 + 1, v0 + 8, u0 + 19, v0 + 14, BLACK)
+    pk.text_centred(rows, cx, v0 + 9, "EXIT", WHITE, 1, 1)
+    pk.disc(rows, cx, v0 + 22, 5, GREEN)
+    for i in range(5):
+        rows[v0 + 19 + i][cx - 2 + i] = (240, 120, 40, 255)
+        rows[v0 + 20 + i][cx - 2 + i] = (240, 120, 40, 255)
+    pk.rect(rows, cx, v0 + 23, cx + 3, v0 + 25, (240, 120, 40, 255))
+    pk.rect(rows, cx + 1, v0 + 21, cx + 3, v0 + 25, (240, 120, 40, 255))
+
+
+def _no_entry_face(rows, u0, v0):
+    """Unpaid-side face of an exit-only lane: fixed red no-entry roundel."""
+    brushed(rows, u0, v0, u0 + 20, v0 + 36, seed=7)
+    cx = u0 + 10
+    pk.rect(rows, u0 + 1, v0 + 8, u0 + 19, v0 + 14, BLACK)
+    pk.text_centred(rows, cx, v0 + 9, "EXIT", WHITE, 1, 1)
+    pk.disc(rows, cx, v0 + 22, 5, RED)
+    pk.rect(rows, cx - 3, v0 + 21, cx + 4, v0 + 24, WHITE)
+
+
+def tex_pylon(exit_variant):
+    """64 px (4 texels/px). Pylon body is x 11..16, y 0..9, z 0..4 in the
+    upper model: south (+z, unpaid) face = texels u 44..64 v 28..64,
+    north (paid) face = u 0..20 v 28..64."""
+    rows = pk.canvas(64, 64, STEEL)
+    brushed(rows, 0, 0, 64, 64, seed=1)
     if exit_variant:
-        # no-entry roundel-bar over the north strip's screen zone
-        pk.rect(rows, 1, 1, 9, 8, RED)
-        pk.rect(rows, 2, 3, 8, 6, WHITE)
-        # and the reader details only survive on the exit (south) side
-        pk.rect(rows, 1, 8, 9, 20, PILLAR)
-        pk.rect(rows, 0, 0, 1, 20, PILLAR_LIT)
-        pk.rect(rows, 2, 11, 8, 17, TAP_DARK)
-        pk.rect(rows, 3, 12, 7, 16, TAP)
-        pk.rect(rows, 4, 13, 6, 15, TAP_DARK)
-        rows[14][5] = WHITE
-    # pillar side zone
-    pk.rect(rows, 20, 0, 32, 20, PILLAR)
-    pk.rect(rows, 20, 0, 21, 20, PILLAR_LIT)
-    # plinth/kick band
-    pk.rect(rows, 0, 20, 32, 32, KICK)
-    pk.rect(rows, 0, 20, 32, 22, (74, 75, 78, 255))
-    pk.rect(rows, 0, 30, 32, 32, (34, 35, 36, 255))
+        _no_entry_face(rows, 44, 28)
+        _indicator_face(rows, 0, 28, label="EXIT")
+    else:
+        _indicator_face(rows, 44, 28)
+        _exit_face(rows, 0, 28)
     return rows
 
 
-def tex_arm():
-    """Arm tube shading. 32px. Rows are the cylinder gradient for the
-    horizontal arm (sampled sideways-safe: full columns), columns 26..32 are
-    the black rubber grip tip."""
-    rows = pk.canvas(32, 32, STEEL)
-    grad = [STEEL_BRIGHT, STEEL_LIT, STEEL_LIT, STEEL, STEEL, STEEL,
-            STEEL_DARK, STEEL_SHADOW]
-    for y in range(32):
-        tone = grad[min(len(grad) - 1, y * len(grad) // 32)]
-        for x in range(32):
-            rows[y][x] = tone
-    for x in range(26, 32):
-        for y in range(32):
-            rows[y][x] = RUBBER_LIT if y < 6 else RUBBER
-    return rows
-
-
-def tex_tube():
-    """Overhead tube: bright crown rows, mid barrel, shadow bottom rows —
-    faces take explicit slices at their own height (globe lesson)."""
-    rows = pk.canvas(32, 32, STEEL)
-    for y in range(32):
-        if y < 5:
-            tone = STEEL_BRIGHT
-        elif y < 9:
-            tone = STEEL_LIT
-        elif y < 22:
-            tone = STEEL
-        elif y < 27:
-            tone = STEEL_DARK
-        else:
-            tone = STEEL_SHADOW
-        for x in range(32):
-            rows[y][x] = tone
-    return rows
-
-
-SIGN_GREEN = (12, 96, 44, 255)
-SIGN_GREEN_DARK = (8, 70, 32, 255)
-SIGN_RED = (168, 22, 26, 255)
-SIGN_RED_DARK = (128, 14, 18, 255)
-
-
-def tex_sign(exit_variant):
-    """The lane signboard hanging under the overhead rail (the long green
-    'Entry' board in the 86 St photo). 32x16: rows 0..8 are the lettered
-    front, rows 8..16 the plain back/edge colour."""
-    base = SIGN_RED if exit_variant else SIGN_GREEN
-    dark = SIGN_RED_DARK if exit_variant else SIGN_GREEN_DARK
-    rows = pk.canvas(32, 32, base)            # square: MC rejects 32x16
-    pk.rect(rows, 0, 0, 32, 1, dark)          # top border of the front zone
-    pk.rect(rows, 0, 7, 32, 8, dark)          # bottom shadow line of the front
-    pk.rect(rows, 0, 0, 1, 8, dark)           # side borders
-    pk.rect(rows, 31, 0, 32, 8, dark)
-    label = "EXIT" if exit_variant else "ENTRY"
-    width = pk.text_width(label)
-    total = width + 5                          # label + arrow
-    x0 = (32 - total) // 2
-    pk.text(rows, x0, 1, label, WHITE)
-    ax = x0 + width + 2                        # down arrow, 3 px wide
-    pk.rect(rows, ax + 1, 1, ax + 2, 5, WHITE)
-    pk.rect(rows, ax, 4, ax + 3, 5, WHITE)
-    rows[5][ax + 1] = WHITE
+def tex_heet_pylon():
+    """HEET indicator pylon, 64 px at 2 texels/px: face art u 0..8 v 0..44
+    (4 x 22 px): display, ENTRY label, two lamp discs."""
+    rows = pk.canvas(64, 64, STEEL)
+    brushed(rows, 0, 0, 64, 64, seed=8)
+    pk.rect(rows, 1, 4, 7, 9, BLACK)
+    pk.rect(rows, 2, 5, 6, 8, DISPLAY)
+    pk.rect(rows, 1, 12, 7, 18, BLACK)
+    pk.rect(rows, 2, 14, 6, 16, WHITE)          # too small for text: a white bar
+    pk.disc(rows, 4, 24, 3, (60, 62, 66, 255))
+    pk.disc(rows, 4, 24, 2, LAMP_OFF)
+    pk.disc(rows, 4, 33, 3, (60, 62, 66, 255))
+    pk.disc(rows, 4, 33, 2, LAMP_OFF)
     return rows
 
 
 def tex_lamp():
-    """Lens sprite, 16px, four 4-row zones: off / go / stop / wait (amber,
-    shown while the async fare lookup is in flight). Bright flat colour with
-    a hot core — lenses, not lit geometry."""
-    rows = pk.canvas(16, 16, LAMP_OFF)
-    pk.rect(rows, 0, 4, 16, 8, GO)
-    pk.rect(rows, 5, 5, 11, 7, GO_CORE)
-    pk.rect(rows, 0, 8, 16, 12, STOP)
-    pk.rect(rows, 5, 9, 11, 11, STOP_CORE)
-    pk.rect(rows, 0, 12, 16, 16, WAIT)
-    pk.rect(rows, 5, 13, 11, 15, WAIT_CORE)
+    """Lit lamp/display plates, 32 px, sampled by EXPLICIT uv windows:
+    discs in rows 0..8 (green 0..8, red 8..16, amber 16..24, transparent
+    24..32) and 16 x 6 display strips: GO (u0 v8), STOP (u16 v8),
+    WAIT (u0 v14), blank lit (u16 v14). Transparent elsewhere (cutout)."""
+    rows = pk.canvas(32, 32, CLEAR)
+    for i, (c, core) in enumerate(((GREEN_LIT, GREEN_CORE), (RED_LIT, RED_CORE), (AMBER, AMBER_CORE))):
+        pk.disc(rows, i * 8 + 4, 4, 4, c)
+        pk.disc(rows, i * 8 + 4, 3, 1, core)
+    # check on green, cross on red
+    for k in range(3):
+        rows[4 + k][2 + k] = WHITE if k < 2 else WHITE
+    rows[6][4] = WHITE
+    rows[5][5] = WHITE
+    rows[4][6] = WHITE
+    for k in range(5):
+        rows[2 + k][10 + k] = WHITE
+        rows[2 + k][14 - k] = WHITE
+    for (u, v, s, col) in ((0, 8, "GO", DISPLAY_GREEN), (16, 8, "STOP", RED_LIT),
+                           (0, 14, "WAIT", AMBER), (16, 14, "", DISPLAY_GREEN)):
+        pk.rect(rows, u, v, u + 16, v + 6, DISPLAY)
+        if s:
+            pk.text_centred(rows, u + 8, v + 1, s, col, 1, 1)
     return rows
 
 
-# lens uv windows (16-unit space), interior slices only — each stays a half
-# texel clear of its 4-row zone's edges so mips never bleed a neighbour zone
-UV_LAMP = {"off": [5, 0.75, 11, 3.25], "go": [5, 4.75, 11, 7.25],
-           "stop": [5, 8.75, 11, 11.25], "wait": [5, 12.75, 11, 15.25]}
-
-
-def tex_picto():
-    """State pictogram sprite, 32px, four 8-row zones: off / go / stop /
-    wait. White symbols on saturated fields inside a darker border — the
-    MTR-barrier pattern (state = pictogram swap) scaled to our pillar plate
-    and the HEET lintel. Symbols sit horizontally centred with plain field
-    either side, so windows of different aspect all read cleanly."""
-    rows = pk.canvas(32, 32, (10, 11, 12, 255))
-
-    def zone(y0, field, dark):
-        pk.rect(rows, 0, y0, 32, y0 + 8, dark)
-        pk.rect(rows, 1, y0 + 1, 31, y0 + 7, field)
-
-    zone(0, (24, 26, 28, 255), (10, 11, 12, 255))          # off: dead panel
-    zone(8, SIGN_GREEN, SIGN_GREEN_DARK)                   # go: up arrow
-    pk.rect(rows, 15, 10, 17, 11, WHITE)                   # head tip
-    pk.rect(rows, 14, 11, 18, 12, WHITE)
-    pk.rect(rows, 13, 12, 19, 13, WHITE)
-    pk.rect(rows, 15, 13, 17, 15, WHITE)                   # shaft
-    zone(16, SIGN_RED, SIGN_RED_DARK)                      # stop: no-entry bar
-    pk.rect(rows, 9, 19, 23, 21, WHITE)
-    zone(24, WAIT, TAP_DARK)                               # wait: hold dot
-    pk.rect(rows, 14, 27, 18, 29, WHITE)
-    pk.rect(rows, 15, 26, 17, 30, WHITE)
+def tex_sign():
+    """HEET drum band, 64 px: black band rows 0..12 (6 px x 2 texels) with
+    ENTRY and a down arrow, centred on u 32; the five drum front faces take
+    consecutive 11.94-texel windows of it (see heet_drum())."""
+    rows = pk.canvas(64, 64, BLACK)
+    brushed(rows, 0, 12, 64, 64, seed=9)
+    pk.rect(rows, 0, 0, 64, 12, BLACK)
+    pk.text_centred(rows, 27, 1, "ENTRY", WHITE, 2, 1)
+    # down arrow at u 49..57
+    pk.rect(rows, 52, 1, 55, 8, WHITE)
+    for i in range(4):
+        pk.rect(rows, 50 + i, 6 + i, 57 - i, 7 + i, WHITE)
     return rows
 
 
+# ------------------------------------------------------------------ icons --
 def icon(kind):
-    """Flat 16px item icon: front view of the unit."""
-    rows = pk.canvas(16, 16, (0, 0, 0, 0))
+    rows = pk.canvas(16, 16, CLEAR)
     if kind == "heet":
-        pk.rect(rows, 1, 1, 3, 16, STEEL_DARK)
-        pk.rect(rows, 13, 1, 15, 16, STEEL_DARK)
-        pk.rect(rows, 7, 1, 9, 16, (60, 62, 64, 255))
-        for y in range(2, 15, 3):
-            pk.rect(rows, 3, y, 7, y + 1, STEEL)
-            pk.rect(rows, 9, y, 13, y + 1, STEEL)
-        pk.rect(rows, 1, 0, 15, 1, STEEL_LIT)
-    else:
-        # matches the rebuilt model: cabinet + pillar, horizontal blocking
-        # arm at cabinet-top height with a rubber tip, and the 45° arm
-        # dropping down-forward from the hub
-        pk.rect(rows, 2, 4, 6, 16, STEEL)
-        pk.rect(rows, 2, 4, 6, 5, STEEL_LIT)
-        pk.rect(rows, 3, 0, 5, 4, PILLAR)
-        pk.rect(rows, 3, 0, 5, 1, PILLAR_LIT)
-        if kind == "exit":
-            pk.rect(rows, 3, 1, 5, 3, RED)
-            pk.rect(rows, 3, 2, 5, 3, WHITE)
-        pk.rect(rows, 6, 5, 13, 7, STEEL_LIT)      # horizontal arm
-        pk.rect(rows, 13, 5, 15, 7, RUBBER)        # rubber tip
-        pk.rect(rows, 6, 4, 8, 8, STEEL_DARK)      # hub boss
-        for i in range(5):                          # down-forward 45° arm
-            pk.rect(rows, 7 + i, 7 + i, 9 + i, 9 + i, STEEL)
-        pk.rect(rows, 12, 12, 14, 14, RUBBER)
+        pk.rect(rows, 1, 0, 15, 3, STEEL_LIT)           # drum
+        pk.rect(rows, 3, 1, 13, 2, BLACK)
+        pk.rect(rows, 2, 3, 3, 16, STEEL_DARK)          # posts
+        pk.rect(rows, 13, 3, 14, 16, STEEL_DARK)
+        pk.rect(rows, 7, 3, 9, 16, STEEL_DARK)          # spindle
+        for y in range(4, 16, 2):
+            pk.rect(rows, 3, y, 7, y + 1, STEEL_LIT)
+            pk.rect(rows, 9, y, 13, y + 1, STEEL_LIT)
+        return rows
+    if kind == "cap":
+        pk.rect(rows, 9, 0, 12, 16, STEEL)              # post
+        pk.rect(rows, 4, 6, 14, 16, STEEL_LIT)          # end panel
+        pk.rect(rows, 4, 15, 14, 16, PLINTH)
+        pk.rect(rows, 10, 0, 11, 16, STEEL_BRIGHT)
+        return rows
+    # turnstile / exit: pylon, cabinet, hood, tripod arm
+    pk.rect(rows, 9, 6, 15, 16, STEEL)                  # cabinet
+    pk.rect(rows, 9, 15, 15, 16, PLINTH)
+    pk.rect(rows, 10, 7, 14, 12, WHITE)                 # poster
+    pk.rect(rows, 10, 7, 14, 8, POSTER_BLUE)
+    pk.rect(rows, 11, 0, 14, 6, STEEL_LIT)              # pylon
+    pk.rect(rows, 12, 1, 13, 2, DISPLAY)
+    pk.disc(rows, 12, 4, 1, RED if kind == "exit" else GREEN_LIT)
+    pk.rect(rows, 1, 7, 9, 8, STEEL_BRIGHT)             # blocking arm
+    pk.rect(rows, 8, 6, 10, 9, STEEL_DARK)              # hub
+    for i in range(4):                                  # down-forward arm
+        pk.rect(rows, 6 - i, 8 + i, 7 - i, 9 + i, STEEL_LIT)
     return rows
 
 
@@ -288,471 +333,365 @@ def wj(path, obj):
         fh.write("\n")
 
 
-TEXTURES = {
-    "steel": f"{MOD}:block/turnstile_steel",
-    "face": f"{MOD}:block/turnstile_face",
-    "tube": f"{MOD}:block/turnstile_tube",
-    "arm": f"{MOD}:block/turnstile_arm",
-    "lamp": f"{MOD}:block/turnstile_lamp",
-    "picto": f"{MOD}:block/turnstile_picto",
-    "sign": f"{MOD}:block/turnstile_sign",
-    "sign_exit": f"{MOD}:block/turnstile_sign_exit",
-    "particle": f"{MOD}:block/turnstile_steel",
+TEX = {
+    "steel": f"{MOD}:block/ts_steel",
+    "dark": f"{MOD}:block/ts_steel_dark",
+    "perf": f"{MOD}:block/ts_perf",
+    "cabinet": f"{MOD}:block/ts_cabinet",
+    "cabinet_end": f"{MOD}:block/ts_cabinet_end",
+    "recess": f"{MOD}:block/ts_recess",
+    "reader": f"{MOD}:block/ts_reader",
+    "pylon": f"{MOD}:block/ts_pylon",
+    "pylon_exit": f"{MOD}:block/ts_pylon_exit",
+    "heet_pylon": f"{MOD}:block/ts_heet_pylon",
+    "lamp": f"{MOD}:block/ts_lamp",
+    "sign": f"{MOD}:block/ts_sign",
+    "flat": f"{MOD}:block/ts_flat",
+    "particle": f"{MOD}:block/ts_steel",
 }
 
-
-def elem(frm, to, faces, rotation=None, shade=None):
-    e = {"from": list(frm), "to": list(to), "faces": faces}
-    if rotation:
-        e["rotation"] = rotation
-    if shade is not None:
-        e["shade"] = shade
-    return e
+FACES = ("down", "up", "north", "south", "west", "east")
 
 
-def f(tex, uv, cull=None):
-    face = {"texture": "#" + tex, "uv": list(uv)}
-    if cull:
-        face["cullface"] = cull
-    return face
+def _wrap(u0, v0, u1, v1):
+    """Shift a uv window by multiples of 16 so it lies inside the sprite; a
+    window wider than the sprite is clamped (only the uniform steel ever is)."""
+    def fix(a, b):
+        lo, hi = min(a, b), max(a, b)
+        if hi - lo >= 16:
+            return (0.0, 16.0) if a <= b else (16.0, 0.0)
+        shift = -16 * math.floor(lo / 16)
+        lo, hi = lo + shift, hi + shift
+        if hi > 16:
+            lo, hi = lo - 16, hi - 16
+            if lo < 0:  # straddles a seam: slide onto the sprite
+                hi -= lo
+                lo = 0.0
+        return (lo, hi) if a <= b else (hi, lo)
+    (u0, u1), (v0, v1) = fix(u0, u1), fix(v0, v1)
+    return [round(u0, 4), round(v0, 4), round(u1, 4), round(v1, 4)]
 
 
-def steel_box(frm, to, omit=(), seed_v=1.0):
-    """A box skinned in generic brushed steel with interior slices sized to
-    each face (1:1-ish texels, never touching the sprite edge)."""
+def face_uv(face, frm, to):
+    """Vanilla auto-UV for `face` of the box frm..to, wrapped onto the sprite."""
     x0, y0, z0 = frm
     x1, y1, z1 = to
-    w, h, d = x1 - x0, y1 - y0, z1 - z0
-    def sl(a, b):
-        a = min(a, 14.5)
-        b = min(b, 14.5)
-        v0 = min(seed_v, 15.25 - b)   # keep the window on the sprite
-        return [0.75, v0, 0.75 + a, v0 + b]
+    if face == "down":
+        return _wrap(x0, 16 - z1, x1, 16 - z0)
+    if face == "up":
+        return _wrap(x0, z0, x1, z1)
+    if face == "north":
+        return _wrap(16 - x1, 16 - y1, 16 - x0, 16 - y0)
+    if face == "south":
+        return _wrap(x0, 16 - y1, x1, 16 - y0)
+    if face == "west":
+        return _wrap(z0, 16 - y1, z1, 16 - y0)
+    return _wrap(16 - z1, 16 - y1, 16 - z0, 16 - y0)
+
+
+def box(frm, to, tex="steel", omit=(), override=None, rotation=None, shade=None, cull=None):
+    """One element with auto-UV steel on every face; `override` maps a face
+    name to (tex, uv) for painted faces; `omit` drops buried faces."""
     faces = {}
-    if "north" not in omit: faces["north"] = f("steel", sl(w, h))
-    if "south" not in omit: faces["south"] = f("steel", sl(w, h))
-    if "east" not in omit: faces["east"] = f("steel", sl(d, h))
-    if "west" not in omit: faces["west"] = f("steel", sl(d, h))
-    if "up" not in omit: faces["up"] = f("steel", sl(w, d))
-    if "down" not in omit: faces["down"] = f("steel", sl(w, d))
-    return elem(frm, to, faces)
-
-
-def model(name, elements):
-    wj(os.path.join(ASSETS, "models/block", name + ".json"),
-       {"parent": "minecraft:block/block", "textures": TEXTURES, "elements": elements})
-
-
-def octo_tube(frm, to, axis, caps=()):
-    """A pipe segment that reads ROUND: the core box plus a twin rotated 45
-    degrees about its long axis (the standard octagonal-pole trick — the
-    rotated faces cut through the core's corners, so nothing is coplanar).
-    Side faces take the tube texture's barrel slice; caps only where asked
-    (buried ends stay open)."""
-    x0, y0, z0 = frm
-    x1, y1, z1 = to
-    length = {"x": x1 - x0, "y": y1 - y0, "z": z1 - z0}[axis]
-    lu = min(14.5, length)
-    side = f("tube", [1, 4.75, 1 + lu, 6])
-    cap = f("tube", [2, 2.5, 3.9, 4.4])
-    sides_by_axis = {
-        "x": ("north", "south", "up", "down"),
-        "y": ("north", "south", "east", "west"),
-        "z": ("east", "west", "up", "down"),
-    }
-    faces = {name: side for name in sides_by_axis[axis]}
-    for name in caps:
-        faces[name] = cap
-    core = elem(frm, to, faces)
-    twin = elem(frm, to, {name: side for name in sides_by_axis[axis]})
-    twin["rotation"] = {
-        "origin": [(x0 + x1) / 2, (y0 + y1) / 2, (z0 + z1) / 2],
-        "axis": axis, "angle": 45,
-    }
-    return [core, twin]
-
-
-def write_cabinet():
-    """Lower-half cabinet, north frame: silhouette unchanged (0..5 x, 1..15 z,
-    15 tall) but built as plinth + body + stepped dome deck."""
-    els = []
-    # proud dark plinth; the body sits on it with its down face omitted
-    els.append(elem([0, 0, 0.75], [5.25, 1.5, 15.25], {
-        "north": f("face", [0, 13, 2.6, 13.75]),
-        "south": f("face", [0, 13, 2.6, 13.75]),
-        "east": f("face", [0, 12.6, 7.25, 13.35]),
-        "west": f("face", [0, 12.6, 7.25, 13.35]),
-        "up": f("face", [0, 10.5, 2.6, 12]),
-        "down": f("face", [0, 14, 2.6, 15.75], cull="down"),
-    }))
-    els.append(steel_box([0.25, 1.5, 1], [5, 13, 15], omit=("down",)))
-    # stainless deck: centre lid + two lower dome ends (inner faces buried)
-    els.append(steel_box([0, 13, 3], [5, 15, 13], seed_v=3.0))
-    els.append(steel_box([0, 13, 1], [5, 14.2, 3], omit=("south",), seed_v=5.0))
-    els.append(steel_box([0, 13, 13], [5, 14.2, 15], omit=("north",), seed_v=5.0))
-    model("turnstile_cabinet", els)
-
-
-RUBBER_UV = [13.2, 8, 15.4, 9.7]
-
-
-def rubber_faces(sides=("north", "south", "east", "west", "up", "down")):
-    return {s: f("arm", RUBBER_UV) for s in sides}
-
-
-def write_arm():
-    """The tripod, rebuilt as the real resting pose from the photos: a cast
-    collar on the cabinet side, a 45°-TILTED SPINDLE BOSS (the actual axis of
-    a NYC tripod points up-and-forward at 45°), one horizontal blocking arm
-    across the lane, and one straight bar through the hub rotated 45° the
-    other way — its two ends are the photos' down-forward and up-back arms,
-    and being perpendicular to the spindle it is geometrically exactly where
-    a resting tripod's other two arms sit (collapsed onto one line: vanilla
-    rotations are single-axis, 120° spacing is not available). Every arm end
-    wears a rubber tip. Rotated elements skip the octagonal twin (the slope
-    rule); at 1.4 px nobody can tell."""
-    HUB_Y, HUB_Z = 13.0, 8.0
-    arm_side = f("arm", [1, 2, 9.5, 3.5])
-    els = []
-    # cast collar against the cabinet side (west face buried in the body)
-    els.append(steel_box([4.4, HUB_Y - 1.9, HUB_Z - 1.9],
-                         [5.4, HUB_Y + 1.9, HUB_Z + 1.9], omit=("west",), seed_v=7.0))
-    # tilted spindle boss: authored along y, rotated +45 about x → points
-    # up-forward, perpendicular to both arm lines below
-    els.append(elem([5.2, HUB_Y - 2.4, HUB_Z - 1.1], [7.0, HUB_Y + 2.4, HUB_Z + 1.1], {
-        "north": f("arm", [1, 1, 2.8, 5.8]),
-        "south": f("arm", [1, 1, 2.8, 5.8]),
-        "east": f("arm", [3, 1, 5.2, 5.8]),
-        "west": f("arm", [3, 1, 5.2, 5.8]),
-        "up": f("arm", [1, 0.5, 2.8, 2.7]),
-        "down": f("arm", [1, 3.5, 2.8, 5.7]),
-    }, rotation={"origin": [6.1, HUB_Y, HUB_Z], "axis": "x", "angle": 45}))
-    # horizontal blocking arm across the lane (octagonal: core + 45° twin)
-    els += octo_tube([6.2, HUB_Y - 0.7, HUB_Z - 0.7],
-                     [13.6, HUB_Y + 0.7, HUB_Z + 0.7], "x")
-    els.append(elem([13.5, HUB_Y - 0.85, HUB_Z - 0.85],
-                    [15.0, HUB_Y + 0.85, HUB_Z + 0.85], rubber_faces()))
-    # the through-bar: authored vertical, rotated −45 about x at the hub —
-    # top end lands up-back, bottom end down-forward, both in the y-z plane
-    diag_rot = {"origin": [6.1, HUB_Y, HUB_Z], "axis": "x", "angle": -45}
-    els.append(elem([5.4, HUB_Y - 5.8, HUB_Z - 0.7], [6.8, HUB_Y + 5.8, HUB_Z + 0.7], {
-        "north": arm_side, "south": arm_side,
-        "east": f("arm", [1, 0.5, 9.5, 2]),
-        "west": f("arm", [1, 3.5, 9.5, 5]),
-    }, rotation=diag_rot))
-    els.append(elem([5.25, HUB_Y - 7.3, HUB_Z - 0.85],
-                    [6.95, HUB_Y - 5.8, HUB_Z + 0.85], rubber_faces(), rotation=diag_rot))
-    els.append(elem([5.25, HUB_Y + 5.8, HUB_Z - 0.85],
-                    [6.95, HUB_Y + 7.3, HUB_Z + 0.85], rubber_faces(), rotation=diag_rot))
-    model("turnstile_arm", els)
-
-
-def pillar_elements(exit_variant):
-    """Upper-half reader pillar. Front strips come from the face texture
-    (north = approach strip, south = exit strip); no lens here — the lamp
-    models own it."""
-    tex = "face"
-    els = []
-    els.append(elem([0.5, 0, 4], [4.5, 10, 12], {
-        "north": f(tex, [0.25, 0.25, 4.75, 9.75]),
-        "south": f(tex, [5.25, 0.25, 9.75, 9.75]),
-        "east": f(tex, [10.5, 0.5, 14.5, 9.5]),
-        "west": f(tex, [10.5, 0.5, 14.5, 9.5]),
-        "down": f(tex, [10.5, 0.5, 14.5, 4.5]),
-    }))
-    els.append(steel_box([0, 10, 3.5], [5, 11, 12.5], seed_v=2.0))
-    # angled swipe-reader heads on the cap, one facing each approach — the
-    # iconic MetroCard reader tilt (22.5° is vanilla's nearest step). The
-    # tilted top face carries the card-slot art; they flank the riser foot.
-    for z0, z1, angle, oz in ((3.9, 6.9, -22.5, 5.4), (9.1, 12.1, 22.5, 10.6)):
-        els.append(elem([0.8, 11, z0], [4.2, 12.6, z1], {
-            "north": f("face", [0.5, 0.25, 4.5, 2.25]),
-            "south": f("face", [5.5, 0.25, 9.5, 2.25]),
-            "east": f("face", [10.5, 0.5, 12.5, 1.5]),
-            "west": f("face", [10.5, 0.5, 12.5, 1.5]),
-            "up": f("face", [0.75, 3.6, 4.75, 5.2]),
-        }, rotation={"origin": [2.5, 11, oz], "axis": "x", "angle": angle}))
-    # slim octagonal riser pipe up into the corner fitting at the rail plane
-    # (photo: thin stanchion with a mounting collar at its foot and a cast
-    # elbow where it turns into the rail). Down faces buried on the cap.
-    els.append(steel_box([2.4, 11, 7.4], [3.6, 11.7, 8.6], omit=("down",), seed_v=13.0))
-    els += octo_tube([2.5, 11.4, 7], [3.5, 21.9, 9], "y")
-    els.append(steel_box([1.9, 21.8, 6.9], [4.1, 24, 9.1], omit=("up",), seed_v=13.5))
-    return els
-
-
-# picto zone tops in UV units (32-px sprite -> 8-texel zone = 4 uv)
-UV_PICTO_Y = {"off": 0, "go": 4, "stop": 8, "wait": 12}
-
-
-def picto_plate(frm, to, face_dir, u0, u1, state_y):
-    """A status sign plate: the outward face samples the state's pictogram
-    zone, every other face the zone's dark border corner. shade:false so
-    the sign reads flat-lit from any angle — MTR's own barrier trick."""
-    edge = f("picto", [0.15, state_y + 0.15, 0.85, state_y + 0.85])
-    faces = {s: edge for s in ("north", "south", "east", "west", "up", "down")}
-    faces[face_dir] = f("picto", [u0, state_y + 0.5, u1, state_y + 3.5])
-    return elem(frm, to, faces, shade=False)
-
-
-def lamp_models(prefix, boxes, plates=()):
-    """Per-state indicator models. `boxes` are small lens boxes sampling the
-    lamp sprite's zone; `plates` are (frm, to, face_dir, u0, u1[, fixed])
-    pictogram signs sampling the picto sprite's zone — a plate with a
-    `fixed` state shows that zone in EVERY model (a permanent sign riding
-    the lamp machinery). All shade:false — lenses and lit signs must not go
-    dull on north faces."""
-    for state, uv in UV_LAMP.items():
-        els = []
-        for frm, to, sides in boxes:
-            faces = {s: f("lamp", uv) for s in sides}
-            els.append(elem(frm, to, faces, shade=False))
-        for plate in plates:
-            frm, to, face_dir, u0, u1 = plate[:5]
-            shown = plate[5] if len(plate) > 5 else state
-            els.append(picto_plate(frm, to, face_dir, u0, u1, UV_PICTO_Y[shown]))
-        model(f"{prefix}_lamp_{state}", els)
-
-
-PILLAR_PLATE_N = ([0.9, 7.0, 3.45], [4.1, 9.6, 4.05], "north", 6, 10)
-PILLAR_PLATE_S = ([0.9, 7.0, 11.95], [4.1, 9.6, 12.55], "south", 6, 10)
-
-
-def write_upper_and_lamps():
-    model("turnstile_upper", pillar_elements(False))
-    model("turnstile_upper_exit", pillar_elements(True))
-    # the pillar's status display is now one pictogram plate per approach
-    # face (replacing the old 2-px lens): green up arrow / red bar / amber
-    # dot, proud over the screen zone
-    lamp_models("turnstile", [], plates=[PILLAR_PLATE_N, PILLAR_PLATE_S])
-    # exit lanes: the wrong-way (north) plate ALWAYS shows the red bar — a
-    # green GO facing the no-entry side would read as an invitation, and the
-    # dynamic plate was covering the painted no-entry roundel behind it
-    lamp_models("turnstile_exit", [], plates=[
-        PILLAR_PLATE_N + ("stop",), PILLAR_PLATE_S])
-
-
-def sign_plate(exit_variant):
-    """The lane signboard hanging under the rail, centred over the walkway —
-    the 86 St photo's green 'Entry' board (red EXIT on exit-only lanes).
-    Bigger than the first pass and hung on two visible straps whose tops
-    bury inside the rail, instead of butting straight against it."""
-    tex = "sign_exit" if exit_variant else "sign"
-    front = f(tex, [0, 0, 16, 4])
-    back = f(tex, [0, 4.25, 16, 7.75])
-    edge = f(tex, [2, 4.5, 4, 7.5])
-    lid = f(tex, [2, 4.5, 15, 5.1])
-    els = [elem([5.5, 19.2, 7.65], [15.5, 21.8, 8.35], {
-        "north": front, "south": back,
-        "east": edge, "west": edge, "up": lid, "down": lid,
-    })]
-    # steel hanger straps (not sign-coloured — they are hardware, not board)
-    for x in (6.8, 13.5):
-        els.append(elem([x, 21.7, 7.8], [x + 0.7, 23.2, 8.2], {
-            "north": f("tube", [1, 4.75, 1.7, 6.25]),
-            "south": f("tube", [1, 4.75, 1.7, 6.25]),
-            "east": f("tube", [1.2, 4.75, 1.6, 6.25]),
-            "west": f("tube", [1.2, 4.75, 1.6, 6.25]),
-        }))
-    return els
-
-
-def write_tubes():
-    """Overhead pipework, rebuilt from the 86 St photos: a slim octagonal
-    rail on cast elbow fittings, buried at both ends inside the risers'
-    corner fittings (which live in the upper/cap models at x 1.9..4.1), and
-    the lane signboard hanging beneath. Cross-sections are inset 0.05 from
-    the fittings' planes so nothing coplanar overlaps across models."""
-    bridge = octo_tube([3.2, 22.05, 7.05], [18.8, 23.95, 8.95], "x")
-    wj(os.path.join(ASSETS, "models/block/turnstile_tube_bridge.json"),
-       {"parent": "minecraft:block/block", "textures": TEXTURES,
-        "elements": bridge + sign_plate(False)})
-    wj(os.path.join(ASSETS, "models/block/turnstile_tube_bridge_exit.json"),
-       {"parent": "minecraft:block/block", "textures": TEXTURES,
-        "elements": bridge + sign_plate(True)})
-    # Row end: short rail out of the riser fitting, elbow fitting, drop pipe
-    # with a closing flange — the photo's curled-down rail end.
-    els = octo_tube([3.2, 22.05, 7.05], [7.1, 23.95, 8.95], "x")
-    els.append(steel_box([6.9, 21.8, 6.9], [9.1, 24, 9.1], omit=("up",), seed_v=13.5))
-    els += octo_tube([7.0, 18.9, 7.0], [9.0, 21.9, 9.0], "y")
-    els.append(steel_box([6.8, 18.3, 6.8], [9.2, 19.0, 9.2], seed_v=13.0))
-    wj(os.path.join(ASSETS, "models/block/turnstile_tube_end.json"),
-       {"parent": "minecraft:block/block", "textures": TEXTURES, "elements": els})
-    # Row ends against a solid wall: the rail runs straight into a mounting
-    # collar flange, like the riser feet — no curled drop hanging in front
-    # of the wall. Flange inset 0.05 from the boundary so it never shares
-    # the wall block's face plane.
-    els = octo_tube([3.2, 22.05, 7.05], [15.3, 23.95, 8.95], "x")
-    els.append(steel_box([15.2, 21.5, 6.6], [15.95, 24.4, 9.4], seed_v=13.0))
-    wj(os.path.join(ASSETS, "models/block/turnstile_tube_wall_end.json"),
-       {"parent": "minecraft:block/block", "textures": TEXTURES, "elements": els})
-
-
-def write_caps():
-    """End cap: unchanged silhouette, plinth + dome polish to match."""
-    els = [
-        elem([0, 0, 0.75], [8.25, 1.5, 15.25], {
-            "north": f("face", [0, 13, 4.1, 13.75]),
-            "south": f("face", [0, 13, 4.1, 13.75]),
-            "east": f("face", [0, 12.6, 7.25, 13.35]),
-            "west": f("face", [0, 12.6, 7.25, 13.35]),
-            "up": f("face", [0, 10.5, 4.1, 12]),
-            "down": f("face", [0, 14, 4.1, 15.75], cull="down"),
-        }),
-        steel_box([0.25, 1.5, 1], [8, 14, 15], omit=("down",)),
-        steel_box([0, 14, 2], [8, 16, 14], seed_v=3.0),
-    ]
-    model("turnstile_cap_lower", els)
-    els = [
-        steel_box([0, 0, 2], [8, 7, 14], seed_v=4.0),
-        steel_box([1, 7, 4], [7, 9, 12], seed_v=6.0),
-    ]
-    els.append(steel_box([2.4, 9, 7.4], [3.6, 9.7, 8.6], omit=("down",), seed_v=13.0))
-    els += octo_tube([2.5, 9.4, 7], [3.5, 21.9, 9], "y")
-    els.append(steel_box([1.9, 21.8, 6.9], [4.1, 24, 9.1], omit=("up",), seed_v=13.5))
-    model("turnstile_cap_upper", els)
-
-
-def heet_sides(y0, y1, top_buried=False, waist_rail=False):
-    """The two full-height side frames: corner posts + five slim vertical
-    bars on a 2-px pitch (denser, closer to the photos' cage) + an optional
-    proud waist rail band. Everything inset 0.25 from the block edges so
-    nothing sits on a boundary plane. With top_buried the up faces are
-    omitted (the roof plate covers them)."""
-    els = []
-    post_omit = ("down",)                 # continues from / into the other half
-    if top_buried:
-        post_omit = post_omit + ("up",)
-    elif y1 == 16:
-        post_omit = ("up",)
-    for x0, x1 in ((0.25, 1.75), (14.25, 15.75)):
-        for z0, z1 in ((1, 2.5), (13.5, 15)):
-            els.append(steel_box([x0, y0, z0], [x1, y1, z1], omit=post_omit, seed_v=2.5))
-        for z in (3.5, 5.5, 7.5, 9.5, 11.5):   # vertical infill bars, 1 on 1
-            els.append(steel_box([x0 + 0.2, y0, z], [x1 - 0.2, y1, z + 1.0],
-                                 omit=("up", "down"), seed_v=8.0))
-        if waist_rail:
-            # proud horizontal band at hip height; wider than the bars so
-            # they bury inside it (never coplanar), ends buried in the posts
-            els.append(steel_box([x0 + 0.05, 7.4, 2.3], [x1 - 0.05, 8.6, 13.7],
-                                 seed_v=5.0))
-    return els
-
-
-def heet_rotor(y_top):
-    """Centre drum + four comb wings. The drum reads ROUND (core + 45° twin
-    about y, the octagonal-pole trick); each wing is a stack of slim
-    horizontal prongs every 2.4 px whose free end wears a dark rubber cap
-    face — the real HEET's interleaving comb. The drum's ends are always
-    buried (other half below, roof plate or the next block above)."""
-    drum_side = f("steel", [0.75, 2, 3.55, 14.5])
-    drum_faces = {s: drum_side for s in ("north", "south", "east", "west")}
-    els = [elem([6.6, 0, 6.6], [9.4, y_top, 9.4], dict(drum_faces)),
-           elem([6.6, 0, 6.6], [9.4, y_top, 9.4], dict(drum_faces),
-                rotation={"origin": [8, y_top / 2, 8], "axis": "y", "angle": 45})]
-    for y in (1.4, 3.8, 6.2, 8.6, 11.0, 13.4):
-        if y + 1.0 > y_top:
+    for face in FACES:
+        if face in omit:
             continue
-        for frm, to, buried, cap in (
-                ([9.4, y, 7.35], [13.9, y + 1.0, 8.65], "west", "east"),
-                ([2.1, y, 7.35], [6.6, y + 1.0, 8.65], "east", "west"),
-                ([7.35, y, 9.4], [8.65, y + 1.0, 13.9], "north", "south"),
-                ([7.35, y, 2.1], [8.65, y + 1.0, 6.6], "south", "north")):
-            prong = steel_box(frm, to, omit=(buried,), seed_v=11.0)
-            prong["faces"][cap] = f("arm", RUBBER_UV)
-            els.append(prong)
+        if override and face in override:
+            t, uv = override[face]
+            faces[face] = {"texture": "#" + t, "uv": uv}
+        else:
+            faces[face] = {"texture": "#" + tex, "uv": face_uv(face, frm, to)}
+        if cull and face in cull:
+            faces[face]["cullface"] = cull[face]
+    el = {"from": list(frm), "to": list(to), "faces": faces}
+    if rotation:
+        el["rotation"] = rotation
+    if shade is not None:
+        el["shade"] = shade
+    return el
+
+
+def rot(origin, axis, angle, rescale=False):
+    r = {"origin": list(origin), "axis": axis, "angle": angle}
+    if rescale:
+        r["rescale"] = True
+    return r
+
+
+def model(name, elements, extra_tex=None):
+    textures = dict(TEX)
+    if extra_tex:
+        textures.update(extra_tex)
+    wj(os.path.join(ASSETS, "models/block", name + ".json"),
+       {"textures": textures, "elements": elements})
+
+
+def plate(frm, to, face, tex, uv):
+    """Painted decal plate: only its outward face draws, unshaded."""
+    faces = {face: {"texture": "#" + tex, "uv": uv}}
+    return {"from": list(frm), "to": list(to), "faces": faces, "shade": False}
+
+
+# --------------------------------------------------------------- low unit --
+# Cabinet x 11..16 (right of the rider), lane x 0..11, unpaid side +z.
+def chamfer_x(x0, x1, y_top, z_edge, run, depth):
+    """45-deg chamfer cutting the corner at (y_top, z_edge + run): a box authored
+    along +z from z_edge, `depth` below y_top, rotated +45 about x at the
+    edge, so its outer face is the slope and the rest is buried."""
+    length = run * math.sqrt(2)
+    return box((x0, y_top - depth, z_edge), (x1, y_top, z_edge + length), "steel",
+               rotation=rot((x0, y_top, z_edge), "x", 45))
+
+
+def cabinet_body(recessed):
+    """Low stainless body x 11..16, full block long, chamfered front-top
+    corner (z 12..16). `recessed`: dark mechanism cover set into the lane
+    side between stainless stiles/rails (tripod side); the end panel is plain."""
+    els = [box((11.4, 0, 0.4), (15.6, 1, 15.6), "dark", omit=("up",), cull={"down": "down"})]
+    if recessed:
+        els += [
+            # main body behind the recess (its west face IS the dark cover)
+            box((11.6, 1, 0), (16, 16, 12), "cabinet", omit=("south",),
+                override={"west": ("recess", [0, 0, 16, 15])}),
+            box((11, 1, 0), (11.6, 16, 3), "steel", omit=("east", "south")),        # rear stile
+            box((11, 1, 13), (11.6, 12, 16), "steel", omit=("east", "north")),      # front stile
+            box((11, 11, 3), (11.6, 16, 13), "steel", omit=("east",)),              # top rail
+            box((11, 1, 3), (11.6, 2, 13), "steel", omit=("east",)),                # sill
+        ]
+    else:
+        els += [box((11, 1, 0), (16, 16, 12), "cabinet", omit=("south",))]
+    # front lower block under the chamfer, its end face carrying the label plate
+    els.append(box((11.6 if recessed else 11, 1, 12), (16, 12, 16), "cabinet", omit=("north", "up"),
+                   override={"south": ("cabinet_end", [11, 4, 16, 15])}))
+    els.append(chamfer_x(11, 16, 16, 12, 4, 3.2))
     return els
+
+
+def reader_elements():
+    """Reader unit mid-top (UPPER model: the cabinet lid is y 0): box with the
+    MetroCard track on its lid and an OMNY tablet leaning back on its
+    approach face, plus the swipe rib along the lane edge."""
+    return [
+        box((11.6, 0, 6), (15.4, 2.4, 10), "steel", omit=("down",),
+            override={"up": ("reader", [8, 12, 16, 16])}),
+        box((12.2, 0.3, 9.7), (14.8, 3.5, 10.3), "dark", omit=("down",),
+            override={"south": ("reader", [0, 0, 4, 6])},
+            rotation=rot((13.5, 0.3, 10), "x", -22.5)),
+        box((11.7, 0, 2), (12.9, 0.8, 6), "steel", omit=("down",)),
+    ]
+
+
+def pylon_elements(tex, indicator=True):
+    """Indicator column at the paid end: x 11..16, z 0..4, vertical face to
+    y 9, flat top to y 11 with a chisel chamfer toward the approach, and an
+    octagonal collar the arch pipe rises from (the renderer draws the pipe)."""
+    faces = {"south": (tex, [11, 7, 16, 16]), "north": (tex, [0, 7, 5, 16])} if indicator else None
+    els = [
+        box((11, 0, 0), (16, 9, 4), "steel", omit=("up",), override=faces),
+        box((11, 9, 0), (16, 11, 2), "steel", omit=("down", "south")),
+        box((11, 9, 2), (16, 9.6, 4), "steel", omit=("down", "north", "up")),
+        chamfer_x(11, 16, 11, 2, 2, 1.6),
+        # collar: octagon r 1.4 about (13.5, ., 1.4)
+        box((12.1, 11, 0), (14.9, 14, 2.8), "steel", omit=("down",)),
+        box((12.1, 11, 0), (14.9, 14, 2.8), "steel", omit=("down",),
+            rotation=rot((13.5, 11, 1.4), "y", 45)),
+    ]
+    return els
+
+
+def lamp_models(prefix, face_z, face):
+    """Lit-state models on the pylon face (upper model coords): GO lights the
+    upper disc + GO display, STOP the lower disc + STOP display, WAIT the
+    amber display. Disc centres y 6.5 / 5.0 match tex_pylon's dark discs."""
+    def disc(cy, u0):
+        r = 0.78
+        if face == "south":
+            frm, to = (13.5 - r, cy - r, face_z), (13.5 + r, cy + r, face_z + 0.06)
+        else:
+            frm, to = (13.5 - r, cy - r, face_z - 0.06), (13.5 + r, cy + r, face_z)
+        return plate(frm, to, face, "lamp", [u0, 0, u0 + 4, 4])
+
+    def display(u0, v0):
+        if face == "south":
+            frm, to = (11.6, 7.3, face_z), (15.4, 8.7, face_z + 0.06)
+        else:
+            frm, to = (11.6, 7.3, face_z - 0.06), (15.4, 8.7, face_z)
+        return plate(frm, to, face, "lamp", [u0, v0, u0 + 8, v0 + 3])
+
+    states = {
+        "go": [disc(6.5, 0), display(0, 4)],
+        "stop": [disc(5.0, 4), display(8, 4)],
+        "wait": [display(0, 7)],
+    }
+    for state, els in states.items():
+        model(f"{prefix}_{state}", els)
+
+
+def write_low_unit():
+    model("ts_cabinet", cabinet_body(True))
+    model("ts_upper", reader_elements() + pylon_elements("pylon"))
+    model("ts_upper_exit", reader_elements() + pylon_elements("pylon_exit"))
+    lamp_models("ts_lamp", 4.0, "south")      # entry lane: indicator toward the unpaid side
+    lamp_models("ts_lamp_exit", 0.0, "north")  # exit lane: indicator toward the paid side
+
+
+def write_cap():
+    """Array end: the same stainless body and column without recess, readers
+    or indicator; its collar receives the last lane's arch."""
+    model("ts_cap_lower", cabinet_body(False))
+    model("ts_cap_upper", pylon_elements("pylon", indicator=False))
+
+
+# ------------------------------------------------------------------- HEET --
+# Lane block: sheet cage, hub at x = 16 (the boundary), rider walks x ~ 10.
+# Comb block = east neighbour (x 16..32 in this frame): post, comb bars,
+# indicator pylon. Rotor (BER) has R 11 curved wings; drum canopy R 15.
+HEET_HUB = (16.0, 8.0)
+SHEET_R = 13.5
+DRUM_R = 15.0
+BAR_PITCH = 2.4
+BAR_Y0 = 3.6
+BAR_COUNT = 12
+
+
+def sheet_panels(y0, y1, tex="perf", thick=0.4, r=SHEET_R):
+    """Five flat panels of a 16-gon around the hub covering 112.5 deg on the
+    -x side: authored tangent at 180 deg, rotated about y by 22.5 steps."""
+    half = r * math.tan(math.radians(11.25))
+    x = HEET_HUB[0] - r
+    els = []
+    for ang in (-45, -22.5, 0, 22.5, 45):
+        els.append(box((x - thick / 2, y0, HEET_HUB[1] - half), (x + thick / 2, y1, HEET_HUB[1] + half),
+                       tex, omit=("up",) if y1 == 16 else (),
+                       rotation=rot((HEET_HUB[0], 0, HEET_HUB[1]), "y", ang)))
+    return els
+
+
+def heet_drum(y0, y1):
+    """16-gon drum canopy R 15 about the hub: 5 full-diameter slabs authored
+    along x rotated -45..45 plus 3 along z rotated -22.5..22.5. The five
+    south-facing sides of the along-x slabs carry the ENTRY band."""
+    half = DRUM_R * math.tan(math.radians(11.25))   # 2.98
+    cx, cz = HEET_HUB
+    els = []
+    face_w = 2 * half * 2 / 4.0   # face width in uv units on the 64 px sign (2 texels/px, 4 texels/unit)
+    for ang in (-45, -22.5, 0, 22.5, 45):
+        i = int(round(ang / 22.5))
+        u0 = 8 + (i - 0.5) * face_w
+        u1 = 8 + (i + 0.5) * face_w
+        els.append(box((cx - DRUM_R, y0, cz - half), (cx + DRUM_R, y1, cz + half), "steel",
+                       override={"south": ("sign", [round(u0, 3), 0, round(u1, 3), 3]),
+                                 "up": ("flat", [0, 0, 16, 6]), "down": ("flat", [0, 0, 16, 6])},
+                       rotation=rot((cx, 0, cz), "y", ang)))
+    for ang in (-22.5, 0, 22.5):
+        els.append(box((cx - half, y0, cz - DRUM_R), (cx + half, y1, cz + DRUM_R), "steel",
+                       override={"up": ("flat", [0, 0, 6, 16]), "down": ("flat", [0, 0, 6, 16])},
+                       rotation=rot((cx, 0, cz), "y", ang)))
+    return els
+
+
+def comb_bars(y_lo, y_hi, y_shift):
+    """Fixed comb bars from the post toward the hub, at half-pitch offset from
+    the rotor bars so the wings interleave when they sweep through."""
+    els = []
+    for k in range(BAR_COUNT):
+        y = BAR_Y0 + k * BAR_PITCH + BAR_PITCH / 2
+        if y_lo <= y < y_hi:
+            yy = y - y_shift
+            els.append(box((19.5, yy - 0.5, 7.5), (29, yy + 0.5, 8.5), "steel", omit=("east",)))
+    return els
+
+
+def heet_pylon(y0, y1, y_shift, uv_v0, uv_v1):
+    return box((28, y0 - y_shift, 2), (32, y1 - y_shift, 5), "steel",
+               override={"south": ("heet_pylon", [0, uv_v0, 2, uv_v1])})
 
 
 def write_heet():
-    lower = heet_sides(0, 16, waist_rail=True) + heet_rotor(16)
-    model("turnstile_heet_lower", lower)
-    upper = heet_sides(0, 13, top_buried=True) + heet_rotor(13)
-    # roof plate sits directly on the frame; everything under it omits its
-    # up face, so nothing z-fights and no daylight band shows above the bars
-    upper.append(steel_box([0, 13, 0.75], [16, 15, 15.25], seed_v=3.5))
-    model("turnstile_heet_upper", upper)
-    # small lenses on both approach faces of both posts, plus the photos'
-    # lit lintel signs on the roof fascia: green arrow / red bar per state
-    lamp_models("turnstile_heet", [
-        ([0.4, 10.5, 0.7], [1.6, 12, 1.25], ("north", "east", "west", "up", "down")),
-        ([14.4, 10.5, 0.7], [15.6, 12, 1.25], ("north", "east", "west", "up", "down")),
-        ([0.4, 10.5, 14.75], [1.6, 12, 15.3], ("south", "east", "west", "up", "down")),
-        ([14.4, 10.5, 14.75], [15.6, 12, 15.3], ("south", "east", "west", "up", "down")),
-    ], plates=[
-        ([5, 13.2, 0.2], [11, 14.8, 0.8], "north", 2.5, 13.5),
-        ([5, 13.2, 15.2], [11, 14.8, 15.8], "south", 2.5, 13.5),
+    cx, cz = HEET_HUB
+    model("ts_heet_lane_lower", sheet_panels(1, 16) + [
+        box((cx - 2, 0, cz - 2), (cx + 2, 1, cz + 2), "dark"),             # bearing plate
+        box((cx - 5, 0, cz - 5), (cx + 5, 0.4, cz + 5), "dark", omit=("down",)),  # floor plate
     ])
+    model("ts_heet_lane_upper",
+          sheet_panels(0, 10) + sheet_panels(10, 11, tex="steel", thick=1.0) + [
+              box((0, 16, 6.5), (16, 18, 9.5), "steel", omit=("east",)),      # beam, west half
+          ] + heet_drum(18, 24))
+    model("ts_heet_comb_lower", [
+        box((28, 0, 6), (32, 1, 10), "dark", omit=("up",)),                    # foot
+        box((29, 1, 7), (31, 16, 9), "steel", omit=("up",)),                   # post
+        heet_pylon(8, 16, 0, 7, 11),
+    ] + comb_bars(0, 16, 0))
+    model("ts_heet_comb_upper", [
+        box((29, 0, 7), (31, 16, 9), "steel", omit=("up", "down")),
+        box((16, 16, 6.5), (32, 18, 9.5), "steel", omit=("west",)),           # beam, east half
+        heet_pylon(16, 30, 16, 0, 7),
+        box((27.8, 14, 1.8), (32, 14.6, 5.2), "dark", omit=("down",)),        # pylon cap
+    ] + comb_bars(16, 32, 16))
+    # HEET lamps: on the pylon's south face (z = 5) of comb_upper.
+    # Face is 4 px wide x 14 px tall here (world y 16..30); discs at pylon
+    # texel rows 24 and 33 of the 44-row art => world y 30 - 12 = 18, 30 - 16.5 = 13.5
+    # (lower block) — so put both discs in the upper model's range instead.
+    def disc(cy, u0):
+        r = 0.9
+        return plate((30 - r, cy - r, 5.0), (30 + r, cy + r, 5.06), "south", "lamp", [u0, 0, u0 + 4, 4])
+
+    def display(u0, v0):
+        return plate((28.4, 11.5, 5.0), (31.6, 12.8, 5.06), "south", "lamp", [u0, v0, u0 + 8, v0 + 3])
+    model("ts_heet_lamp_go", [disc(4.5, 0), display(0, 4)])
+    model("ts_heet_lamp_stop", [disc(0.5, 4), display(8, 4)])
+    model("ts_heet_lamp_wait", [display(0, 7)])
 
 
-# -------------------------------------------------------------- blockstates --
-ROTS = (("north", 0), ("east", 90), ("south", 180), ("west", 270))
+# ------------------------------------------------------------- blockstates --
+YROT = {"north": 0, "east": 90, "south": 180, "west": 270}
 
 
-def ap(mdl, rot):
-    entry = {"model": f"{MOD}:block/{mdl}"}
-    if rot:
-        entry["y"] = rot
-    return entry
+def ap(mdl, facing):
+    a = {"model": f"{MOD}:block/{mdl}"}
+    if YROT[facing]:
+        a["y"] = YROT[facing]
+    return a
 
 
-def row_end_parts(facing, rot, bridge_model):
-    """Overhead-tube selectors shared by lane and cap: bridge to the next
-    unit, wall collar when the row meets a solid wall, curled elbow end
-    otherwise."""
-    return [
-        {"when": {"facing": facing, "half": "upper", "right": "true"},
-         "apply": ap(bridge_model, rot)},
-        {"when": {"facing": facing, "half": "upper", "right": "false", "wall_right": "true"},
-         "apply": ap("turnstile_tube_wall_end", rot)},
-        {"when": {"facing": facing, "half": "upper", "right": "false", "wall_right": "false"},
-         "apply": ap("turnstile_tube_end", rot)},
-    ]
-
-
-def turnstile_blockstate(upper_model, bridge_model="turnstile_tube_bridge",
-                         lamp_prefix="turnstile"):
+def turnstile_blockstate(upper_model, lamp_prefix):
     parts = []
-    for facing, rot in ROTS:
-        parts.append({"when": {"facing": facing, "half": "lower"}, "apply": ap("turnstile_cabinet", rot)})
-        parts.append({"when": {"facing": facing, "half": "lower"}, "apply": ap("turnstile_arm", rot)})
-        parts.append({"when": {"facing": facing, "half": "upper"}, "apply": ap(upper_model, rot)})
-        for state in ("off", "go", "stop", "wait"):
+    for facing in YROT:
+        parts.append({"when": {"facing": facing, "half": "lower"}, "apply": ap("ts_cabinet", facing)})
+        parts.append({"when": {"facing": facing, "half": "upper"}, "apply": ap(upper_model, facing)})
+        for state in ("go", "stop", "wait"):
             parts.append({"when": {"facing": facing, "half": "upper", "indicator": state},
-                          "apply": ap(f"{lamp_prefix}_lamp_{state}", rot)})
-        parts += row_end_parts(facing, rot, bridge_model)
+                          "apply": ap(f"{lamp_prefix}_{state}", facing)})
     return {"multipart": parts}
 
 
 def cap_blockstate():
     parts = []
-    for facing, rot in ROTS:
-        parts.append({"when": {"facing": facing, "half": "lower"}, "apply": ap("turnstile_cap_lower", rot)})
-        parts.append({"when": {"facing": facing, "half": "upper"}, "apply": ap("turnstile_cap_upper", rot)})
-        parts += row_end_parts(facing, rot, "turnstile_tube_bridge")
+    for facing in YROT:
+        parts.append({"when": {"facing": facing, "half": "lower"}, "apply": ap("ts_cap_lower", facing)})
+        parts.append({"when": {"facing": facing, "half": "upper"}, "apply": ap("ts_cap_upper", facing)})
     return {"multipart": parts}
 
 
 def heet_blockstate():
     parts = []
-    for facing, rot in ROTS:
-        parts.append({"when": {"facing": facing, "half": "lower"}, "apply": ap("turnstile_heet_lower", rot)})
-        parts.append({"when": {"facing": facing, "half": "upper"}, "apply": ap("turnstile_heet_upper", rot)})
-        for state in ("off", "go", "stop", "wait"):
-            parts.append({"when": {"facing": facing, "half": "upper", "indicator": state},
-                          "apply": ap(f"turnstile_heet_lamp_{state}", rot)})
+    for facing in YROT:
+        for part in ("lane_lower", "lane_upper", "comb_lower", "comb_upper"):
+            parts.append({"when": {"facing": facing, "part": part}, "apply": ap(f"ts_heet_{part}", facing)})
+        for state in ("go", "stop", "wait"):
+            parts.append({"when": {"facing": facing, "part": "comb_upper", "indicator": state},
+                          "apply": ap(f"ts_heet_lamp_{state}", facing)})
     return {"multipart": parts}
 
 
-# ---------------------------------------------------------------- data files --
-def loot(block):
+# ------------------------------------------------------------ loot / recipe --
+def loot(block, prop, value):
     return {
         "type": "minecraft:block",
-        "pools": [{"rolls": 1, "entries": [{"type": "minecraft:item",
-                                            "name": f"{MOD}:{block}"}],
+        "pools": [{"rolls": 1, "entries": [{"type": "minecraft:item", "name": f"{MOD}:{block}"}],
                    "conditions": [
                        {"condition": "minecraft:block_state_property",
-                        "block": f"{MOD}:{block}", "properties": {"half": "lower"}},
+                        "block": f"{MOD}:{block}", "properties": {prop: value}},
                        {"condition": "minecraft:survives_explosion"}]}],
         "fabric:load_conditions": [{"condition": "fabric:all_mods_loaded", "values": ["mtr"]}],
     }
@@ -761,15 +700,13 @@ def loot(block):
 def recipes():
     return {
         "turnstile_exit": {
-            "type": "minecraft:crafting_shapeless",
-            "category": "redstone",
+            "type": "minecraft:crafting_shapeless", "category": "redstone",
             "ingredients": [{"item": f"{MOD}:turnstile"}, {"item": "minecraft:red_dye"}],
             "result": {"item": f"{MOD}:turnstile_exit"},
             "fabric:load_conditions": [{"condition": "fabric:all_mods_loaded", "values": ["mtr"]}],
         },
         "turnstile_heet": {
-            "type": "minecraft:crafting_shaped",
-            "category": "redstone",
+            "type": "minecraft:crafting_shaped", "category": "redstone",
             "key": {"B": {"item": "minecraft:iron_bars"}, "T": {"item": f"{MOD}:turnstile"}},
             "pattern": ["BB", "TB", "BB"],
             "result": {"item": f"{MOD}:turnstile_heet"},
@@ -779,30 +716,30 @@ def recipes():
 
 
 # ------------------------------------------------------------------- verify --
-# The Java-side property sets — keep in sync with TurnstileBaseBlock (+
-# TurnstileBlock's INDICATOR). One when-key naming a property the block lacks
-# makes the client reject the whole file (the purple-box lesson).
+# Java-side property sets — keep in sync with TurnstileBaseBlock / TurnstileBlock
+# / TurnstileHeetBlock. One when-key naming a property the block lacks makes
+# the client reject the whole file (the purple-box lesson).
+FACINGS = {"north", "south", "east", "west"}
+BOOL = {"true", "false"}
 PROPS = {
-    "turnstile": {"facing": {"north", "south", "east", "west"},
-                  "half": {"lower", "upper"}, "right": {"true", "false"},
-                  "wall_right": {"true", "false"},
+    "turnstile": {"facing": FACINGS, "half": {"lower", "upper"}, "join": BOOL, "open": BOOL,
                   "indicator": {"off", "go", "stop", "wait"}},
-    "turnstile_cap": {"facing": {"north", "south", "east", "west"},
-                      "half": {"lower", "upper"}, "right": {"true", "false"},
-                      "wall_right": {"true", "false"}},
+    "turnstile_cap": {"facing": FACINGS, "half": {"lower", "upper"}},
+    "turnstile_heet": {"facing": FACINGS,
+                       "part": {"lane_lower", "lane_upper", "comb_lower", "comb_upper"},
+                       "open": BOOL, "indicator": {"off", "go", "stop", "wait"}},
 }
 PROPS["turnstile_exit"] = PROPS["turnstile"]
-PROPS["turnstile_heet"] = PROPS["turnstile"]
 
 
 def verify():
+    seen_models = set()
     for block, props in PROPS.items():
         path = os.path.join(ASSETS, "blockstates", block + ".json")
         data = json.load(open(path))
         for part in data["multipart"]:
             when = part.get("when", {})
-            conds = when.get("OR", [when])
-            for cond in conds:
+            for cond in when.get("OR", [when]):
                 for key, value in cond.items():
                     assert key in props, f"{block}: unknown property {key}"
                     for v in str(value).split("|"):
@@ -810,14 +747,21 @@ def verify():
             mdl = part["apply"]["model"].split("/")[-1]
             mpath = os.path.join(ASSETS, "models/block", mdl + ".json")
             assert os.path.exists(mpath), f"{block}: missing model {mdl}"
+            seen_models.add(mdl)
             mdata = json.load(open(mpath))
             for el in mdata["elements"]:
                 for fname, face in el["faces"].items():
                     assert "uv" in face, f"{mdl}: face {fname} missing explicit uv"
                     u0, v0, u1, v1 = face["uv"]
                     assert 0 <= min(u0, u1) and max(u0, u1) <= 16 and \
-                        0 <= min(v0, v1) and max(v0, v1) <= 16, f"{mdl}: uv off sprite"
-    print("verify: blockstates + models OK")
+                        0 <= min(v0, v1) and max(v0, v1) <= 16, f"{mdl}: uv off sprite {face['uv']}"
+                    tex = face["texture"][1:]
+                    assert tex in mdata["textures"], f"{mdl}: unknown texture key {tex}"
+                if "rotation" in el:
+                    assert el["rotation"]["angle"] in (-45, -22.5, 0, 22.5, 45), f"{mdl}: bad angle"
+                for a, b in zip(el["from"], el["to"]):
+                    assert -16 <= a <= 32 and -16 <= b <= 32, f"{mdl}: element out of range"
+    print(f"verify: blockstates + {len(seen_models)} models OK")
 
 
 # --------------------------------------------------------------------- main --
@@ -828,57 +772,51 @@ def main():
 
     texdir = os.path.join(ASSETS, "textures/block")
     textures = {
-        "turnstile_steel": tex_steel(),
-        "turnstile_face": tex_face(False),
-        "turnstile_face_exit": tex_face(True),
-        "turnstile_arm": tex_arm(),
-        "turnstile_tube": tex_tube(),
-        "turnstile_lamp": tex_lamp(),
-        "turnstile_picto": tex_picto(),
-        "turnstile_sign": tex_sign(False),
-        "turnstile_sign_exit": tex_sign(True),
+        "ts_steel": tex_steel(),
+        "ts_steel_dark": tex_steel_dark(),
+        "ts_perf": tex_perf(),
+        "ts_flat": tex_flat(),
+        "ts_cabinet": tex_cabinet(),
+        "ts_cabinet_end": tex_cabinet_end(),
+        "ts_recess": tex_recess(),
+        "ts_reader": tex_reader(),
+        "ts_pylon": tex_pylon(False),
+        "ts_pylon_exit": tex_pylon(True),
+        "ts_heet_pylon": tex_heet_pylon(),
+        "ts_lamp": tex_lamp(),
+        "ts_sign": tex_sign(),
     }
     for name, rows in textures.items():
         pngtool.write_png(os.path.join(texdir, name + ".png"), rows)
-    for name in ("turnstile_exit", "turnstile_heet"):
-        pngtool.write_png(os.path.join(ASSETS, "textures/item", name + ".png"),
-                          icon(name.split("_", 1)[1]))
+    for name, kind in (("turnstile", "turnstile"), ("turnstile_exit", "exit"),
+                       ("turnstile_heet", "heet"), ("turnstile_cap", "cap")):
+        pngtool.write_png(os.path.join(ASSETS, "textures/item", name + ".png"), icon(kind))
         wj(os.path.join(ASSETS, "models/item", name + ".json"),
-           {"parent": "minecraft:item/generated",
-            "textures": {"layer0": f"{MOD}:item/{name}"}})
+           {"parent": "minecraft:item/generated", "textures": {"layer0": f"{MOD}:item/{name}"}})
 
-    write_cabinet()
-    write_arm()
-    write_upper_and_lamps()
-    write_tubes()
-    write_caps()
+    write_low_unit()
+    write_cap()
     write_heet()
 
-    wj(os.path.join(ASSETS, "blockstates/turnstile.json"), turnstile_blockstate("turnstile_upper"))
+    wj(os.path.join(ASSETS, "blockstates/turnstile.json"), turnstile_blockstate("ts_upper", "ts_lamp"))
     wj(os.path.join(ASSETS, "blockstates/turnstile_exit.json"),
-       turnstile_blockstate("turnstile_upper_exit", "turnstile_tube_bridge_exit",
-                            lamp_prefix="turnstile_exit"))
+       turnstile_blockstate("ts_upper_exit", "ts_lamp_exit"))
     wj(os.path.join(ASSETS, "blockstates/turnstile_cap.json"), cap_blockstate())
     wj(os.path.join(ASSETS, "blockstates/turnstile_heet.json"), heet_blockstate())
 
-    for block in ("turnstile_exit", "turnstile_heet"):
-        wj(os.path.join(DATA, MOD, "loot_tables/blocks", block + ".json"), loot(block))
+    for block in ("turnstile", "turnstile_exit", "turnstile_cap"):
+        wj(os.path.join(DATA, MOD, "loot_tables/blocks", block + ".json"), loot(block, "half", "lower"))
+    wj(os.path.join(DATA, MOD, "loot_tables/blocks/turnstile_heet.json"),
+       loot("turnstile_heet", "part", "lane_lower"))
     for name, recipe in recipes().items():
         wj(os.path.join(DATA, MOD, "recipes", name + ".json"), recipe)
-
-    # the exit upper model must dress with the exit face texture
-    path = os.path.join(ASSETS, "models/block/turnstile_upper_exit.json")
-    data = json.load(open(path))
-    data["textures"] = dict(TEXTURES, face=f"{MOD}:block/turnstile_face_exit")
-    wj(path, data)
 
     verify()
 
     if args.preview:
         os.makedirs(args.preview, exist_ok=True)
         for name, rows in textures.items():
-            pngtool.write_png(os.path.join(args.preview, name + ".png"),
-                              pngtool.scale_nn(rows, 12, 12))
+            pngtool.write_png(os.path.join(args.preview, name + ".png"), pngtool.scale_nn(rows, 8, 8))
         print(f"previews in {args.preview}")
 
 

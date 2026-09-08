@@ -227,17 +227,40 @@ def column_cap():
 # girder
 # ---------------------------------------------------------------------------
 
-def girder_body():
+# diagonal runs: a cell on a 45-degree run is 16*sqrt2 = 22.63 px long along
+# the run, so its members are authored from -3.31 to 19.31 and turned -45 about
+# y at the cell centre (-45 in Minecraft maps model +x to world south-east = the
+# "xz" run - the offline renderer has the opposite sign; "zx" is the
+# same model under the blockstate's y=90). Along-run neighbours then meet end
+# to end and crosswise neighbours (22.63 apart) abut, so a diagonal ribbon
+# tiles into a continuous rotated grid. Elements may not carry two rotations,
+# so the diagonal knee brace is a stepped plate without the 45-degree bar.
+DIAG = 16 * 2 ** 0.5
+DX0, DX1 = 8 - DIAG / 2, 8 + DIAG / 2
+
+
+def diag(el):
+    """Turn a world-frame element onto the south-east diagonal (-45 about y at the cell centre)."""
+    e = dict(el)
+    e["rotation"] = {"origin": [8, 8, 8], "axis": "y", "angle": -45, "rescale": False}
+    return e
+
+
+def girder_body(x0=0.0, x1=16.0, ribs=RIB_X):
     els = []
+    L = x1 - x0
     for y0, v in ((0.0, 13.5), (16 - FL_T, 0.5)):
         # flange: side faces carry the steel's rivet row
-        els.append(wbox(0, y0, FL_Z0, 16, y0 + FL_T, FL_Z1, S, faces=["north", "south", "up", "down"],
-                        uv={"north": [0, v, 16, v + FL_T], "south": [0, v, 16, v + FL_T],
-                            "up": [0, 4, 16, 12], "down": [0, 4, 16, 12]}))
-    els.append(wbox(0, FL_T, WEB_Z0, 16, 16 - FL_T, WEB_Z1, S, faces=["north", "south"],
-                    uv={"north": [0, 2, 16, 14], "south": [0, 2, 16, 14]}))
-    for x0 in RIB_X:
-        els.append(wbox(x0, FL_T, RIB_Z0, x0 + RIB_W, 16 - FL_T, RIB_Z1, S,
+        els.append(wbox(x0, y0, FL_Z0, x1, y0 + FL_T, FL_Z1, S,
+                        uv={"north": [0, v, min(16, L), v + FL_T], "south": [0, v, min(16, L), v + FL_T],
+                            "up": [0, 4, min(16, L), 12], "down": [0, 4, min(16, L), 12],
+                            "east": [4, 5, 12, 5 + FL_T], "west": [4, 5, 12, 5 + FL_T]}))
+    # end faces close a run end; at a joint they are buried in the next cell's member
+    els.append(wbox(x0, FL_T, WEB_Z0, x1, 16 - FL_T, WEB_Z1, S, faces=["north", "south", "east", "west"],
+                    uv={"north": [0, 2, min(16, L), 14], "south": [0, 2, min(16, L), 14],
+                        "east": [4, 2, 6, 14], "west": [4, 2, 6, 14]}))
+    for rx in ribs:
+        els.append(wbox(rx, FL_T, RIB_Z0, rx + RIB_W, 16 - FL_T, RIB_Z1, S,
                         faces=["north", "south", "east", "west"],
                         uv={"north": [0.5, 2, 1.7, 14], "south": [0.5, 2, 1.7, 14],
                             "east": [4, 2, 4 + (RIB_Z1 - RIB_Z0), 14], "west": [4, 2, 4 + (RIB_Z1 - RIB_Z0), 14]}))
@@ -253,97 +276,151 @@ def brace_bar(x0, y0, length):
         "rotation": {"origin": [x0, y0, 8], "axis": "z", "angle": 45, "rescale": False}}
 
 
-def brace_steps(x0, x1, line_at):
-    """Gusset web between the bar and the girder underside: 1.5 px steps
-    whose bottoms ride 0.6 above the diagonal (the bar buries the sawtooth)."""
+def brace_steps(x0, x1, line_at, step=STEP, top=0.4):
+    """Gusset web between the bar and the girder underside: steps whose
+    bottoms ride 0.6 above the diagonal (the bar buries the sawtooth)."""
     els = []
     x = x0
     while x < x1 - 0.05:
-        xe = min(x1, x + STEP)
+        xe = min(x1, x + step)
         yb = line_at(x) + 0.6
-        els.append(wbox(x, yb, WEB_Z0, xe, 0.4, WEB_Z1, S, faces=["north", "south", "down"],
-                        uv={"north": [4, 2, 4 + (xe - x), 2 + min(12, 0.4 - yb)],
-                            "south": [4, 2, 4 + (xe - x), 2 + min(12, 0.4 - yb)],
+        els.append(wbox(x, yb, WEB_Z0, xe, top, WEB_Z1, S, faces=["north", "south", "down", "east", "west"],
+                        uv={"north": [4, 2, 4 + (xe - x), 2 + min(12, top - yb)],
+                            "south": [4, 2, 4 + (xe - x), 2 + min(12, top - yb)],
+                            "east": [4, 2, 6, 2 + min(12, top - yb)], "west": [4, 2, 6, 2 + min(12, top - yb)],
                             "down": [4, 4, 4 + (xe - x), 6]}))
         x = xe
     return els
 
 
-def brace_here():
-    """The braced cell's own part: the gusset roots on both column faces (the
-    column below fills x 3..13), each 3 px wide, reaching 12 px down."""
-    els = [brace_bar(13.0, -BR_DROP, 3 * 2 ** 0.5)]
-    els += brace_steps(13.0, 16.0, lambda x: x - 25.0)
-    return els + [K.mirror_x(e) for e in els]
-
-
-def brace_neg():
-    """The cell +x of a braced cell: the brace rises from the shared boundary
-    (y -9) to the girder underside at x 9."""
-    els = [brace_bar(0.0, -9.0, 9 * 2 ** 0.5)]
-    els += brace_steps(0.0, 9.0, lambda x: x - 9.0)
+def brace_stair(x0, x1, line_at):
+    """Diagonal-run stand-in for the 45-degree bar (an element cannot turn
+    about two axes): a staircase of 1.5 px boxes riding the line, wider in
+    z than the web so it reads as the bar's flange."""
+    els = []
+    x = x0
+    while x < x1 - 0.05:
+        xe = min(x1, x + STEP)
+        yc = line_at(x + STEP / 2)
+        els.append(wbox(x, yc - BR_T / 2 - 0.4, BR_Z0, xe, yc + BR_T / 2 + 0.4, BR_Z1, S,
+                        uv={"north": [0, 0.5, xe - x, 0.5 + BR_T + 0.8], "south": [0, 0.5, xe - x, 0.5 + BR_T + 0.8],
+                            "up": [0, 4, xe - x, 8], "down": [0, 4, xe - x, 8],
+                            "east": [4, 4, 8, 4 + BR_T + 0.8], "west": [4, 4, 8, 4 + BR_T + 0.8]}))
+        x = xe
     return els
+
+
+def brace_here(root=13.0, cell_end=16.0, bar=True):
+    """The braced cell's own part: the gusset roots on both column faces (the
+    column below fills x 3..13 on a straight run, 0.93..15.07 measured along a
+    diagonal), reaching 12 px down. Line: y = x - root - 12."""
+    line = lambda x: x - root - BR_DROP
+    reach = cell_end - root
+    if bar:
+        els = [brace_bar(root, -BR_DROP, reach * 2 ** 0.5)]
+    else:
+        els = brace_stair(root, cell_end, line)
+    els += brace_steps(root, cell_end, line)
+    mirror = [K.mirror_x(e) for e in els] if cell_end == 16.0 else [mirror_about(e, 8.0) for e in els]
+    return els + mirror
+
+
+def brace_neg(cell_start=0.0, root=13.0, cell_end=16.0, bar=True):
+    """The cell beyond a braced cell along the run: the brace continues from
+    the shared boundary up to the girder underside 12 px past the root."""
+    # in our frame the root sits at root - (cell_end - cell_start) (the previous cell)
+    r = root - (cell_end - cell_start)
+    line = lambda x: x - r - BR_DROP
+    x_top = r + BR_DROP
+    if bar:
+        els = [brace_bar(cell_start, line(cell_start), (x_top - cell_start) * 2 ** 0.5)]
+    else:
+        els = brace_stair(cell_start, x_top, line)
+    els += brace_steps(cell_start, x_top, line)
+    return els
+
+
+def mirror_about(el, cx):
+    """mirror_x about an arbitrary x (the diagonal cell is centred on 8 but spans -3.31..19.31)."""
+    e = K.mirror_x(el)
+    d = 2 * cx - 16
+    e["from"][0] += d
+    e["to"][0] += d
+    if "rotation" in e:
+        e["rotation"]["origin"][0] += d
+    return e
 
 
 # ---------------------------------------------------------------------------
 # decks
 # ---------------------------------------------------------------------------
 
-def stringers(top, cap_up=True):
+def stringers(top, cap_up=True, x0=0.0, x1=16.0):
     """Two deep riveted I-beam stringers along x, y 0.1..top, sitting straight
     on the cross girder's top flange (bearing blocks at every joint were
     tried first and read as a forest of stubs under the deck), plus a
     mid-span diaphragm channel between them."""
     els = []
     y_lo = 0.1
+    L = x1 - x0
     for z0, z1 in STR_Z:
         for y0 in (y_lo, top - STR_FL):
-            faces = ["north", "south", "up", "down"]
+            faces = ["north", "south", "up", "down", "east", "west"]
             if y0 > y_lo and not cap_up:
                 faces.remove("up")
-            els.append(wbox(0, y0, z0, 16, y0 + STR_FL, z1, S, faces=faces,
-                            uv={"north": [0, 0.6, 16, 0.6 + STR_FL], "south": [0, 0.6, 16, 0.6 + STR_FL],
-                                "up": [0, 4, 16, 7], "down": [0, 4, 16, 7]}))
+            els.append(wbox(x0, y0, z0, x1, y0 + STR_FL, z1, S, faces=faces,
+                            uv={"north": [0, 0.6, min(16, L), 0.6 + STR_FL], "south": [0, 0.6, min(16, L), 0.6 + STR_FL],
+                                "up": [0, 4, min(16, L), 7], "down": [0, 4, min(16, L), 7],
+                                "east": [4, 5, 7, 5 + STR_FL], "west": [4, 5, 7, 5 + STR_FL]}))
         zm = (z0 + z1) / 2
         h = top - y_lo - 2 * STR_FL
-        els.append(wbox(0, y_lo + STR_FL, zm - 0.6, 16, top - STR_FL, zm + 0.6, S, faces=["north", "south"],
-                        uv={"north": [0, 2, 16, 2 + min(12, h)], "south": [0, 2, 16, 2 + min(12, h)]}))
+        els.append(wbox(x0, y_lo + STR_FL, zm - 0.6, x1, top - STR_FL, zm + 0.6, S,
+                        faces=["north", "south", "east", "west"],
+                        uv={"north": [0, 2, min(16, L), 2 + min(12, h)], "south": [0, 2, min(16, L), 2 + min(12, h)],
+                            "east": [4, 2, 5.2, 2 + min(12, h)], "west": [4, 2, 5.2, 2 + min(12, h)]}))
         # stiffener angles at the block ends (pair into a splice rib across a joint)
-        for x0 in (0.1, 14.7):
-            els.append(wbox(x0, y_lo + STR_FL, zm - 1.1, x0 + RIB_W, top - STR_FL, zm + 1.1, S,
+        for rx in (x0 + 0.1, x1 - 1.3):
+            els.append(wbox(rx, y_lo + STR_FL, zm - 1.1, rx + RIB_W, top - STR_FL, zm + 1.1, S,
                             faces=["north", "south", "east", "west"],
                             uv={"north": [0.5, 2, 1.7, 2 + min(12, h)], "south": [0.5, 2, 1.7, 2 + min(12, h)],
                                 "east": [4, 2, 6.2, 2 + min(12, h)], "west": [4, 2, 6.2, 2 + min(12, h)]}))
-    # diaphragm channel between the stringers at mid span
-    els.append(wbox(7, y_lo + 3, STR_Z[0][1], 9, top - 3, STR_Z[1][0], S, faces=["east", "west", "up", "down"],
-                    uv={"east": [4, 4, 9, 4 + min(12, top - y_lo - 6)], "west": [4, 4, 9, 4 + min(12, top - y_lo - 6)],
-                        "up": [4, 4, 6, 9], "down": [4, 4, 6, 9]}))
+    # diaphragm reaches INTO both webs (a stop at the flange edge left a slit beside each web)
+    zw0 = (STR_Z[0][0] + STR_Z[0][1]) / 2 + 0.6
+    zw1 = (STR_Z[1][0] + STR_Z[1][1]) / 2 - 0.6
+    els.append(wbox(7, y_lo + 3, zw0, 9, top - 3, zw1, S, faces=["east", "west", "up", "down"],
+                    uv={"east": [4, 4, 4 + (zw1 - zw0), 4 + min(12, top - y_lo - 6)],
+                        "west": [4, 4, 4 + (zw1 - zw0), 4 + min(12, top - y_lo - 6)],
+                        "up": [4, 4, 6, 4 + (zw1 - zw0)], "down": [4, 4, 6, 4 + (zw1 - zw0)]}))
     return els
 
 
-def ties():
-    """Timber ties on a 4 px pitch across the full cell (they continue into
-    the next cell over), 2 px tall on the stringers' top flanges."""
+def ties(x0=0.0, x1=16.0, z0=0.0, z1=16.0, count=4):
+    """Timber ties across the full cell (they continue into the next cell
+    over), 2 px tall on the stringers' top flanges, `count` per cell."""
     els = []
-    for x0 in (1.0, 5.0, 9.0, 13.0):
-        els.append(wbox(x0, 14, 0, x0 + 2, 16, 16, "#tie",
-                        uv={"up": [0, 0, 16, 2], "down": [0, 0, 16, 2], "east": [0, 6, 16, 8], "west": [0, 6, 16, 8],
-                            "north": [0, 6, 2, 8], "south": [0, 6, 2, 8]},
-                        faces=["up", "down", "east", "west", "north", "south"]))
+    pitch = (x1 - x0) / count
+    for k in range(count):
+        tx = x0 + pitch * (k + 0.5) - 1
+        w = min(16, z1 - z0)
+        els.append(wbox(tx, 14, z0, tx + 2, 16, z1, "#tie",
+                        uv={"up": [0, 0, w, 2], "down": [0, 0, w, 2], "east": [0, 6, w, 8], "west": [0, 6, w, 8],
+                            "north": [0, 6, 2, 8], "south": [0, 6, 2, 8]}))
         # rotate the long faces so the grain runs along the tie
         for f in ("up", "down", "east", "west"):
             els[-1]["faces"][f]["rotation"] = 90
     return els
 
 
-def pan():
+def pan(x0=0.0, x1=16.0, z0=0.0, z1=16.0, cull=True):
     """Closed riveted deck pan: diamond plate on top (concrete goes over it),
     rivet grid below, cullface sides so runs never show internal faces."""
-    el = wbox(0, 13, 0, 16, 16, 16, {"up": "#plate", "down": "#pan", "*": S},
-              uv={"up": [0, 0, 16, 16], "down": [0, 0, 16, 16], "north": [0, 5, 16, 8], "south": [0, 5, 16, 8],
-                  "east": [0, 5, 16, 8], "west": [0, 5, 16, 8]})
-    for f in ("north", "south", "east", "west"):
-        el["faces"][f]["cullface"] = f
+    w, d = min(16, x1 - x0), min(16, z1 - z0)
+    el = wbox(x0, 13, z0, x1, 16, z1, {"up": "#plate", "down": "#pan", "*": S},
+              uv={"up": [0, 0, w, d], "down": [0, 0, w, d], "north": [0, 5, w, 8], "south": [0, 5, w, 8],
+                  "east": [0, 5, d, 8], "west": [0, 5, d, 8]})
+    if cull:
+        for f in ("north", "south", "east", "west"):
+            el["faces"][f]["cullface"] = f
     return [el]
 
 
@@ -405,14 +482,28 @@ def icon_plate_deck():
     return r
 
 
+def icon_structure_creator():
+    r = icon_canvas()
+    irect(r, 2, 6, 30, 10, GREEN_I)
+    irect(r, 6, 10, 10, 30, GREEN_I)
+    irect(r, 22, 10, 26, 30, GREEN_I)
+    iline(r, 10, 14, 14, 10, GREEN_D, 2)
+    iline(r, 21, 10, 17, 14, GREEN_D, 2)
+    for x in range(3, 30, 4):
+        irect(r, x, 3, x + 2, 6, (58, 46, 36, 255))
+    irect(r, 26, 24, 31, 29, (255, 214, 60, 255))
+    irect(r, 27, 25, 30, 28, (120, 90, 20, 255))
+    return r
+
+
 # ---------------------------------------------------------------------------
 # assets
 # ---------------------------------------------------------------------------
 
 COLUMN_PROPS = {"facing": {"north", "east", "south", "west"}, "up": {"true", "false"}, "down": {"true", "false"}}
-GIRDER_PROPS = {"axis": {"x", "z"}, "braced": {"true", "false"}, "brace_neg": {"true", "false"},
+GIRDER_PROPS = {"axis": {"x", "z", "xz", "zx"}, "braced": {"true", "false"}, "brace_neg": {"true", "false"},
                 "brace_pos": {"true", "false"}}
-DECK_PROPS = {"axis": {"x", "z"}}
+DECK_PROPS = {"axis": {"x", "z", "xz", "zx"}}
 VERIFY = [("el_street_column", COLUMN_PROPS), ("el_street_column_lattice", COLUMN_PROPS),
           ("el_girder_plate", GIRDER_PROPS), ("el_track_deck", DECK_PROPS), ("el_plate_deck", DECK_PROPS)]
 
@@ -470,10 +561,18 @@ def build():
     K.model("el_girder_brace_here", brace_here(), tex)
     K.model("el_girder_brace_neg", brace_neg(), tex)
     K.model("el_girder_brace_pos", [K.mirror_x(e) for e in brace_neg()], tex)
+    # diagonal run: 22.63 px members, column root measured along the diagonal
+    DROOT = 8 + 5 * 2 ** 0.5
+    ribs_d = (DX0 + 0.1, 7.4, DX1 - 1.3)
+    K.model("el_girder_plate_body_diag", [diag(e) for e in girder_body(DX0, DX1, ribs_d)], tex)
+    K.model("el_girder_brace_here_diag", [diag(e) for e in brace_here(DROOT, DX1, bar=False)], tex)
+    neg_d = brace_neg(DX0, DROOT, DX1, bar=False)
+    K.model("el_girder_brace_neg_diag", [diag(e) for e in neg_d], tex)
+    K.model("el_girder_brace_pos_diag", [diag(mirror_about(e, 8.0)) for e in neg_d], tex)
     parts = []
-    for axis, rot in (("x", 0), ("z", 90)):
+    for axis, rot, suf in (("x", 0, ""), ("z", 90, ""), ("xz", 0, "_diag"), ("zx", 90, "_diag")):
         def ap(m):
-            a = {"model": f"{MOD}:block/{m}"}
+            a = {"model": f"{MOD}:block/{m}{suf}"}
             if rot:
                 a["y"] = rot
             return a
@@ -492,11 +591,17 @@ def build():
     # decks
     K.model("el_track_deck", stringers(14.0) + ties(), tex)
     K.model("el_plate_deck", stringers(13.0, cap_up=False) + pan(), tex)
+    K.model("el_track_deck_diag", [diag(e) for e in stringers(14.0, x0=DX0, x1=DX1) + ties(DX0, DX1, DX0, DX1, 6)], tex)
+    K.model("el_plate_deck_diag", [diag(e) for e in stringers(13.0, cap_up=False, x0=DX0, x1=DX1)
+                                   + pan(DX0, DX1, DX0, DX1, cull=False)], tex)
     for name in ("el_track_deck", "el_plate_deck"):
         K.write_json(os.path.join(K.BLOCKSTATES, name + ".json"), {"variants": {
             "axis=x": {"model": f"{MOD}:block/{name}"},
-            "axis=z": {"model": f"{MOD}:block/{name}", "y": 90}}})
+            "axis=z": {"model": f"{MOD}:block/{name}", "y": 90},
+            "axis=xz": {"model": f"{MOD}:block/{name}_diag"},
+            "axis=zx": {"model": f"{MOD}:block/{name}_diag", "y": 90}}})
         loot(name)
+    icon("el_structure_creator", icon_structure_creator())
     icon("el_track_deck", icon_track_deck())
     icon("el_plate_deck", icon_plate_deck())
     K.write_json(os.path.join(K.DATA, "recipes/el_track_deck.json"), {

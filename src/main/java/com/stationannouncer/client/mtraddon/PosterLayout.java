@@ -252,7 +252,7 @@ public final class PosterLayout {
     // ------------------------------------------------------------- text flow
 
     /** One flow item: a word, or a token drawn as a symbol. */
-    private record Item(String word, String token, String arg, float width) {
+    public record Item(String word, String token, String arg, float width) {
     }
 
     /**
@@ -293,7 +293,7 @@ public final class PosterLayout {
         return lineEmpty && items.isEmpty() ? y : y + lineHeight;
     }
 
-    private static List<Item> tokenize(Surface s, String text, float size, boolean bold) {
+    public static List<Item> tokenize(Surface s, String text, float size, boolean bold) {
         List<Item> items = new ArrayList<>();
         if (text == null || text.isEmpty()) {
             return items;
@@ -327,7 +327,7 @@ public final class PosterLayout {
 
     // --------------------------------------------------------------- symbols
 
-    private static float symbolWidth(String token, float size) {
+    public static float symbolWidth(String token, float size) {
         return switch (token) {
             case "b", "d" -> size * 1.15f;
             case "wc" -> size * 1.05f;
@@ -336,7 +336,7 @@ public final class PosterLayout {
         };
     }
 
-    private static void symbol(Surface s, String token, String arg, float x, float y, float size, int ink) {
+    public static void symbol(Surface s, String token, String arg, float x, float y, float size, int ink) {
         float cy = y + size * 0.5f;
         switch (token) {
             case "b" -> {
@@ -367,7 +367,7 @@ public final class PosterLayout {
     }
 
     /** The international access symbol: white figure on a blue tile. */
-    private static void wheelchair(Surface s, float x, float y, float size, int layer) {
+    public static void wheelchair(Surface s, float x, float y, float size, int layer) {
         float u = size / 16.0f;
         s.rect(x, y, x + size, y + size, WHEELCHAIR_BLUE, layer);
         // head
@@ -387,7 +387,7 @@ public final class PosterLayout {
      * A block arrow pointing in {@code dir} (0 = right, anticlockwise in 45°
      * steps), centred on cx/cy, at {@code scale} x the 40-unit reference size.
      */
-    private static void bigArrow(Surface s, float cx, float cy, int dir, float scale, int argb, int layer) {
+    public static void bigArrow(Surface s, float cx, float cy, int dir, float scale, int argb, int layer) {
         float a = (float) Math.toRadians(dir * 45.0);
         float cos = MathHelper.cos(a);
         float sin = MathHelper.sin(a);
@@ -408,7 +408,7 @@ public final class PosterLayout {
         }
     }
 
-    private static String fit(Surface s, String text, float size, boolean bold, float maxWidth) {
+    public static String fit(Surface s, String text, float size, boolean bold, float maxWidth) {
         if (text == null || text.isEmpty() || s.width(text, size, bold) <= maxWidth) {
             return text == null ? "" : text;
         }
@@ -575,12 +575,26 @@ public final class PosterLayout {
         private final float oy;
         private final float scale;
 
+        /** A resource font id (e.g. MTR's {@code mtr:mtr}) for the text, or null for vanilla. */
+        private final net.minecraft.util.Identifier fontId;
+
         public GuiSurface(DrawContext context, float ox, float oy, float scale) {
+            this(context, ox, oy, scale, null);
+        }
+
+        public GuiSurface(DrawContext context, float ox, float oy, float scale,
+                          net.minecraft.util.Identifier fontId) {
             this.context = context;
             this.font = MinecraftClient.getInstance().textRenderer;
             this.ox = ox;
             this.oy = oy;
             this.scale = scale;
+            this.fontId = fontId;
+        }
+
+        private net.minecraft.text.Text styled(String string) {
+            return net.minecraft.text.Text.literal(string)
+                    .setStyle(net.minecraft.text.Style.EMPTY.withFont(fontId));
         }
 
         private int px(float x) {
@@ -661,11 +675,20 @@ public final class PosterLayout {
             matrices.translate(ox + x * scale, oy + y * scale, 0);
             float glyph = size * scale / 8.0f;
             matrices.scale(glyph, glyph, 1);
-            context.drawText(font, string, 0, 0, argb, false);
-            if (bold) {
-                // Faked bold: a second pass half a glyph unit to the right (size/16 canvas units).
-                matrices.translate(0.5f, 0, 0);
+            if (fontId != null) {
+                net.minecraft.text.Text text = styled(string);
+                context.drawText(font, text, 0, 0, argb, false);
+                if (bold) {
+                    matrices.translate(0.5f, 0, 0);
+                    context.drawText(font, text, 0, 0, argb, false);
+                }
+            } else {
                 context.drawText(font, string, 0, 0, argb, false);
+                if (bold) {
+                    // Faked bold: a second pass half a glyph unit to the right (size/16 canvas units).
+                    matrices.translate(0.5f, 0, 0);
+                    context.drawText(font, string, 0, 0, argb, false);
+                }
             }
             matrices.pop();
         }
@@ -675,7 +698,8 @@ public final class PosterLayout {
             if (string == null || string.isEmpty()) {
                 return 0;
             }
-            return font.getWidth(string) * size / 8.0f + (bold ? size / 16.0f : 0);
+            int raw = fontId != null ? font.getWidth(styled(string)) : font.getWidth(string);
+            return raw * size / 8.0f + (bold ? size / 16.0f : 0);
         }
     }
 
@@ -689,9 +713,15 @@ public final class PosterLayout {
         private final TextRenderer font;
 
         public WorldSurface(MatrixStack matrices, VertexConsumerProvider consumers) {
+            this(matrices, consumers, null);
+        }
+
+        /** @param fontId a resource font id for the text (e.g. MTR's {@code mtr:mtr}), or null for vanilla. */
+        public WorldSurface(MatrixStack matrices, VertexConsumerProvider consumers,
+                            net.minecraft.util.Identifier fontId) {
             this.matrices = matrices;
             this.consumers = consumers;
-            this.painter = new CanvasPainter(matrices, consumers);
+            this.painter = new CanvasPainter(matrices, consumers).withFont(fontId);
             this.font = MinecraftClient.getInstance().textRenderer;
         }
 
@@ -746,7 +776,7 @@ public final class PosterLayout {
             if (string == null || string.isEmpty()) {
                 return 0;
             }
-            return font.getWidth(string) * size / 8.0f + (bold ? size / 16.0f : 0);
+            return painter.width(string, size) + (bold ? size / 16.0f : 0);
         }
     }
 }

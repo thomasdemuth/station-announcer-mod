@@ -78,6 +78,9 @@ public final class MtrStationDecor {
     public static final TurnstileBlock TURNSTILE_EXIT = new TurnstileBlock(fareGateSettings(), false);
     public static final TurnstileHeetBlock TURNSTILE_HEET = new TurnstileHeetBlock(fareGateSettings());
     public static final TurnstileCapBlock TURNSTILE_CAP = new TurnstileCapBlock(settings());
+    /** Lane data cell (turnstile lower half / HEET lane_lower): animation + lock bookkeeping. */
+    public static final BlockEntityType<TurnstileBlockEntity> TURNSTILE_BLOCK_ENTITY =
+            BlockEntityType.Builder.create(TurnstileBlockEntity::new, TURNSTILE, TURNSTILE_EXIT, TURNSTILE_HEET).build(null);
 
     /** Holding lights (timed off MTR arrivals) and their hanging hardware. */
     public static final HoldingLightBlock HOLDING_LIGHT_YELLOW = new HoldingLightBlock(
@@ -219,12 +222,19 @@ public final class MtrStationDecor {
     public static final BlockEntityType<StopMarkerBlockEntity> STOP_MARKER_BLOCK_ENTITY =
             BlockEntityType.Builder.create(StopMarkerBlockEntity::new, STOP_MARKER).build(null);
 
+    /** MTA-style sign panels: full block height and half height (wall / hanging / standing). */
+    public static final MtaSignBlock MTA_SIGN = new MtaSignBlock(
+            AbstractBlock.Settings.create().strength(1.0f).sounds(net.minecraft.sound.BlockSoundGroup.METAL).nonOpaque(), true);
+    public static final MtaSignBlock MTA_SIGN_HALF = new MtaSignBlock(
+            AbstractBlock.Settings.create().strength(1.0f).sounds(net.minecraft.sound.BlockSoundGroup.METAL).nonOpaque(), false);
+
     public static final BlockEntityType<StationDecorBlockEntity> DECOR_BLOCK_ENTITY =
             BlockEntityType.Builder.create(StationDecorBlockEntity::new,
                     STATION_NAME_MOSAIC, COLUMN_IRON_NAMED, COLUMN_IRON_NAMED_STATION,
                     ENTRANCE_RAILING_SIGN, HOLDING_LIGHT_YELLOW, HOLDING_LIGHT_GREEN,
                     EMPLOYEE_DOOR_MESH, EMPLOYEE_DOOR_BLACK, EMPLOYEE_DOOR_WHITE,
-                    EL_COLUMN_NAMED, EL_COLUMN_NAMED_STATION, EL_NAME_BOARD, EL_POST_NAMED, EL_RAILING_SIGN, EL_WALL_SIGN, EL_SIGN, EL_ENTRANCE_SIGN).build(null);
+                    EL_COLUMN_NAMED, EL_COLUMN_NAMED_STATION, EL_NAME_BOARD, EL_POST_NAMED, EL_RAILING_SIGN, EL_WALL_SIGN, EL_SIGN, EL_ENTRANCE_SIGN,
+                    MTA_SIGN, MTA_SIGN_HALF).build(null);
 
     /** Service change poster frame (wall, two-block, lower half = data). */
     public static final ServicePosterBlock SERVICE_POSTER = new ServicePosterBlock(
@@ -240,6 +250,10 @@ public final class MtrStationDecor {
 
     /** C2S: the railing sign's editor saves (pos + name + which faces show + their route bullets). */
     public static final Identifier UPDATE_RAILING_SIGN_C2S = StationAnnouncer.id("update_railing_sign");
+
+    /** C2S: the MTA sign editor saves (pos + the sign faces as JSON). */
+    public static final Identifier UPDATE_SIGN_C2S = StationAnnouncer.id("update_sign");
+
 
     private MtrStationDecor() {
     }
@@ -320,6 +334,20 @@ public final class MtrStationDecor {
             });
         });
 
+        ServerPlayNetworking.registerGlobalReceiver(UPDATE_SIGN_C2S, (server, player, handler, buf, responseSender) -> {
+            BlockPos pos = buf.readBlockPos();
+            com.stationannouncer.mtr.sign.SignFaces faces = com.stationannouncer.mtr.sign.SignFaces.read(buf);
+            server.execute(() -> {
+                ServerWorld world = player.getServerWorld();
+                if (player.squaredDistanceTo(Vec3d.ofCenter(pos)) <= 64.0 * 64.0
+                        && world.canPlayerModifyAt(player, pos)
+                        && world.getBlockEntity(pos) instanceof StationDecorBlockEntity decor) {
+                    decor.setSign(faces);
+                    decor.sync();
+                }
+            });
+        });
+
         ServerPlayNetworking.registerGlobalReceiver(UPDATE_STOP_MARKER_C2S, (server, player, handler, buf, responseSender) -> {
             BlockPos pos = buf.readBlockPos();
             StopMarkerBlock.Style style = buf.readEnumConstant(StopMarkerBlock.Style.class);
@@ -362,6 +390,8 @@ public final class MtrStationDecor {
         registerEdgeRun("el_wall_sign", EL_WALL_SIGN);
         registerBlock("el_sign", EL_SIGN, ModContent.DECORATION_ENTRIES);
         registerBlock("el_entrance_sign", EL_ENTRANCE_SIGN, ModContent.DECORATION_ENTRIES);
+        registerBlock("mta_sign", MTA_SIGN, ModContent.DECORATION_ENTRIES);
+        registerBlock("mta_sign_half", MTA_SIGN_HALF, ModContent.DECORATION_ENTRIES);
         registerBlock("el_platform_lamp", EL_LAMP_POLE, ModContent.DECORATION_ENTRIES);
         registerBlock("station_name_mosaic", STATION_NAME_MOSAIC, ModContent.DECORATION_ENTRIES);
         registerBlock("column_iron", COLUMN_IRON, ModContent.DECORATION_ENTRIES);
@@ -436,6 +466,7 @@ public final class MtrStationDecor {
         Registry.register(Registries.BLOCK_ENTITY_TYPE, StationAnnouncer.id("station_decor"), DECOR_BLOCK_ENTITY);
         Registry.register(Registries.BLOCK_ENTITY_TYPE, StationAnnouncer.id("service_poster"), SERVICE_POSTER_BLOCK_ENTITY);
         Registry.register(Registries.BLOCK_ENTITY_TYPE, StationAnnouncer.id("stop_marker"), STOP_MARKER_BLOCK_ENTITY);
+        Registry.register(Registries.BLOCK_ENTITY_TYPE, StationAnnouncer.id("turnstile"), TURNSTILE_BLOCK_ENTITY);
     }
 
     /** One face's route bullets off the wire, capped both in count and in length. */

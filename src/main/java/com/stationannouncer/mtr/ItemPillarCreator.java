@@ -5,7 +5,9 @@ import net.minecraft.text.Text;
 import org.mtr.core.data.Rail;
 import org.mtr.mapping.holder.BlockState;
 import org.mtr.mapping.holder.ItemSettings;
+import org.mtr.mapping.holder.Hand;
 import org.mtr.mapping.holder.ItemStack;
+import org.mtr.mapping.holder.PlayerEntity;
 import org.mtr.mapping.holder.MutableText;
 import org.mtr.mapping.holder.ServerPlayerEntity;
 import org.mtr.mapping.holder.TextFormatting;
@@ -54,6 +56,8 @@ public class ItemPillarCreator extends ItemNodeModifierSelectableBlockBase {
         }
         net.minecraft.block.BlockState state = savedState.data;
         ServerWorld world = player.getServerWorld().data;
+        int width = CreatorSettings.width(stack.data, this.width);
+        int spacing = CreatorSettings.spacing(stack.data, this.spacing);
 
         int[] built = {0};
         // Start half a spacing in so the pattern is symmetric and nothing
@@ -78,10 +82,26 @@ public class ItemPillarCreator extends ItemNodeModifierSelectableBlockBase {
         return (nbt != null && nbt.contains(TAG_POS)) || super.hasGlint2(stack);
     }
 
+    /** The material picked by sneak-right-click, for the settings screen's preview (null if none). */
+    public net.minecraft.block.BlockState savedMaterial(net.minecraft.item.ItemStack stack) {
+        BlockState saved = getSavedState(new ItemStack(stack));
+        return saved == null ? null : saved.data;
+    }
+
+    /** Right-click in the air: the settings screen (width, spacing, preview). */
+    @Override
+    public void useWithoutResult(World world, PlayerEntity player, Hand hand) {
+        if (world.isClient()) {
+            MtrPillars.SETTINGS_OPENER.accept(hand.data);
+        }
+    }
+
     @Override
     public void addTooltips(ItemStack stack, World world, List<MutableText> tooltip, TooltipContext options) {
+        int w = CreatorSettings.width(stack.data, width);
         tooltip.add(TextHelper.translatable("tooltip.station_announcer.pillar_creator",
-                width <= 1 ? 1 : 2, spacing).formatted(TextFormatting.GRAY));
+                w <= 1 ? 1 : 2, CreatorSettings.spacing(stack.data, spacing)).formatted(TextFormatting.GRAY));
+        tooltip.add(TextHelper.translatable("tooltip.station_announcer.creator.settings").formatted(TextFormatting.DARK_GRAY));
         super.addTooltips(stack, world, tooltip, options); // saved material + usage hints
     }
 }
