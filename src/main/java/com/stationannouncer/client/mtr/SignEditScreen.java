@@ -136,6 +136,7 @@ public class SignEditScreen extends Screen {
     private static final int TOGGLE_EXIT_WORD = 4;
     private static final int TOGGLE_EXIT_STREETS = 5;
     private static final int TOGGLE_EXIT_NAME = 6;
+    private static final int TOGGLE_STACKED = 7;
 
     private enum Popup { LINE_BULLET, LINE_DIAMOND, LINE_TOKEN, LINE_TOKEN_DIAMOND, ROUTE, EXIT }
 
@@ -178,6 +179,10 @@ public class SignEditScreen extends Screen {
                     != com.stationannouncer.mtr.ElNameBoardBlock.Mount.WALL;
             canvasWidth = 56;
             canvasHeight = 28;
+        } else if (block instanceof com.stationannouncer.mtr.StationColumnBlock column) {
+            doubleSided = true;
+            canvasWidth = column.boardWidth();
+            canvasHeight = column.boardHeight();
         } else if (block instanceof com.stationannouncer.mtr.ElWallSignBlock
                 || block instanceof com.stationannouncer.mtr.ElRailingSignBlock) {
             net.minecraft.util.math.Direction facing = state.get(com.stationannouncer.block.FacingDecorBlock.FACING);
@@ -605,7 +610,8 @@ public class SignEditScreen extends Screen {
         switch (which) {
             case TOGGLE_FRONT -> frontOn = !frontOn;
             case TOGGLE_AUTO -> updateTile(t -> t.withArg("auto".equals(t.arg()) ? "" : "auto"));
-            case TOGGLE_UPPER -> updateTile(t -> t.withNum(t.num() == 1 ? 0 : 1));
+            case TOGGLE_UPPER -> updateTile(t -> t.withNum(t.num() ^ SignSpec.NAME_UPPER));
+            case TOGGLE_STACKED -> updateTile(t -> t.withNum(t.num() ^ SignSpec.NAME_STACKED));
             case TOGGLE_EXIT_WORD -> updateTile(t -> t.withNum(t.num() ^ SignSpec.EXIT_WORD));
             case TOGGLE_EXIT_STREETS -> updateTile(t -> t.withNum(t.num() ^ SignSpec.EXIT_STREETS));
             case TOGGLE_EXIT_NAME -> updateTile(t -> t.withNum(t.num() ^ SignSpec.EXIT_NAME));
@@ -1048,7 +1054,8 @@ public class SignEditScreen extends Screen {
                     FlatUi.heading(c, textRenderer, "Station name", x, y);
                     y += 14;
                     y = field(c, mx, my, "Override (empty = MTR station)", nameBox, x, y, w);
-                    y = toggleField(c, mx, my, "Case", tile.num() == 1 ? "UPPER CASE" : "As written", tile.num() == 1, x, y, w, TOGGLE_UPPER);
+                    y = toggleField(c, mx, my, "Case", tile.hasFlag(SignSpec.NAME_UPPER) ? "UPPER CASE" : "As written", tile.hasFlag(SignSpec.NAME_UPPER), x, y, w, TOGGLE_UPPER);
+                    y = toggleField(c, mx, my, "Lines", tile.hasFlag(SignSpec.NAME_STACKED) ? "Stacked (14 / Street)" : "One line if it fits", tile.hasFlag(SignSpec.NAME_STACKED), x, y, w, TOGGLE_STACKED);
                     y = segmentedField(c, mx, my, "Wheelchair symbol", new String[]{"Auto", "Always", "Never"},
                             "wc".equals(tile.arg()) ? 1 : "nowc".equals(tile.arg()) ? 2 : 0, x, y, w, SEG_WHEELCHAIR);
                     c.drawText(textRenderer, textRenderer.trimToWidth("Auto: shows when MTR's station screen marks it step-free", w), x, y, FlatUi.TEXT_FAINT, false);

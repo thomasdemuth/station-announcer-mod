@@ -307,3 +307,13 @@ Total ≈ 5-7 working days of agent time, gated by Thomas's play passes after 1,
   take three lines, EXIT tiles = full-height red field + one MTR destination per
   line + corner note. Rig-verified (round 4 screenshots). Committed and deployed as 3.1.0 (the
   version had been bumped by the parallel session again).
+- 2026-09-09: Thomas's Reno River column photo → the named column boards
+  (`StationColumnBlock`: column_iron_named(_station), el_column_named(_station),
+  el_post_named) draw through SignLayout too, so long names stack ("RENO /
+  RIVER", "GRAND / CENTRAL") with the wheelchair beside them; STATION_NAME gained
+  a STACKED flag (num bit 2) for the "14 / Street" look even when one line fits.
+  Rig-verified for the column boards (round 5); the stacked flag on a wall panel
+  shares the same wrap code path and was not separately screenshotted — a
+  parallel session's rig took over run/commands.txt + screenshots mid-round.
+  Committed as 3.1.1 WITHOUT a jar build (a Gradle build would have killed that
+  session's rig) — build + deploy_jar.sh still to run.

@@ -198,8 +198,9 @@ points at, and live tiles the station fills in.
   service draws a diamond), **Text** (with inline bullets, wheelchair and small
   arrows; Enter makes a new line, up to three), **Arrow** (eight directions,
   left edge / inline / right edge), **Station** (the MTR station's name, or an
-  override; shows the wheelchair symbol when the station is marked step-free
-  in its MTR station screen), **Exit** (an exit from MTR's station settings:
+  override; long names break onto two lines, or force "Stacked" for the
+  "14 / Street" column-plate look; shows the wheelchair symbol when the station
+  is marked step-free in its MTR station screen), **Exit** (an exit from MTR's station settings:
   "Exit" on the red field, its street names one per line, a corner note you
   type, and optionally the exit's name in a box), **Line + destination** (a route's bullet with "to <terminus>", its
   direction wording, or your own text), **Space**.
@@ -207,9 +208,9 @@ points at, and live tiles the station fills in.
   panel with a black band, or plain black.
 - Everything is stored by name: rename a line, repaint it, change an exit's
   streets or a route's terminus in MTR and every sign follows.
-- The older text signs — the entrance railing sign, the el entrance sign and
-  the el station boards — now use the same editor and typeface. Old placements
-  keep their content.
+- The older text signs — the entrance railing sign, the el entrance sign, the
+  el station boards and the named column boards — now use the same editor and
+  typeface. Old placements keep their content.
 
 ### Railroad PIDS (requires MTR, new in 2.3)
 

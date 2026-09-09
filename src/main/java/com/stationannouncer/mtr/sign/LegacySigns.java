@@ -20,7 +20,7 @@ public final class LegacySigns {
         RAILING,
         /** El entrance sign: bullets beside the name, both faces independent. */
         ENTRANCE,
-        /** El name boards / sign courses: one centred upper-case station name, plain black. */
+        /** El name boards / sign courses / named column boards: one centred upper-case station name, plain black. */
         BOARD,
         /** Not a legacy sign block. */
         NONE
@@ -38,7 +38,8 @@ public final class LegacySigns {
         }
         if (block instanceof com.stationannouncer.mtr.ElNameBoardBlock
                 || block instanceof com.stationannouncer.mtr.ElWallSignBlock
-                || block instanceof com.stationannouncer.mtr.ElRailingSignBlock) {
+                || block instanceof com.stationannouncer.mtr.ElRailingSignBlock
+                || block instanceof com.stationannouncer.mtr.StationColumnBlock) {
             return Kind.BOARD;
         }
         return Kind.NONE;

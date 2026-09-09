@@ -90,7 +90,7 @@ public class StationDecorRenderer implements BlockEntityRenderer<StationDecorBlo
             paintElNameBoard(entity, matrices, vertexConsumers,
                     entity.getCachedState().get(com.stationannouncer.mtr.ElNameBoardBlock.MOUNT));
         } else if (block instanceof com.stationannouncer.mtr.StationColumnBlock column) {
-            paintColumnBoard(matrices, vertexConsumers, name, column.boardOffset(),
+            paintColumnBoard(entity, matrices, vertexConsumers, column.boardOffset(),
                     column.boardWidth(), column.boardHeight());
         } else if (block instanceof com.stationannouncer.mtr.RailingSignBlock) {
             paintRailingSign(entity, matrices, vertexConsumers, name);
@@ -682,14 +682,18 @@ public class StationDecorRenderer implements BlockEntityRenderer<StationDecorBlo
      * (the column body itself, including the station-color tint, comes from
      * the block model and color provider).
      */
-    private void paintColumnBoard(MatrixStack matrices, VertexConsumerProvider vertexConsumers,
-                                  String name, float offset, float width, float height) {
-        if (name.isEmpty()) {
-            return;
-        }
+    private void paintColumnBoard(StationDecorBlockEntity entity, MatrixStack matrices,
+                                  VertexConsumerProvider vertexConsumers, float offset, float width, float height) {
         // Name board on both wide faces; the face plane comes from the block
-        // (iron column flange 0.25, the slim el column 0.1875).
+        // (iron column flange 0.25, the slim el column 0.1875). Content goes
+        // through the sign layout like every other text sign, so a long name
+        // stacks onto two lines and a step-free station carries the symbol.
+        com.stationannouncer.mtr.sign.SignFaces faces = com.stationannouncer.mtr.sign.LegacySigns.of(entity);
         for (int side = 0; side < 2; side++) {
+            com.stationannouncer.mtr.sign.SignSpec spec = side == 0 ? faces.frontSpec() : faces.backSpec();
+            if (spec == null) {
+                continue;
+            }
             matrices.push();
             if (side == 1) {
                 matrices.multiply(RotationAxis.POSITIVE_Y.rotationDegrees(180.0f));
@@ -699,11 +703,7 @@ public class StationDecorRenderer implements BlockEntityRenderer<StationDecorBlo
             float centreY = 0.625f;
             matrices.translate(width * UNIT / 2.0f, centreY + height * UNIT / 2.0f, -offset - 0.01);
             matrices.scale(-UNIT, -UNIT, UNIT);
-            CanvasPainter painter = new CanvasPainter(matrices, vertexConsumers);
-            painter.quad(0, 0, width, height, 0.0f, BOARD_BLACK);
-            String text = upperCase(name);
-            float size = Math.min(height * 0.56f, (width - 4) / Math.max(1, painter.width(text, 1)));
-            painter.textCentered(text, width / 2.0f, height / 2.0f - size / 2.0f, size, TEXT_WHITE);
+            MtaSignPainter.paintFace(matrices, vertexConsumers, spec, width, height, entity.getPos());
             matrices.pop();
         }
     }

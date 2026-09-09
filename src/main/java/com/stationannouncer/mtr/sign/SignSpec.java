@@ -31,7 +31,8 @@ import java.util.List;
  *       in 45° steps; {@code arg}: {@code "left"} / {@code "right"} pins it to
  *       that panel edge (the Vignelli rule), empty = inline.</li>
  *   <li>{@code STATION_NAME} — {@code text}: override, empty = the MTR station
- *       here; {@code num} 1 = upper-case.</li>
+ *       here; {@code num} bit flags: 1 upper-case, 2 stacked on two lines (the
+ *       column plates: "14 / Street"); {@code arg}: wheelchair "" auto / "wc" / "nowc".</li>
  *   <li>{@code EXIT} — {@code text}: the MTR exit name (as typed in the station's
  *       exit list; empty = the station's first exit); {@code arg}: corner note
  *       ("NE corner") — MTR has no corner concept; {@code num} bit flags:
@@ -102,6 +103,10 @@ public record SignSpec(Style style, List<Row> rows) {
             return TEXT;
         }
     }
+
+    /** Station-name tile flags. */
+    public static final int NAME_UPPER = 1;
+    public static final int NAME_STACKED = 2;
 
     /** Exit tile flags. */
     public static final int EXIT_WORD = 1;

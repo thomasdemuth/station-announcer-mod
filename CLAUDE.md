@@ -325,7 +325,8 @@ destination first; FULL editor from day one; the old text signs migrate onto it.
   the station step-free (`ClientAccessibility.isAccessibleStation`, set from
   MTR's station screen; tile arg "" auto / "wc" always / "nowc" never) — beside
   the name on one row, UNDER a two-line name on a tall plate (the column
-  plate look). Dev hook `#sign-access on|off` flips the station the player
+  plate look). STATION_NAME `num` is a flag set: 1 upper-case, 2 STACKED (always
+  break at the middle space, "14 / Street", even when one line would fit). Dev hook `#sign-access on|off` flips the station the player
   stands in; `SignContext` (per pos, 1 s TTL) supplies station name,
   exits (`Station.getExits()` → name + destinations), station lines, and
   `destination(route)` = first platform destination override else last stop.
@@ -344,7 +345,11 @@ destination first; FULL editor from day one; the old text signs migrate onto it.
 - **Migration**: `mtr/sign/LegacySigns` derives a sign from the old fields
   (CustomName / SignFront|Back / RoutesFront|Back) for entrance_railing_sign
   (name row + bullet row), el_entrance_sign (bullets + name), el_sign / el_name_board
-  / el_wall_sign / el_railing_sign (centred upper-case name, PLAIN style) — old
+  / el_wall_sign / el_railing_sign and (2026-09-09) the NAMED COLUMN BOARDS —
+  column_iron_named(_station), el_column_named(_station), el_post_named, all
+  `StationColumnBlock` (centred upper-case name, PLAIN style; `paintColumnBoard`
+  now paints through `MtaSignPainter.paintFace` on the block's boardWidth ×
+  boardHeight canvas, so "Reno River" on a 24-unit post stacks to two lines) — old
   placements draw the same content, now in the MTR font; saving in the editor
   writes `Sign` and the legacy fields are ignored. `RailingSignScreen` deleted.
 - Rig world is `run/world_baker` — a LOCAL COPY inside the rig, not Thomas's real

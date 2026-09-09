@@ -509,7 +509,9 @@ public final class SignLayout {
 
     private static NamePlate namePlate(Surface s, Tile tile, float rowHeight, Fit fit, SignContext ctx) {
         float shrink = fit.shrink();
-        String[] lines = lines(stationText(tile, ctx), fit.wrap());
+        String text = stationText(tile, ctx);
+        // "Stacked" names always break at the middle space ("14 / Street"), the column-plate look.
+        String[] lines = (tile.num() & SignSpec.NAME_STACKED) != 0 ? wrapTwo(text) : lines(text, fit.wrap());
         boolean icon = showsWheelchair(tile, ctx);
         boolean below = icon && lines.length > 1 && rowHeight * shrink >= 40;
         float cap = rowHeight * (below ? 0.26f : lines.length > 1 ? 0.32f : 0.46f) * shrink;
@@ -636,7 +638,7 @@ public final class SignLayout {
                 text = "Subway"; // outside any MTR station: what an entrance sign says anyway
             }
         }
-        return tile.num() == 1 ? text.toUpperCase(java.util.Locale.ROOT) : text;
+        return (tile.num() & SignSpec.NAME_UPPER) != 0 ? text.toUpperCase(java.util.Locale.ROOT) : text;
     }
 
     private static String destinationText(Tile tile) {
