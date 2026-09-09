@@ -336,7 +336,18 @@ destination first; FULL editor from day one; the old text signs migrate onto it.
   step-free at some platforms only (`SignContext.access()` compares
   `ClientAccessibility.platforms(stationId)` with `station.savedRails`). Map+
   has the same rule: `access_badge_outline.svg` / `#i-badge-outline`, glyph
-  `partial`, `stationPartial()` / `stationBadge()`. Dev hook `#sign-access on|off` flips the station the player
+  `partial`, `stationPartial()` / `stationBadge()`.
+  **Creative freedom (2026-09-09, Thomas: "as creative as I want")**: each face
+  has a `SignSpec.Panel` — painted panel width/height in canvas units (0 = the
+  block's plate), dx/dy offset from the plate centre, content scale — so a
+  sign can be bigger, smaller or elsewhere than its block (`SignLayout.panelBox`
+  gives the box in plate coordinates; `paint()` places rows inside it; Metrics
+  stay in plate coordinates). Every tile has `scale` (module multiplier) and
+  `dx`/`dy` nudges; the spacer's width is a number. The editor's numeric fields
+  are one control: `numberField` = label + draggable slider + number box
+  (`HIT_SLIDER`, `dragSlider`, `numberBoxes`), used for panel size/offset/scale,
+  tile "Size & position" and the spacer. The preview fits plate ∪ panel and
+  draws the plate as a grey frame behind the panel. Dev hook `#sign-access on|off` flips the station the player
   stands in; `SignContext` (per pos, 1 s TTL) supplies station name,
   exits (`Station.getExits()` → name + destinations), station lines, and
   `destination(route)` = first platform destination override else last stop.

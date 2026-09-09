@@ -44,7 +44,42 @@ import java.util.List;
  *   <li>{@code SPACER} — {@code num}: width in canvas units.</li>
  * </ul>
  */
-public record SignSpec(Style style, List<Row> rows) {
+public record SignSpec(Style style, List<Row> rows, Panel panel) {
+
+    public SignSpec(Style style, List<Row> rows) {
+        this(style, rows, Panel.DEFAULT);
+    }
+
+    /** Largest panel size / offset in canvas units (64 per block). */
+    public static final float MAX_PANEL = 1024;
+    public static final float MIN_SCALE = 0.1f;
+    public static final float MAX_SCALE = 8;
+
+    /**
+     * Per-face panel overrides: the painted panel's size in canvas units (0 =
+     * the block's own plate), its offset from the plate centre, and a scale
+     * applied to every tile's content. What lets a sign be bigger, smaller or
+     * elsewhere than the block it sits on.
+     */
+    public record Panel(float width, float height, float dx, float dy, float scale) {
+        public static final Panel DEFAULT = new Panel(0, 0, 0, 0, 1);
+
+        public Panel {
+            width = clampF(width, 0, MAX_PANEL);
+            height = clampF(height, 0, MAX_PANEL);
+            dx = clampF(dx, -MAX_PANEL, MAX_PANEL);
+            dy = clampF(dy, -MAX_PANEL, MAX_PANEL);
+            scale = scale <= 0 ? 1 : clampF(scale, MIN_SCALE, MAX_SCALE);
+        }
+
+        public boolean isDefault() {
+            return width == 0 && height == 0 && dx == 0 && dy == 0 && scale == 1;
+        }
+    }
+
+    private static float clampF(float value, float min, float max) {
+        return Float.isNaN(value) ? 0 : Math.max(min, Math.min(max, value));
+    }
 
     public enum Style {
         /** 1989 standard: white on black, with the thin white line under the top edge. */
@@ -113,10 +148,22 @@ public record SignSpec(Style style, List<Row> rows) {
     public static final int EXIT_STREETS = 2;
     public static final int EXIT_NAME = 4;
 
-    public record Tile(TileType type, String text, String arg, int num, List<String> routes) {
+    /**
+     * {@code scale} multiplies this tile's module size (1 = the row's), and
+     * {@code dx}/{@code dy} nudge it in canvas units from where the row put it.
+     */
+    public record Tile(TileType type, String text, String arg, int num, List<String> routes,
+                       float scale, float dx, float dy) {
+        public Tile(TileType type, String text, String arg, int num, List<String> routes) {
+            this(type, text, arg, num, routes, 1, 0, 0);
+        }
+
         public Tile {
             text = clip(text, MAX_TEXT);
             arg = clip(arg, MAX_ARG);
+            scale = scale <= 0 ? 1 : clampF(scale, MIN_SCALE, MAX_SCALE);
+            dx = clampF(dx, -MAX_PANEL, MAX_PANEL);
+            dy = clampF(dy, -MAX_PANEL, MAX_PANEL);
             List<String> list = new ArrayList<>();
             if (routes != null) {
                 for (String route : routes) {
@@ -150,19 +197,27 @@ public record SignSpec(Style style, List<Row> rows) {
         }
 
         public Tile withText(String newText) {
-            return new Tile(type, newText, arg, num, routes);
+            return new Tile(type, newText, arg, num, routes, scale, dx, dy);
         }
 
         public Tile withArg(String newArg) {
-            return new Tile(type, text, newArg, num, routes);
+            return new Tile(type, text, newArg, num, routes, scale, dx, dy);
         }
 
         public Tile withNum(int newNum) {
-            return new Tile(type, text, arg, newNum, routes);
+            return new Tile(type, text, arg, newNum, routes, scale, dx, dy);
         }
 
         public Tile withRoutes(List<String> newRoutes) {
-            return new Tile(type, text, arg, num, newRoutes);
+            return new Tile(type, text, arg, num, newRoutes, scale, dx, dy);
+        }
+
+        public Tile withScale(float newScale) {
+            return new Tile(type, text, arg, num, routes, newScale, dx, dy);
+        }
+
+        public Tile withOffset(float newDx, float newDy) {
+            return new Tile(type, text, arg, num, routes, scale, newDx, newDy);
         }
 
         public boolean hasFlag(int flag) {
@@ -208,6 +263,7 @@ public record SignSpec(Style style, List<Row> rows) {
 
     public SignSpec {
         style = style == null ? Style.BLACK : style;
+        panel = panel == null ? Panel.DEFAULT : panel;
         List<Row> list = new ArrayList<>();
         if (rows != null) {
             for (Row row : rows) {
@@ -259,6 +315,15 @@ public record SignSpec(Style style, List<Row> rows) {
                 if (tile.num() != 0) {
                     t.addProperty("num", tile.num());
                 }
+                if (tile.scale() != 1) {
+                    t.addProperty("scale", tile.scale());
+                }
+                if (tile.dx() != 0) {
+                    t.addProperty("dx", tile.dx());
+                }
+                if (tile.dy() != 0) {
+                    t.addProperty("dy", tile.dy());
+                }
                 if (!tile.routes().isEmpty()) {
                     JsonArray routes = new JsonArray(tile.routes().size());
                     tile.routes().forEach(routes::add);
@@ -270,7 +335,20 @@ public record SignSpec(Style style, List<Row> rows) {
             rowArray.add(entry);
         }
         json.add("rows", rowArray);
+        if (!panel.isDefault()) {
+            JsonObject p = new JsonObject();
+            p.addProperty("w", panel.width());
+            p.addProperty("h", panel.height());
+            p.addProperty("x", panel.dx());
+            p.addProperty("y", panel.dy());
+            p.addProperty("s", panel.scale());
+            json.add("panel", p);
+        }
         return json;
+    }
+
+    private static float num(JsonObject json, String key, float fallback) {
+        return json.has(key) && !json.get(key).isJsonNull() ? json.get(key).getAsFloat() : fallback;
     }
 
     public static SignSpec fromJson(JsonObject json) {
@@ -289,13 +367,19 @@ public record SignSpec(Style style, List<Row> rows) {
                             }
                         }
                         tiles.add(new Tile(TileType.byName(str(t, "type")), str(t, "text"), str(t, "arg"),
-                                t.has("num") ? t.get("num").getAsInt() : 0, routes));
+                                t.has("num") ? t.get("num").getAsInt() : 0, routes,
+                                num(t, "scale", 1), num(t, "dx", 0), num(t, "dy", 0)));
                     }
                 }
                 rows.add(new Row(Align.byName(str(entry, "align")), tiles));
             }
         }
-        return new SignSpec(Style.byName(str(json, "style")), rows);
+        Panel panel = Panel.DEFAULT;
+        if (json.has("panel") && json.get("panel").isJsonObject()) {
+            JsonObject p = json.getAsJsonObject("panel");
+            panel = new Panel(num(p, "w", 0), num(p, "h", 0), num(p, "x", 0), num(p, "y", 0), num(p, "s", 1));
+        }
+        return new SignSpec(Style.byName(str(json, "style")), rows, panel);
     }
 
     private static String str(JsonObject json, String key) {
@@ -324,6 +408,11 @@ public record SignSpec(Style style, List<Row> rows) {
     public static final class Draft {
         public Style style = Style.BLACK;
         public final List<RowDraft> rows = new ArrayList<>();
+        public float panelWidth;
+        public float panelHeight;
+        public float panelDx;
+        public float panelDy;
+        public float panelScale = 1;
 
         public static final class RowDraft {
             public Align align = Align.LEFT;
@@ -346,6 +435,11 @@ public record SignSpec(Style style, List<Row> rows) {
             for (Row row : spec.rows()) {
                 rows.add(new RowDraft(row));
             }
+            panelWidth = spec.panel().width();
+            panelHeight = spec.panel().height();
+            panelDx = spec.panel().dx();
+            panelDy = spec.panel().dy();
+            panelScale = spec.panel().scale();
         }
 
         public SignSpec build() {
@@ -353,7 +447,7 @@ public record SignSpec(Style style, List<Row> rows) {
             for (RowDraft row : rows) {
                 built.add(new Row(row.align, row.tiles));
             }
-            return new SignSpec(style, built);
+            return new SignSpec(style, built, new Panel(panelWidth, panelHeight, panelDx, panelDy, panelScale));
         }
     }
 }

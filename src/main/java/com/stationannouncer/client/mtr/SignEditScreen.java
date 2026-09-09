@@ -73,6 +73,9 @@ public class SignEditScreen extends Screen {
     private final TextBox customBox;
     private final List<TextBox> visibleBoxes = new ArrayList<>();
     private TextBox focused;
+    /** Plate-to-preview mapping, recomputed each frame from the plate and the panel box. */
+    private float previewMinX;
+    private float previewMinY;
 
     // Geometry.
     private int leftWidth = 148;
@@ -120,6 +123,27 @@ public class SignEditScreen extends Screen {
     private static final int HIT_TEMPLATE = 21;
     private static final int HIT_TOGGLE = 22;
     private static final int HIT_PICK = 23;
+    private static final int HIT_SLIDER = 24;
+    private static final int HIT_PANEL_RESET = 25;
+
+    // Numeric fields (slider + number box), by id.
+    private static final int NUM_PANEL_W = 1;
+    private static final int NUM_PANEL_H = 2;
+    private static final int NUM_PANEL_X = 3;
+    private static final int NUM_PANEL_Y = 4;
+    private static final int NUM_PANEL_SCALE = 5;
+    private static final int NUM_TILE_SCALE = 6;
+    private static final int NUM_TILE_DX = 7;
+    private static final int NUM_TILE_DY = 8;
+    private static final int NUM_SPACER = 9;
+
+    /** One number box per numeric field, created on first use. */
+    private final java.util.Map<Integer, TextBox> numberBoxes = new java.util.HashMap<>();
+    /** The slider being dragged: {id, trackX, trackW} plus its range, or null. */
+    private int[] dragSlider;
+    private float dragMin;
+    private float dragMax;
+    private float dragStep;
 
     // Segmented controls / toggles, by arg.
     private static final int SEG_STYLE = 1;
@@ -575,6 +599,24 @@ public class SignEditScreen extends Screen {
                 }
             }
             case HIT_PREVIEW -> selectFromPreview(mx, my);
+            case HIT_SLIDER -> {
+                dragSlider = new int[]{arg, arg2, 0};
+                for (int[] r : hits) {
+                    if (r[4] == HIT_SLIDER && r[5] == arg) {
+                        dragSlider[1] = r[0];
+                        dragSlider[2] = r[2];
+                    }
+                }
+                sliderDrag(mx);
+            }
+            case HIT_PANEL_RESET -> {
+                Draft d = draft();
+                d.panelWidth = 0;
+                d.panelHeight = 0;
+                d.panelDx = 0;
+                d.panelDy = 0;
+                d.panelScale = 1;
+            }
             default -> {
             }
         }
@@ -599,7 +641,6 @@ public class SignEditScreen extends Screen {
             case SEG_TEXT_SIZE -> updateTile(t -> t.withNum(chosen == 0 ? 1 : chosen == 2 ? 2 : 0));
             case SEG_ARROW_SIDE -> updateTile(t -> t.withArg(chosen == 0 ? "left" : chosen == 2 ? "right" : ""));
             case SEG_DEST_MODE -> updateTile(t -> t.withNum(chosen));
-            case SEG_SPACER -> updateTile(t -> t.withNum(chosen == 0 ? 4 : chosen == 1 ? 8 : 16));
             case SEG_WHEELCHAIR -> updateTile(t -> t.withArg(chosen == 1 ? "wc" : chosen == 2 ? "nowc" : ""));
             default -> {
             }
@@ -637,6 +678,10 @@ public class SignEditScreen extends Screen {
 
     @Override
     public boolean mouseDragged(double mx, double my, int button, double dx, double dy) {
+        if (dragSlider != null) {
+            sliderDrag(mx);
+            return true;
+        }
         if (focused != null) {
             focused.mouseDragged(mx, my);
             return true;
@@ -646,10 +691,122 @@ public class SignEditScreen extends Screen {
 
     @Override
     public boolean mouseReleased(double mx, double my, int button) {
+        dragSlider = null;
         if (focused != null) {
             focused.mouseReleased();
         }
         return super.mouseReleased(mx, my, button);
+    }
+
+    // ---------------------------------------------------------- numbers
+
+    private void sliderDrag(double mx) {
+        if (dragSlider == null || dragSlider[2] <= 0) {
+            return;
+        }
+        float t = (float) Math.max(0, Math.min(1, (mx - dragSlider[1]) / dragSlider[2]));
+        float value = dragMin + t * (dragMax - dragMin);
+        applyNumber(dragSlider[0], snap(value, dragStep));
+    }
+
+    private static float snap(float value, float step) {
+        return step > 0 ? Math.round(value / step) * step : value;
+    }
+
+    /** The current value of a numeric field. */
+    private float numberValue(int id) {
+        Draft d = draft();
+        Tile tile = selectedTile();
+        return switch (id) {
+            case NUM_PANEL_W -> d.panelWidth > 0 ? d.panelWidth : canvasWidth;
+            case NUM_PANEL_H -> d.panelHeight > 0 ? d.panelHeight : canvasHeight;
+            case NUM_PANEL_X -> d.panelDx;
+            case NUM_PANEL_Y -> d.panelDy;
+            case NUM_PANEL_SCALE -> d.panelScale;
+            case NUM_TILE_SCALE -> tile == null ? 1 : tile.scale();
+            case NUM_TILE_DX -> tile == null ? 0 : tile.dx();
+            case NUM_TILE_DY -> tile == null ? 0 : tile.dy();
+            case NUM_SPACER -> tile == null ? 0 : tile.num();
+            default -> 0;
+        };
+    }
+
+    private void applyNumber(int id, float value) {
+        Draft d = draft();
+        switch (id) {
+            case NUM_PANEL_W -> d.panelWidth = Math.max(2, value);
+            case NUM_PANEL_H -> d.panelHeight = Math.max(2, value);
+            case NUM_PANEL_X -> d.panelDx = value;
+            case NUM_PANEL_Y -> d.panelDy = value;
+            case NUM_PANEL_SCALE -> d.panelScale = Math.max(SignSpec.MIN_SCALE, value);
+            case NUM_TILE_SCALE -> updateTile(t -> t.withScale(Math.max(SignSpec.MIN_SCALE, value)));
+            case NUM_TILE_DX -> updateTile(t -> t.withOffset(value, t.dy()));
+            case NUM_TILE_DY -> updateTile(t -> t.withOffset(t.dx(), value));
+            case NUM_SPACER -> updateTile(t -> t.withNum(Math.max(0, Math.round(value))));
+            default -> {
+            }
+        }
+        TextBox box = numberBoxes.get(id);
+        if (box != null && !box.isFocused()) {
+            box.load(format(numberValue(id), id == NUM_PANEL_SCALE || id == NUM_TILE_SCALE ? 2 : 1));
+        }
+    }
+
+    private static String format(float value, int decimals) {
+        if (decimals == 0 || value == Math.round(value)) {
+            return Integer.toString(Math.round(value));
+        }
+        String text = String.format(java.util.Locale.ROOT, decimals == 2 ? "%.2f" : "%.1f", value);
+        return text.contains(".") ? text.replaceAll("0+$", "").replaceAll("\\.$", "") : text;
+    }
+
+    /**
+     * Label, a draggable slider and a number box side by side — the same
+     * control for every size, offset and scale, so nothing is stuck on
+     * "small / medium / large". Returns the y below it.
+     */
+    private int numberField(DrawContext c, int mx, int my, String label, int id, float min, float max, float step,
+                            int decimals, int x, int y, int w) {
+        float value = numberValue(id);
+        c.drawText(textRenderer, label, x, y, FlatUi.TEXT_DIM, false);
+        y += 10;
+        int boxW = 44;
+        int trackX = x;
+        int trackW = w - boxW - 8;
+        int trackY = y + FIELD / 2 - 2;
+        FlatUi.rect(c, trackX, trackY, trackW, 4, FlatUi.INPUT);
+        float t = Math.max(0, Math.min(1, (value - min) / (max - min)));
+        int knob = trackX + Math.round(t * (trackW - 6));
+        boolean hot = (dragSlider != null && dragSlider[0] == id) || FlatUi.inside(mx, my, trackX, y, trackW, FIELD);
+        FlatUi.rect(c, trackX, trackY, knob - trackX + 3, 4, hot ? FlatUi.ACCENT : FlatUi.ACCENT_DIM);
+        FlatUi.rect(c, knob, y + 2, 6, FIELD - 4, hot ? FlatUi.TEXT : FlatUi.TEXT_DIM);
+        hit(trackX, y, trackW, FIELD, HIT_SLIDER, id, 0);
+        // Remember the range this slider maps onto for the drag that may start (or is running) here.
+        if (FlatUi.inside(mx, my, trackX, y, trackW, FIELD) || (dragSlider != null && dragSlider[0] == id)) {
+            dragMin = min;
+            dragMax = max;
+            dragStep = step;
+        }
+        TextBox box = numberBoxes.get(id);
+        if (box == null) {
+            box = new TextBox(textRenderer, 8, false);
+            int fieldId = id;
+            box.onChange(v -> {
+                try {
+                    applyNumber(fieldId, Float.parseFloat(v.trim()));
+                } catch (NumberFormatException ignored) {
+                    // half-typed number: leave the value alone until it parses
+                }
+            });
+            numberBoxes.put(id, box);
+        }
+        if (!box.isFocused()) {
+            box.load(format(value, decimals));
+        }
+        box.setBounds(x + w - boxW, y, boxW, FIELD);
+        box.render(c, mx, my);
+        visibleBoxes.add(box);
+        return y + FIELD + 5;
     }
 
     @Override
@@ -914,10 +1071,27 @@ public class SignEditScreen extends Screen {
 
     private void drawPreview(DrawContext c, int mx, int my) {
         FlatUi.rect(c, centreX, leftY, centreW, leftH, 0xFF0F0F12);
-        int pw = Math.round(canvasWidth * previewScale);
-        int ph = Math.round(canvasHeight * previewScale);
-        FlatUi.rect(c, previewX - 2, previewY - 2, pw + 4, ph + 4, 0xFF3A3A40);
         SignSpec spec = draft().build();
+        // Fit the plate AND the panel (which may be bigger or elsewhere) into the pane.
+        float[] panel = SignLayout.panelBox(spec, canvasWidth, canvasHeight);
+        previewMinX = Math.min(0, panel[0]);
+        previewMinY = Math.min(0, panel[1]);
+        float maxX = Math.max(canvasWidth, panel[0] + panel[2]);
+        float maxY = Math.max(canvasHeight, panel[1] + panel[3]);
+        float bw = maxX - previewMinX;
+        float bh = maxY - previewMinY;
+        previewScale = Math.max(0.1f, Math.min((centreW - 12) / bw, (leftH - 40) / bh));
+        int pw = Math.round(bw * previewScale);
+        int ph = Math.round(bh * previewScale);
+        int originX = centreX + (centreW - pw) / 2;
+        int originY = leftY + 10;
+        previewX = originX - Math.round(previewMinX * previewScale);
+        previewY = originY - Math.round(previewMinY * previewScale);
+        // The block's plate, as the reference frame the panel is placed against.
+        FlatUi.rect(c, previewX - 1, previewY - 1, Math.round(canvasWidth * previewScale) + 2,
+                Math.round(canvasHeight * previewScale) + 2, 0xFF3A3A40);
+        FlatUi.rect(c, previewX, previewY, Math.round(canvasWidth * previewScale),
+                Math.round(canvasHeight * previewScale), 0xFF1A1A1E);
         lastMetrics = SignLayout.paint(new PosterLayout.GuiSurface(c, previewX, previewY, previewScale, SignLayout.FONT),
                 spec, canvasWidth, canvasHeight, ctx);
         // Selection highlight.
@@ -930,7 +1104,8 @@ public class SignEditScreen extends Screen {
             }
         } else if (selRow >= 0 && selRow < lastMetrics.rowBounds().size()) {
             float[] r = lastMetrics.rowBounds().get(selRow);
-            box = new float[]{0, r[0], canvasWidth, r[1]};
+            float[] pb = SignLayout.panelBox(spec, canvasWidth, canvasHeight);
+            box = new float[]{pb[0], r[0], pb[0] + pb[2], r[1]};
         }
         if (box != null) {
             int sx = previewX + Math.round(box[0] * previewScale);
@@ -940,10 +1115,10 @@ public class SignEditScreen extends Screen {
             FlatUi.rect(c, sx, sy, sw, sh, 0x223D8BFF);
             FlatUi.outline(c, sx - 1, sy - 1, sw + 2, sh + 2, FlatUi.ACCENT);
         }
-        hit(previewX, previewY, pw, ph, HIT_PREVIEW, 0, 0);
+        hit(originX, originY, pw, ph, HIT_PREVIEW, 0, 0);
         String hint = (editingBack ? "Back face · " : "") + (spec.isEmpty() ? "Add a tile or pick a template" : "Click to select");
         if (textRenderer.getWidth(hint) <= centreW - 8) {
-            c.drawText(textRenderer, hint, centreX + (centreW - textRenderer.getWidth(hint)) / 2, previewY + ph + 8,
+            c.drawText(textRenderer, hint, centreX + (centreW - textRenderer.getWidth(hint)) / 2, originY + ph + 8,
                     FlatUi.TEXT_FAINT, false);
         }
         String where = ctx.stationName().isEmpty() ? "Not inside an MTR station" : "Station: " + ctx.stationName();
@@ -967,7 +1142,16 @@ public class SignEditScreen extends Screen {
                 c.drawText(textRenderer, textRenderer.trimToWidth("Own: edit it via Back, top bar", w), x, y, FlatUi.TEXT_FAINT, false);
                 y += 12;
             }
-            c.drawText(textRenderer, textRenderer.trimToWidth("Rows share the panel height.", w), x, y, FlatUi.TEXT_FAINT, false);
+            FlatUi.heading(c, textRenderer, "Panel", x, y);
+            y += 12;
+            y = numberField(c, mx, my, "Width (units, 64 per block)", NUM_PANEL_W, 4, 512, 1, 0, x, y, w);
+            y = numberField(c, mx, my, "Height", NUM_PANEL_H, 4, 256, 1, 0, x, y, w);
+            y = numberField(c, mx, my, "Shift right / left", NUM_PANEL_X, -256, 256, 1, 0, x, y, w);
+            y = numberField(c, mx, my, "Shift down / up", NUM_PANEL_Y, -256, 256, 1, 0, x, y, w);
+            y = numberField(c, mx, my, "Content scale", NUM_PANEL_SCALE, 0.25f, 4, 0.05f, 2, x, y, w);
+            FlatUi.button(c, textRenderer, "Reset panel to the block", x, y, w, FIELD, mx, my, ButtonStyle.FLAT);
+            hit(x, y, w, FIELD, HIT_PANEL_RESET, 0, 0);
+            y += FIELD + 5;
         } else if (tile == null) {
             FlatUi.heading(c, textRenderer, "Row " + (selRow + 1), x, y);
             y += 14;
@@ -985,7 +1169,8 @@ public class SignEditScreen extends Screen {
                             tile.num() == 1 ? 0 : tile.num() == 2 ? 2 : 1, x, y, w, SEG_TEXT_SIZE);
                     int deleteY = rightY + rightH - 6 - FlatUi.BUTTON_HEIGHT;
                     int toolbarH = 12 + FIELD + 4 + FIELD + 8;
-                    int boxH = Math.max(30, Math.min(60, deleteY - 6 - toolbarH - y));
+                    int geometryH = 3 * (FIELD + 15) + 14;
+                    int boxH = Math.max(24, Math.min(60, deleteY - 6 - toolbarH - geometryH - y));
                     textBox.setBounds(x, y, w, boxH);
                     textBox.render(c, mx, my);
                     visibleBoxes.add(textBox);
@@ -1107,11 +1292,21 @@ public class SignEditScreen extends Screen {
                 case SPACER -> {
                     FlatUi.heading(c, textRenderer, "Space", x, y);
                     y += 14;
-                    y = segmentedField(c, mx, my, "Width", new String[]{"Small", "Medium", "Large"},
-                            tile.num() <= 4 ? 0 : tile.num() <= 8 ? 1 : 2, x, y, w, SEG_SPACER);
+                    y = numberField(c, mx, my, "Width (units, 64 per block)", NUM_SPACER, 0, 128, 1, 0, x, y, w);
                 }
                 default -> {
                 }
+            }
+            if (tile.type() != TileType.SPACER) {
+                int geomTop = rightY + rightH - 6 - FlatUi.BUTTON_HEIGHT - 3 * (FIELD + 15) - 14;
+                if (geomTop > y) {
+                    y = geomTop;
+                }
+                FlatUi.heading(c, textRenderer, "Size & position", x, y);
+                y += 12;
+                y = numberField(c, mx, my, "Scale", NUM_TILE_SCALE, 0.25f, 4, 0.05f, 2, x, y, w);
+                y = numberField(c, mx, my, "Nudge right / left", NUM_TILE_DX, -64, 64, 0.5f, 1, x, y, w);
+                y = numberField(c, mx, my, "Nudge down / up", NUM_TILE_DY, -64, 64, 0.5f, 1, x, y, w);
             }
             deleteButton(c, mx, my, "Delete tile", x, w);
         }

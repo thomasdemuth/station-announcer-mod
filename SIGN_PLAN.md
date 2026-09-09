@@ -321,3 +321,7 @@ Total ≈ 5-7 working days of agent time, gated by Thomas's play passes after 1,
   artwork (filled = all platforms step-free, outline = some), rebuilt from the
   SVG numbers in `PosterLayout.wheelchair`; Map+ badges follow the same rule.
   Offline-rendered preview matched the SVG; harness green. 3.1.2.
+- 2026-09-09 (later still): creative freedom — per-face Panel (width/height/
+  offset/content scale), per-tile scale + nudge, numeric spacer; editor sliders
+  with number boxes replace the small/medium/large segments. Compile-verified;
+  NOT screenshotted (a parallel session held the rig). 3.1.3.

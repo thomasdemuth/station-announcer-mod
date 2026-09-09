@@ -207,6 +207,10 @@ points at, and live tiles the station fills in.
   direction wording, or your own text), **Space**.
 - Styles: black with the thin white line (today's standard), the 1970 white
   panel with a black band, or plain black.
+- Free geometry: the Sign inspector sets the panel's width, height, offset
+  and content scale (so a sign can outgrow or float off its block, for column
+  plates and the like), every tile has its own scale and nudge, and a Space
+  tile's width is a number. All of these are sliders with a number box.
 - Everything is stored by name: rename a line, repaint it, change an exit's
   streets or a route's terminus in MTR and every sign follows.
 - The older text signs — the entrance railing sign, the el entrance sign, the

@@ -124,21 +124,39 @@ public final class SignLayout {
     // ================================================================ paint
 
     /** Paints the panel and its rows; returns where everything landed. */
+    /** The painted panel's box in plate coordinates: {x0, y0, width, height}. */
+    public static float[] panelBox(SignSpec spec, float plateWidth, float plateHeight) {
+        SignSpec.Panel panel = spec.panel();
+        float pw = panel.width() > 0 ? panel.width() : plateWidth;
+        float ph = panel.height() > 0 ? panel.height() : plateHeight;
+        return new float[]{(plateWidth - pw) / 2.0f + panel.dx(), (plateHeight - ph) / 2.0f + panel.dy(), pw, ph};
+    }
+
+    /**
+     * Paints the panel and its rows; {@code width}/{@code height} are the
+     * block's plate — the panel itself may be resized or moved by the spec's
+     * {@link SignSpec.Panel}. Returns where everything landed, in plate coordinates.
+     */
     public static Metrics paint(Surface s, SignSpec spec, float width, float height, SignContext ctx) {
+        float[] box = panelBox(spec, width, height);
+        float x0 = box[0];
+        float y0 = box[1];
+        float pw = box[2];
+        float ph = box[3];
         boolean white = spec.style() == Style.WHITE_BAND;
         int ink = white ? INK : WHITE;
-        s.rect(0, 0, width, height, white ? PAPER : BLACK, 0);
+        s.rect(x0, y0, x0 + pw, y0 + ph, white ? PAPER : BLACK, 0);
         float top = PAD_Y;
         if (white) {
-            float band = Math.min(height * 0.16f, 6);
-            s.rect(0, 0, width, band, BLACK, 1);
+            float band = Math.min(ph * 0.16f, 6);
+            s.rect(x0, y0, x0 + pw, y0 + band, BLACK, 1);
             top = band + PAD_Y;
         } else if (spec.style() == Style.BLACK) {
             // The thin white line under the top edge of every black MTA panel
             // (it was meant to hide the mounting channel; now it is the look).
-            float lineY = Math.min(height * 0.09f, 4);
-            float thickness = Math.max(0.6f, height * 0.02f);
-            s.rect(0, lineY, width, lineY + thickness, WHITE, 1);
+            float lineY = Math.min(ph * 0.09f, 4);
+            float thickness = Math.max(0.6f, ph * 0.02f);
+            s.rect(x0, y0 + lineY, x0 + pw, y0 + lineY + thickness, WHITE, 1);
             top = lineY + thickness + PAD_Y * 0.5f;
         }
         List<float[]> rowBounds = new ArrayList<>();
@@ -147,11 +165,11 @@ public final class SignLayout {
         if (rows.isEmpty()) {
             return new Metrics(rowBounds, tiles);
         }
-        float rowHeight = (height - top - PAD_Y) / rows.size();
+        float rowHeight = (ph - top - PAD_Y) / rows.size();
         for (int r = 0; r < rows.size(); r++) {
-            float rowTop = top + r * rowHeight;
+            float rowTop = y0 + top + r * rowHeight;
             rowBounds.add(new float[]{rowTop, rowTop + rowHeight});
-            paintRow(s, rows.get(r), r, rowTop, rowHeight, width, ink, ctx, tiles);
+            paintRow(s, rows.get(r), r, rowTop, rowHeight, x0, pw, spec.panel().scale(), ink, ctx, tiles);
         }
         return new Metrics(rowBounds, tiles);
     }
@@ -192,33 +210,36 @@ public final class SignLayout {
      * fit is trimmed with an ellipsis, the text tiles sharing the width the
      * fixed tiles (bullets, arrows) leave over.
      */
-    private static void paintRow(Surface s, Row row, int rowIndex, float rowTop, float rowHeight, float width,
-                                 int ink, SignContext ctx, List<TileBounds> out) {
+    private static void paintRow(Surface s, Row row, int rowIndex, float rowTop, float rowHeight, float x0,
+                                 float width, float contentScale, int ink, SignContext ctx, List<TileBounds> out) {
         List<Tile> tileList = row.tiles();
         if (tileList.isEmpty()) {
             return;
         }
+        // Every tile measures against its own module height: the row's, times
+        // the panel's content scale, times the tile's own scale.
+        float rowHeight0 = rowHeight;
         float available = width - 2 * PAD_X;
         Fit fit = Fit.NATURAL;
-        List<Placed> placed = measure(s, tileList, rowHeight, fit, ctx);
+        List<Placed> placed = measure(s, tileList, rowHeight, contentScale, fit, ctx);
         float total = total(placed, gap(rowHeight, fit));
         // A little condensing first (real sign shops do), then stack the text
         // on two lines, then condense further, and trim what still overflows.
         while (total > available && fit.shrink() > WRAP_SHRINK) {
             fit = new Fit(Math.max(WRAP_SHRINK, fit.shrink() * Math.max(0.8f, available / total) - 0.01f), false,
                     Float.MAX_VALUE);
-            placed = measure(s, tileList, rowHeight, fit, ctx);
+            placed = measure(s, tileList, rowHeight, contentScale, fit, ctx);
             total = total(placed, gap(rowHeight, fit));
         }
         if (total > available) {
             fit = new Fit(1.0f, true, Float.MAX_VALUE);
-            placed = measure(s, tileList, rowHeight, fit, ctx);
+            placed = measure(s, tileList, rowHeight, contentScale, fit, ctx);
             total = total(placed, gap(rowHeight, fit));
         }
         while (total > available && fit.shrink() > MIN_SHRINK) {
             fit = new Fit(Math.max(MIN_SHRINK, fit.shrink() * Math.max(0.6f, available / total) - 0.01f), true,
                     Float.MAX_VALUE);
-            placed = measure(s, tileList, rowHeight, fit, ctx);
+            placed = measure(s, tileList, rowHeight, contentScale, fit, ctx);
             total = total(placed, gap(rowHeight, fit));
         }
         float gap = gap(rowHeight, fit);
@@ -228,14 +249,14 @@ public final class SignLayout {
             for (Placed p : placed) {
                 if (textBearing(p.tile)) {
                     textCount++;
-                    fixed += fixedPart(s, p.tile, rowHeight, fit, ctx);
+                    fixed += fixedPart(s, p.tile, rowHeight * contentScale * p.tile.scale(), fit, ctx);
                 } else {
                     fixed += p.width;
                 }
             }
             float budget = Math.max(6, (available - fixed) / Math.max(1, textCount));
             fit = new Fit(fit.shrink(), fit.wrap(), budget);
-            placed = measure(s, tileList, rowHeight, fit, ctx);
+            placed = measure(s, tileList, rowHeight, contentScale, fit, ctx);
         }
 
         // Pinned arrows take the edges; the rest flows between them.
@@ -256,14 +277,14 @@ public final class SignLayout {
         if (middleCount > 1) {
             middleWidth += (middleCount - 1) * gap;
         }
-        float middleStart = PAD_X + leftWidth;
-        float middleAvail = Math.max(0, width - PAD_X - rightWidth - middleStart);
+        float middleStart = x0 + PAD_X + leftWidth;
+        float middleAvail = Math.max(0, x0 + width - PAD_X - rightWidth - middleStart);
         float x = middleStart;
         if (row.align() == Align.CENTER) {
             x = middleStart + Math.max(0, (middleAvail - middleWidth) / 2.0f);
         }
-        float leftX = PAD_X;
-        float rightX = width - PAD_X;
+        float leftX = x0 + PAD_X;
+        float rightX = x0 + width - PAD_X;
         float cy = rowTop + rowHeight / 2.0f;
         for (Placed p : placed) {
             float tx;
@@ -278,8 +299,11 @@ public final class SignLayout {
                 tx = x;
                 x += p.width + gap;
             }
-            paintTile(s, p.tile, tx, cy, rowHeight, fit, ink, ctx);
-            out.add(new TileBounds(rowIndex, p.index, tx, rowTop, tx + p.width, rowTop + rowHeight));
+            float px = tx + p.tile.dx();
+            float py = cy + p.tile.dy();
+            float module = rowHeight0 * contentScale * p.tile.scale();
+            paintTile(s, p.tile, px, py, module, fit, ink, ctx);
+            out.add(new TileBounds(rowIndex, p.index, px, py - rowHeight0 / 2.0f, px + p.width, py + rowHeight0 / 2.0f));
         }
     }
 
@@ -296,13 +320,14 @@ public final class SignLayout {
         return total + Math.max(0, placed.size() - 1) * gap;
     }
 
-    private static List<Placed> measure(Surface s, List<Tile> tiles, float rowHeight, Fit fit, SignContext ctx) {
+    private static List<Placed> measure(Surface s, List<Tile> tiles, float rowHeight, float contentScale, Fit fit,
+                                        SignContext ctx) {
         List<Placed> placed = new ArrayList<>(tiles.size());
         for (int i = 0; i < tiles.size(); i++) {
             Tile tile = tiles.get(i);
             int pin = tile.type() == SignSpec.TileType.ARROW
                     ? ("left".equals(tile.arg()) ? -1 : "right".equals(tile.arg()) ? 1 : 0) : 0;
-            placed.add(new Placed(tile, i, tileWidth(s, tile, rowHeight, fit, ctx), pin));
+            placed.add(new Placed(tile, i, tileWidth(s, tile, rowHeight * contentScale * tile.scale(), fit, ctx), pin));
         }
         return placed;
     }
