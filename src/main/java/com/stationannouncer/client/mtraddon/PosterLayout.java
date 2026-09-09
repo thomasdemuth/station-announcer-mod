@@ -66,7 +66,7 @@ public final class PosterLayout {
     public static final int BAND = 0xFFD9D9D3;
     public static final int INK = 0xFF141416;
     public static final int GREY_INK = 0xFF4A4A50;
-    public static final int WHEELCHAIR_BLUE = 0xFF1F63C0;
+    public static final int WHEELCHAIR_BLUE = 0xFF157AC0;
 
     private static final Pattern TOKEN = Pattern.compile("\\{([a-zA-Z<>^]+)(?::([^}]*))?}");
 
@@ -366,21 +366,90 @@ public final class PosterLayout {
         }
     }
 
-    /** The international access symbol: white figure on a blue tile. */
+    /**
+     * The MTA subway-font accessibility glyph (Thomas's SubwayGlyphs, 300-unit
+     * box): a rounded square (corner radius 30) carrying the figure — head,
+     * torso, arm bar with its quarter-arc joint, curved thigh into a 45° leg,
+     * and the C-shaped wheel arc open at the top right. Filled tile = a fully
+     * step-free station; outline tile = step-free at some platforms only.
+     * Coordinates below are the SVG path numbers, scaled by {@code size/300}.
+     */
     public static void wheelchair(Surface s, float x, float y, float size, int layer) {
-        float u = size / 16.0f;
-        s.rect(x, y, x + size, y + size, WHEELCHAIR_BLUE, layer);
+        wheelchair(s, x, y, size, layer, false, BLACK);
+    }
+
+    public static void wheelchair(Surface s, float x, float y, float size, int layer, boolean outline,
+                                  int background) {
+        float u = size / 300.0f;
+        int ink;
+        if (outline) {
+            roundedSquare(s, x, y, size, 30 * u, WHEELCHAIR_BLUE, layer);
+            roundedSquare(s, x + 15 * u, y + 15 * u, size - 30 * u, 22.5f * u, background, layer + 1);
+            ink = WHEELCHAIR_BLUE;
+        } else {
+            roundedSquare(s, x, y, size, 30 * u, WHEELCHAIR_BLUE, layer);
+            ink = WHITE;
+        }
+        int l = layer + 2;
         // head
-        s.disc(x + 9.2f * u, y + 3.2f * u, 1.9f * u, WHITE, layer + 1);
-        // torso down to the seat, then the thigh forward
-        s.rect(x + 8.0f * u, y + 5.2f * u, x + 10.4f * u, y + 10.2f * u, WHITE, layer + 1);
-        s.rect(x + 8.0f * u, y + 8.4f * u, x + 13.2f * u, y + 10.2f * u, WHITE, layer + 1);
-        // shin down to the footrest
-        s.rect(x + 11.6f * u, y + 8.4f * u, x + 13.2f * u, y + 13.4f * u, WHITE, layer + 1);
-        s.rect(x + 11.6f * u, y + 12.4f * u, x + 14.4f * u, y + 13.6f * u, WHITE, layer + 1);
-        // wheel: white ring
-        s.disc(x + 7.0f * u, y + 10.6f * u, 4.4f * u, WHITE, layer + 1);
-        s.disc(x + 7.0f * u, y + 10.6f * u, 2.9f * u, WHEELCHAIR_BLUE, layer + 2);
+        s.disc(x + 125.42f * u, y + 54.07f * u, 21.32f * u, ink, l);
+        // torso
+        s.rect(x + 110.42f * u, y + 95.67f * u, x + 140.42f * u, y + 180.34f * u, ink, l);
+        // arm bar and its quarter-arc joint (annulus centred 151.07,91.34, radii 10.64..40.64)
+        s.rect(x + 151.07f * u, y + 101.98f * u, x + 204.96f * u, y + 131.98f * u, ink, l);
+        annulus(s, x + 151.07f * u, y + 91.34f * u, 10.64f * u, 40.64f * u, 90, 180, 6, ink, l);
+        // thigh: strip between the seat's top curve and its bottom curve
+        float[][] top = bezier(159.07f, 150.34f, 183.27f, 150.34f, 206.96f, 160.15f, 224.07f, 177.27f, 6);
+        float[][] bottom = bezier(159.07f, 180.34f, 175.38f, 180.34f, 191.34f, 186.95f, 202.86f, 198.48f, 6);
+        s.rect(x + 140.42f * u, y + 150.34f * u, x + 159.07f * u, y + 180.34f * u, ink, l);
+        for (int i = 0; i + 1 < top.length; i++) {
+            s.poly(new float[]{x + top[i][0] * u, x + top[i + 1][0] * u, x + bottom[i + 1][0] * u, x + bottom[i][0] * u},
+                    new float[]{y + top[i][1] * u, y + top[i + 1][1] * u, y + bottom[i + 1][1] * u, y + bottom[i][1] * u},
+                    ink, l);
+        }
+        // lower leg: 30-wide bar at 45° down to the footrest
+        s.poly(new float[]{x + 202.86f * u, x + 224.07f * u, x + 260.3f * u, x + 239.09f * u},
+                new float[]{y + 198.48f * u, y + 177.27f * u, y + 213.49f * u, y + 234.7f * u}, ink, l);
+        // wheel: C-shaped arc, centre 143.36,182.25, radii 59.57..74.57, open at the top right
+        annulus(s, x + 143.36f * u, y + 182.25f * u, 59.57f * u, 74.57f * u, 0, 257, 24, ink, l);
+    }
+
+    /** A square with rounded corners of radius {@code r}. */
+    private static void roundedSquare(Surface s, float x, float y, float size, float r, int argb, int layer) {
+        s.rect(x + r, y, x + size - r, y + size, argb, layer);
+        s.rect(x, y + r, x + r, y + size - r, argb, layer);
+        s.rect(x + size - r, y + r, x + size, y + size - r, argb, layer);
+        s.disc(x + r, y + r, r, argb, layer);
+        s.disc(x + size - r, y + r, r, argb, layer);
+        s.disc(x + r, y + size - r, r, argb, layer);
+        s.disc(x + size - r, y + size - r, r, argb, layer);
+    }
+
+    /** A ring sector from {@code fromDeg} to {@code toDeg} (screen angles, y down, 90 = bottom), as quads. */
+    private static void annulus(Surface s, float cx, float cy, float r0, float r1, float fromDeg, float toDeg,
+                                int segments, int argb, int layer) {
+        for (int i = 0; i < segments; i++) {
+            float a0 = (float) Math.toRadians(fromDeg + (toDeg - fromDeg) * i / segments);
+            float a1 = (float) Math.toRadians(fromDeg + (toDeg - fromDeg) * (i + 1) / segments);
+            float c0 = MathHelper.cos(a0);
+            float s0 = MathHelper.sin(a0);
+            float c1 = MathHelper.cos(a1);
+            float s1 = MathHelper.sin(a1);
+            s.poly(new float[]{cx + r0 * c0, cx + r1 * c0, cx + r1 * c1, cx + r0 * c1},
+                    new float[]{cy + r0 * s0, cy + r1 * s0, cy + r1 * s1, cy + r0 * s1}, argb, layer);
+        }
+    }
+
+    /** Points along a cubic Bézier (absolute control points), {@code n} segments. */
+    private static float[][] bezier(float x0, float y0, float x1, float y1, float x2, float y2, float x3, float y3, int n) {
+        float[][] out = new float[n + 1][2];
+        for (int i = 0; i <= n; i++) {
+            float t = (float) i / n;
+            float mt = 1 - t;
+            out[i][0] = mt * mt * mt * x0 + 3 * mt * mt * t * x1 + 3 * mt * t * t * x2 + t * t * t * x3;
+            out[i][1] = mt * mt * mt * y0 + 3 * mt * mt * t * y1 + 3 * mt * t * t * y2 + t * t * t * y3;
+        }
+        return out;
     }
 
     /**

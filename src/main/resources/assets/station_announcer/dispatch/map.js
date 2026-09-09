@@ -408,6 +408,25 @@ const ACCESS_ICON = new Image();
 ACCESS_ICON.onload = () => invalidateStatic();
 ACCESS_ICON.src = "access_badge.svg";
 const ACCESS_IMG = '<svg class="badge-14"><use href="#i-badge"/></svg>';
+/** The outline badge: step-free at some platforms only (the filled tile means every platform). */
+const ACCESS_ICON_OUTLINE = new Image();
+ACCESS_ICON_OUTLINE.onload = () => invalidateStatic();
+ACCESS_ICON_OUTLINE.src = "access_badge_outline.svg";
+const ACCESS_IMG_OUTLINE = '<svg class="badge-14"><use href="#i-badge-outline"/></svg>';
+
+/** True when a station is step-free at some, but not all, of its platforms. */
+function stationPartial(st) {
+	if (!st || !st.accessible) return false;
+	const listed = st.accessiblePlatforms;
+	if (!Array.isArray(listed) || !listed.length) return false;
+	const set = new Set(listed.map(String));
+	return (st.platformIds || []).some((id) => !set.has(String(id)));
+}
+
+/** The badge markup for a station record (filled = all platforms, outline = some). */
+function stationBadge(st) {
+	return stationPartial(st) ? ACCESS_IMG_OUTLINE : ACCESS_IMG;
+}
 
 function drawIcon(g, path, x, y, size, color) {
 	g.save();
@@ -2373,12 +2392,13 @@ function buildGlyphs() {
 		for (const part of st.parts) {
 			const colors = new Set();
 			let accessible = false;
+			let notAllAccessible = false;
 			let dx = 0, dz = 0, n = 0;
 			let servedAtAll = false;
 			for (const pid of part.platforms.length ? part.platforms : st.platformIds) {
 				const pl = state.platforms.get(pid);
 				if (!pl) continue;
-				if (pl.accessible) accessible = true;
+				if (pl.accessible) accessible = true; else notAllAccessible = true;
 				for (const rid of pl.routeIds) {
 					const rt = state.routes.get(rid);
 					if (!rt) continue;
@@ -2411,6 +2431,8 @@ function buildGlyphs() {
 			state.glyphs.push({
 				stationId: st.id, partId: part.id,
 				x: part.x, z: part.z,
+				// outline badge when this dot's platforms are only partly step-free
+				partial: accessible && notAllAccessible,
 				colors: [...colors],
 				terminals,
 				spread,
@@ -3144,7 +3166,8 @@ function drawLabels(g, vp, sel) {
 		}
 		if (withBadge) {
 			// inline after the name, centred on its cap height — never orphaned
-			g.drawImage(ACCESS_ICON, chosen.x0 + tw + 4 * s, chosen.c.y - size * 0.36 - bw / 2, bw, bw);
+			g.drawImage(gl.partial ? ACCESS_ICON_OUTLINE : ACCESS_ICON, chosen.x0 + tw + 4 * s,
+				chosen.c.y - size * 0.36 - bw / 2, bw, bw);
 		}
 		if (bullets.length) {
 			let bx = chosen.x0 + tw + (withBadge ? bw + 4 * s : 0) + (text ? 3 * s : 0);
@@ -3881,7 +3904,7 @@ function hoverAt(sx, sy) {
 	} else {
 		const st = state.stations.get(gl.stationId);
 		html = `${esc(gl.label)}${gl.sub ? ' <span style="color:#8a929c">· ' + esc(gl.sub) + "</span>" : ""}`
-			+ (st && st.accessible ? " " + ACCESS_IMG : "");
+			+ (st && st.accessible ? " " + stationBadge(st) : "");
 	}
 	tip.innerHTML = html;
 	tip.classList.remove("hidden");
@@ -5916,7 +5939,7 @@ function stationPanelHtml(data) {
 	return `
 		<div class="st-head">
 			<div class="st-title">
-				<h2>${esc(data.name)}${data.accessible ? " " + ACCESS_IMG : ""}</h2>
+				<h2>${esc(data.name)}${data.accessible ? " " + (acc.all ? ACCESS_IMG : ACCESS_IMG_OUTLINE) : ""}</h2>
 				${data.partName ? `<div class="st-part">${esc(data.partName)}</div>` : ""}
 				<div class="st-bullets">${bullets}</div>
 			</div>

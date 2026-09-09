@@ -489,8 +489,8 @@ public final class SignLayout {
      * below). {@code arg}: "" = symbol when the station is marked step-free in
      * the addon, "wc" = always, "nowc" = never.
      */
-    private record NamePlate(String[] lines, float cap, boolean icon, boolean iconBelow, float iconSize,
-                             float textWidth, float maxText) {
+    private record NamePlate(String[] lines, float cap, boolean icon, boolean iconOutline, boolean iconBelow,
+                             float iconSize, float textWidth, float maxText) {
         float width() {
             if (!icon) {
                 return textWidth;
@@ -513,6 +513,8 @@ public final class SignLayout {
         // "Stacked" names always break at the middle space ("14 / Street"), the column-plate look.
         String[] lines = (tile.num() & SignSpec.NAME_STACKED) != 0 ? wrapTwo(text) : lines(text, fit.wrap());
         boolean icon = showsWheelchair(tile, ctx);
+        // Outline tile = step-free at some platforms only; a forced symbol on an unmarked station is filled.
+        boolean outline = icon && ctx != null && ctx.access() == SignContext.Access.PARTIAL;
         boolean below = icon && lines.length > 1 && rowHeight * shrink >= 40;
         float cap = rowHeight * (below ? 0.26f : lines.length > 1 ? 0.32f : 0.46f) * shrink;
         float w = 0;
@@ -520,7 +522,7 @@ public final class SignLayout {
             w = Math.max(w, Math.min(fit.maxText(), capWidth(s, line, cap)));
         }
         float iconSize = below ? rowHeight * 0.22f * shrink : cap * 1.15f;
-        return new NamePlate(lines, cap, icon, below, iconSize, w, fit.maxText());
+        return new NamePlate(lines, cap, icon, outline, below, iconSize, w, fit.maxText());
     }
 
     private static void paintNamePlate(Surface s, NamePlate plate, float x, float cy, int ink) {
@@ -536,12 +538,13 @@ public final class SignLayout {
             float total = textHeight + gap + plate.iconSize();
             float top = cy - total / 2.0f;
             paintLines(s, plate.lines(), x, top + textHeight / 2.0f, plate.cap(), ink, plate.maxText(), false);
-            PosterLayout.wheelchair(s, x, top + textHeight + gap, plate.iconSize(), 2);
+            PosterLayout.wheelchair(s, x, top + textHeight + gap, plate.iconSize(), 2, plate.iconOutline(),
+                    ink == WHITE ? BLACK : PAPER);
             return;
         }
         paintLines(s, plate.lines(), x, cy, plate.cap(), ink, plate.maxText(), false);
         PosterLayout.wheelchair(s, x + plate.textWidth() + plate.iconSize() * 0.35f, cy - plate.iconSize() / 2.0f,
-                plate.iconSize(), 2);
+                plate.iconSize(), 2, plate.iconOutline(), ink == WHITE ? BLACK : PAPER);
     }
 
     /** Up to three lines of text vertically centred on {@code cy}, each clipped to {@code maxText}. */

@@ -326,7 +326,17 @@ destination first; FULL editor from day one; the old text signs migrate onto it.
   MTR's station screen; tile arg "" auto / "wc" always / "nowc" never) — beside
   the name on one row, UNDER a two-line name on a tall plate (the column
   plate look). STATION_NAME `num` is a flag set: 1 upper-case, 2 STACKED (always
-  break at the middle space, "14 / Street", even when one line would fit). Dev hook `#sign-access on|off` flips the station the player
+  break at the middle space, "14 / Street", even when one line would fit). **The wheelchair glyph (2026-09-09) is Thomas's
+  SubwayGlyphs artwork** (`tools/reference/wheelchair_{filled,outline}.svg`,
+  300-unit box, corner radius 30, blue #157ac0 = the Map+ badge):
+  `PosterLayout.wheelchair(s, x, y, size, layer, outline, background)` rebuilds
+  it from the SVG path numbers with Surface primitives (rounded square = rects +
+  corner discs; arm joint and wheel = ring-sector quads; thigh = Bézier strip;
+  leg = 45° quad). FILLED tile = every platform step-free, OUTLINE tile =
+  step-free at some platforms only (`SignContext.access()` compares
+  `ClientAccessibility.platforms(stationId)` with `station.savedRails`). Map+
+  has the same rule: `access_badge_outline.svg` / `#i-badge-outline`, glyph
+  `partial`, `stationPartial()` / `stationBadge()`. Dev hook `#sign-access on|off` flips the station the player
   stands in; `SignContext` (per pos, 1 s TTL) supplies station name,
   exits (`Station.getExits()` → name + destinations), station lines, and
   `destination(route)` = first platform destination override else last stop.
@@ -484,6 +494,21 @@ errors outside a deliberate full-refresh window.
 jar in run/mods (the world will not boot without it), RCON on 25575 / `rigpass`
 (scratchpad rcon.py). Loom's runServer wrapper can exit while the JVM keeps serving;
 a second launch then dies on session.lock — check `lsof -i :25565` first.
+
+### EL ROOF WIDTH 8 (2026-09-09) — 7-wide roofs were breaking at the peak
+
+Thomas's 7-wide `el_roof` showed a notch at the ridge: `MAX_LEVEL` was 2, so the middle
+row clamped to level 2 and its crown peaked at 22.6 px while the level-2 slopes beside it
+reached 25.9 px (the doc's "up to 7" was never true — 5 and 6 worked). Now `MAX_LEVEL = 3`
+in both `ElRoofBlock` and `tools/gen_el2_assets.py` (ROOF_PROPS follows it): widths 7
+(crown at level 3) and 8 (ridge pair at level 3) work; 9+ still clamps. The JSON element
+ceiling (y ≤ 32) is the constraint: a level-3 descending slab's high edge is at 32.5 px, so
+`deck_slab`/`deck_slab_x`/`chord` author those pieces from their LOW edge and rotate about
+that end (identical surface), `flat_square` clips at 32, and the level-3 ridge half-cap is
+skipped (the two slabs' vertical end faces meet flush, ~34 px, above the ceiling). Verified
+on the rig: 5/7/8-wide x-ridge roofs side by side, all peaks formed, gables + trusses intact.
+Not verified: level-3 hips/valleys/peaks (an 8-wide L corner) — the corner squares clip
+at 32 px there.
 
 ### TURNSTILES + HEET v2 (2026-09-06/07) — from-scratch rebuild WITH ANIMATION + BLOCKING; awaiting Thomas's verdict, NOT deployed, version still 2.4.54
 

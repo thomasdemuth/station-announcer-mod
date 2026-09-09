@@ -35,8 +35,12 @@ public class SignContext {
 
     private final BlockPos pos;
     private long expiry;
+    /** How much of the station is step-free according to the addon's accessibility map. */
+    public enum Access { NONE, PARTIAL, FULL }
+
     private String stationName = "";
     private long stationId;
+    private java.util.Set<Long> stationPlatforms = java.util.Set.of();
     private int stationColor = 0xFF1F4D3A;
     private List<Exit> exits = List.of();
     private List<String> stationLines = List.of();
@@ -60,12 +64,18 @@ public class SignContext {
             if (station == null) {
                 stationName = "";
                 stationId = 0;
+                stationPlatforms = java.util.Set.of();
                 exits = List.of();
                 stationLines = List.of();
                 return;
             }
             stationName = AddonUi.firstLang(station.getName());
             stationId = station.getId();
+            java.util.Set<Long> platformIds = new java.util.HashSet<>();
+            for (org.mtr.core.data.Platform platform : station.savedRails) {
+                platformIds.add(platform.getId());
+            }
+            stationPlatforms = platformIds;
             stationColor = 0xFF000000 | station.getColor();
             List<Exit> found = new ArrayList<>();
             for (StationExit exit : station.getExits()) {
@@ -105,11 +115,40 @@ public class SignContext {
         return stationColor;
     }
 
-    /** Whether the addon marks this station step-free (MTR station screen → Accessibility). */
+    /** Whether the addon marks this station step-free at all (MTR station screen → Accessibility). */
     public boolean stationAccessible() {
+        return access() != Access.NONE;
+    }
+
+    /**
+     * FULL when every platform is step-free (the addon's "all platforms" entry,
+     * or a subset covering every platform here), PARTIAL when only some are.
+     */
+    public Access access() {
         refresh();
-        return stationId != 0
-                && com.stationannouncer.client.mtraddon.ClientAccessibility.isAccessibleStation(stationId);
+        if (stationId == 0) {
+            return Access.NONE;
+        }
+        long[] platforms = com.stationannouncer.client.mtraddon.ClientAccessibility.platforms(stationId);
+        if (platforms == null) {
+            return Access.NONE;
+        }
+        if (platforms.length == 0 || stationPlatforms.isEmpty()) {
+            return Access.FULL;
+        }
+        for (long id : stationPlatforms) {
+            boolean listed = false;
+            for (long p : platforms) {
+                if (p == id) {
+                    listed = true;
+                    break;
+                }
+            }
+            if (!listed) {
+                return Access.PARTIAL;
+            }
+        }
+        return Access.FULL;
     }
 
     public long stationId() {

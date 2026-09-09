@@ -200,7 +200,8 @@ points at, and live tiles the station fills in.
   left edge / inline / right edge), **Station** (the MTR station's name, or an
   override; long names break onto two lines, or force "Stacked" for the
   "14 / Street" column-plate look; shows the wheelchair symbol when the station
-  is marked step-free in its MTR station screen), **Exit** (an exit from MTR's station settings:
+  is marked step-free in its MTR station screen — a filled tile when every
+  platform is step-free, an outline tile when only some are), **Exit** (an exit from MTR's station settings:
   "Exit" on the red field, its street names one per line, a corner note you
   type, and optionally the exit's name in a box), **Line + destination** (a route's bullet with "to <terminus>", its
   direction wording, or your own text), **Space**.

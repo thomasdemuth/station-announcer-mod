@@ -317,3 +317,7 @@ Total ≈ 5-7 working days of agent time, gated by Thomas's play passes after 1,
   parallel session's rig took over run/commands.txt + screenshots mid-round.
   Committed as 3.1.1 WITHOUT a jar build (a Gradle build would have killed that
   session's rig) — build + deploy_jar.sh still to run.
+- 2026-09-09 (later): wheelchair glyph replaced with Thomas's SubwayGlyphs
+  artwork (filled = all platforms step-free, outline = some), rebuilt from the
+  SVG numbers in `PosterLayout.wheelchair`; Map+ badges follow the same rule.
+  Offline-rendered preview matched the SVG; harness green. 3.1.2.
