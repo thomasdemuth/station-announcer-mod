@@ -151,6 +151,10 @@ public class StationAnnouncerClient implements ClientModInitializer {
                                     // Dev-only: the MTA sign editor / loader (#sign-editor x y z,
                                     // #sign-load x y z <json file>, #sign-close).
                                     com.stationannouncer.client.mtr.SignDevHooks.open(client, cmd);
+                                } else if (cmd.equals("#bridge-editor")) {
+                                    // Dev-only: the Bridge Creator screen for the held item.
+                                    client.setScreen(new com.stationannouncer.client.mtr.BridgeCreatorScreen(
+                                            net.minecraft.util.Hand.MAIN_HAND, client.player.getMainHandStack()));
                                 } else if (cmd.startsWith("#poster-")) {
                                     // Dev-only: open the poster screens without a mouse
                                     // (#poster-list <disruptionId> / #poster-editor <posterId> /

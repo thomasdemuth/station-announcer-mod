@@ -34,6 +34,13 @@ public final class MtrPillars {
 
     /** C2S: the creator settings screen saves (hand + width + spacing + lattice + girder). */
     public static final Identifier UPDATE_CREATOR_C2S = StationAnnouncer.id("update_creator");
+    /** C2S: the bridge creator screen saves its whole spec (hand + NBT). */
+    public static final Identifier UPDATE_BRIDGE_C2S = StationAnnouncer.id("update_bridge");
+    /** C2S: bridge creator actions from the screen (hand + action byte, see {@link #BRIDGE_BUILD}). */
+    public static final Identifier BRIDGE_ACTION_C2S = StationAnnouncer.id("bridge_action");
+    public static final byte BRIDGE_BUILD = 0;
+    public static final byte BRIDGE_CLEAR_TRACKS = 1;
+    public static final byte BRIDGE_UNDO = 2;
 
     /** Opens the settings screen for the creator in the given hand; installed by the client module. */
     public static java.util.function.Consumer<Hand> SETTINGS_OPENER = hand -> {
@@ -41,6 +48,7 @@ public final class MtrPillars {
 
     public static ItemPillarCreator PILLAR_CREATOR;
     public static ItemElStructureCreator EL_STRUCTURE_CREATOR;
+    public static ItemBridgeCreator BRIDGE_CREATOR;
 
     private MtrPillars() {
     }
@@ -52,6 +60,9 @@ public final class MtrPillars {
         EL_STRUCTURE_CREATOR = new ItemElStructureCreator();
         Registry.register(Registries.ITEM, StationAnnouncer.id("el_structure_creator"), EL_STRUCTURE_CREATOR);
         ModContent.OPERATIONS_ENTRIES.add(EL_STRUCTURE_CREATOR);
+        BRIDGE_CREATOR = new ItemBridgeCreator();
+        Registry.register(Registries.ITEM, StationAnnouncer.id("bridge_creator"), BRIDGE_CREATOR);
+        ModContent.OPERATIONS_ENTRIES.add(BRIDGE_CREATOR);
         for (int[] size : SIZES) {
             // legacy fixed variants: registered (items in chests keep working), not in the tab
             Registry.register(Registries.ITEM,
@@ -82,5 +93,35 @@ public final class MtrPillars {
                 }
             });
         });
+
+        ServerPlayNetworking.registerGlobalReceiver(UPDATE_BRIDGE_C2S, (server, player, handler, buf, responseSender) -> {
+            Hand hand = buf.readBoolean() ? Hand.OFF_HAND : Hand.MAIN_HAND;
+            net.minecraft.nbt.NbtCompound nbt = buf.readNbt();
+            server.execute(() -> {
+                ItemStack stack = player.getStackInHand(hand);
+                if (stack.getItem() instanceof ItemBridgeCreator && nbt != null) {
+                    BridgeSpec.fromNbt(nbt).write(stack);
+                }
+            });
+        });
+        ServerPlayNetworking.registerGlobalReceiver(BRIDGE_ACTION_C2S, (server, player, handler, buf, responseSender) -> {
+            Hand hand = buf.readBoolean() ? Hand.OFF_HAND : Hand.MAIN_HAND;
+            byte action = buf.readByte();
+            server.execute(() -> {
+                ItemStack stack = player.getStackInHand(hand);
+                if (!(stack.getItem() instanceof ItemBridgeCreator)) {
+                    return;
+                }
+                switch (action) {
+                    case BRIDGE_BUILD -> BridgeService.buildManual(player, stack);
+                    case BRIDGE_CLEAR_TRACKS -> BridgeService.clearManualTracks(stack);
+                    case BRIDGE_UNDO -> BridgeService.undo(player);
+                    default -> {
+                    }
+                }
+            });
+        });
+        net.fabricmc.fabric.api.event.lifecycle.v1.ServerLifecycleEvents.SERVER_STOPPED.register(server -> BridgeService.clearAll());
+        BridgeCommand.register();
     }
 }

@@ -44,6 +44,56 @@ rig's Gradle wrappers (and sometimes the JVMs) get SIGKILLed — forbid agents f
 entirely and check rig health after each one finishes; an orphaned JVM keeps serving but
 loses the console fifo.
 
+### BRIDGE CREATOR (2026-09-09) — configurable multi-track bridge/viaduct tool, 3.2.0
+
+Thomas's ask: "a full custom bridge creator" — settings menu (pillar distance, custom
+structure, railing toggle, block per part, clean UI), multi-track selection (2-track vs
+3-track line), works on curves & hills, presets. Built as `station_announcer:bridge_creator`
+(OPERATIONS tab; the old pillar/railing/viaduct/el creators stay).
+- **Data**: `mtr/BridgeSpec` (plain public fields, NBT under item key `Bridge`, Gson for
+  user presets; `Slot` enum = the 8 material slots; materials are block-state STRINGS
+  parsed with `BlockArgumentParser.block` so `oak_slab[type=top]` works). `BridgePresets`
+  = 9 built-ins. `BridgeService.TRACKS_TAG` = manual track selection (rail hex ids).
+- **Engine**: `mtr/BridgeBuilder` runs against `Path` (rail or straight line) + `Sink`
+  (world or a HashMap) — THE PREVIEW IS THE BUILD. Cross-section in LATERAL CELLS along
+  the reference rail's perpendicular (0.25-block steps); companion tracks located per
+  sample by nearest polyline point projected onto the perpendicular; deck spans
+  outermost tracks ± overhang; heights per cell from the nearest track's rail y (grades
+  step block by block). Passes: protect rail cells + 4 rows clearance → deck/girders/
+  railing → piers (cap, legs that skip CLAIMED cells and stop at the first real block,
+  footing) → arches (circular soffit s(u)=rise·(1−√(1−u²)) between pier positions).
+  First writer claims a cell; nothing existing is replaced. `detectCompanions` = parallel
+  (|cos|≥0.8), within reach, |Δy|≤6, covering ≥ half the shorter rail, and not overlapping
+  the reference (same track).
+- **Server**: `BridgeService` — rails come from `simulator.railIdMap` read INSIDE
+  `simulator.run(...)` (TSC thread), only immutable RailMath crosses back, build on the
+  server thread via `server.execute`. Simulator for a world = `MtrSimulators.get()`
+  matched on `Init.getWorldId`. Per-player undo (`LAST_BUILD`, 400k cap). Packets in
+  `MtrPillars`: `update_bridge` (hand + NBT spec), `bridge_action` (build/clear/undo).
+  `/bridge build <from> <to> | tracks build|clear | preset "<name>" | undo` (level 2).
+- **Item**: `ItemBridgeCreator extends ItemNodeModifierSelectableBlockBase(false,…)`;
+  sneak-click on a block = material pick into `spec.pickTarget`; two-node click → build
+  (AUTO/SINGLE) or add track (MANUAL); glints while armed or with tracks selected.
+- **Client**: `client/mtr/BridgeCreatorScreen` on FlatUi (hit-list pattern from
+  SignEditScreen; numberField sliders; material popup = searchable icon grid of every
+  block with an item; preset dropdown; save-as prompt; inspector scrolls). Preview via
+  `CreatorPreview.render` over straight tracks at 3-block spacing (`previewTracks`).
+  `BridgeUserPresets` → `config/station_announcer/bridge_presets.json`. Dev hook
+  `#bridge-editor` opens the screen headlessly. Opener dispatch in MtrPidsClient.
+- Icon: `tools/gen_bridge_icon.py` (generated).
+- **VERIFIED on the rig (world_baker, screenshots 2026-09-09 17:36–17:39)**: `/bridge build
+  -2460 74 2028 -2321 74 1892` — a CURVED, ELEVATED 3-track line over a river — with the
+  Stone viaduct (wall piers into the riverbed + arches + parapet, deck follows the curve
+  across all three tracks, auto-detected), Steel girder (iron edge girders, concrete legs,
+  caps, iron-bar railing) and NYC steel el (el_street_column legs, el_track_deck,
+  el_girder_plate caps — axis orientation OK, a train ran over it) presets; `/bridge undo`
+  restored the crossing exactly (the world's pre-existing pillars were never touched);
+  `#bridge-editor` screenshot of the FlatUi screen with the live preview. Zero exceptions.
+  NOT verified: real node clicking + sneak-pick, manual track mode end to end, material
+  popup / preset menu / slider clicks, user-preset file round trip, grades (the graded
+  candidate line runs in a tunnel). Elevated-rail probe trick: `/execute if block x y-1 z
+  air if block x y-5 z air run say ELEV…` through commands.txt, grep the client log.
+
 ### v2.4.1 — addon release (2026-08-07)
 
 **SHIPPED to `releases/station-announcer-2.4.1+1.20.4.jar`**: the five dispatch/lift/

@@ -162,7 +162,12 @@ public final class MtrPidsClient {
         com.stationannouncer.mtr.MtrPillars.SETTINGS_OPENER = hand -> {
             net.minecraft.client.MinecraftClient client = net.minecraft.client.MinecraftClient.getInstance();
             if (client.player != null && client.currentScreen == null) {
-                client.setScreen(new CreatorSettingsScreen(hand, client.player.getStackInHand(hand)));
+                net.minecraft.item.ItemStack held = client.player.getStackInHand(hand);
+                if (held.getItem() instanceof com.stationannouncer.mtr.ItemBridgeCreator) {
+                    client.setScreen(new BridgeCreatorScreen(hand, held));
+                } else {
+                    client.setScreen(new CreatorSettingsScreen(hand, held));
+                }
             }
         };
         MtrPids.CONFIG_GUI_OPENER = blockEntity -> {

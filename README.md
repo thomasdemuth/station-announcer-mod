@@ -270,6 +270,43 @@ one long beam on two poles. Stack **PIDS Drop Poles** above an end block to hang
 lower from a tall ceiling. Wall and hanging boards never merge with each other (they sit at
 different depths, so a mixed run would step).
 
+### Bridge Creator (requires MTR, new in 3.2)
+
+One configurable tool that replaces juggling the pillar, railing and viaduct creators: it
+builds a **whole bridge or viaduct under a stretch of track**, follows curves and grades,
+and sizes itself to however many parallel tracks the line has. Find it in the Operations
+tab.
+
+- **Right-click in the air** for the settings screen: a parts list on the left (tracks,
+  deck, girders, railing, piers, arches), a live 3D preview in the middle (built by the
+  same code that builds in the world; drag to turn) and the selected part's settings on
+  the right. Every part has its own **material** — pick from the searchable block grid, or
+  press **Pick** and sneak-click a block in the world to use its exact state (stairs,
+  slabs, logs keep their properties). **Presets** at the top: nine built-in (stone viaduct,
+  brick arches, steel girder, concrete box girder, modern viaduct, wooden trestle, NYC
+  steel el, piers only, deck + railing only) plus **Save as…** for your own, kept in
+  `config/station_announcer/bridge_presets.json`.
+- **Parts**: deck (thickness, overhang beyond the outer tracks, an optional edge material
+  for a kerb or walkway), girders (under the edges, under each track, both, or a solid box
+  the full width; depth), railing (any fence, wall, pane or block; height; inset), piers
+  (under the edges, one in the centre, under or beside each track, or a solid wall pier;
+  spacing and thickness along the track; optional cap beam across the deck and a widened
+  footing at the ground) and arches between the piers (filled spandrel walls or open ribs;
+  rise). Logs, pillars and the el kit's decks and girders turn to follow the track.
+- **Tracks**: in **Auto** mode click two nodes of one track and every parallel track within
+  the reach (default 8 blocks sideways) is bridged too, so a river crossing on a 2-track
+  line gets a 2-track bridge and a 3-track line a 3-track one. **Single** bridges only the
+  clicked track. **Manual** lets you click two nodes of each track you want (again to
+  remove it), then press **Build** in the screen. The deck always spans from the outermost
+  track to the outermost track plus the overhang.
+- Piers pass through whatever the same build placed and stop at the first real block —
+  ground, riverbed or an existing structure. Nothing existing is ever replaced, and the
+  rail cell plus four blocks of clearance above every track are never built in.
+- **Undo last build** (screen button or `/bridge undo`) puts back every block the last
+  build replaced. `/bridge build <x1 y1 z1> <x2 y2 z2>` builds between two node
+  coordinates without clicking; `/bridge preset "<name>"` loads a built-in preset into
+  the held creator; `/bridge tracks build|clear` drives the manual selection.
+
 ### Railing & Viaduct Creators (requires MTR, new in 1.7)
 
 Two more rail-following tools alongside the pillar creators, used the same way (sneak-click
