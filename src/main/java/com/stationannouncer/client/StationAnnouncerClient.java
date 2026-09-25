@@ -57,6 +57,7 @@ public class StationAnnouncerClient implements ClientModInitializer {
         BlockRenderLayerMap.INSTANCE.putBlock(ModContent.EL_WALL_GLASS, net.minecraft.client.render.RenderLayer.getCutoutMipped());
         BlockRenderLayerMap.INSTANCE.putBlock(ModContent.EL_STREET_COLUMN_LATTICE, net.minecraft.client.render.RenderLayer.getCutoutMipped());
         BlockRenderLayerMap.INSTANCE.putBlock(ModContent.EL_STAIR_WALL_GLASS, net.minecraft.client.render.RenderLayer.getCutoutMipped());
+        BlockRenderLayerMap.INSTANCE.putBlock(ModContent.EL_STAIR_UPPER, net.minecraft.client.render.RenderLayer.getCutoutMipped());
         BlockRenderLayerMap.INSTANCE.putBlock(ModContent.EL_STAIR_ROOF, net.minecraft.client.render.RenderLayer.getCutoutMipped());
         BlockRenderLayerMap.INSTANCE.putBlock(ModContent.EL_LANDING_ROOF, net.minecraft.client.render.RenderLayer.getCutoutMipped());
         BlockRenderLayerMap.INSTANCE.putBlock(ModContent.PLATFORM_BARRIER,
@@ -143,6 +144,18 @@ public class StationAnnouncerClient implements ClientModInitializer {
                                             be.devPose(-1, dir, now - ago);
                                         }
                                     }
+                                } else if (cmd.startsWith("#crack ")) {
+                                    // Dev-only: pose a mining crack on a block on THIS client
+                                    // (#crack x y z stage, stage 0-9; -1 clears) — how the
+                                    // breaking overlay on renderer-drawn blocks gets screenshotted.
+                                    String[] a = cmd.split("\\s+");
+                                    net.minecraft.util.math.BlockPos p = new net.minecraft.util.math.BlockPos(
+                                            Integer.parseInt(a[1]), Integer.parseInt(a[2]), Integer.parseInt(a[3]));
+                                    int stage = a.length > 4 ? Integer.parseInt(a[4]) : 5;
+                                    // One breaking block per "entity" in vanilla, so each pos gets
+                                    // its own synthetic (negative, never a real entity) breaker id.
+                                    int breaker = Long.hashCode(p.asLong()) | Integer.MIN_VALUE;
+                                    client.worldRenderer.setBlockBreakingInfo(breaker, p, stage);
                                 } else if (cmd.equals("#reload")) {
                                     // Dev-only: F3+T without a keyboard, so a headless rig can
                                     // pick up regenerated models/textures copied into build/resources.

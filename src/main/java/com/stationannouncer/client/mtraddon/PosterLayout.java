@@ -330,15 +330,31 @@ public final class PosterLayout {
     public static float symbolWidth(String token, float size) {
         return switch (token) {
             case "b", "d" -> size * 1.15f;
-            case "wc" -> size * 1.05f;
+            case "wc", "s" -> size * 1.05f;
             case "<", ">", "^", "v" -> size * 0.9f;
             default -> size;
         };
     }
 
     public static void symbol(Surface s, String token, String arg, float x, float y, float size, int ink) {
+        // What a pictogram's cut-outs show: the sheet behind dark ink, a black panel behind light ink.
+        boolean lightInk = ((ink >> 16 & 0xFF) + (ink >> 8 & 0xFF) + (ink & 0xFF)) > 384;
+        symbol(s, token, arg, x, y, size, ink, lightInk ? 0xFF0E0E10 : WHITE);
+    }
+
+    /** As above with the surface colour behind the text given (a sign's colour field). */
+    public static void symbol(Surface s, String token, String arg, float x, float y, float size, int ink,
+                              int background) {
         float cy = y + size * 0.5f;
         switch (token) {
+            case "s" -> {
+                int num = com.stationannouncer.client.mtr.SignSymbols.byKey(arg);
+                if (num >= 0) {
+                    com.stationannouncer.client.mtr.SignSymbols.draw(s, num, x, y, size, ink, background, 2);
+                } else {
+                    s.text("{s:" + arg + "}", x, y, size, ink, false);
+                }
+            }
             case "b" -> {
                 RouteBullets.Bullet bullet = lineBullet(arg);
                 float radius = size * 0.575f;
@@ -390,7 +406,12 @@ public final class PosterLayout {
             roundedSquare(s, x, y, size, 30 * u, WHEELCHAIR_BLUE, layer);
             ink = WHITE;
         }
-        int l = layer + 2;
+        wheelchairFigure(s, x, y, size, ink, layer + 2);
+    }
+
+    /** The figure alone (no tile), in the same 300-unit box — the ramp symbol sits it on a slope. */
+    public static void wheelchairFigure(Surface s, float x, float y, float size, int ink, int l) {
+        float u = size / 300.0f;
         // head
         s.disc(x + 125.42f * u, y + 54.07f * u, 21.32f * u, ink, l);
         // torso
@@ -415,7 +436,7 @@ public final class PosterLayout {
     }
 
     /** A square with rounded corners of radius {@code r}. */
-    private static void roundedSquare(Surface s, float x, float y, float size, float r, int argb, int layer) {
+    public static void roundedSquare(Surface s, float x, float y, float size, float r, int argb, int layer) {
         s.rect(x + r, y, x + size - r, y + size, argb, layer);
         s.rect(x, y + r, x + r, y + size - r, argb, layer);
         s.rect(x + size - r, y + r, x + size, y + size - r, argb, layer);
@@ -767,7 +788,7 @@ public final class PosterLayout {
             if (string == null || string.isEmpty()) {
                 return 0;
             }
-            int raw = fontId != null ? font.getWidth(styled(string)) : font.getWidth(string);
+            float raw = fontId != null ? font.getTextHandler().getWidth(styled(string)) : font.getWidth(string);
             return raw * size / 8.0f + (bold ? size / 16.0f : 0);
         }
     }
@@ -806,7 +827,7 @@ public final class PosterLayout {
 
         @Override
         public void poly(float[] xs, float[] ys, int argb, int layer) {
-            VertexConsumer buffer = consumers.getBuffer(RenderLayer.getDebugQuads());
+            VertexConsumer buffer = consumers.getBuffer(CanvasPainter.layer());
             Matrix4f matrix = matrices.peek().getPositionMatrix();
             float depth = z(layer);
             // Triangle fan from the first vertex; each triangle is a quad with a repeated corner.
@@ -819,7 +840,7 @@ public final class PosterLayout {
 
         @Override
         public void disc(float cx, float cy, float radius, int argb, int layer) {
-            VertexConsumer buffer = consumers.getBuffer(RenderLayer.getDebugQuads());
+            VertexConsumer buffer = consumers.getBuffer(CanvasPainter.layer());
             Matrix4f matrix = matrices.peek().getPositionMatrix();
             float depth = z(layer);
             for (int i = 0; i < SEGMENTS; i++) {

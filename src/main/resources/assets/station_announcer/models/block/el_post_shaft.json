@@ -2,7 +2,8 @@
  "ambientocclusion": false,
  "textures": {
   "green": "station_announcer:block/el2_green",
-  "black": "station_announcer:block/el2_black"
+  "black": "station_announcer:block/el2_black",
+  "particle": "#green"
  },
  "elements": [
   {

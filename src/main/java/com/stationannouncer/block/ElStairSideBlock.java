@@ -36,6 +36,14 @@ import org.jetbrains.annotations.Nullable;
  * levels its rails off over the last tread at floor height and closes with a
  * post. Diagonal continuations get no vanilla neighbour update, so placement
  * and removal recompute them explicitly ({@link #refreshDiagonals}).
+ *
+ * <p>{@link #POST}: posts stand on every OTHER cell of a run (parity along the
+ * ascent axis, so stacked courses line up); run ends get newels regardless.
+ * {@link #MODE}: TRIANGLE WALLS - under a ceiling a wall / glass bottom course
+ * becomes {@code fill} (vertical boards from the stringer to the top of its
+ * cell, no sloped top rail) and whatever is stacked on it {@code rect} (plain
+ * vertical cells), so the wall meets the soffit level while its foot follows
+ * the flight. Railing and posts-only courses are always {@code band}.
  * Assets: tools/gen_el2_stairs.py.
  */
 public class ElStairSideBlock extends Block {
@@ -57,25 +65,54 @@ public class ElStairSideBlock extends Block {
     public static final DirectionProperty FACING = Properties.HORIZONTAL_FACING;
     public static final EnumProperty<Side> SIDE = EnumProperty.of("side", Side.class);
     public static final BooleanProperty BOTTOM = BooleanProperty.of("bottom");
-    /** Nothing of the family above: the post runs on up to the roof band. */
+    /** A stair or landing roof sits on this course: the post runs on up into its frieze. Without a roof the posts stop at the rail. */
     public static final BooleanProperty TOP = BooleanProperty.of("top");
     public static final BooleanProperty END_UP = BooleanProperty.of("end_up");
     public static final BooleanProperty END_DOWN = BooleanProperty.of("end_down");
     public static final BooleanProperty LEVEL = BooleanProperty.of("level");
+    public static final BooleanProperty POST = BooleanProperty.of("post");
+
+    public enum Mode implements StringIdentifiable {
+        BAND("band"), FILL("fill"), RECT("rect");
+
+        private final String name;
+
+        Mode(String name) {
+            this.name = name;
+        }
+
+        @Override
+        public String asString() {
+            return name;
+        }
+    }
+
+    public static final EnumProperty<Mode> MODE = EnumProperty.of("mode", Mode.class);
 
     /** [side][bottom] -> per-facing shapes. */
     private final VoxelShape[][][] shapes = new VoxelShape[2][2][];
+    /** [side] -> per-facing full-height panel (fill / rect cells). */
+    private final VoxelShape[][] panelShapes = new VoxelShape[2][];
+    /** Wall and glass courses fill up to a ceiling; railings and posts-only courses never do. */
+    private final boolean fills;
 
     public ElStairSideBlock(Settings settings) {
+        this(settings, false);
+    }
+
+    public ElStairSideBlock(Settings settings, boolean fills) {
         super(settings);
+        this.fills = fills;
         setDefaultState(getDefaultState().with(FACING, Direction.NORTH).with(SIDE, Side.LEFT)
-                .with(BOTTOM, true).with(TOP, true).with(END_UP, true).with(END_DOWN, true).with(LEVEL, false));
+                .with(BOTTOM, true).with(TOP, false).with(END_UP, true).with(END_DOWN, true).with(LEVEL, false)
+                .with(POST, true).with(MODE, Mode.BAND));
         // authored facing NORTH with the stair to the WEST: panel plane at x 0..2.4.
         // The course band is v 12..20 on the 45-degree slope, i.e. y from
         // 24 - z to 40 - z at world z: four steps along z track it (the
         // bottom course reaches the floor line with its stringer and kick).
         for (int side = 0; side < 2; side++) {
             double x0 = side == 0 ? 0 : 13.6, x1 = side == 0 ? 2.4 : 16;
+            panelShapes[side] = FacingDecorBlock.rotations(Block.createCuboidShape(x0, 0, 0, x1, 16, 16));
             for (int bottom = 0; bottom < 2; bottom++) {
                 VoxelShape north = net.minecraft.util.shape.VoxelShapes.empty();
                 for (int i = 0; i < 4; i++) {
@@ -92,12 +129,16 @@ public class ElStairSideBlock extends Block {
 
     @Override
     protected void appendProperties(StateManager.Builder<Block, BlockState> builder) {
-        builder.add(FACING, SIDE, BOTTOM, TOP, END_UP, END_DOWN, LEVEL);
+        builder.add(FACING, SIDE, BOTTOM, TOP, END_UP, END_DOWN, LEVEL, POST, MODE);
     }
 
     @Override
     public VoxelShape getOutlineShape(BlockState state, BlockView world, BlockPos pos, ShapeContext context) {
-        return shapes[state.get(SIDE) == Side.LEFT ? 0 : 1][state.get(BOTTOM) ? 1 : 0][state.get(FACING).getHorizontal()];
+        int side = state.get(SIDE) == Side.LEFT ? 0 : 1;
+        if (state.get(MODE) != Mode.BAND) {
+            return panelShapes[side][state.get(FACING).getHorizontal()];
+        }
+        return shapes[side][state.get(BOTTOM) ? 1 : 0][state.get(FACING).getHorizontal()];
     }
 
     /** Direction from this block to the stair it flanks. */
@@ -124,11 +165,24 @@ public class ElStairSideBlock extends Block {
         boolean level = stair.getBlock() instanceof SubwayStairBlock
                 ? stair.get(SubwayStairBlock.FACING) == facing && stair.get(SubwayStairBlock.TOP)
                 : isStairSide(below) && below.get(FACING) == facing && below.get(SIDE) == side && below.get(LEVEL);
-        return state.with(BOTTOM, !continues(world, pos.down(), facing, side))
-                .with(TOP, !continues(world, pos.up(), facing, side))
+        boolean bottom = !continues(world, pos.down(), facing, side);
+        Mode mode = Mode.BAND;
+        if (fills) {
+            if (!bottom && below.get(MODE) != Mode.BAND) {
+                mode = Mode.RECT;
+            } else if (bottom && StairFamily.underCeiling(world, pos)) {
+                mode = Mode.FILL;
+            }
+        }
+        return state.with(BOTTOM, bottom).with(MODE, mode).with(POST, StairFamily.postCell(pos, facing))
+                .with(TOP, carriesRoof(world.getBlockState(pos.up())))
                 .with(END_UP, !continues(world, pos.up().offset(facing), facing, side))
                 .with(END_DOWN, !continues(world, pos.down().offset(facing.getOpposite()), facing, side))
                 .with(LEVEL, level);
+    }
+
+    private static boolean carriesRoof(BlockState above) {
+        return above.getBlock() instanceof ElStairRoofBlock || above.getBlock() instanceof ElLandingRoofBlock;
     }
 
     @Nullable
@@ -138,13 +192,14 @@ public class ElStairSideBlock extends Block {
         BlockPos pos = context.getBlockPos();
         Direction facing = context.getHorizontalPlayerFacing();
         Side side = null;
+        boolean forced = StairFamily.forced(context);
         // stacking on a course: same ascent and side as the course below
         BlockState under = world.getBlockState(pos.down());
-        if (isStairSide(under)) {
+        if (!forced && isStairSide(under)) {
             return compute(getDefaultState().with(FACING, under.get(FACING)).with(SIDE, under.get(SIDE)), world, pos);
         }
         // a stair beside us decides both the ascent and the side
-        for (Side candidate : Side.values()) {
+        for (Side candidate : forced ? new Side[0] : Side.values()) {
             for (Direction f : Direction.Type.HORIZONTAL) {
                 BlockState stair = world.getBlockState(pos.offset(stairDirection(f, candidate)));
                 if (stair.getBlock() instanceof SubwayStairBlock && stair.get(SubwayStairBlock.FACING) == f) {
@@ -157,7 +212,14 @@ public class ElStairSideBlock extends Block {
             }
         }
         if (side == null) {
-            // no stair yet: the stair is on the side the player stands on
+            // no stair yet: the course's own run (diagonal cells) decides the ascent,
+            // and the stair is on the side the player stands on
+            if (!forced) {
+                Direction near = StairFamily.ascentNear(world, pos);
+                if (near != null) {
+                    facing = near;
+                }
+            }
             Direction right = facing.rotateYClockwise();
             Vec3d rel = context.getPlayer() == null ? Vec3d.ZERO
                     : context.getPlayer().getPos().subtract(Vec3d.ofCenter(pos));

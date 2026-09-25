@@ -325,3 +325,51 @@ Total ≈ 5-7 working days of agent time, gated by Thomas's play passes after 1,
   offset/content scale), per-tile scale + nudge, numeric spacer; editor sliders
   with number boxes replace the small/medium/large segments. Compile-verified;
   NOT screenshotted (a parallel session held the rig). 3.1.3.
+
+
+### 2026-09-20 — zones, drag-to-place, the "in world" view, merging el_sign (3.2.1)
+
+Thomas: "allow me to move things around and place text & stuff how I want and aligned how I want
+(left, right, center)" + "the preview in the center can flip between the editor view and a preview
+view which shows the actual sign in the context of the world" + "these el station signs need to
+auto connect to form larger signs".
+
+- **Three zones per row** (`SignLayout.paintRow`): tiles flush LEFT, tiles CENTRED ON THE PANEL (pushed
+  aside only when a side zone is in the way — it used to centre in the space the pinned arrows left
+  over), tiles flush RIGHT. `SignSpec.Place` on every tile (AUTO / LEFT / CENTER / RIGHT, JSON `place`,
+  omitted when AUTO): AUTO follows the row's `Align`, which gained `RIGHT`. An edge arrow's older
+  `arg` "left"/"right" still pins it (outermost in that zone) while its place is AUTO; choosing a
+  place in the editor clears the arg. `SignLayout.zoneOf` is the one rule, the inspector reads it.
+  Multi-line tiles range their LINES the same way (left / centred / right inside the tile width) —
+  `paintLines(…, boxWidth, align)`; a station plate with the wheelchair below centres the symbol too.
+- **Drag to place**: mouse-down on a tile in the editor canvas selects AND grabs it; dragging writes
+  `dx`/`dy` in half units. Snaps (3 screen px): back onto its row line (dy 0), back into its slot
+  (dx 0), or its centre onto the panel's centre line — the guide that caught it draws magenta. Alt =
+  no snapping. Arrow keys nudge the selected tile 1 unit (shift 5, alt 0.5) when no text box has
+  focus. Inspector: "Position in row" (Row / Left / Centre / Right), Move sliders now ±256, "Put back
+  in its row slot". The old arrow "Left edge / Inline / Right edge" control is gone (same thing).
+- **Editor | In world** switch at the top of the centre pane. In world = `SignWorldView`: a client-only
+  `MarkerEntity` (never added to the world) becomes the camera entity; hand/HUD hidden via
+  `options.hudHidden`, third person suspended, everything restored in `exit()` which the screen calls
+  from `removed()`. The screen paints GROUND everywhere except the centre pane, so the pane IS the
+  world. The camera orbits the sign's panel centre (`locate()` walks the merged run; panel dx/dy
+  shift the target), starts at the player's own eye + look and eases in, fits the panel + surroundings
+  to the pane (`fitDistance`), is turned by the pane's NDC offset so the sign is centred in the PANE
+  not the window, stops short of blocks between sign and eye (VISUAL raycast), follows Front|Back to
+  the other side. Drag = orbit (±85° / ±70°), scroll = zoom, "Reset view". The game camera adds its
+  own tick-lerped eye height to the entity y — `update()` reads what it added last frame and subtracts
+  it (no 1.62-block sink when the view opens).
+- **The world always shows the draft**: `StationDecorBlockEntity.previewSign` (transient, client only;
+  `getSign()` returns it when set; NBT/sync use the stored field). The editor pushes `build()` when it
+  changes + `MtaSignPainter.invalidateRuns()`; `removed()` clears it, so Cancel reverts.
+- **Editing a merged run**: `MtaSignPainter.signOwner` — the editor opens on the segment the run
+  actually draws (first with a saved sign, else the origin) for el_sign / el_wall_sign /
+  el_railing_sign. Saving onto any other segment used to change nothing on screen.
+- **el_sign merges**: `ElNameBoardBlock` LEFT/RIGHT (el_sign only — ctor flag `merges`; the v1
+  `el_name_board` shares the class, never connects, and its blockstate's partial variant keys ignore
+  the two properties). Same facing + mount joins; a connected side runs plate + cap to the block edge
+  and drops that end face; legs / rod / wall brackets stay per block. Renderer: the segment with
+  nothing on its LEFT paints one `64*run - 8` canvas on both faces (back face: run centre is at
+  local -X after the 180° turn). `onBlockAdded` joins /setblock and pasted boards. Old placements
+  default left/right=false and heal on the next neighbour update.
+- Dev hook: `#sign-view world|editor`.

@@ -12,6 +12,8 @@ import net.minecraft.sound.SoundEvents;
 import net.minecraft.state.StateManager;
 import net.minecraft.state.property.BooleanProperty;
 import net.minecraft.state.property.DirectionProperty;
+import net.minecraft.state.property.EnumProperty;
+import net.minecraft.util.StringIdentifiable;
 import net.minecraft.state.property.Properties;
 import net.minecraft.util.ActionResult;
 import net.minecraft.util.Hand;
@@ -35,6 +37,15 @@ import org.jetbrains.annotations.Nullable;
  * vanilla's neighbor updates never fire for — so placement and removal
  * explicitly recompute the two diagonal neighbors ({@link #refreshDiagonals}).
  * The modern variant's mesh risers need the cutout render layer.</p>
+ *
+ * <p>IN-CELL SIDES (2026-09-20): {@link #LEFT} / {@link #RIGHT} put the el
+ * stair family's stringer, railing or wall on the stair's OWN edge (the treads
+ * narrow by 2.4 px on that side), so a flight needs no columns beside it - a
+ * stair through a platform only needs a well of its own width. A wall under a
+ * ceiling, or under an {@link ElStairUpperBlock} wall, becomes {@code wall_fill}
+ * (vertical boards to the top of the cell - the triangle wall). Set with the el
+ * stair course items (sneak-click a tread's outer third); a new stair copies the
+ * sides of the run it continues. {@link #POST}: posts on every other cell.</p>
  */
 public class SubwayStairBlock extends Block {
     public static final DirectionProperty FACING = Properties.HORIZONTAL_FACING;
@@ -48,24 +59,71 @@ public class SubwayStairBlock extends Block {
      *  block's blockstate maps it and only it toggles. */
     public static final BooleanProperty SOLID = BooleanProperty.of("solid");
 
-    private final VoxelShape[] shapes;
+    /** What stands on one edge of the stair, inside its own cell. */
+    public enum InSide implements StringIdentifiable {
+        NONE("none"), STRINGER("stringer"), RAILING("railing"), WALL("wall"), WALL_FILL("wall_fill");
+
+        private final String name;
+
+        InSide(String name) {
+            this.name = name;
+        }
+
+        /** Something a player cannot walk through. */
+        public boolean panel() {
+            return this == RAILING || this == WALL || this == WALL_FILL;
+        }
+
+        @Override
+        public String asString() {
+            return name;
+        }
+    }
+
+    public static final EnumProperty<InSide> LEFT = EnumProperty.of("left", InSide.class);
+    public static final EnumProperty<InSide> RIGHT = EnumProperty.of("right", InSide.class);
+    public static final BooleanProperty POST = BooleanProperty.of("post");
+
+    /** [left panel][right panel] -> per-facing shapes. */
+    private final VoxelShape[][][] shapes = new VoxelShape[2][2][];
     private final boolean solidToggle;
 
     public SubwayStairBlock(Settings settings, boolean solidToggle) {
         super(settings);
         this.solidToggle = solidToggle;
         setDefaultState(getDefaultState().with(FACING, Direction.NORTH)
-                .with(BOTTOM, true).with(TOP, true).with(SOLID, false));
+                .with(BOTTOM, true).with(TOP, true).with(SOLID, false)
+                .with(LEFT, InSide.NONE).with(RIGHT, InSide.NONE).with(POST, true));
         // Ascending toward NORTH: lower half full, upper half on the north side.
-        VoxelShape north = VoxelShapes.union(
+        VoxelShape steps = VoxelShapes.union(
                 createCuboidShape(0, 0, 0, 16, 8, 16),
-                createCuboidShape(0, 8, 0, 16, 16, 8)).simplify();
-        this.shapes = FacingDecorBlock.rotations(north);
+                createCuboidShape(0, 8, 0, 16, 16, 8));
+        for (int left = 0; left < 2; left++) {
+            for (int right = 0; right < 2; right++) {
+                VoxelShape north = steps;
+                if (left == 1) {
+                    north = VoxelShapes.union(north, sidePanel(0, 2.4));
+                }
+                if (right == 1) {
+                    north = VoxelShapes.union(north, sidePanel(13.6, 16));
+                }
+                shapes[left][right] = FacingDecorBlock.rotations(north.simplify());
+            }
+        }
+    }
+
+    /** An in-cell railing / wall: four steps under the rail line (16 px over the nosings, y = 40 - z). */
+    private static VoxelShape sidePanel(double x0, double x1) {
+        VoxelShape panel = VoxelShapes.empty();
+        for (int i = 0; i < 4; i++) {
+            panel = VoxelShapes.union(panel, createCuboidShape(x0, 0, 4 * i, x1, Math.min(32, 40 - 4 * i), 4 * (i + 1)));
+        }
+        return panel;
     }
 
     @Override
     protected void appendProperties(StateManager.Builder<Block, BlockState> builder) {
-        builder.add(FACING, BOTTOM, TOP, SOLID);
+        builder.add(FACING, BOTTOM, TOP, SOLID, LEFT, RIGHT, POST);
     }
 
     /** Empty-hand right-click on the modern stair toggles the closed
@@ -91,7 +149,7 @@ public class SubwayStairBlock extends Block {
 
     @Override
     public VoxelShape getOutlineShape(BlockState state, BlockView world, BlockPos pos, ShapeContext context) {
-        return shapes[state.get(FACING).getHorizontal()];
+        return shapes[state.get(LEFT).panel() ? 1 : 0][state.get(RIGHT).panel() ? 1 : 0][state.get(FACING).getHorizontal()];
     }
 
     /** The downhill continuation cell: one down, one block against the ascent. */
@@ -109,19 +167,66 @@ public class SubwayStairBlock extends Block {
         return state.isOf(this) && state.get(FACING) == facing;
     }
 
-    private BlockState computed(WorldAccess world, BlockPos pos, Direction facing) {
-        return getDefaultState().with(FACING, facing)
-                .with(BOTTOM, !continues(world, downhill(pos, facing), facing))
-                .with(TOP, !continues(world, uphill(pos, facing), facing));
+    /** Everything derived from the surroundings; FACING, SOLID and the chosen sides come from {@code base}. */
+    private BlockState computed(BlockState base, WorldAccess world, BlockPos pos) {
+        Direction facing = base.get(FACING);
+        return base.with(BOTTOM, !continues(world, downhill(pos, facing), facing))
+                .with(TOP, !continues(world, uphill(pos, facing), facing))
+                .with(POST, StairFamily.postCell(pos, facing))
+                .with(LEFT, settled(base.get(LEFT), world, pos, true))
+                .with(RIGHT, settled(base.get(RIGHT), world, pos, false));
+    }
+
+    /**
+     * wall <-> wall_fill: a wall fills its cell (triangle wall) under a ceiling,
+     * or when the upper course right above carries a wall on the same edge -
+     * a banded wall would overlap that cell's boards.
+     */
+    private static InSide settled(InSide side, WorldAccess world, BlockPos pos, boolean left) {
+        if (side != InSide.WALL && side != InSide.WALL_FILL) {
+            return side;
+        }
+        BlockState above = world.getBlockState(pos.up());
+        boolean upper = above.getBlock() instanceof ElStairUpperBlock
+                && above.get(left ? ElStairUpperBlock.LEFT : ElStairUpperBlock.RIGHT) != ElStairUpperBlock.Kind.NONE;
+        return upper || StairFamily.underCeiling(world, pos) ? InSide.WALL_FILL : InSide.WALL;
+    }
+
+    /** Sets one in-cell side (the el stair course items call this); same value again clears it. */
+    public void toggleSide(World world, BlockPos pos, BlockState state, boolean left, InSide side) {
+        InSide current = state.get(left ? LEFT : RIGHT);
+        boolean same = current == side || (side == InSide.WALL && current == InSide.WALL_FILL);
+        BlockState next = computed(state.with(left ? LEFT : RIGHT, same ? InSide.NONE : side), world, pos);
+        world.setBlockState(pos, next, Block.NOTIFY_ALL);
+    }
+
+    @Override
+    public BlockState getStateForNeighborUpdate(BlockState state, Direction direction, BlockState neighborState,
+                                                WorldAccess world, BlockPos pos, BlockPos neighborPos) {
+        // only the cell above matters (an upper course turning a wall into a fill); ends are diagonal
+        return direction == Direction.UP ? computed(state, world, pos) : state;
     }
 
     @Nullable
     @Override
     public BlockState getPlacementState(ItemPlacementContext context) {
-        return computed(context.getWorld(), context.getBlockPos(),
-                context.getHorizontalPlayerFacing())
-                .with(SOLID, solidToggle
-                        && com.stationannouncer.item.SubwayStairItem.selectedSolid(context.getStack()));
+        // neighbours decide the ascent; look direction is the fallback (sneak forces it)
+        World world = context.getWorld();
+        BlockPos pos = context.getBlockPos();
+        Direction facing = StairFamily.placementAscent(context);
+        BlockState base = getDefaultState().with(FACING, facing).with(SOLID, solidToggle
+                && com.stationannouncer.item.SubwayStairItem.selectedSolid(context.getStack()));
+        // continuing a run: carry its in-cell sides along (not when the player forces a fresh start)
+        if (!StairFamily.forced(context)) {
+            for (BlockPos cell : new BlockPos[]{downhill(pos, facing), uphill(pos, facing)}) {
+                BlockState run = world.getBlockState(cell);
+                if (run.isOf(this) && run.get(FACING) == facing) {
+                    base = base.with(LEFT, run.get(LEFT)).with(RIGHT, run.get(RIGHT));
+                    break;
+                }
+            }
+        }
+        return computed(base, world, pos);
     }
 
     @Override
@@ -148,8 +253,7 @@ public class SubwayStairBlock extends Block {
         for (BlockPos cell : new BlockPos[]{downhill(pos, facing), uphill(pos, facing)}) {
             BlockState neighbor = world.getBlockState(cell);
             if (neighbor.isOf(this)) {
-                BlockState fresh = computed(world, cell, neighbor.get(FACING))
-                        .with(SOLID, neighbor.get(SOLID));
+                BlockState fresh = computed(neighbor, world, cell);
                 if (fresh != neighbor) {
                     world.setBlockState(cell, fresh, Block.NOTIFY_LISTENERS);
                 }

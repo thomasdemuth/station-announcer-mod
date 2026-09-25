@@ -28,14 +28,6 @@
   },
   {
    "when": {
-    "facing": "north"
-   },
-   "apply": {
-    "model": "station_announcer:block/el_post_plates"
-   }
-  },
-  {
-   "when": {
     "facing": "east"
    },
    "apply": {
@@ -60,15 +52,6 @@
    },
    "apply": {
     "model": "station_announcer:block/el_post_cap",
-    "y": 90
-   }
-  },
-  {
-   "when": {
-    "facing": "east"
-   },
-   "apply": {
-    "model": "station_announcer:block/el_post_plates",
     "y": 90
    }
   },
@@ -103,15 +86,6 @@
   },
   {
    "when": {
-    "facing": "south"
-   },
-   "apply": {
-    "model": "station_announcer:block/el_post_plates",
-    "y": 180
-   }
-  },
-  {
-   "when": {
     "facing": "west"
    },
    "apply": {
@@ -136,15 +110,6 @@
    },
    "apply": {
     "model": "station_announcer:block/el_post_cap",
-    "y": 270
-   }
-  },
-  {
-   "when": {
-    "facing": "west"
-   },
-   "apply": {
-    "model": "station_announcer:block/el_post_plates",
     "y": 270
    }
   }

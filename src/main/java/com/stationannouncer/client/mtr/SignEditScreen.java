@@ -47,8 +47,9 @@ public class SignEditScreen extends Screen {
     private static final String[] DIRECTION_GLYPHS = {"↖", "↑", "↗", "←", "", "→", "↙", "↓", "↘"};
     /** Direction pad cell → arrow direction (0 = right, anticlockwise). */
     private static final int[] DIRECTION_OF_CELL = {3, 2, 1, 4, -1, 0, 5, 6, 7};
-    private static final String[] TILE_LABELS = {"Bullets", "Text", "Arrow", "Station", "Exit", "Line + dest.", "Space"};
-    private static final String[] TILE_TAGS = {"●", "T", "→", "St", "Ex", "◐", "·"};
+    private static final String[] TILE_LABELS = {"Bullets", "Text", "Symbol", "Station", "Exit", "Line + dest.", "Space",
+            "Divider", "Badge"};
+    private static final String[] TILE_TAGS = {"●", "T", "→", "St", "Ex", "◐", "·", "|", "Bg"};
 
     private final StationDecorBlockEntity entity;
     private final SignContext ctx;
@@ -63,6 +64,26 @@ public class SignEditScreen extends Screen {
     private SignFaces.BackMode backMode;
     private boolean editingBack;
 
+    // The sign in the world: the centre of its run on the block-centre plane and
+    // the way its FRONT face looks, for the "in world" view's camera.
+    private net.minecraft.util.math.Vec3d signAnchor = net.minecraft.util.math.Vec3d.ZERO;
+    private net.minecraft.util.math.Direction frontNormal = net.minecraft.util.math.Direction.NORTH;
+    /** Centre view: the flat editor canvas, or the real block through a detached camera. */
+    private boolean worldView;
+    private final SignWorldView worldCamera = new SignWorldView();
+    private boolean orbiting;
+    /** The draft last pushed onto the block, so the world shows what is being edited. */
+    private SignFaces pushedPreview;
+
+    // Dragging a tile on the canvas: where it started, and the guides it snapped to.
+    private boolean draggingTile;
+    private double dragStartMx;
+    private double dragStartMy;
+    private float dragStartDx;
+    private float dragStartDy;
+    private boolean guideX;
+    private boolean guideY;
+
     /** Selection: row -1 = the sign itself; tile -1 = the row. */
     private int selRow = -1;
     private int selTile = -1;
@@ -71,7 +92,16 @@ public class SignEditScreen extends Screen {
     private final TextBox nameBox;
     private final TextBox cornerBox;
     private final TextBox customBox;
+    private final TextBox badgeBox;
+    private final TextBox templateBox;
     private final List<TextBox> visibleBoxes = new ArrayList<>();
+    /** Inspector scrolling: the pane is shorter than its content on a small window. */
+    private int inspectorScroll;
+    private int inspectorContent;
+    private int inspectorView;
+    /** Vertical clip for hit rectangles and text boxes recorded while a scrolled pane draws. */
+    private int clipTop = Integer.MIN_VALUE;
+    private int clipBottom = Integer.MAX_VALUE;
     private TextBox focused;
     /** Plate-to-preview mapping, recomputed each frame from the plate and the panel box. */
     private float previewMinX;
@@ -125,6 +155,19 @@ public class SignEditScreen extends Screen {
     private static final int HIT_PICK = 23;
     private static final int HIT_SLIDER = 24;
     private static final int HIT_PANEL_RESET = 25;
+    private static final int HIT_VIEW = 26;
+    private static final int HIT_WORLD = 27;
+    private static final int HIT_TILE_RESET = 28;
+    private static final int HIT_WORLD_RESET = 29;
+    private static final int HIT_COLOR = 30;
+    private static final int HIT_COPY = 31;
+    private static final int HIT_PASTE = 32;
+    private static final int HIT_USER_TEMPLATE = 33;
+    private static final int HIT_USER_TEMPLATE_DELETE = 34;
+    private static final int HIT_TEMPLATE_SAVE = 35;
+
+    /** The copied face: survives closing the editor, so a sign can be pasted onto another block. */
+    private static SignSpec clipboard;
 
     // Numeric fields (slider + number box), by id.
     private static final int NUM_PANEL_W = 1;
@@ -154,6 +197,7 @@ public class SignEditScreen extends Screen {
     private static final int SEG_DEST_MODE = 6;
     private static final int SEG_SPACER = 7;
     private static final int SEG_WHEELCHAIR = 8;
+    private static final int SEG_PLACE = 9;
     private static final int TOGGLE_FRONT = 1;
     private static final int TOGGLE_AUTO = 2;
     private static final int TOGGLE_UPPER = 3;
@@ -172,8 +216,10 @@ public class SignEditScreen extends Screen {
     private String toast;
     private long toastUntil;
 
-    public SignEditScreen(StationDecorBlockEntity entity) {
+    public SignEditScreen(StationDecorBlockEntity clicked) {
         super(Text.translatable("gui.station_announcer.mta_sign.title"));
+        // A merged run is one sign: edit the segment the run actually draws.
+        StationDecorBlockEntity entity = MtaSignPainter.signOwner(clicked);
         this.entity = entity;
         this.ctx = MtaSignPainter.context(entity.getPos());
         var state = entity.getCachedState();
@@ -201,7 +247,11 @@ public class SignEditScreen extends Screen {
         } else if (block instanceof com.stationannouncer.mtr.ElNameBoardBlock) {
             doubleSided = state.get(com.stationannouncer.mtr.ElNameBoardBlock.MOUNT)
                     != com.stationannouncer.mtr.ElNameBoardBlock.Mount.WALL;
-            canvasWidth = 56;
+            // merged el_sign boards are one sign as wide as the run
+            int run = world == null ? 1 : MtaSignPainter.legacyRun(world, entity.getPos(),
+                    state.get(com.stationannouncer.block.FacingDecorBlock.FACING).rotateYClockwise(),
+                    st -> com.stationannouncer.mtr.ElNameBoardBlock.sameSign(state, st));
+            canvasWidth = 64 * run - 8;
             canvasHeight = 28;
         } else if (block instanceof com.stationannouncer.mtr.StationColumnBlock column) {
             doubleSided = true;
@@ -224,6 +274,7 @@ public class SignEditScreen extends Screen {
         SignFaces faces = entity.getSign() != null ? entity.getSign()
                 : block instanceof MtaSignBlock ? SignFaces.EMPTY
                 : com.stationannouncer.mtr.sign.LegacySigns.of(entity);
+        locate(state, world);
         frontDraft = new Draft(faces.front());
         backDraft = new Draft(faces.back());
         frontOn = faces.frontOn();
@@ -233,6 +284,11 @@ public class SignEditScreen extends Screen {
         textBox = new TextBox(font, SignSpec.MAX_TEXT, true);
         textBox.placeholder = "Sign text. Enter = next line (up to 3).";
         textBox.onChange(v -> updateTile(t -> t.withText(v)));
+        badgeBox = new TextBox(font, 16, false);
+        badgeBox.placeholder = "LIRR, M15 SBS, PATH…";
+        badgeBox.onChange(v -> updateTile(t -> t.withText(v)));
+        templateBox = new TextBox(font, SignUserTemplates.MAX_NAME, false);
+        templateBox.placeholder = "Name…";
         nameBox = new TextBox(font, SignSpec.MAX_TEXT, false);
         nameBox.placeholder = "(station name)";
         nameBox.onChange(v -> updateTile(t -> t.withText(v)));
@@ -245,6 +301,127 @@ public class SignEditScreen extends Screen {
         if (!frontDraft.rows.isEmpty() && !frontDraft.rows.get(0).tiles.isEmpty()) {
             select(0, 0);
         }
+    }
+
+    // ------------------------------------------------------------ in world
+
+    /**
+     * Where this sign is in the world: walks the merged run the block belongs
+     * to and takes its middle, at the height the plate hangs. Depth is the
+     * block's centre plane — close enough to aim a camera at.
+     */
+    private void locate(net.minecraft.block.BlockState state, net.minecraft.client.world.ClientWorld world) {
+        net.minecraft.block.Block block = state.getBlock();
+        net.minecraft.util.math.Direction normal = state.contains(com.stationannouncer.block.FacingDecorBlock.FACING)
+                ? state.get(com.stationannouncer.block.FacingDecorBlock.FACING) : net.minecraft.util.math.Direction.NORTH;
+        java.util.function.Predicate<net.minecraft.block.BlockState> family = null;
+        float yFrac = 0.5f;
+        if (block instanceof MtaSignBlock sign) {
+            net.minecraft.util.math.Direction facing = normal;
+            family = st -> st.getBlock() == block
+                    && st.get(com.stationannouncer.block.FacingDecorBlock.FACING) == facing
+                    && st.get(MtaSignBlock.MOUNT) == state.get(MtaSignBlock.MOUNT);
+            yFrac = sign.plateHeight() < 16 && state.get(MtaSignBlock.MOUNT).asString().equals("standing") ? 0.75f : 0.5f;
+        } else if (block instanceof com.stationannouncer.mtr.RailingSignBlock) {
+            normal = com.stationannouncer.mtr.RailingSignBlock.frontOf(state);
+            family = st -> st.getBlock() instanceof com.stationannouncer.mtr.RailingSignBlock;
+            yFrac = 0.8f;
+        } else if (block instanceof com.stationannouncer.mtr.ElNameBoardBlock) {
+            family = st -> com.stationannouncer.mtr.ElNameBoardBlock.sameSign(state, st);
+            yFrac = state.get(com.stationannouncer.mtr.ElNameBoardBlock.MOUNT)
+                    == com.stationannouncer.mtr.ElNameBoardBlock.Mount.STANDING ? 0.6f : 0.53f;
+        } else if (block instanceof com.stationannouncer.mtr.StationColumnBlock) {
+            yFrac = 0.625f;
+        } else if (block instanceof com.stationannouncer.mtr.ElEntranceSignBlock
+                || block instanceof com.stationannouncer.mtr.ElWallSignBlock
+                || block instanceof com.stationannouncer.mtr.ElRailingSignBlock) {
+            net.minecraft.util.math.Direction facing = normal;
+            family = st -> st.getBlock() == block
+                    && st.get(com.stationannouncer.block.FacingDecorBlock.FACING) == facing;
+            yFrac = block instanceof com.stationannouncer.mtr.ElRailingSignBlock ? 0.66f : 0.5f;
+        }
+        net.minecraft.util.math.BlockPos pos = entity.getPos();
+        double along = 0;
+        if (family != null && world != null) {
+            net.minecraft.util.math.Direction posDir = normal.rotateYClockwise();
+            int before = 0;
+            while (before < 16 && family.test(world.getBlockState(pos.offset(posDir.getOpposite(), before + 1)))) {
+                before++;
+            }
+            int after = 0;
+            while (after < 16 && family.test(world.getBlockState(pos.offset(posDir, after + 1)))) {
+                after++;
+            }
+            along = (after - before) / 2.0;
+            signAnchor = net.minecraft.util.math.Vec3d.ofBottomCenter(pos)
+                    .add(posDir.getOffsetX() * along, yFrac, posDir.getOffsetZ() * along);
+        } else {
+            signAnchor = net.minecraft.util.math.Vec3d.ofBottomCenter(pos).add(0, yFrac, 0);
+        }
+        frontNormal = normal;
+    }
+
+    /** The face being edited looks this way. */
+    private net.minecraft.util.math.Vec3d viewNormal() {
+        net.minecraft.util.math.Direction n = editingBack ? frontNormal.getOpposite() : frontNormal;
+        return new net.minecraft.util.math.Vec3d(n.getOffsetX(), 0, n.getOffsetZ());
+    }
+
+    /** The centre of the painted panel in the world (the plate may be shifted off its block). */
+    private net.minecraft.util.math.Vec3d viewTarget() {
+        Draft d = draft();
+        // Canvas x grows toward the viewer's right, which is the normal turned counter-clockwise.
+        net.minecraft.util.math.Direction n = editingBack ? frontNormal.getOpposite() : frontNormal;
+        net.minecraft.util.math.Direction right = n.rotateYCounterclockwise();
+        double dx = d.panelDx / 64.0;
+        return signAnchor.add(right.getOffsetX() * dx, -d.panelDy / 64.0, right.getOffsetZ() * dx);
+    }
+
+    private float tanHalfV() {
+        double fov = client == null ? 70 : client.options.getFov().getValue();
+        return (float) Math.tan(Math.toRadians(fov) / 2.0);
+    }
+
+    /** Camera distance at which the whole panel, with some of its surroundings, fits the centre pane. */
+    private float fitDistance() {
+        Draft d = draft();
+        float w = Math.max(canvasWidth, d.panelWidth) / 64.0f;
+        float h = Math.max(canvasHeight, d.panelHeight) / 64.0f;
+        float tanV = tanHalfV();
+        float tanH = tanV * width / Math.max(1, height);
+        float fracX = Math.max(0.15f, centreW / (float) Math.max(1, width));
+        float fracY = Math.max(0.15f, (leftH - 30) / (float) Math.max(1, height));
+        float byWidth = (w / 2.0f * 1.7f) / (tanH * fracX);
+        float byHeight = (h / 2.0f * 2.2f) / (tanV * fracY);
+        return Math.max(1.4f, Math.max(byWidth, byHeight));
+    }
+
+    private void setWorldView(boolean on) {
+        if (on == worldView) {
+            return;
+        }
+        worldView = on;
+        draggingTile = false;
+        if (on) {
+            focus(null);
+            worldCamera.enter(viewTarget(), viewNormal(), fitDistance());
+            worldView = worldCamera.active();
+        } else {
+            worldCamera.exit();
+        }
+    }
+
+    /** Dev rig: flip the centre view headlessly. */
+    void viewForDev(String mode) {
+        setWorldView("world".equals(mode));
+    }
+
+    @Override
+    public void removed() {
+        worldCamera.exit();
+        entity.setPreviewSign(null);
+        MtaSignPainter.invalidateRuns();
+        super.removed();
     }
 
     // ------------------------------------------------------------- drafts
@@ -276,6 +453,9 @@ public class SignEditScreen extends Screen {
         if (row >= d.rows.size()) {
             row = d.rows.size() - 1;
         }
+        if (row != selRow || tile != selTile) {
+            inspectorScroll = 0;
+        }
         selRow = row;
         selTile = row < 0 ? -1 : Math.min(tile, d.rows.get(row).tiles.size() - 1);
         Tile selected = selectedTile();
@@ -285,6 +465,7 @@ public class SignEditScreen extends Screen {
                 case STATION_NAME -> nameBox.load(selected.text());
                 case EXIT -> cornerBox.load(selected.arg());
                 case DESTINATION -> customBox.load(selected.text());
+                case BADGE -> badgeBox.load(selected.text());
                 default -> {
                 }
             }
@@ -454,6 +635,65 @@ public class SignEditScreen extends Screen {
         }
     }
 
+    /** Replaces the face being edited with {@code spec}: rows, style and its own plate. */
+    private void loadFace(SignSpec spec) {
+        Draft source = new Draft(spec);
+        Draft d = draft();
+        d.style = source.style;
+        d.rows.clear();
+        d.rows.addAll(source.rows);
+        d.panelWidth = source.panelWidth;
+        d.panelHeight = source.panelHeight;
+        d.panelDx = source.panelDx;
+        d.panelDy = source.panelDy;
+        d.panelScale = source.panelScale;
+        templateMenuOpen = false;
+        select(-1, -1);
+    }
+
+    private void copyFace() {
+        clipboard = draft().build();
+        if (client != null) {
+            client.keyboard.setClipboard(clipboard.toJson().toString());
+        }
+        toast("Copied this face — open another sign and Paste");
+    }
+
+    private void pasteFace() {
+        SignSpec spec = clipboard;
+        if (spec == null && client != null) {
+            // A sign copied as JSON in another session (or shared as text) pastes too.
+            try {
+                String text = client.keyboard.getClipboard();
+                if (text != null && text.startsWith("{") && text.length() <= SignSpec.MAX_JSON) {
+                    spec = SignSpec.fromJson(com.google.gson.JsonParser.parseString(text).getAsJsonObject());
+                }
+            } catch (Exception ignored) {
+                spec = null;
+            }
+        }
+        if (spec == null) {
+            toast("Nothing copied yet");
+            return;
+        }
+        loadFace(spec);
+    }
+
+    private void saveTemplate() {
+        String name = templateBox.getText().trim();
+        if (name.isEmpty()) {
+            toast("Type a name for the template first");
+            focus(templateBox);
+            return;
+        }
+        if (SignUserTemplates.put(name, draft().build())) {
+            templateBox.load("");
+            focus(null);
+        } else {
+            toast("Template list is full — delete one first");
+        }
+    }
+
     private void insertToken(String token) {
         Tile tile = selectedTile();
         if (tile == null || tile.type() != TileType.TEXT) {
@@ -469,11 +709,18 @@ public class SignEditScreen extends Screen {
                 backDraft.build());
     }
 
-    private void save() {
+    /** Sends the sign; false (and a toast) when it is too big for the wire, so nothing is lost by closing. */
+    private boolean save() {
+        SignFaces faces = build();
+        if (faces.toJson().toString().length() > SignSpec.MAX_JSON * 2) {
+            toast("Too much on this sign to save — remove a few tiles");
+            return false;
+        }
         PacketByteBuf buf = PacketByteBufs.create();
         buf.writeBlockPos(entity.getPos());
-        build().write(buf);
+        faces.write(buf);
         ClientPlayNetworking.send(MtrStationDecor.UPDATE_SIGN_C2S, buf);
+        return true;
     }
 
     // ------------------------------------------------------------- layout
@@ -500,7 +747,19 @@ public class SignEditScreen extends Screen {
     // -------------------------------------------------------------- input
 
     private void hit(int x, int y, int w, int h, int id, int arg, int arg2) {
-        hits.add(new int[]{x, y, w, h, id, arg, arg2});
+        int top = Math.max(y, clipTop);
+        int bottom = Math.min(y + h, clipBottom);
+        if (bottom <= top) {
+            return;
+        }
+        hits.add(new int[]{x, top, w, bottom - top, id, arg, arg2});
+    }
+
+    /** Registers a text box for clicks and tabbing unless it is scrolled out of its pane. */
+    private void showBox(TextBox box, int y, int h) {
+        if (y + h > clipTop && y < clipBottom) {
+            visibleBoxes.add(box);
+        }
     }
 
     @Override
@@ -558,9 +817,26 @@ public class SignEditScreen extends Screen {
                 addMenuOpen = false;
             }
             case HIT_TEMPLATE -> applyTemplate(arg);
+            case HIT_USER_TEMPLATE -> {
+                List<String> names = SignUserTemplates.names();
+                if (arg >= 0 && arg < names.size()) {
+                    loadFace(SignUserTemplates.all().get(names.get(arg)));
+                }
+            }
+            case HIT_USER_TEMPLATE_DELETE -> {
+                List<String> names = SignUserTemplates.names();
+                if (arg >= 0 && arg < names.size()) {
+                    SignUserTemplates.remove(names.get(arg));
+                }
+            }
+            case HIT_TEMPLATE_SAVE -> saveTemplate();
+            case HIT_COPY -> copyFace();
+            case HIT_PASTE -> pasteFace();
+            case HIT_COLOR -> updateTile(t -> t.withArg(arg <= 0 ? "" : SignLayout.COLOR_NAMES[arg - 1]));
             case HIT_SAVE -> {
-                save();
-                close();
+                if (save()) {
+                    close();
+                }
             }
             case HIT_CANCEL -> close();
             case HIT_FACE -> {
@@ -595,10 +871,28 @@ public class SignEditScreen extends Screen {
                     case 5 -> insertToken("{v}");
                     case 6 -> insertToken("{>}");
                     default -> {
+                        if (arg >= 100 && arg - 100 < SignSymbols.KEYS.length) {
+                            insertToken("{s:" + SignSymbols.KEYS[arg - 100] + "}");
+                        }
                     }
                 }
             }
-            case HIT_PREVIEW -> selectFromPreview(mx, my);
+            case HIT_PREVIEW -> {
+                selectFromPreview(mx, my);
+                Tile grabbed = selectedTile();
+                if (grabbed != null) {
+                    focus(null);
+                    draggingTile = true;
+                    dragStartMx = mx;
+                    dragStartMy = my;
+                    dragStartDx = grabbed.dx();
+                    dragStartDy = grabbed.dy();
+                }
+            }
+            case HIT_VIEW -> setWorldView(arg == 1);
+            case HIT_WORLD -> orbiting = true;
+            case HIT_WORLD_RESET -> worldCamera.reset(fitDistance());
+            case HIT_TILE_RESET -> updateTile(t -> t.withOffset(0, 0));
             case HIT_SLIDER -> {
                 dragSlider = new int[]{arg, arg2, 0};
                 for (int[] r : hits) {
@@ -635,12 +929,15 @@ public class SignEditScreen extends Screen {
             case SEG_ALIGN -> {
                 Draft.RowDraft row = selectedRow();
                 if (row != null) {
-                    row.align = chosen == 1 ? Align.CENTER : Align.LEFT;
+                    row.align = chosen == 1 ? Align.CENTER : chosen == 2 ? Align.RIGHT : Align.LEFT;
                 }
             }
             case SEG_TEXT_SIZE -> updateTile(t -> t.withNum(chosen == 0 ? 1 : chosen == 2 ? 2 : 0));
             case SEG_ARROW_SIDE -> updateTile(t -> t.withArg(chosen == 0 ? "left" : chosen == 2 ? "right" : ""));
             case SEG_DEST_MODE -> updateTile(t -> t.withNum(chosen));
+            // An explicit place replaces an edge arrow's older left/right pin.
+            case SEG_PLACE -> updateTile(t -> (t.type() == TileType.ARROW ? t.withArg("") : t)
+                    .withPlace(SignSpec.Place.values()[Math.max(0, Math.min(3, chosen))]));
             case SEG_WHEELCHAIR -> updateTile(t -> t.withArg(chosen == 1 ? "wc" : chosen == 2 ? "nowc" : ""));
             default -> {
             }
@@ -682,6 +979,14 @@ public class SignEditScreen extends Screen {
             sliderDrag(mx);
             return true;
         }
+        if (orbiting) {
+            worldCamera.orbit(dx, dy);
+            return true;
+        }
+        if (draggingTile) {
+            dragTile(mx, my);
+            return true;
+        }
         if (focused != null) {
             focused.mouseDragged(mx, my);
             return true;
@@ -692,10 +997,60 @@ public class SignEditScreen extends Screen {
     @Override
     public boolean mouseReleased(double mx, double my, int button) {
         dragSlider = null;
+        orbiting = false;
+        draggingTile = false;
+        guideX = false;
+        guideY = false;
         if (focused != null) {
             focused.mouseReleased();
         }
         return super.mouseReleased(mx, my, button);
+    }
+
+    /**
+     * Moves the grabbed tile with the mouse: its offset from where the row
+     * put it, in half canvas units. Within a couple of pixels it snaps back
+     * onto its own row line (dy 0) and its own slot (dx 0) — or onto the
+     * panel's centre line — and the guide that caught it is drawn. Alt = free.
+     */
+    private void dragTile(double mx, double my) {
+        Tile tile = selectedTile();
+        if (tile == null || previewScale <= 0) {
+            return;
+        }
+        if (Math.abs(mx - dragStartMx) < 2 && Math.abs(my - dragStartMy) < 2 && tile.dx() == dragStartDx
+                && tile.dy() == dragStartDy) {
+            return; // a click, not a drag
+        }
+        float dx = snap(dragStartDx + (float) ((mx - dragStartMx) / previewScale), 0.5f);
+        float dy = snap(dragStartDy + (float) ((my - dragStartMy) / previewScale), 0.5f);
+        guideX = false;
+        guideY = false;
+        if (!Screen.hasAltDown()) {
+            float reach = 3.0f / previewScale;
+            if (Math.abs(dy) <= reach) {
+                dy = 0;
+                guideY = true;
+            }
+            if (Math.abs(dx) <= reach) {
+                dx = 0;
+            } else if (lastMetrics != null) {
+                for (SignLayout.TileBounds b : lastMetrics.tiles()) {
+                    if (b.row() == selRow && b.tile() == selTile) {
+                        float[] panel = SignLayout.panelBox(draft().build(), canvasWidth, canvasHeight);
+                        float home = (b.x1() + b.x2()) / 2.0f - tile.dx();
+                        float toCentre = panel[0] + panel[2] / 2.0f - home;
+                        if (Math.abs(dx - toCentre) <= reach) {
+                            dx = toCentre;
+                            guideX = true;
+                        }
+                    }
+                }
+            }
+        }
+        float fx = Math.max(-SignSpec.MAX_PANEL, Math.min(SignSpec.MAX_PANEL, dx));
+        float fy = Math.max(-SignSpec.MAX_PANEL, Math.min(SignSpec.MAX_PANEL, dy));
+        updateTile(t -> t.withOffset(fx, fy));
     }
 
     // ---------------------------------------------------------- numbers
@@ -805,7 +1160,7 @@ public class SignEditScreen extends Screen {
         }
         box.setBounds(x + w - boxW, y, boxW, FIELD);
         box.render(c, mx, my);
-        visibleBoxes.add(box);
+        showBox(box, y, FIELD);
         return y + FIELD + 5;
     }
 
@@ -820,6 +1175,15 @@ public class SignEditScreen extends Screen {
             if (box.mouseScrolled(mx, my, verticalAmount)) {
                 return true;
             }
+        }
+        if (worldView && FlatUi.inside(mx, my, centreX, leftY, centreW, leftH)) {
+            worldCamera.zoom(verticalAmount);
+            return true;
+        }
+        if (FlatUi.inside(mx, my, rightX, rightY, rightWidth, rightH)) {
+            int max = Math.max(0, inspectorContent - inspectorView);
+            inspectorScroll = Math.max(0, Math.min(max, inspectorScroll - (int) (verticalAmount * CARD)));
+            return true;
         }
         if (FlatUi.inside(mx, my, leftX, leftY, leftWidth, leftH)) {
             int max = Math.max(0, structureContent - (leftH - 16));
@@ -844,8 +1208,21 @@ public class SignEditScreen extends Screen {
             return true;
         }
         if (Screen.hasControlDown() && keyCode == 83) { // ctrl+S
-            save();
-            close();
+            if (save()) {
+                close();
+            }
+            return true;
+        }
+        if (focused == null && Screen.hasControlDown() && keyCode == 67) { // ctrl+C: the whole face
+            copyFace();
+            return true;
+        }
+        if (focused == null && Screen.hasControlDown() && keyCode == 86) { // ctrl+V
+            pasteFace();
+            return true;
+        }
+        if (focused == templateBox && (keyCode == 257 || keyCode == 335)) { // enter saves the template
+            saveTemplate();
             return true;
         }
         if (keyCode == 258 && !visibleBoxes.isEmpty()) { // tab
@@ -857,6 +1234,14 @@ public class SignEditScreen extends Screen {
             return true;
         }
         if (focused != null && focused.keyPressed(keyCode, modifiers)) {
+            return true;
+        }
+        if (focused == null && selectedTile() != null && keyCode >= 262 && keyCode <= 265) {
+            // arrows nudge the selected tile: 1 unit, 5 with shift, a half with alt
+            float step = Screen.hasShiftDown() ? 5 : Screen.hasAltDown() ? 0.5f : 1;
+            float nx = keyCode == 262 ? step : keyCode == 263 ? -step : 0;
+            float ny = keyCode == 264 ? step : keyCode == 265 ? -step : 0;
+            updateTile(t -> t.withOffset(t.dx() + nx, t.dy() + ny));
             return true;
         }
         return super.keyPressed(keyCode, scanCode, modifiers);
@@ -888,7 +1273,22 @@ public class SignEditScreen extends Screen {
     public void render(DrawContext c, int mx, int my, float delta) {
         hits.clear();
         visibleBoxes.clear();
-        FlatUi.rect(c, 0, 0, width, height, FlatUi.GROUND);
+        // The block in the world always shows the draft, in either view.
+        SignFaces current = build();
+        if (!current.equals(pushedPreview)) {
+            pushedPreview = current;
+            entity.setPreviewSign(current);
+            MtaSignPainter.invalidateRuns();
+        }
+        if (worldView) {
+            // Everything but the centre pane is ground; the centre is the world itself.
+            FlatUi.rect(c, 0, 0, width, leftY, FlatUi.GROUND);
+            FlatUi.rect(c, 0, leftY, centreX, height - leftY, FlatUi.GROUND);
+            FlatUi.rect(c, centreX + centreW, leftY, width - centreX - centreW, height - leftY, FlatUi.GROUND);
+            FlatUi.rect(c, centreX, paneBottom, centreW, height - paneBottom, FlatUi.GROUND);
+        } else {
+            FlatUi.rect(c, 0, 0, width, height, FlatUi.GROUND);
+        }
         int hoverX = popup == null ? mx : -1;
         int hoverY = popup == null ? my : -1;
         drawTopBar(c, hoverX, hoverY);
@@ -922,6 +1322,14 @@ public class SignEditScreen extends Screen {
         int cancelW = 50;
         int sx = width - PAD - saveW;
         int cx = sx - 4 - cancelW;
+        int copyW = 40;
+        int pasteX = cx - 8 - copyW;
+        int copyX = pasteX - 3 - copyW;
+        FlatUi.button(c, textRenderer, "Copy", copyX, 2, copyW, FlatUi.BUTTON_HEIGHT, mx, my, ButtonStyle.FLAT);
+        hit(copyX, 2, copyW, FlatUi.BUTTON_HEIGHT, HIT_COPY, 0, 0);
+        FlatUi.button(c, textRenderer, "Paste", pasteX, 2, copyW, FlatUi.BUTTON_HEIGHT, mx, my,
+                clipboard != null ? ButtonStyle.FLAT : ButtonStyle.GHOST);
+        hit(pasteX, 2, copyW, FlatUi.BUTTON_HEIGHT, HIT_PASTE, 0, 0);
         FlatUi.button(c, textRenderer, "Cancel", cx, 2, cancelW, FlatUi.BUTTON_HEIGHT, mx, my, ButtonStyle.GHOST);
         hit(cx, 2, cancelW, FlatUi.BUTTON_HEIGHT, HIT_CANCEL, 0, 0);
         FlatUi.button(c, textRenderer, "Save", sx, 2, saveW, FlatUi.BUTTON_HEIGHT, mx, my, ButtonStyle.PRIMARY);
@@ -936,14 +1344,11 @@ public class SignEditScreen extends Screen {
         c.enableScissor(leftX + 1, top, leftX + leftWidth - 1, leftY + leftH - 1);
         int y = top - structureScroll;
         Draft d = draft();
-        y = card(c, mx, my, y, -1, -1, "Sign", switch (d.style) {
-            case WHITE_BAND -> "1970 white";
-            case PLAIN -> "Plain black";
-            default -> "Black";
-        }, 0, 0);
+        y = card(c, mx, my, y, -1, -1, "Sign", format(d.panelWidth > 0 ? d.panelWidth : canvasWidth, 0)
+                + " x " + format(d.panelHeight > 0 ? d.panelHeight : canvasHeight, 0), 0, 0);
         for (int r = 0; r < d.rows.size(); r++) {
             Draft.RowDraft row = d.rows.get(r);
-            y = card(c, mx, my, y, r, -1, "Row " + (r + 1), row.align == Align.CENTER ? "centred" : "left", 0, 0);
+            y = card(c, mx, my, y, r, -1, "Row " + (r + 1), row.align == Align.CENTER ? "centred" : row.align == Align.RIGHT ? "right" : "left", 0, 0);
             for (int t = 0; t < row.tiles.size(); t++) {
                 Tile tile = row.tiles.get(t);
                 y = card(c, mx, my, y, r, t, TILE_TAGS[tile.type().ordinal()], snippet(tile),
@@ -976,6 +1381,27 @@ public class SignEditScreen extends Screen {
         hit(bx, y, bw, FlatUi.BUTTON_HEIGHT, HIT_TEMPLATES, 0, 0);
         y += FlatUi.BUTTON_HEIGHT + 3;
         if (templateMenuOpen) {
+            // Yours first: saving and reusing your own designs is the common case.
+            FlatUi.heading(c, textRenderer, "Your templates", bx, y);
+            y += 12;
+            List<String> mine = SignUserTemplates.names();
+            for (int i = 0; i < mine.size(); i++) {
+                FlatUi.button(c, textRenderer, textRenderer.trimToWidth(mine.get(i), bw - FIELD - 10), bx, y, bw - FIELD - 2,
+                        FIELD, mx, my, ButtonStyle.FLAT);
+                hit(bx, y, bw - FIELD - 2, FIELD, HIT_USER_TEMPLATE, i, 0);
+                FlatUi.button(c, textRenderer, "×", bx + bw - FIELD, y, FIELD, FIELD, mx, my, ButtonStyle.DANGER);
+                hit(bx + bw - FIELD, y, FIELD, FIELD, HIT_USER_TEMPLATE_DELETE, i, 0);
+                y += FIELD + 2;
+            }
+            int saveW = 34;
+            templateBox.setBounds(bx, y, bw - saveW - 2, FIELD);
+            templateBox.render(c, mx, my);
+            showBox(templateBox, y, FIELD);
+            FlatUi.button(c, textRenderer, "Save", bx + bw - saveW, y, saveW, FIELD, mx, my, ButtonStyle.PRIMARY);
+            hit(bx + bw - saveW, y, saveW, FIELD, HIT_TEMPLATE_SAVE, 0, 0);
+            y += FIELD + 6;
+            FlatUi.heading(c, textRenderer, "Built in", bx, y);
+            y += 12;
             String[] names = SignTemplates.NAMES;
             for (int i = 0; i < names.length; i++) {
                 FlatUi.button(c, textRenderer, textRenderer.trimToWidth(names[i], bw - 8), bx, y, bw, FIELD, mx, my, ButtonStyle.FLAT);
@@ -983,7 +1409,7 @@ public class SignEditScreen extends Screen {
                 y += FIELD + 2;
             }
             c.drawText(textRenderer, textRenderer.trimToWidth("Replaces this face's rows", bw), bx, y + 1, FlatUi.TEXT_FAINT, false);
-            y += 12;
+            y += 14;
         }
         c.disableScissor();
         structureContent = y + structureScroll - top + 4;
@@ -998,6 +1424,7 @@ public class SignEditScreen extends Screen {
             case STATION_NAME -> 0xFF2F6E9A;
             case EXIT -> 0xFFB03A3A;
             case DESTINATION -> 0xFF5B4FCF;
+            case BADGE -> 0xFF2F4FA0;
             default -> 0xFF4A4A55;
         };
     }
@@ -1007,11 +1434,14 @@ public class SignEditScreen extends Screen {
             case BULLETS -> "auto".equals(tile.arg()) ? "all lines here"
                     : tile.routes().isEmpty() ? "(no lines)" : String.join(" ", tile.routes()).replace("d:", "◆");
             case TEXT -> tile.text().isBlank() ? "(empty)" : tile.text().replace('\n', ' ');
-            case ARROW -> "Arrow " + DIRECTION_GLYPHS[cellOfDirection(tile.num())]
+            case ARROW -> (SignSymbols.isSymbol(tile.num()) ? SignSymbols.name(tile.num())
+                    : "Arrow " + DIRECTION_GLYPHS[cellOfDirection(tile.num())])
                     + ("left".equals(tile.arg()) ? " · left edge" : "right".equals(tile.arg()) ? " · right edge" : "");
             case STATION_NAME -> tile.text().isEmpty() ? "Station name (auto)" : tile.text();
             case EXIT -> "Exit" + (tile.text().isEmpty() ? "" : " " + tile.text());
             case DESTINATION -> tile.routes().isEmpty() ? "(pick a route)" : tile.routes().get(0).replace("||", " · ");
+            case RULE -> "Divider line";
+            case BADGE -> tile.text().isBlank() ? "(empty badge)" : tile.text();
             default -> "Space";
         };
     }
@@ -1069,8 +1499,54 @@ public class SignEditScreen extends Screen {
         return y + CARD;
     }
 
+    /** The Editor | In world switch along the top of the centre pane. */
+    private void drawViewSwitch(DrawContext c, int mx, int my) {
+        int segW = Math.min(150, centreW - 8);
+        int sx = centreX + (centreW - segW) / 2;
+        int sy = leftY + 4;
+        if (worldView) {
+            FlatUi.rect(c, sx - 3, sy - 3, segW + 6, FlatUi.BUTTON_HEIGHT + 6, 0xCC0F0F12);
+        }
+        FlatUi.segmented(c, textRenderer, new String[]{"Editor", "In world"}, worldView ? 1 : 0, sx, sy, segW,
+                FlatUi.BUTTON_HEIGHT, mx, my);
+        hit(sx, sy, segW / 2, FlatUi.BUTTON_HEIGHT, HIT_VIEW, 0, 0);
+        hit(sx + segW / 2, sy, segW - segW / 2, FlatUi.BUTTON_HEIGHT, HIT_VIEW, 1, 0);
+    }
+
+    /**
+     * The centre pane as a window onto the real block: nothing is painted
+     * over the frame but the switch, a frame line and the hints. The camera
+     * is re-aimed every frame so the sign sits in the middle of this pane.
+     */
+    private void drawWorldView(DrawContext c, int mx, int my) {
+        float tanV = tanHalfV();
+        float tanH = tanV * width / Math.max(1, height);
+        float paneCx = centreX + centreW / 2.0f;
+        float paneCy = leftY + leftH / 2.0f + 6;
+        worldCamera.update(viewTarget(), viewNormal(), (paneCx - width / 2.0f) / (width / 2.0f),
+                -(paneCy - height / 2.0f) / (height / 2.0f), tanH, tanV);
+        FlatUi.outline(c, centreX, leftY, centreW, leftH, FlatUi.BORDER);
+        drawViewSwitch(c, mx, my);
+        int resetW = 62;
+        int ry = paneBottom - FlatUi.BUTTON_HEIGHT - 5;
+        FlatUi.button(c, textRenderer, "Reset view", centreX + centreW - resetW - 5, ry, resetW, FlatUi.BUTTON_HEIGHT,
+                mx, my, ButtonStyle.FLAT);
+        hit(centreX + centreW - resetW - 5, ry, resetW, FlatUi.BUTTON_HEIGHT, HIT_WORLD_RESET, 0, 0);
+        String hint = (editingBack ? "Back face · " : "") + "Drag to look around · scroll to zoom";
+        hint = textRenderer.trimToWidth(hint, Math.max(10, centreW - resetW - 22));
+        int hw = textRenderer.getWidth(hint);
+        FlatUi.rect(c, centreX + 5, ry, hw + 10, FlatUi.BUTTON_HEIGHT, 0xCC0F0F12);
+        c.drawText(textRenderer, hint, centreX + 10, ry + (FlatUi.BUTTON_HEIGHT - 8) / 2, FlatUi.TEXT_DIM, false);
+        hit(centreX, leftY, centreW, leftH, HIT_WORLD, 0, 0);
+    }
+
     private void drawPreview(DrawContext c, int mx, int my) {
+        if (worldView) {
+            drawWorldView(c, mx, my);
+            return;
+        }
         FlatUi.rect(c, centreX, leftY, centreW, leftH, 0xFF0F0F12);
+        drawViewSwitch(c, mx, my);
         SignSpec spec = draft().build();
         // Fit the plate AND the panel (which may be bigger or elsewhere) into the pane.
         float[] panel = SignLayout.panelBox(spec, canvasWidth, canvasHeight);
@@ -1080,11 +1556,11 @@ public class SignEditScreen extends Screen {
         float maxY = Math.max(canvasHeight, panel[1] + panel[3]);
         float bw = maxX - previewMinX;
         float bh = maxY - previewMinY;
-        previewScale = Math.max(0.1f, Math.min((centreW - 12) / bw, (leftH - 40) / bh));
+        previewScale = Math.max(0.1f, Math.min((centreW - 12) / bw, (leftH - 64) / bh));
         int pw = Math.round(bw * previewScale);
         int ph = Math.round(bh * previewScale);
         int originX = centreX + (centreW - pw) / 2;
-        int originY = leftY + 10;
+        int originY = leftY + 10 + FlatUi.BUTTON_HEIGHT + 6;
         previewX = originX - Math.round(previewMinX * previewScale);
         previewY = originY - Math.round(previewMinY * previewScale);
         // The block's plate, as the reference frame the panel is placed against.
@@ -1114,9 +1590,17 @@ public class SignEditScreen extends Screen {
             int sh = Math.max(2, Math.round((box[3] - box[1]) * previewScale));
             FlatUi.rect(c, sx, sy, sw, sh, 0x223D8BFF);
             FlatUi.outline(c, sx - 1, sy - 1, sw + 2, sh + 2, FlatUi.ACCENT);
+            // Guides the dragged tile snapped to: the panel's centre line, its own row line.
+            if (draggingTile && guideX) {
+                FlatUi.rect(c, previewX + Math.round((panel[0] + panel[2] / 2.0f) * previewScale), originY, 1, ph, 0xFFFF4FA3);
+            }
+            if (draggingTile && guideY) {
+                FlatUi.rect(c, originX, sy + sh / 2, pw, 1, 0xFFFF4FA3);
+            }
         }
         hit(originX, originY, pw, ph, HIT_PREVIEW, 0, 0);
-        String hint = (editingBack ? "Back face · " : "") + (spec.isEmpty() ? "Add a tile or pick a template" : "Click to select");
+        String hint = (editingBack ? "Back face · " : "") + (spec.isEmpty() ? "Add a tile or pick a template"
+                : selectedTile() != null ? "Drag to move · arrow keys nudge" : "Click to select · drag a tile to move it");
         if (textRenderer.getWidth(hint) <= centreW - 8) {
             c.drawText(textRenderer, hint, centreX + (centreW - textRenderer.getWidth(hint)) / 2, originY + ph + 8,
                     FlatUi.TEXT_FAINT, false);
@@ -1125,16 +1609,44 @@ public class SignEditScreen extends Screen {
         c.drawText(textRenderer, textRenderer.trimToWidth(where, centreW - 8), centreX + 4, paneBottom - 12, FlatUi.TEXT_FAINT, false);
     }
 
+    /**
+     * The inspector scrolls: on a small window (a Mac at auto GUI scale is
+     * ~266 px tall) the sign's plate controls or a tile's size and position
+     * would otherwise fall off the bottom. The delete button stays put below.
+     */
     private void drawInspector(DrawContext c, int mx, int my) {
         FlatUi.pane(c, rightX, rightY, rightWidth, rightH);
-        int x = rightX + 8;
-        int w = rightWidth - 16;
-        int y = rightY + 5;
+        int footer = selRow < 0 ? 0 : FlatUi.BUTTON_HEIGHT + 10;
+        int viewTop = rightY + 2;
+        int viewBottom = rightY + rightH - 2 - footer;
+        inspectorView = viewBottom - viewTop;
+        inspectorScroll = Math.max(0, Math.min(Math.max(0, inspectorContent - inspectorView), inspectorScroll));
+        clipTop = viewTop;
+        clipBottom = viewBottom;
+        c.enableScissor(rightX + 1, viewTop, rightX + rightWidth - 1, viewBottom);
+        int end = inspectorBody(c, mx, my, rightX + 8, rightY + 5 - inspectorScroll, rightWidth - 16);
+        c.disableScissor();
+        clipTop = Integer.MIN_VALUE;
+        clipBottom = Integer.MAX_VALUE;
+        inspectorContent = end + inspectorScroll - viewTop + 4;
+        FlatUi.scrollThumb(c, rightX + rightWidth, viewTop, inspectorView, inspectorContent, inspectorScroll);
+        if (selRow >= 0) {
+            deleteButton(c, mx, my, selectedTile() == null ? "Delete row" : "Delete tile", rightX + 8, rightWidth - 16);
+        }
+    }
+
+    /** Draws the inspector's fields from {@code y} down; returns the y below the last one. */
+    private int inspectorBody(DrawContext c, int mx, int my, int x, int y, int w) {
         Tile tile = selectedTile();
         Draft.RowDraft row = selectedRow();
         if (selRow < 0) {
+            // The plate comes first: it is the one thing people look for here.
+            FlatUi.heading(c, textRenderer, "Plate size", x, y);
+            y += 12;
+            y = numberField(c, mx, my, "Width (64 = one block)", NUM_PANEL_W, 4, 512, 1, 0, x, y, w);
+            y = numberField(c, mx, my, "Height", NUM_PANEL_H, 4, 256, 1, 0, x, y, w);
             FlatUi.heading(c, textRenderer, "Sign", x, y);
-            y += 14;
+            y += 12;
             y = segmentedField(c, mx, my, "Style", new String[]{"Black", "1970 white", "Plain"}, draft().style.ordinal(), x, y, w, SEG_STYLE);
             y = toggleField(c, mx, my, "Front face", frontOn ? "Shown" : "Hidden", frontOn, x, y, w, TOGGLE_FRONT);
             if (doubleSided) {
@@ -1142,24 +1654,23 @@ public class SignEditScreen extends Screen {
                 c.drawText(textRenderer, textRenderer.trimToWidth("Own: edit it via Back, top bar", w), x, y, FlatUi.TEXT_FAINT, false);
                 y += 12;
             }
-            FlatUi.heading(c, textRenderer, "Panel", x, y);
+            FlatUi.heading(c, textRenderer, "Plate position & contents", x, y);
             y += 12;
-            y = numberField(c, mx, my, "Width (units, 64 per block)", NUM_PANEL_W, 4, 512, 1, 0, x, y, w);
-            y = numberField(c, mx, my, "Height", NUM_PANEL_H, 4, 256, 1, 0, x, y, w);
             y = numberField(c, mx, my, "Shift right / left", NUM_PANEL_X, -256, 256, 1, 0, x, y, w);
             y = numberField(c, mx, my, "Shift down / up", NUM_PANEL_Y, -256, 256, 1, 0, x, y, w);
             y = numberField(c, mx, my, "Content scale", NUM_PANEL_SCALE, 0.25f, 4, 0.05f, 2, x, y, w);
-            FlatUi.button(c, textRenderer, "Reset panel to the block", x, y, w, FIELD, mx, my, ButtonStyle.FLAT);
+            FlatUi.button(c, textRenderer, "Reset plate to the block's own", x, y, w, FIELD, mx, my, ButtonStyle.FLAT);
             hit(x, y, w, FIELD, HIT_PANEL_RESET, 0, 0);
             y += FIELD + 5;
         } else if (tile == null) {
             FlatUi.heading(c, textRenderer, "Row " + (selRow + 1), x, y);
             y += 14;
             if (row != null) {
-                y = segmentedField(c, mx, my, "Alignment", new String[]{"Left", "Centre"}, row.align == Align.CENTER ? 1 : 0, x, y, w, SEG_ALIGN);
+                y = segmentedField(c, mx, my, "Alignment", new String[]{"Left", "Centre", "Right"},
+                        row.align == Align.CENTER ? 1 : row.align == Align.RIGHT ? 2 : 0, x, y, w, SEG_ALIGN);
             }
-            c.drawText(textRenderer, textRenderer.trimToWidth("Edge arrows stay pinned either way.", w), x, y, FlatUi.TEXT_FAINT, false);
-            deleteButton(c, mx, my, "Delete row", x, w);
+            c.drawText(textRenderer, textRenderer.trimToWidth("Each tile can override this.", w), x, y, FlatUi.TEXT_FAINT, false);
+            y += 12;
         } else {
             switch (tile.type()) {
                 case TEXT -> {
@@ -1168,12 +1679,13 @@ public class SignEditScreen extends Screen {
                     y = segmentedField(c, mx, my, "Size", new String[]{"Small", "Normal", "Large"},
                             tile.num() == 1 ? 0 : tile.num() == 2 ? 2 : 1, x, y, w, SEG_TEXT_SIZE);
                     int deleteY = rightY + rightH - 6 - FlatUi.BUTTON_HEIGHT;
-                    int toolbarH = 12 + FIELD + 4 + FIELD + 8;
-                    int geometryH = 3 * (FIELD + 15) + 14;
-                    int boxH = Math.max(24, Math.min(60, deleteY - 6 - toolbarH - geometryH - y));
+                    y = colorField(c, mx, my, "Colour field", tile.arg(), true, x, y, w);
+                    int toolbarH = 12 + FIELD + 4 + FIELD + 4 + 2 * 20 + 8;
+                    int geometryH = 3 * (FIELD + 15) + 14 + (FIELD + 15) + (FIELD + 5);
+                    int boxH = Math.max(24, Math.min(60, deleteY - 6 - toolbarH - geometryH - (y + inspectorScroll)));
                     textBox.setBounds(x, y, w, boxH);
                     textBox.render(c, mx, my);
-                    visibleBoxes.add(textBox);
+                    showBox(textBox, y, boxH);
                     y += boxH + 6;
                     FlatUi.heading(c, textRenderer, "Insert at cursor", x, y);
                     y += 12;
@@ -1190,6 +1702,33 @@ public class SignEditScreen extends Screen {
                         FlatUi.button(c, textRenderer, glyphs[i], gx, y, gw, FIELD, mx, my, ButtonStyle.FLAT);
                         hit(gx, y, gw, FIELD, HIT_TOKEN, 2 + i, 0);
                     }
+                    y += FIELD + 4;
+                    // every pictogram as an inline token
+                    int cell = 18;
+                    int perRow = Math.max(1, (w + 2) / (cell + 2));
+                    for (int i = 0; i < SignSymbols.KEYS.length; i++) {
+                        int gx = x + (i % perRow) * (cell + 2);
+                        int gy = y + (i / perRow) * (cell + 2);
+                        int fill = symbolCell(c, mx, my, gx, gy, cell, false);
+                        SignSymbols.draw(new PosterLayout.GuiSurface(c, gx + 2, gy + 2, 1.0f), SignSymbols.FIRST + i, 0, 0,
+                                cell - 4, FlatUi.TEXT_DIM, fill, 0);
+                        hit(gx, gy, cell, cell, HIT_TOKEN, 100 + i, 0);
+                    }
+                    y += ((SignSymbols.KEYS.length + perRow - 1) / perRow) * (cell + 2) + 4;
+                }
+                case RULE -> {
+                    FlatUi.heading(c, textRenderer, "Divider", x, y);
+                    y += 14;
+                    c.drawText(textRenderer, textRenderer.trimToWidth("A thin line between groups of modules.", w), x, y, FlatUi.TEXT_FAINT, false);
+                    y += 12;
+                }
+                case BADGE -> {
+                    FlatUi.heading(c, textRenderer, "Badge", x, y);
+                    y += 14;
+                    y = field(c, mx, my, "Label", badgeBox, x, y, w);
+                    y = colorField(c, mx, my, "Colour", tile.arg(), false, x, y, w);
+                    c.drawText(textRenderer, textRenderer.trimToWidth("Other operators and bus routes.", w), x, y, FlatUi.TEXT_FAINT, false);
+                    y += 12;
                 }
                 case BULLETS -> {
                     FlatUi.heading(c, textRenderer, "Route bullets", x, y);
@@ -1206,13 +1745,12 @@ public class SignEditScreen extends Screen {
                         y += FIELD + 6;
                     }
                     c.drawText(textRenderer, textRenderer.trimToWidth("Click a chip to remove it.", w), x, y, FlatUi.TEXT_FAINT, false);
+                    y += 12;
                 }
                 case ARROW -> {
-                    FlatUi.heading(c, textRenderer, "Arrow", x, y);
+                    FlatUi.heading(c, textRenderer, "Symbol", x, y);
                     y += 14;
-                    y = segmentedField(c, mx, my, "Position", new String[]{"Left edge", "Inline", "Right edge"},
-                            "left".equals(tile.arg()) ? 0 : "right".equals(tile.arg()) ? 2 : 1, x, y, w, SEG_ARROW_SIDE);
-                    c.drawText(textRenderer, "Direction", x, y, FlatUi.TEXT_DIM, false);
+                    c.drawText(textRenderer, "Arrows", x, y, FlatUi.TEXT_DIM, false);
                     y += 11;
                     int cell = 24;
                     int padX = x + (w - cell * 3 - 8) / 2;
@@ -1224,16 +1762,35 @@ public class SignEditScreen extends Screen {
                         int gx = padX + (i % 3) * (cell + 4);
                         int gy = y + (i / 3) * (cell + 4);
                         boolean on = tile.num() == dir;
-                        boolean hovered = FlatUi.inside(mx, my, gx, gy, cell, cell);
-                        FlatUi.rect(c, gx, gy, cell, cell, on ? FlatUi.ACCENT_DIM : hovered ? 0xFF34343C : FlatUi.PANE_RAISED);
-                        FlatUi.outline(c, gx, gy, cell, cell, on ? FlatUi.ACCENT : FlatUi.BORDER_STRONG);
+                        symbolCell(c, mx, my, gx, gy, cell, on);
                         String g = DIRECTION_GLYPHS[i];
                         c.drawText(textRenderer, g, gx + (cell - textRenderer.getWidth(g)) / 2, gy + (cell - 8) / 2,
                                 on ? FlatUi.TEXT : FlatUi.TEXT_DIM, false);
                         hit(gx, gy, cell, cell, HIT_DIRECTION, dir, 0);
                     }
-                    y += 3 * (cell + 4) + 4;
-                    c.drawText(textRenderer, textRenderer.trimToWidth("Real signs pin the arrow to the edge it points at.", w), x, y, FlatUi.TEXT_FAINT, false);
+                    y += 3 * (cell + 4) + 2;
+                    c.drawText(textRenderer, "Symbols", x, y, FlatUi.TEXT_DIM, false);
+                    y += 11;
+                    int perRow = Math.max(1, (w + 4) / (cell + 4));
+                    String hovered = null;
+                    for (int i = 0; i < SignSymbols.NAMES.length; i++) {
+                        int num = SignSymbols.FIRST + i;
+                        int gx = x + (i % perRow) * (cell + 4);
+                        int gy = y + (i / perRow) * (cell + 4);
+                        boolean on = tile.num() == num;
+                        int fill = symbolCell(c, mx, my, gx, gy, cell, on);
+                        SignSymbols.draw(new PosterLayout.GuiSurface(c, gx + 3, gy + 3, 1.0f), num, 0, 0, cell - 6,
+                                on ? FlatUi.TEXT : FlatUi.TEXT_DIM, fill, 0);
+                        hit(gx, gy, cell, cell, HIT_DIRECTION, num, 0);
+                        if (FlatUi.inside(mx, my, gx, gy, cell, cell)) {
+                            hovered = SignSymbols.NAMES[i];
+                        }
+                    }
+                    y += ((SignSymbols.NAMES.length + perRow - 1) / perRow) * (cell + 4) + 2;
+                    c.drawText(textRenderer, textRenderer.trimToWidth(hovered != null ? hovered
+                            : SignSymbols.isSymbol(tile.num()) ? SignSymbols.name(tile.num())
+                            : "Real signs pin the arrow to the edge it points at.", w), x, y, FlatUi.TEXT_FAINT, false);
+                    y += 12;
                 }
                 case STATION_NAME -> {
                     FlatUi.heading(c, textRenderer, "Station name", x, y);
@@ -1247,6 +1804,7 @@ public class SignEditScreen extends Screen {
                     y += 11;
                     c.drawText(textRenderer, textRenderer.trimToWidth("Here: " + (ctx.stationName().isEmpty() ? "(no station)" : ctx.stationName()
                             + (ctx.stationAccessible() ? " (step-free)" : " (not marked step-free)")), w), x, y, FlatUi.TEXT_FAINT, false);
+                    y += 12;
                 }
                 case EXIT -> {
                     FlatUi.heading(c, textRenderer, "Exit", x, y);
@@ -1269,6 +1827,7 @@ public class SignEditScreen extends Screen {
                     y = toggleField(c, mx, my, "Exit name box", tile.hasFlag(SignSpec.EXIT_NAME) ? "Shown" : "Hidden", tile.hasFlag(SignSpec.EXIT_NAME), x, y, w, TOGGLE_EXIT_NAME);
                     y = field(c, mx, my, "Corner / note (last line)", cornerBox, x, y, w);
                     c.drawText(textRenderer, textRenderer.trimToWidth("One MTR destination per line, up to three.", w), x, y, FlatUi.TEXT_FAINT, false);
+                    y += 12;
                 }
                 case DESTINATION -> {
                     FlatUi.heading(c, textRenderer, "Line + destination", x, y);
@@ -1298,18 +1857,69 @@ public class SignEditScreen extends Screen {
                 }
             }
             if (tile.type() != TileType.SPACER) {
-                int geomTop = rightY + rightH - 6 - FlatUi.BUTTON_HEIGHT - 3 * (FIELD + 15) - 14;
+                // Bottom-anchored while everything fits; once the pane scrolls it simply follows the fields.
+                int geomTop = rightY + rightH - 6 - FlatUi.BUTTON_HEIGHT - 3 * (FIELD + 15) - 14 - (FIELD + 15)
+                        - (FIELD + 5) - inspectorScroll;
                 if (geomTop > y) {
                     y = geomTop;
                 }
                 FlatUi.heading(c, textRenderer, "Size & position", x, y);
                 y += 12;
+                // Where in the row: follow the row's alignment, or sit at an edge / the centre
+                // on its own. An older edge arrow reads as the side it is pinned to.
+                int zone = row == null ? -1 : SignLayout.zoneOf(tile, row.align);
+                int placeShown = tile.place() != SignSpec.Place.AUTO ? tile.place().ordinal()
+                        : tile.type() == TileType.ARROW && !tile.arg().isEmpty() ? zone + 2 : 0;
+                y = segmentedField(c, mx, my, "Position in row", new String[]{"Row", "Left", "Centre", "Right"},
+                        placeShown, x, y, w, SEG_PLACE);
                 y = numberField(c, mx, my, "Scale", NUM_TILE_SCALE, 0.25f, 4, 0.05f, 2, x, y, w);
-                y = numberField(c, mx, my, "Nudge right / left", NUM_TILE_DX, -64, 64, 0.5f, 1, x, y, w);
-                y = numberField(c, mx, my, "Nudge down / up", NUM_TILE_DY, -64, 64, 0.5f, 1, x, y, w);
+                y = numberField(c, mx, my, "Move right / left", NUM_TILE_DX, -256, 256, 0.5f, 1, x, y, w);
+                y = numberField(c, mx, my, "Move down / up", NUM_TILE_DY, -256, 256, 0.5f, 1, x, y, w);
+                boolean moved = tile.dx() != 0 || tile.dy() != 0;
+                FlatUi.button(c, textRenderer, moved ? "Put back in its row slot" : "Drag it on the canvas to move",
+                        x, y, w, FIELD, moved ? mx : -1, moved ? my : -1, ButtonStyle.FLAT);
+                if (moved) {
+                    hit(x, y, w, FIELD, HIT_TILE_RESET, 0, 0);
+                }
+                y += FIELD + 5;
             }
-            deleteButton(c, mx, my, "Delete tile", x, w);
         }
+        return y;
+    }
+
+    /** One cell of the arrow pad / symbol grid; returns its fill colour (what a symbol's cut-outs show). */
+    private int symbolCell(DrawContext c, int mx, int my, int gx, int gy, int cell, boolean on) {
+        boolean hovered = FlatUi.inside(mx, my, gx, gy, cell, cell) && my >= clipTop && my < clipBottom;
+        int fill = on ? FlatUi.ACCENT_DIM : hovered ? 0xFF34343C : FlatUi.PANE_RAISED;
+        FlatUi.rect(c, gx, gy, cell, cell, fill);
+        FlatUi.outline(c, gx, gy, cell, cell, on ? FlatUi.ACCENT : FlatUi.BORDER_STRONG);
+        return fill;
+    }
+
+    /** A row of colour swatches (with a "none" cell when {@code allowNone}); the choice lands in the tile's arg. */
+    private int colorField(DrawContext c, int mx, int my, String label, String chosen, boolean allowNone, int x, int y, int w) {
+        c.drawText(textRenderer, label, x, y, FlatUi.TEXT_DIM, false);
+        y += 10;
+        int count = SignLayout.COLOR_NAMES.length + (allowNone ? 1 : 0);
+        int cell = Math.max(10, Math.min(16, (w - (count - 1) * 2) / count));
+        for (int i = 0; i < count; i++) {
+            int index = allowNone ? i : i + 1; // 0 = none
+            int gx = x + i * (cell + 2);
+            boolean on = index == 0 ? SignLayout.namedColor(chosen) == 0
+                    : SignLayout.COLOR_NAMES[index - 1].equalsIgnoreCase(chosen);
+            if (index == 0) {
+                FlatUi.rect(c, gx, y, cell, cell, FlatUi.INPUT);
+                c.drawText(textRenderer, "×", gx + (cell - textRenderer.getWidth("×")) / 2, y + (cell - 8) / 2, FlatUi.TEXT_DIM, false);
+            } else {
+                FlatUi.rect(c, gx, y, cell, cell, SignLayout.COLOR_VALUES[index - 1]);
+            }
+            FlatUi.outline(c, gx, y, cell, cell, on ? FlatUi.ACCENT : FlatUi.BORDER_STRONG);
+            if (on) {
+                FlatUi.outline(c, gx + 1, y + 1, cell - 2, cell - 2, FlatUi.ACCENT);
+            }
+            hit(gx, y, cell, cell, HIT_COLOR, index, 0);
+        }
+        return y + cell + 6;
     }
 
     private void deleteButton(DrawContext c, int mx, int my, String label, int x, int w) {
@@ -1323,7 +1933,7 @@ public class SignEditScreen extends Screen {
         y += 10;
         box.setBounds(x, y, w, FIELD);
         box.render(c, mx, my);
-        visibleBoxes.add(box);
+        showBox(box, y, FIELD);
         return y + FIELD + 5;
     }
 

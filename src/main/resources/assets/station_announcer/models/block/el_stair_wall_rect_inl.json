@@ -1,0 +1,42 @@
+{
+ "textures": {
+  "green": "station_announcer:block/el2_green",
+  "cream": "station_announcer:block/el2_cream",
+  "glass": "station_announcer:block/el2_wired_glass_plain",
+  "particle": "#green"
+ },
+ "elements": [
+  {
+   "from": [
+    0.8000000000000007,
+    0.0,
+    0.0
+   ],
+   "to": [
+    1.5999999999999996,
+    16.0,
+    16.0
+   ],
+   "faces": {
+    "west": {
+     "uv": [
+      0.0,
+      0.0,
+      16.0,
+      16.0
+     ],
+     "texture": "#cream"
+    },
+    "east": {
+     "uv": [
+      0.0,
+      0.0,
+      16.0,
+      16.0
+     ],
+     "texture": "#cream"
+    }
+   }
+  }
+ ]
+}

@@ -4,6 +4,7 @@
    "when": {
     "facing": "north",
     "side": "left",
+    "mode": "band",
     "level": "true",
     "end_up": "true",
     "end_down": "true"
@@ -16,19 +17,21 @@
    "when": {
     "facing": "north",
     "side": "left",
+    "mode": "band|fill",
     "bottom": "true",
     "level": "true",
     "end_up": "true",
     "end_down": "true"
    },
    "apply": {
-    "model": "station_announcer:block/el_stair_stringer_cc"
+    "model": "station_announcer:block/el_stair_stringer_lc"
    }
   },
   {
    "when": {
     "facing": "north",
     "side": "left",
+    "mode": "band",
     "level": "true",
     "end_up": "true",
     "end_down": "false"
@@ -41,19 +44,21 @@
    "when": {
     "facing": "north",
     "side": "left",
+    "mode": "band|fill",
     "bottom": "true",
     "level": "true",
     "end_up": "true",
     "end_down": "false"
    },
    "apply": {
-    "model": "station_announcer:block/el_stair_stringer_cn"
+    "model": "station_announcer:block/el_stair_stringer_ln"
    }
   },
   {
    "when": {
     "facing": "north",
     "side": "left",
+    "mode": "band",
     "level": "true",
     "end_up": "false",
     "end_down": "true"
@@ -66,19 +71,21 @@
    "when": {
     "facing": "north",
     "side": "left",
+    "mode": "band|fill",
     "bottom": "true",
     "level": "true",
     "end_up": "false",
     "end_down": "true"
    },
    "apply": {
-    "model": "station_announcer:block/el_stair_stringer_cc"
+    "model": "station_announcer:block/el_stair_stringer_lc"
    }
   },
   {
    "when": {
     "facing": "north",
     "side": "left",
+    "mode": "band",
     "level": "true",
     "end_up": "false",
     "end_down": "false"
@@ -91,19 +98,21 @@
    "when": {
     "facing": "north",
     "side": "left",
+    "mode": "band|fill",
     "bottom": "true",
     "level": "true",
     "end_up": "false",
     "end_down": "false"
    },
    "apply": {
-    "model": "station_announcer:block/el_stair_stringer_cn"
+    "model": "station_announcer:block/el_stair_stringer_ln"
    }
   },
   {
    "when": {
     "facing": "north",
     "side": "left",
+    "mode": "band",
     "level": "false",
     "end_up": "true",
     "end_down": "true"
@@ -116,6 +125,7 @@
    "when": {
     "facing": "north",
     "side": "left",
+    "mode": "band|fill",
     "bottom": "true",
     "level": "false",
     "end_up": "true",
@@ -129,6 +139,7 @@
    "when": {
     "facing": "north",
     "side": "left",
+    "mode": "band",
     "level": "false",
     "end_up": "true",
     "end_down": "false"
@@ -141,6 +152,7 @@
    "when": {
     "facing": "north",
     "side": "left",
+    "mode": "band|fill",
     "bottom": "true",
     "level": "false",
     "end_up": "true",
@@ -154,6 +166,7 @@
    "when": {
     "facing": "north",
     "side": "left",
+    "mode": "band",
     "level": "false",
     "end_up": "false",
     "end_down": "true"
@@ -166,6 +179,7 @@
    "when": {
     "facing": "north",
     "side": "left",
+    "mode": "band|fill",
     "bottom": "true",
     "level": "false",
     "end_up": "false",
@@ -179,6 +193,7 @@
    "when": {
     "facing": "north",
     "side": "left",
+    "mode": "band",
     "level": "false",
     "end_up": "false",
     "end_down": "false"
@@ -191,6 +206,7 @@
    "when": {
     "facing": "north",
     "side": "left",
+    "mode": "band|fill",
     "bottom": "true",
     "level": "false",
     "end_up": "false",
@@ -204,6 +220,7 @@
    "when": {
     "facing": "north",
     "side": "left",
+    "mode": "band",
     "level": "true"
    },
    "apply": {
@@ -214,30 +231,11 @@
    "when": {
     "facing": "north",
     "side": "left",
+    "mode": "band",
     "bottom": "true",
-    "top": "false"
-   },
-   "apply": {
-    "model": "station_announcer:block/el_stair_post_bottom"
-   }
-  },
-  {
-   "when": {
-    "facing": "north",
-    "side": "left",
-    "bottom": "false",
-    "top": "false"
-   },
-   "apply": {
-    "model": "station_announcer:block/el_stair_post_chain"
-   }
-  },
-  {
-   "when": {
-    "facing": "north",
-    "side": "left",
-    "bottom": "true",
-    "top": "true"
+    "top": "true",
+    "end_down": "false",
+    "post": "true"
    },
    "apply": {
     "model": "station_announcer:block/el_stair_post_bottom_top"
@@ -247,8 +245,51 @@
    "when": {
     "facing": "north",
     "side": "left",
+    "mode": "band",
+    "bottom": "true",
+    "top": "true",
+    "end_down": "true"
+   },
+   "apply": {
+    "model": "station_announcer:block/el_stair_newel_bottom_top"
+   }
+  },
+  {
+   "when": {
+    "facing": "north",
+    "side": "left",
+    "mode": "band",
+    "bottom": "true",
+    "top": "false",
+    "end_down": "false",
+    "post": "true"
+   },
+   "apply": {
+    "model": "station_announcer:block/el_stair_post_bottom"
+   }
+  },
+  {
+   "when": {
+    "facing": "north",
+    "side": "left",
+    "mode": "band",
+    "bottom": "true",
+    "top": "false",
+    "end_down": "true"
+   },
+   "apply": {
+    "model": "station_announcer:block/el_stair_newel_bottom"
+   }
+  },
+  {
+   "when": {
+    "facing": "north",
+    "side": "left",
+    "mode": "band",
     "bottom": "false",
-    "top": "true"
+    "top": "true",
+    "end_down": "false",
+    "post": "true"
    },
    "apply": {
     "model": "station_announcer:block/el_stair_post_chain_top"
@@ -257,7 +298,48 @@
   {
    "when": {
     "facing": "north",
+    "side": "left",
+    "mode": "band",
+    "bottom": "false",
+    "top": "true",
+    "end_down": "true"
+   },
+   "apply": {
+    "model": "station_announcer:block/el_stair_newel_chain_top"
+   }
+  },
+  {
+   "when": {
+    "facing": "north",
+    "side": "left",
+    "mode": "band",
+    "bottom": "false",
+    "top": "false",
+    "end_down": "false",
+    "post": "true"
+   },
+   "apply": {
+    "model": "station_announcer:block/el_stair_post_chain"
+   }
+  },
+  {
+   "when": {
+    "facing": "north",
+    "side": "left",
+    "mode": "band",
+    "bottom": "false",
+    "top": "false",
+    "end_down": "true"
+   },
+   "apply": {
+    "model": "station_announcer:block/el_stair_newel_chain"
+   }
+  },
+  {
+   "when": {
+    "facing": "north",
     "side": "right",
+    "mode": "band",
     "level": "true",
     "end_up": "true",
     "end_down": "true"
@@ -270,19 +352,21 @@
    "when": {
     "facing": "north",
     "side": "right",
+    "mode": "band|fill",
     "bottom": "true",
     "level": "true",
     "end_up": "true",
     "end_down": "true"
    },
    "apply": {
-    "model": "station_announcer:block/el_stair_stringer_cc_r"
+    "model": "station_announcer:block/el_stair_stringer_lc_r"
    }
   },
   {
    "when": {
     "facing": "north",
     "side": "right",
+    "mode": "band",
     "level": "true",
     "end_up": "true",
     "end_down": "false"
@@ -295,19 +379,21 @@
    "when": {
     "facing": "north",
     "side": "right",
+    "mode": "band|fill",
     "bottom": "true",
     "level": "true",
     "end_up": "true",
     "end_down": "false"
    },
    "apply": {
-    "model": "station_announcer:block/el_stair_stringer_cn_r"
+    "model": "station_announcer:block/el_stair_stringer_ln_r"
    }
   },
   {
    "when": {
     "facing": "north",
     "side": "right",
+    "mode": "band",
     "level": "true",
     "end_up": "false",
     "end_down": "true"
@@ -320,19 +406,21 @@
    "when": {
     "facing": "north",
     "side": "right",
+    "mode": "band|fill",
     "bottom": "true",
     "level": "true",
     "end_up": "false",
     "end_down": "true"
    },
    "apply": {
-    "model": "station_announcer:block/el_stair_stringer_cc_r"
+    "model": "station_announcer:block/el_stair_stringer_lc_r"
    }
   },
   {
    "when": {
     "facing": "north",
     "side": "right",
+    "mode": "band",
     "level": "true",
     "end_up": "false",
     "end_down": "false"
@@ -345,19 +433,21 @@
    "when": {
     "facing": "north",
     "side": "right",
+    "mode": "band|fill",
     "bottom": "true",
     "level": "true",
     "end_up": "false",
     "end_down": "false"
    },
    "apply": {
-    "model": "station_announcer:block/el_stair_stringer_cn_r"
+    "model": "station_announcer:block/el_stair_stringer_ln_r"
    }
   },
   {
    "when": {
     "facing": "north",
     "side": "right",
+    "mode": "band",
     "level": "false",
     "end_up": "true",
     "end_down": "true"
@@ -370,6 +460,7 @@
    "when": {
     "facing": "north",
     "side": "right",
+    "mode": "band|fill",
     "bottom": "true",
     "level": "false",
     "end_up": "true",
@@ -383,6 +474,7 @@
    "when": {
     "facing": "north",
     "side": "right",
+    "mode": "band",
     "level": "false",
     "end_up": "true",
     "end_down": "false"
@@ -395,6 +487,7 @@
    "when": {
     "facing": "north",
     "side": "right",
+    "mode": "band|fill",
     "bottom": "true",
     "level": "false",
     "end_up": "true",
@@ -408,6 +501,7 @@
    "when": {
     "facing": "north",
     "side": "right",
+    "mode": "band",
     "level": "false",
     "end_up": "false",
     "end_down": "true"
@@ -420,6 +514,7 @@
    "when": {
     "facing": "north",
     "side": "right",
+    "mode": "band|fill",
     "bottom": "true",
     "level": "false",
     "end_up": "false",
@@ -433,6 +528,7 @@
    "when": {
     "facing": "north",
     "side": "right",
+    "mode": "band",
     "level": "false",
     "end_up": "false",
     "end_down": "false"
@@ -445,6 +541,7 @@
    "when": {
     "facing": "north",
     "side": "right",
+    "mode": "band|fill",
     "bottom": "true",
     "level": "false",
     "end_up": "false",
@@ -458,6 +555,7 @@
    "when": {
     "facing": "north",
     "side": "right",
+    "mode": "band",
     "level": "true"
    },
    "apply": {
@@ -468,30 +566,11 @@
    "when": {
     "facing": "north",
     "side": "right",
+    "mode": "band",
     "bottom": "true",
-    "top": "false"
-   },
-   "apply": {
-    "model": "station_announcer:block/el_stair_post_bottom_r"
-   }
-  },
-  {
-   "when": {
-    "facing": "north",
-    "side": "right",
-    "bottom": "false",
-    "top": "false"
-   },
-   "apply": {
-    "model": "station_announcer:block/el_stair_post_chain_r"
-   }
-  },
-  {
-   "when": {
-    "facing": "north",
-    "side": "right",
-    "bottom": "true",
-    "top": "true"
+    "top": "true",
+    "end_down": "false",
+    "post": "true"
    },
    "apply": {
     "model": "station_announcer:block/el_stair_post_bottom_top_r"
@@ -501,8 +580,51 @@
    "when": {
     "facing": "north",
     "side": "right",
+    "mode": "band",
+    "bottom": "true",
+    "top": "true",
+    "end_down": "true"
+   },
+   "apply": {
+    "model": "station_announcer:block/el_stair_newel_bottom_top_r"
+   }
+  },
+  {
+   "when": {
+    "facing": "north",
+    "side": "right",
+    "mode": "band",
+    "bottom": "true",
+    "top": "false",
+    "end_down": "false",
+    "post": "true"
+   },
+   "apply": {
+    "model": "station_announcer:block/el_stair_post_bottom_r"
+   }
+  },
+  {
+   "when": {
+    "facing": "north",
+    "side": "right",
+    "mode": "band",
+    "bottom": "true",
+    "top": "false",
+    "end_down": "true"
+   },
+   "apply": {
+    "model": "station_announcer:block/el_stair_newel_bottom_r"
+   }
+  },
+  {
+   "when": {
+    "facing": "north",
+    "side": "right",
+    "mode": "band",
     "bottom": "false",
-    "top": "true"
+    "top": "true",
+    "end_down": "false",
+    "post": "true"
    },
    "apply": {
     "model": "station_announcer:block/el_stair_post_chain_top_r"
@@ -510,8 +632,49 @@
   },
   {
    "when": {
+    "facing": "north",
+    "side": "right",
+    "mode": "band",
+    "bottom": "false",
+    "top": "true",
+    "end_down": "true"
+   },
+   "apply": {
+    "model": "station_announcer:block/el_stair_newel_chain_top_r"
+   }
+  },
+  {
+   "when": {
+    "facing": "north",
+    "side": "right",
+    "mode": "band",
+    "bottom": "false",
+    "top": "false",
+    "end_down": "false",
+    "post": "true"
+   },
+   "apply": {
+    "model": "station_announcer:block/el_stair_post_chain_r"
+   }
+  },
+  {
+   "when": {
+    "facing": "north",
+    "side": "right",
+    "mode": "band",
+    "bottom": "false",
+    "top": "false",
+    "end_down": "true"
+   },
+   "apply": {
+    "model": "station_announcer:block/el_stair_newel_chain_r"
+   }
+  },
+  {
+   "when": {
     "facing": "east",
     "side": "left",
+    "mode": "band",
     "level": "true",
     "end_up": "true",
     "end_down": "true"
@@ -525,13 +688,14 @@
    "when": {
     "facing": "east",
     "side": "left",
+    "mode": "band|fill",
     "bottom": "true",
     "level": "true",
     "end_up": "true",
     "end_down": "true"
    },
    "apply": {
-    "model": "station_announcer:block/el_stair_stringer_cc",
+    "model": "station_announcer:block/el_stair_stringer_lc",
     "y": 90
    }
   },
@@ -539,6 +703,7 @@
    "when": {
     "facing": "east",
     "side": "left",
+    "mode": "band",
     "level": "true",
     "end_up": "true",
     "end_down": "false"
@@ -552,13 +717,14 @@
    "when": {
     "facing": "east",
     "side": "left",
+    "mode": "band|fill",
     "bottom": "true",
     "level": "true",
     "end_up": "true",
     "end_down": "false"
    },
    "apply": {
-    "model": "station_announcer:block/el_stair_stringer_cn",
+    "model": "station_announcer:block/el_stair_stringer_ln",
     "y": 90
    }
   },
@@ -566,6 +732,7 @@
    "when": {
     "facing": "east",
     "side": "left",
+    "mode": "band",
     "level": "true",
     "end_up": "false",
     "end_down": "true"
@@ -579,13 +746,14 @@
    "when": {
     "facing": "east",
     "side": "left",
+    "mode": "band|fill",
     "bottom": "true",
     "level": "true",
     "end_up": "false",
     "end_down": "true"
    },
    "apply": {
-    "model": "station_announcer:block/el_stair_stringer_cc",
+    "model": "station_announcer:block/el_stair_stringer_lc",
     "y": 90
    }
   },
@@ -593,6 +761,7 @@
    "when": {
     "facing": "east",
     "side": "left",
+    "mode": "band",
     "level": "true",
     "end_up": "false",
     "end_down": "false"
@@ -606,13 +775,14 @@
    "when": {
     "facing": "east",
     "side": "left",
+    "mode": "band|fill",
     "bottom": "true",
     "level": "true",
     "end_up": "false",
     "end_down": "false"
    },
    "apply": {
-    "model": "station_announcer:block/el_stair_stringer_cn",
+    "model": "station_announcer:block/el_stair_stringer_ln",
     "y": 90
    }
   },
@@ -620,6 +790,7 @@
    "when": {
     "facing": "east",
     "side": "left",
+    "mode": "band",
     "level": "false",
     "end_up": "true",
     "end_down": "true"
@@ -633,6 +804,7 @@
    "when": {
     "facing": "east",
     "side": "left",
+    "mode": "band|fill",
     "bottom": "true",
     "level": "false",
     "end_up": "true",
@@ -647,6 +819,7 @@
    "when": {
     "facing": "east",
     "side": "left",
+    "mode": "band",
     "level": "false",
     "end_up": "true",
     "end_down": "false"
@@ -660,6 +833,7 @@
    "when": {
     "facing": "east",
     "side": "left",
+    "mode": "band|fill",
     "bottom": "true",
     "level": "false",
     "end_up": "true",
@@ -674,6 +848,7 @@
    "when": {
     "facing": "east",
     "side": "left",
+    "mode": "band",
     "level": "false",
     "end_up": "false",
     "end_down": "true"
@@ -687,6 +862,7 @@
    "when": {
     "facing": "east",
     "side": "left",
+    "mode": "band|fill",
     "bottom": "true",
     "level": "false",
     "end_up": "false",
@@ -701,6 +877,7 @@
    "when": {
     "facing": "east",
     "side": "left",
+    "mode": "band",
     "level": "false",
     "end_up": "false",
     "end_down": "false"
@@ -714,6 +891,7 @@
    "when": {
     "facing": "east",
     "side": "left",
+    "mode": "band|fill",
     "bottom": "true",
     "level": "false",
     "end_up": "false",
@@ -728,6 +906,7 @@
    "when": {
     "facing": "east",
     "side": "left",
+    "mode": "band",
     "level": "true"
    },
    "apply": {
@@ -739,32 +918,11 @@
    "when": {
     "facing": "east",
     "side": "left",
+    "mode": "band",
     "bottom": "true",
-    "top": "false"
-   },
-   "apply": {
-    "model": "station_announcer:block/el_stair_post_bottom",
-    "y": 90
-   }
-  },
-  {
-   "when": {
-    "facing": "east",
-    "side": "left",
-    "bottom": "false",
-    "top": "false"
-   },
-   "apply": {
-    "model": "station_announcer:block/el_stair_post_chain",
-    "y": 90
-   }
-  },
-  {
-   "when": {
-    "facing": "east",
-    "side": "left",
-    "bottom": "true",
-    "top": "true"
+    "top": "true",
+    "end_down": "false",
+    "post": "true"
    },
    "apply": {
     "model": "station_announcer:block/el_stair_post_bottom_top",
@@ -775,8 +933,54 @@
    "when": {
     "facing": "east",
     "side": "left",
+    "mode": "band",
+    "bottom": "true",
+    "top": "true",
+    "end_down": "true"
+   },
+   "apply": {
+    "model": "station_announcer:block/el_stair_newel_bottom_top",
+    "y": 90
+   }
+  },
+  {
+   "when": {
+    "facing": "east",
+    "side": "left",
+    "mode": "band",
+    "bottom": "true",
+    "top": "false",
+    "end_down": "false",
+    "post": "true"
+   },
+   "apply": {
+    "model": "station_announcer:block/el_stair_post_bottom",
+    "y": 90
+   }
+  },
+  {
+   "when": {
+    "facing": "east",
+    "side": "left",
+    "mode": "band",
+    "bottom": "true",
+    "top": "false",
+    "end_down": "true"
+   },
+   "apply": {
+    "model": "station_announcer:block/el_stair_newel_bottom",
+    "y": 90
+   }
+  },
+  {
+   "when": {
+    "facing": "east",
+    "side": "left",
+    "mode": "band",
     "bottom": "false",
-    "top": "true"
+    "top": "true",
+    "end_down": "false",
+    "post": "true"
    },
    "apply": {
     "model": "station_announcer:block/el_stair_post_chain_top",
@@ -786,7 +990,51 @@
   {
    "when": {
     "facing": "east",
+    "side": "left",
+    "mode": "band",
+    "bottom": "false",
+    "top": "true",
+    "end_down": "true"
+   },
+   "apply": {
+    "model": "station_announcer:block/el_stair_newel_chain_top",
+    "y": 90
+   }
+  },
+  {
+   "when": {
+    "facing": "east",
+    "side": "left",
+    "mode": "band",
+    "bottom": "false",
+    "top": "false",
+    "end_down": "false",
+    "post": "true"
+   },
+   "apply": {
+    "model": "station_announcer:block/el_stair_post_chain",
+    "y": 90
+   }
+  },
+  {
+   "when": {
+    "facing": "east",
+    "side": "left",
+    "mode": "band",
+    "bottom": "false",
+    "top": "false",
+    "end_down": "true"
+   },
+   "apply": {
+    "model": "station_announcer:block/el_stair_newel_chain",
+    "y": 90
+   }
+  },
+  {
+   "when": {
+    "facing": "east",
     "side": "right",
+    "mode": "band",
     "level": "true",
     "end_up": "true",
     "end_down": "true"
@@ -800,13 +1048,14 @@
    "when": {
     "facing": "east",
     "side": "right",
+    "mode": "band|fill",
     "bottom": "true",
     "level": "true",
     "end_up": "true",
     "end_down": "true"
    },
    "apply": {
-    "model": "station_announcer:block/el_stair_stringer_cc_r",
+    "model": "station_announcer:block/el_stair_stringer_lc_r",
     "y": 90
    }
   },
@@ -814,6 +1063,7 @@
    "when": {
     "facing": "east",
     "side": "right",
+    "mode": "band",
     "level": "true",
     "end_up": "true",
     "end_down": "false"
@@ -827,13 +1077,14 @@
    "when": {
     "facing": "east",
     "side": "right",
+    "mode": "band|fill",
     "bottom": "true",
     "level": "true",
     "end_up": "true",
     "end_down": "false"
    },
    "apply": {
-    "model": "station_announcer:block/el_stair_stringer_cn_r",
+    "model": "station_announcer:block/el_stair_stringer_ln_r",
     "y": 90
    }
   },
@@ -841,6 +1092,7 @@
    "when": {
     "facing": "east",
     "side": "right",
+    "mode": "band",
     "level": "true",
     "end_up": "false",
     "end_down": "true"
@@ -854,13 +1106,14 @@
    "when": {
     "facing": "east",
     "side": "right",
+    "mode": "band|fill",
     "bottom": "true",
     "level": "true",
     "end_up": "false",
     "end_down": "true"
    },
    "apply": {
-    "model": "station_announcer:block/el_stair_stringer_cc_r",
+    "model": "station_announcer:block/el_stair_stringer_lc_r",
     "y": 90
    }
   },
@@ -868,6 +1121,7 @@
    "when": {
     "facing": "east",
     "side": "right",
+    "mode": "band",
     "level": "true",
     "end_up": "false",
     "end_down": "false"
@@ -881,13 +1135,14 @@
    "when": {
     "facing": "east",
     "side": "right",
+    "mode": "band|fill",
     "bottom": "true",
     "level": "true",
     "end_up": "false",
     "end_down": "false"
    },
    "apply": {
-    "model": "station_announcer:block/el_stair_stringer_cn_r",
+    "model": "station_announcer:block/el_stair_stringer_ln_r",
     "y": 90
    }
   },
@@ -895,6 +1150,7 @@
    "when": {
     "facing": "east",
     "side": "right",
+    "mode": "band",
     "level": "false",
     "end_up": "true",
     "end_down": "true"
@@ -908,6 +1164,7 @@
    "when": {
     "facing": "east",
     "side": "right",
+    "mode": "band|fill",
     "bottom": "true",
     "level": "false",
     "end_up": "true",
@@ -922,6 +1179,7 @@
    "when": {
     "facing": "east",
     "side": "right",
+    "mode": "band",
     "level": "false",
     "end_up": "true",
     "end_down": "false"
@@ -935,6 +1193,7 @@
    "when": {
     "facing": "east",
     "side": "right",
+    "mode": "band|fill",
     "bottom": "true",
     "level": "false",
     "end_up": "true",
@@ -949,6 +1208,7 @@
    "when": {
     "facing": "east",
     "side": "right",
+    "mode": "band",
     "level": "false",
     "end_up": "false",
     "end_down": "true"
@@ -962,6 +1222,7 @@
    "when": {
     "facing": "east",
     "side": "right",
+    "mode": "band|fill",
     "bottom": "true",
     "level": "false",
     "end_up": "false",
@@ -976,6 +1237,7 @@
    "when": {
     "facing": "east",
     "side": "right",
+    "mode": "band",
     "level": "false",
     "end_up": "false",
     "end_down": "false"
@@ -989,6 +1251,7 @@
    "when": {
     "facing": "east",
     "side": "right",
+    "mode": "band|fill",
     "bottom": "true",
     "level": "false",
     "end_up": "false",
@@ -1003,6 +1266,7 @@
    "when": {
     "facing": "east",
     "side": "right",
+    "mode": "band",
     "level": "true"
    },
    "apply": {
@@ -1014,32 +1278,11 @@
    "when": {
     "facing": "east",
     "side": "right",
+    "mode": "band",
     "bottom": "true",
-    "top": "false"
-   },
-   "apply": {
-    "model": "station_announcer:block/el_stair_post_bottom_r",
-    "y": 90
-   }
-  },
-  {
-   "when": {
-    "facing": "east",
-    "side": "right",
-    "bottom": "false",
-    "top": "false"
-   },
-   "apply": {
-    "model": "station_announcer:block/el_stair_post_chain_r",
-    "y": 90
-   }
-  },
-  {
-   "when": {
-    "facing": "east",
-    "side": "right",
-    "bottom": "true",
-    "top": "true"
+    "top": "true",
+    "end_down": "false",
+    "post": "true"
    },
    "apply": {
     "model": "station_announcer:block/el_stair_post_bottom_top_r",
@@ -1050,8 +1293,54 @@
    "when": {
     "facing": "east",
     "side": "right",
+    "mode": "band",
+    "bottom": "true",
+    "top": "true",
+    "end_down": "true"
+   },
+   "apply": {
+    "model": "station_announcer:block/el_stair_newel_bottom_top_r",
+    "y": 90
+   }
+  },
+  {
+   "when": {
+    "facing": "east",
+    "side": "right",
+    "mode": "band",
+    "bottom": "true",
+    "top": "false",
+    "end_down": "false",
+    "post": "true"
+   },
+   "apply": {
+    "model": "station_announcer:block/el_stair_post_bottom_r",
+    "y": 90
+   }
+  },
+  {
+   "when": {
+    "facing": "east",
+    "side": "right",
+    "mode": "band",
+    "bottom": "true",
+    "top": "false",
+    "end_down": "true"
+   },
+   "apply": {
+    "model": "station_announcer:block/el_stair_newel_bottom_r",
+    "y": 90
+   }
+  },
+  {
+   "when": {
+    "facing": "east",
+    "side": "right",
+    "mode": "band",
     "bottom": "false",
-    "top": "true"
+    "top": "true",
+    "end_down": "false",
+    "post": "true"
    },
    "apply": {
     "model": "station_announcer:block/el_stair_post_chain_top_r",
@@ -1060,8 +1349,52 @@
   },
   {
    "when": {
+    "facing": "east",
+    "side": "right",
+    "mode": "band",
+    "bottom": "false",
+    "top": "true",
+    "end_down": "true"
+   },
+   "apply": {
+    "model": "station_announcer:block/el_stair_newel_chain_top_r",
+    "y": 90
+   }
+  },
+  {
+   "when": {
+    "facing": "east",
+    "side": "right",
+    "mode": "band",
+    "bottom": "false",
+    "top": "false",
+    "end_down": "false",
+    "post": "true"
+   },
+   "apply": {
+    "model": "station_announcer:block/el_stair_post_chain_r",
+    "y": 90
+   }
+  },
+  {
+   "when": {
+    "facing": "east",
+    "side": "right",
+    "mode": "band",
+    "bottom": "false",
+    "top": "false",
+    "end_down": "true"
+   },
+   "apply": {
+    "model": "station_announcer:block/el_stair_newel_chain_r",
+    "y": 90
+   }
+  },
+  {
+   "when": {
     "facing": "south",
     "side": "left",
+    "mode": "band",
     "level": "true",
     "end_up": "true",
     "end_down": "true"
@@ -1075,13 +1408,14 @@
    "when": {
     "facing": "south",
     "side": "left",
+    "mode": "band|fill",
     "bottom": "true",
     "level": "true",
     "end_up": "true",
     "end_down": "true"
    },
    "apply": {
-    "model": "station_announcer:block/el_stair_stringer_cc",
+    "model": "station_announcer:block/el_stair_stringer_lc",
     "y": 180
    }
   },
@@ -1089,6 +1423,7 @@
    "when": {
     "facing": "south",
     "side": "left",
+    "mode": "band",
     "level": "true",
     "end_up": "true",
     "end_down": "false"
@@ -1102,13 +1437,14 @@
    "when": {
     "facing": "south",
     "side": "left",
+    "mode": "band|fill",
     "bottom": "true",
     "level": "true",
     "end_up": "true",
     "end_down": "false"
    },
    "apply": {
-    "model": "station_announcer:block/el_stair_stringer_cn",
+    "model": "station_announcer:block/el_stair_stringer_ln",
     "y": 180
    }
   },
@@ -1116,6 +1452,7 @@
    "when": {
     "facing": "south",
     "side": "left",
+    "mode": "band",
     "level": "true",
     "end_up": "false",
     "end_down": "true"
@@ -1129,13 +1466,14 @@
    "when": {
     "facing": "south",
     "side": "left",
+    "mode": "band|fill",
     "bottom": "true",
     "level": "true",
     "end_up": "false",
     "end_down": "true"
    },
    "apply": {
-    "model": "station_announcer:block/el_stair_stringer_cc",
+    "model": "station_announcer:block/el_stair_stringer_lc",
     "y": 180
    }
   },
@@ -1143,6 +1481,7 @@
    "when": {
     "facing": "south",
     "side": "left",
+    "mode": "band",
     "level": "true",
     "end_up": "false",
     "end_down": "false"
@@ -1156,13 +1495,14 @@
    "when": {
     "facing": "south",
     "side": "left",
+    "mode": "band|fill",
     "bottom": "true",
     "level": "true",
     "end_up": "false",
     "end_down": "false"
    },
    "apply": {
-    "model": "station_announcer:block/el_stair_stringer_cn",
+    "model": "station_announcer:block/el_stair_stringer_ln",
     "y": 180
    }
   },
@@ -1170,6 +1510,7 @@
    "when": {
     "facing": "south",
     "side": "left",
+    "mode": "band",
     "level": "false",
     "end_up": "true",
     "end_down": "true"
@@ -1183,6 +1524,7 @@
    "when": {
     "facing": "south",
     "side": "left",
+    "mode": "band|fill",
     "bottom": "true",
     "level": "false",
     "end_up": "true",
@@ -1197,6 +1539,7 @@
    "when": {
     "facing": "south",
     "side": "left",
+    "mode": "band",
     "level": "false",
     "end_up": "true",
     "end_down": "false"
@@ -1210,6 +1553,7 @@
    "when": {
     "facing": "south",
     "side": "left",
+    "mode": "band|fill",
     "bottom": "true",
     "level": "false",
     "end_up": "true",
@@ -1224,6 +1568,7 @@
    "when": {
     "facing": "south",
     "side": "left",
+    "mode": "band",
     "level": "false",
     "end_up": "false",
     "end_down": "true"
@@ -1237,6 +1582,7 @@
    "when": {
     "facing": "south",
     "side": "left",
+    "mode": "band|fill",
     "bottom": "true",
     "level": "false",
     "end_up": "false",
@@ -1251,6 +1597,7 @@
    "when": {
     "facing": "south",
     "side": "left",
+    "mode": "band",
     "level": "false",
     "end_up": "false",
     "end_down": "false"
@@ -1264,6 +1611,7 @@
    "when": {
     "facing": "south",
     "side": "left",
+    "mode": "band|fill",
     "bottom": "true",
     "level": "false",
     "end_up": "false",
@@ -1278,6 +1626,7 @@
    "when": {
     "facing": "south",
     "side": "left",
+    "mode": "band",
     "level": "true"
    },
    "apply": {
@@ -1289,32 +1638,11 @@
    "when": {
     "facing": "south",
     "side": "left",
+    "mode": "band",
     "bottom": "true",
-    "top": "false"
-   },
-   "apply": {
-    "model": "station_announcer:block/el_stair_post_bottom",
-    "y": 180
-   }
-  },
-  {
-   "when": {
-    "facing": "south",
-    "side": "left",
-    "bottom": "false",
-    "top": "false"
-   },
-   "apply": {
-    "model": "station_announcer:block/el_stair_post_chain",
-    "y": 180
-   }
-  },
-  {
-   "when": {
-    "facing": "south",
-    "side": "left",
-    "bottom": "true",
-    "top": "true"
+    "top": "true",
+    "end_down": "false",
+    "post": "true"
    },
    "apply": {
     "model": "station_announcer:block/el_stair_post_bottom_top",
@@ -1325,8 +1653,54 @@
    "when": {
     "facing": "south",
     "side": "left",
+    "mode": "band",
+    "bottom": "true",
+    "top": "true",
+    "end_down": "true"
+   },
+   "apply": {
+    "model": "station_announcer:block/el_stair_newel_bottom_top",
+    "y": 180
+   }
+  },
+  {
+   "when": {
+    "facing": "south",
+    "side": "left",
+    "mode": "band",
+    "bottom": "true",
+    "top": "false",
+    "end_down": "false",
+    "post": "true"
+   },
+   "apply": {
+    "model": "station_announcer:block/el_stair_post_bottom",
+    "y": 180
+   }
+  },
+  {
+   "when": {
+    "facing": "south",
+    "side": "left",
+    "mode": "band",
+    "bottom": "true",
+    "top": "false",
+    "end_down": "true"
+   },
+   "apply": {
+    "model": "station_announcer:block/el_stair_newel_bottom",
+    "y": 180
+   }
+  },
+  {
+   "when": {
+    "facing": "south",
+    "side": "left",
+    "mode": "band",
     "bottom": "false",
-    "top": "true"
+    "top": "true",
+    "end_down": "false",
+    "post": "true"
    },
    "apply": {
     "model": "station_announcer:block/el_stair_post_chain_top",
@@ -1336,7 +1710,51 @@
   {
    "when": {
     "facing": "south",
+    "side": "left",
+    "mode": "band",
+    "bottom": "false",
+    "top": "true",
+    "end_down": "true"
+   },
+   "apply": {
+    "model": "station_announcer:block/el_stair_newel_chain_top",
+    "y": 180
+   }
+  },
+  {
+   "when": {
+    "facing": "south",
+    "side": "left",
+    "mode": "band",
+    "bottom": "false",
+    "top": "false",
+    "end_down": "false",
+    "post": "true"
+   },
+   "apply": {
+    "model": "station_announcer:block/el_stair_post_chain",
+    "y": 180
+   }
+  },
+  {
+   "when": {
+    "facing": "south",
+    "side": "left",
+    "mode": "band",
+    "bottom": "false",
+    "top": "false",
+    "end_down": "true"
+   },
+   "apply": {
+    "model": "station_announcer:block/el_stair_newel_chain",
+    "y": 180
+   }
+  },
+  {
+   "when": {
+    "facing": "south",
     "side": "right",
+    "mode": "band",
     "level": "true",
     "end_up": "true",
     "end_down": "true"
@@ -1350,13 +1768,14 @@
    "when": {
     "facing": "south",
     "side": "right",
+    "mode": "band|fill",
     "bottom": "true",
     "level": "true",
     "end_up": "true",
     "end_down": "true"
    },
    "apply": {
-    "model": "station_announcer:block/el_stair_stringer_cc_r",
+    "model": "station_announcer:block/el_stair_stringer_lc_r",
     "y": 180
    }
   },
@@ -1364,6 +1783,7 @@
    "when": {
     "facing": "south",
     "side": "right",
+    "mode": "band",
     "level": "true",
     "end_up": "true",
     "end_down": "false"
@@ -1377,13 +1797,14 @@
    "when": {
     "facing": "south",
     "side": "right",
+    "mode": "band|fill",
     "bottom": "true",
     "level": "true",
     "end_up": "true",
     "end_down": "false"
    },
    "apply": {
-    "model": "station_announcer:block/el_stair_stringer_cn_r",
+    "model": "station_announcer:block/el_stair_stringer_ln_r",
     "y": 180
    }
   },
@@ -1391,6 +1812,7 @@
    "when": {
     "facing": "south",
     "side": "right",
+    "mode": "band",
     "level": "true",
     "end_up": "false",
     "end_down": "true"
@@ -1404,13 +1826,14 @@
    "when": {
     "facing": "south",
     "side": "right",
+    "mode": "band|fill",
     "bottom": "true",
     "level": "true",
     "end_up": "false",
     "end_down": "true"
    },
    "apply": {
-    "model": "station_announcer:block/el_stair_stringer_cc_r",
+    "model": "station_announcer:block/el_stair_stringer_lc_r",
     "y": 180
    }
   },
@@ -1418,6 +1841,7 @@
    "when": {
     "facing": "south",
     "side": "right",
+    "mode": "band",
     "level": "true",
     "end_up": "false",
     "end_down": "false"
@@ -1431,13 +1855,14 @@
    "when": {
     "facing": "south",
     "side": "right",
+    "mode": "band|fill",
     "bottom": "true",
     "level": "true",
     "end_up": "false",
     "end_down": "false"
    },
    "apply": {
-    "model": "station_announcer:block/el_stair_stringer_cn_r",
+    "model": "station_announcer:block/el_stair_stringer_ln_r",
     "y": 180
    }
   },
@@ -1445,6 +1870,7 @@
    "when": {
     "facing": "south",
     "side": "right",
+    "mode": "band",
     "level": "false",
     "end_up": "true",
     "end_down": "true"
@@ -1458,6 +1884,7 @@
    "when": {
     "facing": "south",
     "side": "right",
+    "mode": "band|fill",
     "bottom": "true",
     "level": "false",
     "end_up": "true",
@@ -1472,6 +1899,7 @@
    "when": {
     "facing": "south",
     "side": "right",
+    "mode": "band",
     "level": "false",
     "end_up": "true",
     "end_down": "false"
@@ -1485,6 +1913,7 @@
    "when": {
     "facing": "south",
     "side": "right",
+    "mode": "band|fill",
     "bottom": "true",
     "level": "false",
     "end_up": "true",
@@ -1499,6 +1928,7 @@
    "when": {
     "facing": "south",
     "side": "right",
+    "mode": "band",
     "level": "false",
     "end_up": "false",
     "end_down": "true"
@@ -1512,6 +1942,7 @@
    "when": {
     "facing": "south",
     "side": "right",
+    "mode": "band|fill",
     "bottom": "true",
     "level": "false",
     "end_up": "false",
@@ -1526,6 +1957,7 @@
    "when": {
     "facing": "south",
     "side": "right",
+    "mode": "band",
     "level": "false",
     "end_up": "false",
     "end_down": "false"
@@ -1539,6 +1971,7 @@
    "when": {
     "facing": "south",
     "side": "right",
+    "mode": "band|fill",
     "bottom": "true",
     "level": "false",
     "end_up": "false",
@@ -1553,6 +1986,7 @@
    "when": {
     "facing": "south",
     "side": "right",
+    "mode": "band",
     "level": "true"
    },
    "apply": {
@@ -1564,32 +1998,11 @@
    "when": {
     "facing": "south",
     "side": "right",
+    "mode": "band",
     "bottom": "true",
-    "top": "false"
-   },
-   "apply": {
-    "model": "station_announcer:block/el_stair_post_bottom_r",
-    "y": 180
-   }
-  },
-  {
-   "when": {
-    "facing": "south",
-    "side": "right",
-    "bottom": "false",
-    "top": "false"
-   },
-   "apply": {
-    "model": "station_announcer:block/el_stair_post_chain_r",
-    "y": 180
-   }
-  },
-  {
-   "when": {
-    "facing": "south",
-    "side": "right",
-    "bottom": "true",
-    "top": "true"
+    "top": "true",
+    "end_down": "false",
+    "post": "true"
    },
    "apply": {
     "model": "station_announcer:block/el_stair_post_bottom_top_r",
@@ -1600,8 +2013,54 @@
    "when": {
     "facing": "south",
     "side": "right",
+    "mode": "band",
+    "bottom": "true",
+    "top": "true",
+    "end_down": "true"
+   },
+   "apply": {
+    "model": "station_announcer:block/el_stair_newel_bottom_top_r",
+    "y": 180
+   }
+  },
+  {
+   "when": {
+    "facing": "south",
+    "side": "right",
+    "mode": "band",
+    "bottom": "true",
+    "top": "false",
+    "end_down": "false",
+    "post": "true"
+   },
+   "apply": {
+    "model": "station_announcer:block/el_stair_post_bottom_r",
+    "y": 180
+   }
+  },
+  {
+   "when": {
+    "facing": "south",
+    "side": "right",
+    "mode": "band",
+    "bottom": "true",
+    "top": "false",
+    "end_down": "true"
+   },
+   "apply": {
+    "model": "station_announcer:block/el_stair_newel_bottom_r",
+    "y": 180
+   }
+  },
+  {
+   "when": {
+    "facing": "south",
+    "side": "right",
+    "mode": "band",
     "bottom": "false",
-    "top": "true"
+    "top": "true",
+    "end_down": "false",
+    "post": "true"
    },
    "apply": {
     "model": "station_announcer:block/el_stair_post_chain_top_r",
@@ -1610,8 +2069,52 @@
   },
   {
    "when": {
+    "facing": "south",
+    "side": "right",
+    "mode": "band",
+    "bottom": "false",
+    "top": "true",
+    "end_down": "true"
+   },
+   "apply": {
+    "model": "station_announcer:block/el_stair_newel_chain_top_r",
+    "y": 180
+   }
+  },
+  {
+   "when": {
+    "facing": "south",
+    "side": "right",
+    "mode": "band",
+    "bottom": "false",
+    "top": "false",
+    "end_down": "false",
+    "post": "true"
+   },
+   "apply": {
+    "model": "station_announcer:block/el_stair_post_chain_r",
+    "y": 180
+   }
+  },
+  {
+   "when": {
+    "facing": "south",
+    "side": "right",
+    "mode": "band",
+    "bottom": "false",
+    "top": "false",
+    "end_down": "true"
+   },
+   "apply": {
+    "model": "station_announcer:block/el_stair_newel_chain_r",
+    "y": 180
+   }
+  },
+  {
+   "when": {
     "facing": "west",
     "side": "left",
+    "mode": "band",
     "level": "true",
     "end_up": "true",
     "end_down": "true"
@@ -1625,13 +2128,14 @@
    "when": {
     "facing": "west",
     "side": "left",
+    "mode": "band|fill",
     "bottom": "true",
     "level": "true",
     "end_up": "true",
     "end_down": "true"
    },
    "apply": {
-    "model": "station_announcer:block/el_stair_stringer_cc",
+    "model": "station_announcer:block/el_stair_stringer_lc",
     "y": 270
    }
   },
@@ -1639,6 +2143,7 @@
    "when": {
     "facing": "west",
     "side": "left",
+    "mode": "band",
     "level": "true",
     "end_up": "true",
     "end_down": "false"
@@ -1652,13 +2157,14 @@
    "when": {
     "facing": "west",
     "side": "left",
+    "mode": "band|fill",
     "bottom": "true",
     "level": "true",
     "end_up": "true",
     "end_down": "false"
    },
    "apply": {
-    "model": "station_announcer:block/el_stair_stringer_cn",
+    "model": "station_announcer:block/el_stair_stringer_ln",
     "y": 270
    }
   },
@@ -1666,6 +2172,7 @@
    "when": {
     "facing": "west",
     "side": "left",
+    "mode": "band",
     "level": "true",
     "end_up": "false",
     "end_down": "true"
@@ -1679,13 +2186,14 @@
    "when": {
     "facing": "west",
     "side": "left",
+    "mode": "band|fill",
     "bottom": "true",
     "level": "true",
     "end_up": "false",
     "end_down": "true"
    },
    "apply": {
-    "model": "station_announcer:block/el_stair_stringer_cc",
+    "model": "station_announcer:block/el_stair_stringer_lc",
     "y": 270
    }
   },
@@ -1693,6 +2201,7 @@
    "when": {
     "facing": "west",
     "side": "left",
+    "mode": "band",
     "level": "true",
     "end_up": "false",
     "end_down": "false"
@@ -1706,13 +2215,14 @@
    "when": {
     "facing": "west",
     "side": "left",
+    "mode": "band|fill",
     "bottom": "true",
     "level": "true",
     "end_up": "false",
     "end_down": "false"
    },
    "apply": {
-    "model": "station_announcer:block/el_stair_stringer_cn",
+    "model": "station_announcer:block/el_stair_stringer_ln",
     "y": 270
    }
   },
@@ -1720,6 +2230,7 @@
    "when": {
     "facing": "west",
     "side": "left",
+    "mode": "band",
     "level": "false",
     "end_up": "true",
     "end_down": "true"
@@ -1733,6 +2244,7 @@
    "when": {
     "facing": "west",
     "side": "left",
+    "mode": "band|fill",
     "bottom": "true",
     "level": "false",
     "end_up": "true",
@@ -1747,6 +2259,7 @@
    "when": {
     "facing": "west",
     "side": "left",
+    "mode": "band",
     "level": "false",
     "end_up": "true",
     "end_down": "false"
@@ -1760,6 +2273,7 @@
    "when": {
     "facing": "west",
     "side": "left",
+    "mode": "band|fill",
     "bottom": "true",
     "level": "false",
     "end_up": "true",
@@ -1774,6 +2288,7 @@
    "when": {
     "facing": "west",
     "side": "left",
+    "mode": "band",
     "level": "false",
     "end_up": "false",
     "end_down": "true"
@@ -1787,6 +2302,7 @@
    "when": {
     "facing": "west",
     "side": "left",
+    "mode": "band|fill",
     "bottom": "true",
     "level": "false",
     "end_up": "false",
@@ -1801,6 +2317,7 @@
    "when": {
     "facing": "west",
     "side": "left",
+    "mode": "band",
     "level": "false",
     "end_up": "false",
     "end_down": "false"
@@ -1814,6 +2331,7 @@
    "when": {
     "facing": "west",
     "side": "left",
+    "mode": "band|fill",
     "bottom": "true",
     "level": "false",
     "end_up": "false",
@@ -1828,6 +2346,7 @@
    "when": {
     "facing": "west",
     "side": "left",
+    "mode": "band",
     "level": "true"
    },
    "apply": {
@@ -1839,32 +2358,11 @@
    "when": {
     "facing": "west",
     "side": "left",
+    "mode": "band",
     "bottom": "true",
-    "top": "false"
-   },
-   "apply": {
-    "model": "station_announcer:block/el_stair_post_bottom",
-    "y": 270
-   }
-  },
-  {
-   "when": {
-    "facing": "west",
-    "side": "left",
-    "bottom": "false",
-    "top": "false"
-   },
-   "apply": {
-    "model": "station_announcer:block/el_stair_post_chain",
-    "y": 270
-   }
-  },
-  {
-   "when": {
-    "facing": "west",
-    "side": "left",
-    "bottom": "true",
-    "top": "true"
+    "top": "true",
+    "end_down": "false",
+    "post": "true"
    },
    "apply": {
     "model": "station_announcer:block/el_stair_post_bottom_top",
@@ -1875,8 +2373,54 @@
    "when": {
     "facing": "west",
     "side": "left",
+    "mode": "band",
+    "bottom": "true",
+    "top": "true",
+    "end_down": "true"
+   },
+   "apply": {
+    "model": "station_announcer:block/el_stair_newel_bottom_top",
+    "y": 270
+   }
+  },
+  {
+   "when": {
+    "facing": "west",
+    "side": "left",
+    "mode": "band",
+    "bottom": "true",
+    "top": "false",
+    "end_down": "false",
+    "post": "true"
+   },
+   "apply": {
+    "model": "station_announcer:block/el_stair_post_bottom",
+    "y": 270
+   }
+  },
+  {
+   "when": {
+    "facing": "west",
+    "side": "left",
+    "mode": "band",
+    "bottom": "true",
+    "top": "false",
+    "end_down": "true"
+   },
+   "apply": {
+    "model": "station_announcer:block/el_stair_newel_bottom",
+    "y": 270
+   }
+  },
+  {
+   "when": {
+    "facing": "west",
+    "side": "left",
+    "mode": "band",
     "bottom": "false",
-    "top": "true"
+    "top": "true",
+    "end_down": "false",
+    "post": "true"
    },
    "apply": {
     "model": "station_announcer:block/el_stair_post_chain_top",
@@ -1886,7 +2430,51 @@
   {
    "when": {
     "facing": "west",
+    "side": "left",
+    "mode": "band",
+    "bottom": "false",
+    "top": "true",
+    "end_down": "true"
+   },
+   "apply": {
+    "model": "station_announcer:block/el_stair_newel_chain_top",
+    "y": 270
+   }
+  },
+  {
+   "when": {
+    "facing": "west",
+    "side": "left",
+    "mode": "band",
+    "bottom": "false",
+    "top": "false",
+    "end_down": "false",
+    "post": "true"
+   },
+   "apply": {
+    "model": "station_announcer:block/el_stair_post_chain",
+    "y": 270
+   }
+  },
+  {
+   "when": {
+    "facing": "west",
+    "side": "left",
+    "mode": "band",
+    "bottom": "false",
+    "top": "false",
+    "end_down": "true"
+   },
+   "apply": {
+    "model": "station_announcer:block/el_stair_newel_chain",
+    "y": 270
+   }
+  },
+  {
+   "when": {
+    "facing": "west",
     "side": "right",
+    "mode": "band",
     "level": "true",
     "end_up": "true",
     "end_down": "true"
@@ -1900,13 +2488,14 @@
    "when": {
     "facing": "west",
     "side": "right",
+    "mode": "band|fill",
     "bottom": "true",
     "level": "true",
     "end_up": "true",
     "end_down": "true"
    },
    "apply": {
-    "model": "station_announcer:block/el_stair_stringer_cc_r",
+    "model": "station_announcer:block/el_stair_stringer_lc_r",
     "y": 270
    }
   },
@@ -1914,6 +2503,7 @@
    "when": {
     "facing": "west",
     "side": "right",
+    "mode": "band",
     "level": "true",
     "end_up": "true",
     "end_down": "false"
@@ -1927,13 +2517,14 @@
    "when": {
     "facing": "west",
     "side": "right",
+    "mode": "band|fill",
     "bottom": "true",
     "level": "true",
     "end_up": "true",
     "end_down": "false"
    },
    "apply": {
-    "model": "station_announcer:block/el_stair_stringer_cn_r",
+    "model": "station_announcer:block/el_stair_stringer_ln_r",
     "y": 270
    }
   },
@@ -1941,6 +2532,7 @@
    "when": {
     "facing": "west",
     "side": "right",
+    "mode": "band",
     "level": "true",
     "end_up": "false",
     "end_down": "true"
@@ -1954,13 +2546,14 @@
    "when": {
     "facing": "west",
     "side": "right",
+    "mode": "band|fill",
     "bottom": "true",
     "level": "true",
     "end_up": "false",
     "end_down": "true"
    },
    "apply": {
-    "model": "station_announcer:block/el_stair_stringer_cc_r",
+    "model": "station_announcer:block/el_stair_stringer_lc_r",
     "y": 270
    }
   },
@@ -1968,6 +2561,7 @@
    "when": {
     "facing": "west",
     "side": "right",
+    "mode": "band",
     "level": "true",
     "end_up": "false",
     "end_down": "false"
@@ -1981,13 +2575,14 @@
    "when": {
     "facing": "west",
     "side": "right",
+    "mode": "band|fill",
     "bottom": "true",
     "level": "true",
     "end_up": "false",
     "end_down": "false"
    },
    "apply": {
-    "model": "station_announcer:block/el_stair_stringer_cn_r",
+    "model": "station_announcer:block/el_stair_stringer_ln_r",
     "y": 270
    }
   },
@@ -1995,6 +2590,7 @@
    "when": {
     "facing": "west",
     "side": "right",
+    "mode": "band",
     "level": "false",
     "end_up": "true",
     "end_down": "true"
@@ -2008,6 +2604,7 @@
    "when": {
     "facing": "west",
     "side": "right",
+    "mode": "band|fill",
     "bottom": "true",
     "level": "false",
     "end_up": "true",
@@ -2022,6 +2619,7 @@
    "when": {
     "facing": "west",
     "side": "right",
+    "mode": "band",
     "level": "false",
     "end_up": "true",
     "end_down": "false"
@@ -2035,6 +2633,7 @@
    "when": {
     "facing": "west",
     "side": "right",
+    "mode": "band|fill",
     "bottom": "true",
     "level": "false",
     "end_up": "true",
@@ -2049,6 +2648,7 @@
    "when": {
     "facing": "west",
     "side": "right",
+    "mode": "band",
     "level": "false",
     "end_up": "false",
     "end_down": "true"
@@ -2062,6 +2662,7 @@
    "when": {
     "facing": "west",
     "side": "right",
+    "mode": "band|fill",
     "bottom": "true",
     "level": "false",
     "end_up": "false",
@@ -2076,6 +2677,7 @@
    "when": {
     "facing": "west",
     "side": "right",
+    "mode": "band",
     "level": "false",
     "end_up": "false",
     "end_down": "false"
@@ -2089,6 +2691,7 @@
    "when": {
     "facing": "west",
     "side": "right",
+    "mode": "band|fill",
     "bottom": "true",
     "level": "false",
     "end_up": "false",
@@ -2103,6 +2706,7 @@
    "when": {
     "facing": "west",
     "side": "right",
+    "mode": "band",
     "level": "true"
    },
    "apply": {
@@ -2114,32 +2718,11 @@
    "when": {
     "facing": "west",
     "side": "right",
+    "mode": "band",
     "bottom": "true",
-    "top": "false"
-   },
-   "apply": {
-    "model": "station_announcer:block/el_stair_post_bottom_r",
-    "y": 270
-   }
-  },
-  {
-   "when": {
-    "facing": "west",
-    "side": "right",
-    "bottom": "false",
-    "top": "false"
-   },
-   "apply": {
-    "model": "station_announcer:block/el_stair_post_chain_r",
-    "y": 270
-   }
-  },
-  {
-   "when": {
-    "facing": "west",
-    "side": "right",
-    "bottom": "true",
-    "top": "true"
+    "top": "true",
+    "end_down": "false",
+    "post": "true"
    },
    "apply": {
     "model": "station_announcer:block/el_stair_post_bottom_top_r",
@@ -2150,11 +2733,100 @@
    "when": {
     "facing": "west",
     "side": "right",
+    "mode": "band",
+    "bottom": "true",
+    "top": "true",
+    "end_down": "true"
+   },
+   "apply": {
+    "model": "station_announcer:block/el_stair_newel_bottom_top_r",
+    "y": 270
+   }
+  },
+  {
+   "when": {
+    "facing": "west",
+    "side": "right",
+    "mode": "band",
+    "bottom": "true",
+    "top": "false",
+    "end_down": "false",
+    "post": "true"
+   },
+   "apply": {
+    "model": "station_announcer:block/el_stair_post_bottom_r",
+    "y": 270
+   }
+  },
+  {
+   "when": {
+    "facing": "west",
+    "side": "right",
+    "mode": "band",
+    "bottom": "true",
+    "top": "false",
+    "end_down": "true"
+   },
+   "apply": {
+    "model": "station_announcer:block/el_stair_newel_bottom_r",
+    "y": 270
+   }
+  },
+  {
+   "when": {
+    "facing": "west",
+    "side": "right",
+    "mode": "band",
     "bottom": "false",
-    "top": "true"
+    "top": "true",
+    "end_down": "false",
+    "post": "true"
    },
    "apply": {
     "model": "station_announcer:block/el_stair_post_chain_top_r",
+    "y": 270
+   }
+  },
+  {
+   "when": {
+    "facing": "west",
+    "side": "right",
+    "mode": "band",
+    "bottom": "false",
+    "top": "true",
+    "end_down": "true"
+   },
+   "apply": {
+    "model": "station_announcer:block/el_stair_newel_chain_top_r",
+    "y": 270
+   }
+  },
+  {
+   "when": {
+    "facing": "west",
+    "side": "right",
+    "mode": "band",
+    "bottom": "false",
+    "top": "false",
+    "end_down": "false",
+    "post": "true"
+   },
+   "apply": {
+    "model": "station_announcer:block/el_stair_post_chain_r",
+    "y": 270
+   }
+  },
+  {
+   "when": {
+    "facing": "west",
+    "side": "right",
+    "mode": "band",
+    "bottom": "false",
+    "top": "false",
+    "end_down": "true"
+   },
+   "apply": {
+    "model": "station_announcer:block/el_stair_newel_chain_r",
     "y": 270
    }
   }

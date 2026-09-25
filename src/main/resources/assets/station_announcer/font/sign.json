@@ -1,0 +1,15 @@
+{
+	"providers": [
+		{
+			"type": "ttf",
+			"file": "station_announcer:texgyreheros-bold.otf",
+			"shift": [0, -0.29],
+			"size": 12.357,
+			"oversample": 8.0
+		},
+		{
+			"type": "reference",
+			"id": "mtr:mtr"
+		}
+	]
+}

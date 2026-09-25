@@ -1,0 +1,10 @@
+{
+ "textures": {
+  "green": "station_announcer:block/el2_green",
+  "red": "station_announcer:block/el2_roof_red",
+  "soffit": "station_announcer:block/el2_soffit",
+  "lattice": "station_announcer:block/el2_lattice",
+  "particle": "#green"
+ },
+ "elements": []
+}

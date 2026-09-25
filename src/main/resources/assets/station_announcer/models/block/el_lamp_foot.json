@@ -1,7 +1,8 @@
 {
  "textures": {
   "green": "station_announcer:block/el2_green",
-  "lamp": "station_announcer:block/el2_lamp"
+  "lamp": "station_announcer:block/el2_lamp",
+  "particle": "#green"
  },
  "elements": [
   {

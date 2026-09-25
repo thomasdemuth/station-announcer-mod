@@ -382,7 +382,7 @@ public class StationDecorRenderer implements BlockEntityRenderer<StationDecorBlo
                 // railing's balusters end at exactly model y 6 and y 18, and a
                 // lid flush with them would be coplanar with the rails they meet.
                 // Overshooting buries those faces inside the slab instead.
-                CanvasPainter.box(vertexConsumers.getBuffer(net.minecraft.client.render.RenderLayer.getDebugQuads()),
+                CanvasPainter.box(vertexConsumers.getBuffer(CanvasPainter.layer()),
                         matrices.peek().getPositionMatrix(),
                         0, -SLAB_OVERSHOOT, front ? PANEL_FRONT_Z : PANEL_CENTRE_Z,
                         panelWidth, 48 + SLAB_OVERSHOOT, back ? PANEL_BACK_Z : PANEL_CENTRE_Z,
@@ -391,6 +391,9 @@ public class StationDecorRenderer implements BlockEntityRenderer<StationDecorBlo
             if (thisSide) {
                 // The face is one canvas unit inside the slab's edge all round.
                 matrices.translate(1, 1, -KEYLINE_STANDOFF);
+                // A resized plate is a slab of its own, back to the railing's centre plane.
+                MtaSignPainter.plateSlab(matrices, vertexConsumers, side == 0 ? frontSpec : backSpec,
+                        panelWidth - 2, 46, (PANEL_CENTRE_Z + KEYLINE_STANDOFF) * UNIT, false);
                 MtaSignPainter.paintFace(matrices, vertexConsumers, side == 0 ? frontSpec : backSpec,
                         panelWidth - 2, 46, pos);
             }
@@ -524,6 +527,8 @@ public class StationDecorRenderer implements BlockEntityRenderer<StationDecorBlo
                     side == 0 ? -0.375 - 0.004 : 0.1875 - 0.004);
             matrices.scale(-UNIT, -UNIT, UNIT);
             matrices.translate(1, 1, 0);
+            // The box is 3 px deep (model z 2..5): a resized plate reaches its centre plane.
+            MtaSignPainter.plateSlab(matrices, vertexConsumers, spec, w - 2, h - 2, 1.5f / 16.0f + 0.004f, false);
             MtaSignPainter.paintFace(matrices, vertexConsumers, spec, w - 2, h - 2, pos);
             matrices.pop();
         }
@@ -682,6 +687,10 @@ public class StationDecorRenderer implements BlockEntityRenderer<StationDecorBlo
      * (the column body itself, including the station-color tint, comes from
      * the block model and color provider).
      */
+    /** Column name plate: 0.6 px of steel standing off the flange, the painted face a hair in front of it. */
+    private static final float COLUMN_PLATE_DEPTH = 0.0375f;
+    private static final float COLUMN_FACE_STANDOFF = 0.008f;
+
     private void paintColumnBoard(StationDecorBlockEntity entity, MatrixStack matrices,
                                   VertexConsumerProvider vertexConsumers, float offset, float width, float height) {
         // Name board on both wide faces; the face plane comes from the block
@@ -701,8 +710,15 @@ public class StationDecorRenderer implements BlockEntityRenderer<StationDecorBlo
             // Board centred on the column, top at model y 12 (0.75) for the
             // 16-tall board; smaller boards keep the same centre line (y 10).
             float centreY = 0.625f;
-            matrices.translate(width * UNIT / 2.0f, centreY + height * UNIT / 2.0f, -offset - 0.01);
+            matrices.translate(width * UNIT / 2.0f, centreY + height * UNIT / 2.0f,
+                    -offset - COLUMN_PLATE_DEPTH - COLUMN_FACE_STANDOFF);
             matrices.scale(-UNIT, -UNIT, UNIT);
+            // The plate itself is geometry drawn here, not part of the block
+            // model, so it follows the sign's own plate size: a real slab from
+            // the painted face back into the flange. Where the plate is wider
+            // than the column, its back face is what you see from behind.
+            MtaSignPainter.plateSlab(matrices, vertexConsumers, spec, width, height,
+                    COLUMN_FACE_STANDOFF + COLUMN_PLATE_DEPTH + 0.004f, true);
             MtaSignPainter.paintFace(matrices, vertexConsumers, spec, width, height, entity.getPos());
             matrices.pop();
         }
@@ -749,6 +765,8 @@ public class StationDecorRenderer implements BlockEntityRenderer<StationDecorBlo
         // Board y 3..13 of the course (40 units tall), 1 px in from the run ends.
         matrices.translate(centerOffset + halfWidthBlocks, topPx / 16.0, frontPx / 16.0 - 0.5 - 0.006);
         matrices.scale(-UNIT, -UNIT, UNIT);
+        // The band is 1.6 px of model (z 14.2..15.8); a resized plate is a slab of the same depth.
+        MtaSignPainter.plateSlab(matrices, vertexConsumers, spec, panelWidth, heightUnits, 1.6f / 16.0f + 0.006f, false);
         MtaSignPainter.paintFace(matrices, vertexConsumers, spec, panelWidth, heightUnits, pos);
         matrices.pop();
     }
@@ -789,7 +807,31 @@ public class StationDecorRenderer implements BlockEntityRenderer<StationDecorBlo
     private void paintElNameBoard(StationDecorBlockEntity entity, MatrixStack matrices,
                                   VertexConsumerProvider vertexConsumers,
                                   com.stationannouncer.mtr.ElNameBoardBlock.Mount mount) {
-        com.stationannouncer.mtr.sign.SignFaces faces = com.stationannouncer.mtr.sign.LegacySigns.of(entity);
+        // el_sign boards side by side are ONE sign: the segment with nothing on
+        // its LEFT (facing.rotateYCounterclockwise(), local -X) paints the whole
+        // run, 1 px in from the run's two ends; the others draw nothing.
+        net.minecraft.block.BlockState state = entity.getCachedState();
+        net.minecraft.client.world.ClientWorld world = net.minecraft.client.MinecraftClient.getInstance().world;
+        int run = 1;
+        com.stationannouncer.mtr.sign.SignFaces faces;
+        if (world != null && state.getBlock() instanceof com.stationannouncer.mtr.ElNameBoardBlock board && board.merges()) {
+            Direction facing = state.get(com.stationannouncer.block.FacingDecorBlock.FACING);
+            Direction posDir = facing.rotateYClockwise();
+            net.minecraft.util.math.BlockPos pos = entity.getPos();
+            if (com.stationannouncer.mtr.ElNameBoardBlock.sameSign(state, world.getBlockState(pos.offset(posDir.getOpposite())))) {
+                return;
+            }
+            while (run < MAX_SIGN_RUN
+                    && com.stationannouncer.mtr.ElNameBoardBlock.sameSign(state, world.getBlockState(pos.offset(posDir, run)))) {
+                run++;
+            }
+            faces = MtaSignPainter.legacyFaces(world, pos, posDir, run, com.stationannouncer.mtr.sign.LegacySigns.Kind.BOARD);
+        } else {
+            faces = com.stationannouncer.mtr.sign.LegacySigns.of(entity);
+        }
+        float width = 64 * run - 8;
+        float halfWidthBlocks = (16 * run - 2) / 32.0f;
+        float centreOffset = (run - 1) / 2.0f;
         boolean wall = mount == com.stationannouncer.mtr.ElNameBoardBlock.Mount.WALL;
         float top = mount == com.stationannouncer.mtr.ElNameBoardBlock.Mount.STANDING ? 13.0f : 12.0f;
         float front = wall ? 13.8f : 7.4f;
@@ -799,10 +841,15 @@ public class StationDecorRenderer implements BlockEntityRenderer<StationDecorBlo
             if (side == 1) {
                 matrices.multiply(RotationAxis.POSITIVE_Y.rotationDegrees(180.0f));
             }
-            matrices.translate(0.4375, top / 16.0f, front / 16.0f - 0.5 - 0.008);
+            // The run grows toward local +X; seen from behind (rotated 180) that is -X.
+            matrices.translate((side == 0 ? centreOffset : -centreOffset) + halfWidthBlocks,
+                    top / 16.0f, front / 16.0f - 0.5 - 0.008);
             matrices.scale(-UNIT, -UNIT, UNIT);
+            // Plate 1.2 px thick: to the wall when wall-mounted, to the centre plane otherwise.
+            MtaSignPainter.plateSlab(matrices, vertexConsumers, side == 0 ? faces.frontSpec() : faces.backSpec(),
+                    width, 28, (wall ? 1.2f : 0.6f) / 16.0f + 0.008f, false);
             MtaSignPainter.paintFace(matrices, vertexConsumers, side == 0 ? faces.frontSpec() : faces.backSpec(),
-                    56, 28, entity.getPos());
+                    width, 28, entity.getPos());
             matrices.pop();
         }
     }

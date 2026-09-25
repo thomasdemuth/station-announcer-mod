@@ -252,13 +252,17 @@ public final class ModContent {
     public static final com.stationannouncer.block.ElStairSideBlock EL_STAIR_RAILING = new com.stationannouncer.block.ElStairSideBlock(
             AbstractBlock.Settings.create().strength(2.0f, 6.0f).sounds(BlockSoundGroup.METAL).nonOpaque());
     public static final com.stationannouncer.block.ElStairSideBlock EL_STAIR_WALL = new com.stationannouncer.block.ElStairSideBlock(
-            AbstractBlock.Settings.create().strength(2.0f, 6.0f).sounds(BlockSoundGroup.METAL).nonOpaque());
+            AbstractBlock.Settings.create().strength(2.0f, 6.0f).sounds(BlockSoundGroup.METAL).nonOpaque(), true);
     public static final com.stationannouncer.block.ElStairSideBlock EL_STAIR_WALL_GLASS = new com.stationannouncer.block.ElStairSideBlock(
-            AbstractBlock.Settings.create().strength(2.0f, 6.0f).sounds(BlockSoundGroup.GLASS).nonOpaque());
+            AbstractBlock.Settings.create().strength(2.0f, 6.0f).sounds(BlockSoundGroup.GLASS).nonOpaque(), true);
     public static final com.stationannouncer.block.ElStairRoofBlock EL_STAIR_ROOF = new com.stationannouncer.block.ElStairRoofBlock(
             AbstractBlock.Settings.create().strength(2.0f, 6.0f).sounds(BlockSoundGroup.METAL).nonOpaque());
     public static final com.stationannouncer.block.ElStairSideBlock EL_STAIR_OPEN = new com.stationannouncer.block.ElStairSideBlock(
             AbstractBlock.Settings.create().strength(2.0f, 6.0f).sounds(BlockSoundGroup.METAL).nonOpaque());
+    /** In-cell upper wall course above the treads (walk-through). */
+    public static final com.stationannouncer.block.ElStairUpperBlock EL_STAIR_UPPER = new com.stationannouncer.block.ElStairUpperBlock(
+            AbstractBlock.Settings.create().strength(2.0f, 6.0f).sounds(BlockSoundGroup.METAL).nonOpaque());
+    public static final BlockItem EL_STAIR_UPPER_ITEM = new com.stationannouncer.item.ElStairUpperItem(EL_STAIR_UPPER, new Item.Settings());
     public static final BlockItem EL_STAIR_OPEN_ITEM = new com.stationannouncer.item.ElStairSideItem(EL_STAIR_OPEN, new Item.Settings());
     public static final BlockItem EL_STAIR_RAILING_ITEM = new com.stationannouncer.item.ElStairSideItem(EL_STAIR_RAILING, new Item.Settings());
     public static final BlockItem EL_STAIR_WALL_ITEM = new com.stationannouncer.item.ElStairSideItem(EL_STAIR_WALL, new Item.Settings());
@@ -330,6 +334,10 @@ public final class ModContent {
             BlockEntityType.Builder.create(SpeakerBlockEntity::new, SPEAKER_BLOCK).build(null);
     public static final BlockEntityType<AmbienceBlockEntity> AMBIENCE_BLOCK_ENTITY =
             BlockEntityType.Builder.create(AmbienceBlockEntity::new, AMBIENCE_BLOCK).build(null);
+    /** Zebra board label plates (both variants share one type). */
+    public static final BlockEntityType<com.stationannouncer.block.ZebraBoardBlockEntity> ZEBRA_BOARD_BLOCK_ENTITY =
+            BlockEntityType.Builder.create(com.stationannouncer.block.ZebraBoardBlockEntity::new,
+                    ZEBRA_BOARD_WALL, ZEBRA_BOARD_HANGING).build(null);
 
     /** Invisible rideable marker for bench sitting. */
     public static final EntityType<SeatEntity> SEAT_ENTITY =
@@ -436,6 +444,7 @@ public final class ModContent {
         Registry.register(Registries.BLOCK, StationAnnouncer.id("el_stair_wall_glass"), EL_STAIR_WALL_GLASS);
         Registry.register(Registries.BLOCK, StationAnnouncer.id("el_stair_roof"), EL_STAIR_ROOF);
         Registry.register(Registries.BLOCK, StationAnnouncer.id("el_stair_open"), EL_STAIR_OPEN);
+        Registry.register(Registries.BLOCK, StationAnnouncer.id("el_stair_upper"), EL_STAIR_UPPER);
         Registry.register(Registries.BLOCK, StationAnnouncer.id("el_landing_roof"), EL_LANDING_ROOF);
         Registry.register(Registries.BLOCK, StationAnnouncer.id("el_stair_landing"), EL_STAIR_LANDING);
         Registry.register(Registries.BLOCK, StationAnnouncer.id("el_street_column"), EL_STREET_COLUMN);
@@ -495,6 +504,7 @@ public final class ModContent {
         Registry.register(Registries.ITEM, StationAnnouncer.id("el_stair_wall_glass"), EL_STAIR_WALL_GLASS_ITEM);
         Registry.register(Registries.ITEM, StationAnnouncer.id("el_stair_roof"), EL_STAIR_ROOF_ITEM);
         Registry.register(Registries.ITEM, StationAnnouncer.id("el_stair_open"), EL_STAIR_OPEN_ITEM);
+        Registry.register(Registries.ITEM, StationAnnouncer.id("el_stair_upper"), EL_STAIR_UPPER_ITEM);
         Registry.register(Registries.ITEM, StationAnnouncer.id("el_landing_roof"), EL_LANDING_ROOF_ITEM);
         Registry.register(Registries.ITEM, StationAnnouncer.id("el_stair_landing"), EL_STAIR_LANDING_ITEM);
         Registry.register(Registries.ITEM, StationAnnouncer.id("el_street_column"), EL_STREET_COLUMN_ITEM);
@@ -532,6 +542,7 @@ public final class ModContent {
         Registry.register(Registries.BLOCK_ENTITY_TYPE, StationAnnouncer.id("pa_control_box"), CONTROL_BOX_BLOCK_ENTITY);
         Registry.register(Registries.BLOCK_ENTITY_TYPE, StationAnnouncer.id("speaker"), SPEAKER_BLOCK_ENTITY);
         Registry.register(Registries.BLOCK_ENTITY_TYPE, StationAnnouncer.id("ambience_block"), AMBIENCE_BLOCK_ENTITY);
+        Registry.register(Registries.BLOCK_ENTITY_TYPE, StationAnnouncer.id("zebra_board"), ZEBRA_BOARD_BLOCK_ENTITY);
         Registry.register(Registries.ENTITY_TYPE, StationAnnouncer.id("seat"), SEAT_ENTITY);
 
         Registry.register(Registries.SOUND_EVENT, StationAnnouncer.id("chime"), CHIME);
@@ -572,6 +583,7 @@ public final class ModContent {
         DECORATION_ENTRIES.add(EL_STAIR_WALL_ITEM);
         DECORATION_ENTRIES.add(EL_STAIR_WALL_GLASS_ITEM);
         DECORATION_ENTRIES.add(EL_STAIR_OPEN_ITEM);
+        DECORATION_ENTRIES.add(EL_STAIR_UPPER_ITEM);
         DECORATION_ENTRIES.add(EL_STAIR_ROOF_ITEM);
         DECORATION_ENTRIES.add(EL_LANDING_ROOF_ITEM);
         DECORATION_ENTRIES.add(EL_STAIR_LANDING_ITEM);

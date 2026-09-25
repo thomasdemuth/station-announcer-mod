@@ -213,7 +213,9 @@ public class HandrailBlock extends Block {
                 }
             }
         } else {
-            facing = context.getHorizontalPlayerFacing();
+            // sloped rails climb with the flight they stand on; look direction otherwise
+            facing = variant.sloped() ? StairFamily.placementAscent(context)
+                    : context.getHorizontalPlayerFacing();
             Direction right = facing.rotateYClockwise();
             if (style == Style.WALL) {
                 // Sloped wall rail: sit on the side that actually has a wall.

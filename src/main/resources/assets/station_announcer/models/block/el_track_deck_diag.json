@@ -6,7 +6,8 @@
   "lace": "station_announcer:block/el2_lace",
   "tie": "station_announcer:block/el2_tie",
   "pan": "station_announcer:block/el2_pan",
-  "plate": "station_announcer:block/el2_plate"
+  "plate": "station_announcer:block/el2_plate",
+  "particle": "#green"
  },
  "elements": [
   {

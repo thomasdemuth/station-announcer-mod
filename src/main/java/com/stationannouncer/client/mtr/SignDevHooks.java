@@ -46,6 +46,12 @@ public final class SignDevHooks {
                     faces.write(buf);
                     ClientPlayNetworking.send(MtrStationDecor.UPDATE_SIGN_C2S, buf);
                 }
+                case "#sign-view" -> {
+                    // #sign-view world|editor — flip the open editor's centre pane
+                    if (client.currentScreen instanceof SignEditScreen screen) {
+                        screen.viewForDev(parts[1]);
+                    }
+                }
                 case "#sign-close" -> client.setScreen(null);
                 case "#sign-access" -> {
                     // Mark the station the player stands in step-free (or clear it) through the addon's packet.

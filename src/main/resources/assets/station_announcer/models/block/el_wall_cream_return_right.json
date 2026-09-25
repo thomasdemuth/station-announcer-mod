@@ -4,7 +4,8 @@
   "cream": "station_announcer:block/el2_cream",
   "glass": "station_announcer:block/el2_wired_glass",
   "creamr": "station_announcer:block/el2_cream_ridged",
-  "gpanel": "station_announcer:block/el2_green_panel"
+  "gpanel": "station_announcer:block/el2_green_panel",
+  "particle": "#green"
  },
  "elements": [
   {

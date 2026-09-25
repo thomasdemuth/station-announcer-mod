@@ -34,8 +34,13 @@ import java.util.List;
  */
 @Environment(EnvType.CLIENT)
 public final class SignLayout {
-    /** MTR's bundled Noto Sans SemiBold, declared as a normal font resource. */
-    public static final Identifier FONT = new Identifier("mtr", "mtr");
+    /**
+     * The sign face: TeX Gyre Heros Bold (a free Helvetica-metric font — the MTA
+     * system is set in Helvetica Medium), bundled under assets/.../font and sized
+     * in its JSON so its capitals match MTR's Noto Sans, which stays the fallback
+     * for glyphs Heros lacks. The cap constants below therefore hold for both.
+     */
+    public static final Identifier FONT = new Identifier("station_announcer", "sign");
 
     /**
      * Cap height of the MTR font in canvas units per unit of painter size, and
@@ -55,6 +60,40 @@ public final class SignLayout {
     public static final int GREY = 0xFF8A8A90;
     /** The MTA exit red: white "Exit" on a red field. */
     public static final int EXIT_RED = 0xFFEE352E;
+
+    /** Colour fields and badge colours by name; anything else is read as {@code #RRGGBB}. */
+    public static final String[] COLOR_NAMES = {"red", "yellow", "green", "blue", "orange", "white", "black", "grey"};
+    public static final int[] COLOR_VALUES = {EXIT_RED, 0xFFFCCC0A, 0xFF00933C, 0xFF0039A6, 0xFFFF6319, PAPER, BLACK,
+            0xFF808183};
+
+    /** The colour a tile's {@code arg} names, or 0 for none / unreadable. */
+    public static int namedColor(String name) {
+        if (name == null || name.isEmpty()) {
+            return 0;
+        }
+        for (int i = 0; i < COLOR_NAMES.length; i++) {
+            if (COLOR_NAMES[i].equalsIgnoreCase(name)) {
+                return COLOR_VALUES[i];
+            }
+        }
+        if (name.length() == 7 && name.charAt(0) == '#') {
+            try {
+                return 0xFF000000 | Integer.parseInt(name.substring(1), 16);
+            } catch (NumberFormatException ignored) {
+                return 0;
+            }
+        }
+        return 0;
+    }
+
+    /** Black or white copy, whichever reads on {@code background}. */
+    public static int inkOn(int background) {
+        return RouteBullets.needsDarkText(background) ? INK : WHITE;
+    }
+
+    private static float fieldPad(float rowHeight, float shrink) {
+        return rowHeight * 0.12f * shrink;
+    }
 
     private static final float PAD_X = 3;
     private static final float PAD_Y = 2;
@@ -181,13 +220,15 @@ public final class SignLayout {
         final Tile tile;
         final int index;
         final float width;
-        final int pin; // -1 left edge, +1 right edge, 0 flow
+        final int zone;       // -1 left edge, 0 centred on the panel, +1 right edge
+        final boolean pinned; // an edge arrow (the older "left"/"right" arg): outermost in its zone
 
-        Placed(Tile tile, int index, float width, int pin) {
+        Placed(Tile tile, int index, float width, int zone, boolean pinned) {
             this.tile = tile;
             this.index = index;
             this.width = width;
-            this.pin = pin;
+            this.zone = zone;
+            this.pinned = pinned;
         }
     }
 
@@ -221,25 +262,25 @@ public final class SignLayout {
         float rowHeight0 = rowHeight;
         float available = width - 2 * PAD_X;
         Fit fit = Fit.NATURAL;
-        List<Placed> placed = measure(s, tileList, rowHeight, contentScale, fit, ctx);
+        List<Placed> placed = measure(s, tileList, row.align(), rowHeight, contentScale, fit, ctx);
         float total = total(placed, gap(rowHeight, fit));
         // A little condensing first (real sign shops do), then stack the text
         // on two lines, then condense further, and trim what still overflows.
         while (total > available && fit.shrink() > WRAP_SHRINK) {
             fit = new Fit(Math.max(WRAP_SHRINK, fit.shrink() * Math.max(0.8f, available / total) - 0.01f), false,
                     Float.MAX_VALUE);
-            placed = measure(s, tileList, rowHeight, contentScale, fit, ctx);
+            placed = measure(s, tileList, row.align(), rowHeight, contentScale, fit, ctx);
             total = total(placed, gap(rowHeight, fit));
         }
         if (total > available) {
             fit = new Fit(1.0f, true, Float.MAX_VALUE);
-            placed = measure(s, tileList, rowHeight, contentScale, fit, ctx);
+            placed = measure(s, tileList, row.align(), rowHeight, contentScale, fit, ctx);
             total = total(placed, gap(rowHeight, fit));
         }
         while (total > available && fit.shrink() > MIN_SHRINK) {
             fit = new Fit(Math.max(MIN_SHRINK, fit.shrink() * Math.max(0.6f, available / total) - 0.01f), true,
                     Float.MAX_VALUE);
-            placed = measure(s, tileList, rowHeight, contentScale, fit, ctx);
+            placed = measure(s, tileList, row.align(), rowHeight, contentScale, fit, ctx);
             total = total(placed, gap(rowHeight, fit));
         }
         float gap = gap(rowHeight, fit);
@@ -256,55 +297,61 @@ public final class SignLayout {
             }
             float budget = Math.max(6, (available - fixed) / Math.max(1, textCount));
             fit = new Fit(fit.shrink(), fit.wrap(), budget);
-            placed = measure(s, tileList, rowHeight, contentScale, fit, ctx);
+            placed = measure(s, tileList, row.align(), rowHeight, contentScale, fit, ctx);
         }
 
-        // Pinned arrows take the edges; the rest flows between them.
-        float leftWidth = 0;
-        float rightWidth = 0;
-        float middleWidth = 0;
-        int middleCount = 0;
+        // Three zones: tiles flush left, tiles centred on the panel, tiles flush
+        // right. Edge arrows are outermost in their zone whatever their place
+        // in the list; everything else keeps list order.
+        List<Placed> leftZone = new ArrayList<>();
+        List<Placed> centreZone = new ArrayList<>();
+        List<Placed> rightZone = new ArrayList<>();
         for (Placed p : placed) {
-            if (p.pin < 0) {
-                leftWidth += p.width + gap;
-            } else if (p.pin > 0) {
-                rightWidth += p.width + gap;
+            if (p.zone < 0) {
+                if (p.pinned) {
+                    leftZone.add(pinnedCount(leftZone), p);
+                } else {
+                    leftZone.add(p);
+                }
+            } else if (p.zone > 0) {
+                rightZone.add(p);
             } else {
-                middleWidth += p.width;
-                middleCount++;
+                centreZone.add(p);
             }
         }
-        if (middleCount > 1) {
-            middleWidth += (middleCount - 1) * gap;
-        }
-        float middleStart = x0 + PAD_X + leftWidth;
-        float middleAvail = Math.max(0, x0 + width - PAD_X - rightWidth - middleStart);
-        float x = middleStart;
-        if (row.align() == Align.CENTER) {
-            x = middleStart + Math.max(0, (middleAvail - middleWidth) / 2.0f);
-        }
+        rightZone.sort(java.util.Comparator.comparing(p -> p.pinned)); // stable: pinned arrows end up at the edge
+        float leftWidth = total(leftZone, gap);
+        float centreWidth = total(centreZone, gap);
+        float rightWidth = total(rightZone, gap);
         float leftX = x0 + PAD_X;
-        float rightX = x0 + width - PAD_X;
+        float rightX = x0 + width - PAD_X - rightWidth;
+        // Centred on the PANEL, pushed aside only when a side zone is in the way.
+        float centreMin = leftZone.isEmpty() ? leftX : leftX + leftWidth + gap;
+        float centreMax = (rightZone.isEmpty() ? x0 + width - PAD_X : rightX - gap) - centreWidth;
+        float centreX = Math.max(centreMin, Math.min(centreMax, x0 + (width - centreWidth) / 2.0f));
         float cy = rowTop + rowHeight / 2.0f;
-        for (Placed p : placed) {
-            float tx;
-            if (p.pin < 0) {
-                tx = leftX;
-                leftX += p.width + gap;
-            } else if (p.pin > 0) {
-                rightX -= p.width;
-                tx = rightX;
-                rightX -= gap;
-            } else {
-                tx = x;
-                x += p.width + gap;
+        float[] cursor = {leftX, centreX, rightX};
+        List<List<Placed>> zones = List.of(leftZone, centreZone, rightZone);
+        for (int z = 0; z < 3; z++) {
+            for (Placed p : zones.get(z)) {
+                float px = cursor[z] + p.tile.dx();
+                float py = cy + p.tile.dy();
+                cursor[z] += p.width + gap;
+                float module = rowHeight0 * contentScale * p.tile.scale();
+                paintTile(s, p.tile, px, py, module, fit, ink, ctx, p.width, z - 1);
+                out.add(new TileBounds(rowIndex, p.index, px, py - rowHeight0 / 2.0f, px + p.width, py + rowHeight0 / 2.0f));
             }
-            float px = tx + p.tile.dx();
-            float py = cy + p.tile.dy();
-            float module = rowHeight0 * contentScale * p.tile.scale();
-            paintTile(s, p.tile, px, py, module, fit, ink, ctx);
-            out.add(new TileBounds(rowIndex, p.index, px, py - rowHeight0 / 2.0f, px + p.width, py + rowHeight0 / 2.0f));
         }
+    }
+
+    private static int pinnedCount(List<Placed> zone) {
+        int count = 0;
+        for (Placed p : zone) {
+            if (p.pinned) {
+                count++;
+            }
+        }
+        return count;
     }
 
     /** Space between tiles, condensing with the row. */
@@ -320,14 +367,42 @@ public final class SignLayout {
         return total + Math.max(0, placed.size() - 1) * gap;
     }
 
-    private static List<Placed> measure(Surface s, List<Tile> tiles, float rowHeight, float contentScale, Fit fit,
-                                        SignContext ctx) {
+    /**
+     * The zone a tile lands in: its own {@link SignSpec.Place}, else an edge
+     * arrow's pin, else the row's alignment.
+     */
+    public static int zoneOf(Tile tile, Align rowAlign) {
+        switch (tile.place()) {
+            case LEFT:
+                return -1;
+            case CENTER:
+                return 0;
+            case RIGHT:
+                return 1;
+            default:
+                break;
+        }
+        int pin = edgePin(tile);
+        if (pin != 0) {
+            return pin;
+        }
+        return rowAlign == Align.CENTER ? 0 : rowAlign == Align.RIGHT ? 1 : -1;
+    }
+
+    private static int edgePin(Tile tile) {
+        if (tile.type() != SignSpec.TileType.ARROW || tile.place() != SignSpec.Place.AUTO) {
+            return 0;
+        }
+        return "left".equals(tile.arg()) ? -1 : "right".equals(tile.arg()) ? 1 : 0;
+    }
+
+    private static List<Placed> measure(Surface s, List<Tile> tiles, Align rowAlign, float rowHeight,
+                                        float contentScale, Fit fit, SignContext ctx) {
         List<Placed> placed = new ArrayList<>(tiles.size());
         for (int i = 0; i < tiles.size(); i++) {
             Tile tile = tiles.get(i);
-            int pin = tile.type() == SignSpec.TileType.ARROW
-                    ? ("left".equals(tile.arg()) ? -1 : "right".equals(tile.arg()) ? 1 : 0) : 0;
-            placed.add(new Placed(tile, i, tileWidth(s, tile, rowHeight * contentScale * tile.scale(), fit, ctx), pin));
+            placed.add(new Placed(tile, i, tileWidth(s, tile, rowHeight * contentScale * tile.scale(), fit, ctx),
+                    zoneOf(tile, rowAlign), edgePin(tile) != 0));
         }
         return placed;
     }
@@ -336,6 +411,7 @@ public final class SignLayout {
     private static float fixedPart(Surface s, Tile tile, float rowHeight, Fit fit, SignContext ctx) {
         return switch (tile.type()) {
             case DESTINATION -> bulletDiameter(rowHeight, fit.shrink()) * 1.3f;
+            case TEXT -> namedColor(tile.arg()) != 0 ? 2 * fieldPad(rowHeight, fit.shrink()) : 0;
             case EXIT -> exitWidth(s, tile, rowHeight, fit.shrink(), ctx)
                     - exitStackWidth(s, tile, rowHeight, fit.shrink(), ctx);
             default -> 0;
@@ -426,10 +502,17 @@ public final class SignLayout {
                 for (String line : lines) {
                     w = Math.max(w, Math.min(fit.maxText(), tokenWidth(s, line, cap)));
                 }
-                return w;
+                return namedColor(tile.arg()) != 0 ? w + 2 * fieldPad(rowHeight, shrink) : w;
             }
             case ARROW -> {
                 return rowHeight * 0.62f * shrink;
+            }
+            case RULE -> {
+                return ruleWidth(rowHeight, shrink);
+            }
+            case BADGE -> {
+                float cap = badgeCap(rowHeight, shrink);
+                return tile.text().isBlank() ? 0 : capWidth(s, tile.text().trim(), cap) + cap * 1.2f;
             }
             case STATION_NAME -> {
                 NamePlate plate = namePlate(s, tile, rowHeight, fit, ctx);
@@ -466,7 +549,7 @@ public final class SignLayout {
     // --------------------------------------------------------------- tiles
 
     private static void paintTile(Surface s, Tile tile, float x, float cy, float rowHeight, Fit fit, int ink,
-                                  SignContext ctx) {
+                                  SignContext ctx, float tileWidth, int lineAlign) {
         float shrink = fit.shrink();
         switch (tile.type()) {
             case BULLETS -> {
@@ -480,13 +563,43 @@ public final class SignLayout {
             case TEXT -> {
                 String[] lines = lines(tile.text(), fit.wrap());
                 float cap = textCap(tile, rowHeight, shrink, lines.length);
-                paintLines(s, lines, x, cy, cap, ink, fit.maxText(), true);
+                int field = namedColor(tile.arg());
+                if (field != 0) {
+                    // A colour field spans the row like the red "Exit" does, whatever the panel style.
+                    float pad = fieldPad(rowHeight, shrink);
+                    float half = rowHeight / 2.0f - 0.6f;
+                    s.rect(x, cy - half, x + tileWidth, cy + half, field, 1);
+                    paintLines(s, lines, x + pad, cy, cap, inkOn(field), fit.maxText(), true, tileWidth - 2 * pad,
+                            lineAlign, field);
+                } else {
+                    paintLines(s, lines, x, cy, cap, ink, fit.maxText(), true, tileWidth, lineAlign);
+                }
+            }
+            case RULE -> {
+                float reach = rowHeight * 0.4f;
+                s.rect(x, cy - reach, x + ruleWidth(rowHeight, shrink), cy + reach, ink, 2);
+            }
+            case BADGE -> {
+                if (!tile.text().isBlank()) {
+                    float cap = badgeCap(rowHeight, shrink);
+                    float h = cap * 1.9f;
+                    int fill = namedColor(tile.arg());
+                    if (fill == 0) {
+                        fill = COLOR_VALUES[3];
+                    }
+                    roundedRect(s, x, cy - h / 2.0f, tileWidth, h, h * 0.24f, fill, 2);
+                    capCentered(s, tile.text().trim(), x + cap * 0.6f, cy, cap, inkOn(fill));
+                }
             }
             case ARROW -> {
                 float size = rowHeight * 0.62f * shrink;
-                PosterLayout.bigArrow(s, x + size / 2.0f, cy, tile.num(), size / 40.0f, ink, 2);
+                if (SignSymbols.isSymbol(tile.num())) {
+                    SignSymbols.draw(s, tile.num(), x, cy - size / 2.0f, size, ink, ink == INK ? PAPER : BLACK, 2);
+                } else {
+                    PosterLayout.bigArrow(s, x + size / 2.0f, cy, tile.num(), size / 40.0f, ink, 2);
+                }
             }
-            case STATION_NAME -> paintNamePlate(s, namePlate(s, tile, rowHeight, fit, ctx), x, cy, ink);
+            case STATION_NAME -> paintNamePlate(s, namePlate(s, tile, rowHeight, fit, ctx), x, cy, ink, lineAlign);
             case EXIT -> paintExit(s, tile, x, cy, rowHeight, shrink, ink, ctx, fit.maxText());
             case DESTINATION -> {
                 float d = bulletDiameter(rowHeight, shrink);
@@ -497,7 +610,8 @@ public final class SignLayout {
                 if (!text.isEmpty()) {
                     String[] lines = lines(text, fit.wrap());
                     float cap = rowHeight * (lines.length > 1 ? 0.3f : 0.42f) * shrink;
-                    paintLines(s, lines, x + d * 1.3f, cy, cap, ink, fit.maxText(), false);
+                    paintLines(s, lines, x + d * 1.3f, cy, cap, ink, fit.maxText(), false,
+                            Math.max(0, tileWidth - d * 1.3f), lineAlign);
                 }
             }
             default -> {
@@ -550,9 +664,9 @@ public final class SignLayout {
         return new NamePlate(lines, cap, icon, outline, below, iconSize, w, fit.maxText());
     }
 
-    private static void paintNamePlate(Surface s, NamePlate plate, float x, float cy, int ink) {
+    private static void paintNamePlate(Surface s, NamePlate plate, float x, float cy, int ink, int lineAlign) {
         if (!plate.icon()) {
-            paintLines(s, plate.lines(), x, cy, plate.cap(), ink, plate.maxText(), false);
+            paintLines(s, plate.lines(), x, cy, plate.cap(), ink, plate.maxText(), false, plate.textWidth(), lineAlign);
             return;
         }
         if (plate.iconBelow()) {
@@ -562,42 +676,68 @@ public final class SignLayout {
             float gap = plate.cap() * 0.45f;
             float total = textHeight + gap + plate.iconSize();
             float top = cy - total / 2.0f;
-            paintLines(s, plate.lines(), x, top + textHeight / 2.0f, plate.cap(), ink, plate.maxText(), false);
-            PosterLayout.wheelchair(s, x, top + textHeight + gap, plate.iconSize(), 2, plate.iconOutline(),
-                    ink == WHITE ? BLACK : PAPER);
+            paintLines(s, plate.lines(), x, top + textHeight / 2.0f, plate.cap(), ink, plate.maxText(), false,
+                    plate.width(), lineAlign);
+            PosterLayout.wheelchair(s, x + (plate.width() - plate.iconSize()) * (lineAlign + 1) / 2.0f,
+                    top + textHeight + gap, plate.iconSize(), 2, plate.iconOutline(), ink == WHITE ? BLACK : PAPER);
             return;
         }
-        paintLines(s, plate.lines(), x, cy, plate.cap(), ink, plate.maxText(), false);
+        paintLines(s, plate.lines(), x, cy, plate.cap(), ink, plate.maxText(), false, plate.textWidth(), lineAlign);
         PosterLayout.wheelchair(s, x + plate.textWidth() + plate.iconSize() * 0.35f, cy - plate.iconSize() / 2.0f,
                 plate.iconSize(), 2, plate.iconOutline(), ink == WHITE ? BLACK : PAPER);
     }
 
-    /** Up to three lines of text vertically centred on {@code cy}, each clipped to {@code maxText}. */
+    /**
+     * Up to three lines of text vertically centred on {@code cy}, each clipped
+     * to {@code maxText} and set left (-1), centred (0) or right (+1) inside
+     * {@code boxWidth} — the tile's zone decides, so a centred station plate
+     * centres "14" over "Street" and a right-hand block ranges right.
+     */
+    private static float ruleWidth(float rowHeight, float shrink) {
+        return Math.max(0.7f, rowHeight * 0.03f * shrink);
+    }
+
+    private static float badgeCap(float rowHeight, float shrink) {
+        return rowHeight * 0.3f * shrink;
+    }
+
+    private static void roundedRect(Surface s, float x, float y, float w, float h, float r, int argb, int layer) {
+        r = Math.min(r, Math.min(w, h) / 2.0f);
+        s.rect(x + r, y, x + w - r, y + h, argb, layer);
+        s.rect(x, y + r, x + r, y + h - r, argb, layer);
+        s.rect(x + w - r, y + r, x + w, y + h - r, argb, layer);
+        s.disc(x + r, y + r, r, argb, layer);
+        s.disc(x + w - r, y + r, r, argb, layer);
+        s.disc(x + r, y + h - r, r, argb, layer);
+        s.disc(x + w - r, y + h - r, r, argb, layer);
+    }
+
     private static void paintLines(Surface s, String[] lines, float x, float cy, float cap, int ink, float maxText,
-                                   boolean tokens) {
-        if (lines.length == 1) {
-            String line = clip(s, lines[0], cap, maxText);
-            if (tokens) {
-                tokens(s, line, x, cy - cap / 2.0f, cap, ink);
-            } else {
-                capCentered(s, line, x, cy, cap, ink);
-            }
-            return;
-        }
+                                   boolean tokens, float boxWidth, int align) {
+        paintLines(s, lines, x, cy, cap, ink, maxText, tokens, boxWidth, align, ink == INK ? PAPER : BLACK);
+    }
+
+    private static void paintLines(Surface s, String[] lines, float x, float cy, float cap, int ink, float maxText,
+                                   boolean tokens, float boxWidth, int align, int background) {
         float pitch = cap * 1.42f;
         float top = cy - (lines.length - 1) * pitch / 2.0f - cap / 2.0f;
         for (int i = 0; i < lines.length; i++) {
             String line = clip(s, lines[i], cap, maxText);
+            float lx = x;
+            if (align >= 0 && lines.length > 1) {
+                float lineWidth = tokens ? tokenWidth(s, line, cap) : capWidth(s, line, cap);
+                lx += Math.max(0, boxWidth - lineWidth) * (align + 1) / 2.0f;
+            }
             if (tokens) {
-                tokens(s, line, x, top + i * pitch, cap, ink);
+                tokens(s, line, lx, top + i * pitch, cap, ink, background);
             } else {
-                cap(s, line, x, top + i * pitch, cap, ink);
+                cap(s, line, lx, top + i * pitch, cap, ink);
             }
         }
     }
 
     /** Token-bearing text on one line with its cap line at {@code capTop}. */
-    private static void tokens(Surface s, String line, float x, float capTop, float cap, int ink) {
+    private static void tokens(Surface s, String line, float x, float capTop, float cap, int ink, int background) {
         float size = sizeFor(cap);
         float space = s.width(" ", size, false);
         float y = capTop - TOP_PER_SIZE * size;
@@ -613,7 +753,8 @@ public final class SignLayout {
                 s.text(item.word(), x, y, size, ink, false);
             } else {
                 // Symbols are authored against the vanilla glyph box; centre them on the cap line.
-                PosterLayout.symbol(s, item.token(), item.arg(), x, capTop + cap / 2.0f - size / 2.0f, size, ink);
+                PosterLayout.symbol(s, item.token(), item.arg(), x, capTop + cap / 2.0f - size / 2.0f, size, ink,
+                        background);
             }
             x += item.width();
             first = false;
@@ -785,7 +926,7 @@ public final class SignLayout {
                 lines[i] = clip(s, parts.lines().get(i), small, maxText);
                 stack = Math.max(stack, capWidth(s, lines[i], small));
             }
-            paintLines(s, lines, x, cy, small, ink, maxText, false);
+            paintLines(s, lines, x, cy, small, ink, maxText, false, 0, -1);
             x += stack + gap;
         }
         if (!parts.name().isEmpty()) {

@@ -16,8 +16,8 @@ Contracts honoured (each learned the hard way elsewhere in this repo):
 - every face carries an explicit uv inside 0..16 (auto-UV bleeds the atlas
   for elements outside the block; `face_uv()` reproduces vanilla's auto-UV
   and wraps it back onto the sprite);
-- steel textures vary VERTICALLY only (stacked/adjacent faces sampling the
-  same window never band);
+- steel textures are UNIFORM satin (a few levels of soft drift + fine grain,
+  no stripe columns), so faces sampling any window never band;
 - no two elements share a plane unless the buried face is omitted;
 - verify() checks every blockstate when-key against the Java property sets
   and every model face's uv.
@@ -60,7 +60,6 @@ AMBER_CORE = (255, 230, 150, 255)
 LAMP_OFF = (40, 44, 42, 255)
 DISPLAY = (16, 22, 18, 255)
 DISPLAY_GREEN = (80, 230, 120, 255)
-OMNY_BLUE = (60, 120, 255, 255)
 POSTER_BLUE = (0, 57, 166, 255)
 POSTER_YELLOW = (252, 204, 10, 255)
 CLEAR = (0, 0, 0, 0)
@@ -69,15 +68,21 @@ CLEAR = (0, 0, 0, 0)
 # --------------------------------------------------------------- textures --
 def brushed(rows, x0, y0, x1, y1, base=STEEL, lit=STEEL_LIT, dark=STEEL_DARK,
             bright=STEEL_BRIGHT, seam=STEEL_SHADOW, seed=0):
-    """#4 satin stainless: per-COLUMN tones only (vertical grain), so a face
-    sampling any window of it never bands against its neighbours."""
-    tones = [base, lit, base, dark, base, bright, base, lit, base, base, dark, base, lit]
+    """Satin stainless, UNIFORM: the base tone with a soft per-column drift of
+    a few levels (smoothed, so no column reads as a stripe) and a fine
+    per-texel grain. No lit/dark/seam columns — Thomas: "less stripy, more
+    uniform metallic"; the facets' own shading is what models the form.
+    (lit/dark/bright/seam are accepted for the callers' sake and unused.)"""
+    def h(a, b=0):
+        n = (a * 374761393 + b * 668265263 + seed * 2246822519) & 0xFFFFFFFF
+        n = ((n ^ (n >> 13)) * 1274126177) & 0xFFFFFFFF
+        return ((n ^ (n >> 16)) & 0xFFFF) / 65535.0 - 0.5
+    span = max(3.0, base[0] * 0.035)           # +-3 on the dark steels, +-6 on stainless
     for x in range(x0, x1):
-        t = tones[(x * 7 + seed * 3) % len(tones)]
-        if (x * 11 + seed) % 17 == 5:
-            t = seam
+        col = (h(x - 1) + 2 * h(x) + h(x + 1)) / 4 * span
         for y in range(y0, y1):
-            rows[y][x] = t
+            d = col + h(x, y + 1) * span * 0.5
+            rows[y][x] = tuple(max(0, min(255, int(round(c + d)))) for c in base[:3]) + (255,)
 
 
 def tex_steel():
@@ -112,7 +117,7 @@ def tex_perf():
     return rows
 
 
-def seams(rows, cols=(), rowlines=(), colour=(120, 122, 126, 255), x0=0, x1=32, y0=0, y1=32):
+def seams(rows, cols=(), rowlines=(), colour=(148, 150, 154, 255), x0=0, x1=32, y0=0, y1=32):
     """Panel seam lines (1 texel) — the only non-vertical detail steel gets;
     seams sit where panel joints are on the real cabinet."""
     for c in cols:
@@ -153,25 +158,14 @@ def tex_recess():
 
 
 def tex_reader():
-    """Reader unit on the cabinet top. OMNY tablet face at u 0..8 v 0..12
-    (black, blue corner lights, tap glyph); reader box top at u 16..32
-    v 24..32 (MetroCard swipe track with arrows, yellow decal)."""
+    """The LCD plate beside the swipe slot: lid art at texels u 0..5 v 0..6 —
+    dark bezel, green screen with one lit text line, yellow swipe decal."""
     rows = tex_steel()
-    pk.rect(rows, 0, 0, 8, 12, PANEL)
-    pk.rect(rows, 1, 1, 7, 11, (10, 12, 20, 255))
-    for (x, y) in ((1, 1), (6, 1), (1, 10), (6, 10)):
-        rows[y][x] = OMNY_BLUE
-        rows[y][x + (1 if x == 1 else -1)] = OMNY_BLUE
-        rows[y + (1 if y == 1 else -1)][x] = OMNY_BLUE
-    pk.rect(rows, 3, 4, 5, 8, WHITE)
-    rows[6][4] = (10, 12, 20, 255)
-    # swipe track
-    pk.rect(rows, 16, 24, 32, 32, (150, 152, 156, 255))
-    pk.rect(rows, 17, 27, 31, 29, (40, 42, 46, 255))
-    for x in (19, 23, 27):
-        rows[26][x] = BLACK
-        rows[30][x] = BLACK
-    pk.rect(rows, 28, 25, 31, 27, POSTER_YELLOW)
+    # 5 x 6 texels = the 2.5 x 3 px plate at 2 texels/px (square texels)
+    pk.rect(rows, 0, 0, 5, 6, PANEL)                       # bezel
+    pk.rect(rows, 1, 1, 4, 4, DISPLAY)                     # screen
+    pk.rect(rows, 1, 2, 4, 3, DISPLAY_GREEN)               # lit text line
+    pk.rect(rows, 1, 5, 4, 6, POSTER_YELLOW)               # swipe decal at the approach end
     return rows
 
 
@@ -434,13 +428,21 @@ def plate(frm, to, face, tex, uv):
 
 # --------------------------------------------------------------- low unit --
 # Cabinet x 11..16 (right of the rider), lane x 0..11, unpaid side +z.
+CHAMFER_INSET = 0.03
+
+
 def chamfer_x(x0, x1, y_top, z_edge, run, depth):
     """45-deg chamfer cutting the corner at (y_top, z_edge + run): a box authored
     along +z from z_edge, `depth` below y_top, rotated +45 about x at the
-    edge, so its outer face is the slope and the rest is buried."""
+    edge, so its outer face is the slope and the rest is buried.
+    Its x ends sit CHAMFER_INSET inside x0/x1: the buried part of the rotated
+    box reaches behind the body's own side faces, and at the same x those
+    coplanar faces z-fought (the stippled patches on the cabinet and pylon
+    sides)."""
     length = run * math.sqrt(2)
-    return box((x0, y_top - depth, z_edge), (x1, y_top, z_edge + length), "steel",
-               rotation=rot((x0, y_top, z_edge), "x", 45))
+    xa, xb = x0 + CHAMFER_INSET, x1 - CHAMFER_INSET
+    return box((xa, y_top - depth, z_edge), (xb, y_top, z_edge + length), "steel",
+               rotation=rot((xa, y_top, z_edge), "x", 45))
 
 
 def cabinet_body(recessed):
@@ -453,9 +455,10 @@ def cabinet_body(recessed):
             # main body behind the recess (its west face IS the dark cover)
             box((11.6, 1, 0), (16, 16, 12), "cabinet", omit=("south",),
                 override={"west": ("recess", [0, 0, 16, 15])}),
-            box((11, 1, 0), (11.6, 16, 3), "steel", omit=("east", "south")),        # rear stile
-            box((11, 1, 13), (11.6, 12, 16), "steel", omit=("east", "north")),      # front stile
-            box((11, 11, 3), (11.6, 16, 13), "steel", omit=("east",)),              # top rail
+            box((11, 1, 0), (11.6, 16, 3), "steel", omit=("east",)),                # rear stile (south face = recess jamb)
+            box((11, 1, 13), (11.6, 12, 16), "steel", omit=("east",)),              # front stile (north face = recess jamb)
+            box((11, 11, 3), (11.6, 16, 12), "steel", omit=("east",)),              # top rail (ends at the chamfer)
+            box((11, 11, 12), (11.6, 12, 13), "steel", omit=("east", "north", "south", "up")),
             box((11, 1, 3), (11.6, 2, 13), "steel", omit=("east",)),                # sill
         ]
     else:
@@ -468,16 +471,21 @@ def cabinet_body(recessed):
 
 
 def reader_elements():
-    """Reader unit mid-top (UPPER model: the cabinet lid is y 0): box with the
-    MetroCard track on its lid and an OMNY tablet leaning back on its
-    approach face, plus the swipe rib along the lane edge."""
+    """MetroCard reader on the lid (UPPER model: the cabinet lid is y 0), the
+    way the Cubic turnstile carries it: NOT a box — a low SWIPE SLOT along the
+    lane edge (two thin stainless fins with a real gap between them, dark
+    floor in the gap; the card is swiped front to back through it) and a
+    small green LCD plate lying nearly flush beside its approach end.
+    Everything stays under 1.1 px so the lid reads as a flat hood (Thomas,
+    2026-09-20: the 4 x 4 x 2.4 px reader box "is not a MetroCard reader and
+    is blocking the model")."""
+    z0, z1 = 4.6, 11.6
     return [
-        box((11.6, 0, 6), (15.4, 2.4, 10), "steel", omit=("down",),
-            override={"up": ("reader", [8, 12, 16, 16])}),
-        box((12.2, 0.3, 9.7), (14.8, 3.5, 10.3), "dark", omit=("down",),
-            override={"south": ("reader", [0, 0, 4, 6])},
-            rotation=rot((13.5, 0.3, 10), "x", -22.5)),
-        box((11.7, 0, 2), (12.9, 0.8, 6), "steel", omit=("down",)),
+        box((11.4, 0, z0), (11.9, 1.05, z1), "steel", omit=("down",)),            # lane-side fin
+        box((12.2, 0, z0), (12.7, 1.05, z1), "steel", omit=("down",)),            # inner fin
+        box((11.9, 0, z0 + 0.05), (12.2, 0.3, z1 - 0.05), "recess", omit=("down", "east", "west")),  # slot floor
+        box((13.0, 0, 8.4), (15.5, 0.45, 11.4), "dark", omit=("down",),
+            override={"up": ("reader", [0, 0, 2.5, 3])}),                           # LCD plate
     ]
 
 
@@ -493,7 +501,8 @@ def pylon_elements(tex, indicator=True):
         chamfer_x(11, 16, 11, 2, 2, 1.6),
         # collar: octagon r 1.4 about (13.5, ., 1.4)
         box((12.1, 11, 0), (14.9, 14, 2.8), "steel", omit=("down",)),
-        box((12.1, 11, 0), (14.9, 14, 2.8), "steel", omit=("down",),
+        # twin lid 0.03 lower: two lids in one plane z-fight
+        box((12.1, 11, 0), (14.9, 13.97, 2.8), "steel", omit=("down",),
             rotation=rot((13.5, 11, 1.4), "y", 45)),
     ]
     return els

@@ -108,8 +108,10 @@ public class StairDividerBlock extends Block {
     @Nullable
     @Override
     public BlockState getPlacementState(ItemPlacementContext context) {
+        // the stairs it divides decide the ascent - clicked in from the side of a
+        // flight, the look direction is 90 degrees off (sneak forces it anyway)
         return computed(context.getWorld(), context.getBlockPos(),
-                context.getHorizontalPlayerFacing());
+                StairFamily.placementAscent(context));
     }
 
     @Override

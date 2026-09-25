@@ -62,6 +62,11 @@ final class MtaSignPainter {
         CONTEXTS.clear();
     }
 
+    /** Drops the cached runs (their faces are cached with them): the editor's live draft changed. */
+    static void invalidateRuns() {
+        RUNS.clear();
+    }
+
     static SignContext context(BlockPos pos) {
         return CONTEXTS.computeIfAbsent(pos.asLong(), key -> new SignContext(pos.toImmutable()));
     }
@@ -172,6 +177,49 @@ final class MtaSignPainter {
         return steps == 0 ? origin : origin.offset(dir, steps);
     }
 
+    /**
+     * The segment of a merged legacy run that an edit must land on. The run
+     * draws the FIRST segment holding a saved sign ({@link #legacyFaces}), so
+     * saving onto any other segment would change nothing on screen: the editor
+     * opens on that segment instead, or on the run's origin when none is saved.
+     * Blocks that do not merge return {@code entity} itself.
+     */
+    static StationDecorBlockEntity signOwner(StationDecorBlockEntity entity) {
+        ClientWorld world = net.minecraft.client.MinecraftClient.getInstance().world;
+        BlockState state = entity.getCachedState();
+        java.util.function.Predicate<BlockState> family;
+        if (state.getBlock() instanceof com.stationannouncer.mtr.ElNameBoardBlock board && board.merges()) {
+            family = st -> com.stationannouncer.mtr.ElNameBoardBlock.sameSign(state, st);
+        } else if (state.getBlock() instanceof com.stationannouncer.mtr.ElWallSignBlock
+                || state.getBlock() instanceof com.stationannouncer.mtr.ElRailingSignBlock) {
+            family = st -> st.getBlock() == state.getBlock()
+                    && st.get(com.stationannouncer.block.FacingDecorBlock.FACING)
+                    == state.get(com.stationannouncer.block.FacingDecorBlock.FACING);
+        } else {
+            return entity;
+        }
+        if (world == null) {
+            return entity;
+        }
+        Direction posDir = state.get(com.stationannouncer.block.FacingDecorBlock.FACING).rotateYClockwise();
+        BlockPos origin = entity.getPos();
+        for (int i = 0; i < MAX_RUN && family.test(world.getBlockState(origin.offset(posDir.getOpposite()))); i++) {
+            origin = origin.offset(posDir.getOpposite());
+        }
+        StationDecorBlockEntity first = null;
+        for (int i = 0; i < MAX_RUN && family.test(world.getBlockState(pos(origin, posDir, i))); i++) {
+            if (world.getBlockEntity(pos(origin, posDir, i)) instanceof StationDecorBlockEntity segment) {
+                if (first == null) {
+                    first = segment;
+                }
+                if (nonEmpty(segment.getSign()) != null) {
+                    return segment;
+                }
+            }
+        }
+        return first != null ? first : entity;
+    }
+
     /** Length of a run of same-family blocks through {@code pos} along {@code posDir}, counted from its origin. */
     static int legacyRun(ClientWorld world, BlockPos pos, Direction posDir,
                          java.util.function.Predicate<BlockState> family) {
@@ -185,6 +233,40 @@ final class MtaSignPainter {
             count++;
         }
         return count;
+    }
+
+    /**
+     * The plate as geometry: a slab from the painted face (canvas z 0) back
+     * {@code depthBlocks} into the sign, under the sign's own panel box. The
+     * block models only carry the plate at the block's stock size, so a sign
+     * whose plate was resized or moved in the editor would otherwise be a
+     * paper-thin rectangle floating in front of it. Drawn for a custom panel
+     * only unless {@code always} (column boards have no model plate at all).
+     * The front is left open — the painted panel IS the front, and a second
+     * quad a hair behind it in the same layer z-fights at grazing angles.
+     */
+    static void plateSlab(MatrixStack matrices, VertexConsumerProvider consumers, SignSpec spec,
+                          float width, float height, float depthBlocks, boolean always) {
+        if (spec == null) {
+            return;
+        }
+        float[] box = SignLayout.panelBox(spec, width, height);
+        if (!always && box[0] == 0 && box[1] == 0 && box[2] == width && box[3] == height) {
+            return;
+        }
+        float x1 = box[0];
+        float y1 = box[1];
+        float x2 = box[0] + box[2];
+        float y2 = box[1] + box[3];
+        float z = depthBlocks * 64.0f;
+        int colour = spec.style() == SignSpec.Style.WHITE_BAND ? SignLayout.PAPER : SignLayout.BLACK;
+        org.joml.Matrix4f m = matrices.peek().getPositionMatrix();
+        net.minecraft.client.render.VertexConsumer buffer = consumers.getBuffer(CanvasPainter.layer());
+        CanvasPainter.quad3d(buffer, m, x1, y1, z, x1, y2, z, x2, y2, z, x2, y1, z, colour);
+        CanvasPainter.quad3d(buffer, m, x1, y1, 0, x1, y2, 0, x1, y2, z, x1, y1, z, colour);
+        CanvasPainter.quad3d(buffer, m, x2, y1, 0, x2, y1, z, x2, y2, z, x2, y2, 0, colour);
+        CanvasPainter.quad3d(buffer, m, x1, y2, 0, x2, y2, 0, x2, y2, z, x1, y2, z, colour);
+        CanvasPainter.quad3d(buffer, m, x1, y1, 0, x1, y1, z, x2, y1, z, x2, y1, 0, colour);
     }
 
     /** Paints one face of a legacy sign panel whose matrices are already at the canvas origin. */
@@ -238,6 +320,8 @@ final class MtaSignPainter {
                 matrices.translate(centerOffset + halfRun, top, frontZ - STANDOFF);
             }
             matrices.scale(-UNIT, -UNIT, UNIT);
+            // Every mount's plate is 1 px of model from the painted face to the wall or the centre plane.
+            plateSlab(matrices, consumers, spec, width, height, 1.0f / 16.0f + STANDOFF, false);
             PosterLayout.WorldSurface surface = new PosterLayout.WorldSurface(matrices, consumers, SignLayout.FONT);
             SignLayout.paint(surface, spec, width, height, ctx);
             matrices.pop();

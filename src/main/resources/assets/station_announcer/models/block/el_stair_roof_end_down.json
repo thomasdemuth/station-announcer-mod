@@ -4,7 +4,8 @@
   "green": "station_announcer:block/el2_green",
   "red": "station_announcer:block/el2_roof_red",
   "soffit": "station_announcer:block/el2_soffit",
-  "lattice": "station_announcer:block/el2_lattice_solid"
+  "lattice": "station_announcer:block/el2_lattice_solid",
+  "particle": "#green"
  },
  "elements": [
   {

@@ -51,7 +51,7 @@ like the v1 family). Lane-side neighbour = `FACING.rotateYCounterclockwise()`.
 
 | id | class | properties | cells |
 |---|---|---|---|
-| `turnstile` / `turnstile_exit` | `TurnstileBlock` (BE on lower) | facing, half, **join**, **open**, indicator(off/go/stop/wait) | lower = cabinet + tripod (BER); upper = hood + OMNY + pylon (+ `ts_arch` when join) |
+| `turnstile` / `turnstile_exit` | `TurnstileBlock` (BE on lower) | facing, half, **join**, **open**, indicator(off/go/stop/wait) | lower = cabinet + tripod (BER); upper = flat hood + swipe slot + LCD plate + pylon (OMNY tablet and the reader BOX removed 2026-09-20, Thomas) (+ `ts_arch` when join) |
 | `turnstile_cap` | `TurnstileCapBlock` | facing, half | end panel + post + arch riser; place on the last lane's lane side |
 | `turnstile_heet` | `TurnstileHeetBlock` (BE on lane_lower) | facing, **part**(lane_lower/lane_upper/comb_lower/comb_upper), open, indicator | 2 wide × 1 deep × 2 tall; comb cell on the rider's right; drum canopy drawn by lane_upper up to y 24 (world 2.5 blocks) |
 
@@ -128,3 +128,28 @@ collars. Implemented as such (see CLAUDE.md "Round 2"). The arch moved into the 
 
 See the bottom of the CLAUDE.md turnstile v2 section for what was verified and what
 Thomas still needs to judge.
+
+## 2026-09-20 feedback round (3.2.1)
+
+Thomas, from an in-game screenshot: "get rid of the OMNY reader, fix the z-fighting, textures less
+stripy and more uniform metallic".
+- OMNY tablet element + its texture art deleted (`reader_elements`, `tex_reader`); the MetroCard
+  reader box and swipe rib stay.
+- **Z-fighting cause:** `chamfer_x` boxes are rotated 45 deg and mostly buried, but their west/east
+  faces sat at the SAME x as the cabinet / pylon side faces, so the buried part of the rotated side
+  face was coplanar with the stiles, top rail and body (stippled patches beside the chamfer). Fix:
+  chamfers inset `CHAMFER_INSET` 0.03 in x. Also: the recess top rail poked 1 px through the slope
+  (now ends at z 12 + a filler under it), the recess jamb faces were wrongly omitted, and the collar
+  octagon's two lids shared y 14 (twin now 13.97).
+- `brushed()` rewritten: base tone + smoothed per-column drift of a few levels + fine grain; the
+  lit/dark/bright/seam stripe columns are gone. Panel seams softened.
+- Audit: a rotation-aware coplanar check (same-direction normals, plane gap < 0.015, clipped overlap
+  area) over cabinet + upper + every lamp model reports 0 pairs. The HEET drum lids still share
+  planes by design (grain-free `ts_flat`).
+
+**Same day, 3.2.3 — the reader box went too.** With the tablet gone Thomas saw what was left: a
+4 x 4 x 2.4 px box with a swipe decal on its lid — "not a MetroCard reader and it seems to be
+blocking the model". The real lid is flat: the reader is a SWIPE SLOT along the lane edge. Now two
+0.5 px stainless fins (x 11.4..11.9 / 12.2..12.7, z 4.6..11.6, 1.05 tall) with a real 0.3 px gap and a
+dark floor, plus a 2.5 x 3 px LCD plate 0.45 proud beside the approach end (`ts_reader` art at texels
+0..5 x 0..6, square texels). Nothing on the lid exceeds 1.1 px. Coplanar audit still 0.

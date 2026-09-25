@@ -32,6 +32,8 @@ public class ElStairRoofBlock extends Block {
     public static final DirectionProperty FACING = Properties.HORIZONTAL_FACING;
     public static final BooleanProperty EDGE_LEFT = BooleanProperty.of("edge_left");
     public static final BooleanProperty EDGE_RIGHT = BooleanProperty.of("edge_right");
+    /** An edge cell over a course post: draws the stub that carries the post into the frieze chord. */
+    public static final BooleanProperty POST = BooleanProperty.of("post");
     /** How a run end is closed: RUN = another cell continues, END = open (fascia), LANDING = a landing roof takes over. */
     public enum End implements net.minecraft.util.StringIdentifiable {
         RUN("run"), END("end"), LANDING("landing");
@@ -75,12 +77,12 @@ public class ElStairRoofBlock extends Block {
     public ElStairRoofBlock(Settings settings) {
         super(settings);
         setDefaultState(getDefaultState().with(FACING, Direction.NORTH).with(EDGE_LEFT, true)
-                .with(EDGE_RIGHT, true).with(UP, End.END).with(DOWN, End.END));
+                .with(EDGE_RIGHT, true).with(UP, End.END).with(DOWN, End.END).with(POST, true));
     }
 
     @Override
     protected void appendProperties(StateManager.Builder<Block, BlockState> builder) {
-        builder.add(FACING, EDGE_LEFT, EDGE_RIGHT, UP, DOWN);
+        builder.add(FACING, EDGE_LEFT, EDGE_RIGHT, UP, DOWN, POST);
     }
 
     @Override
@@ -105,7 +107,9 @@ public class ElStairRoofBlock extends Block {
                 : landingDown ? End.LANDING : End.END;
         return state.with(EDGE_LEFT, !same(world, pos.offset(facing.rotateYCounterclockwise()), facing))
                 .with(EDGE_RIGHT, !same(world, pos.offset(facing.rotateYClockwise()), facing))
-                .with(UP, up).with(DOWN, down);
+                .with(UP, up).with(DOWN, down)
+                // the side courses below post every other cell (same parity rule) and always at the foot
+                .with(POST, down != End.RUN || StairFamily.postCell(pos, facing));
     }
 
     @Nullable
@@ -113,19 +117,8 @@ public class ElStairRoofBlock extends Block {
     public BlockState getPlacementState(ItemPlacementContext context) {
         World world = context.getWorld();
         BlockPos pos = context.getBlockPos();
-        Direction facing = context.getHorizontalPlayerFacing();
-        // adopt the ascent of a roof or side course beside / below us
-        for (BlockPos near : new BlockPos[]{pos.east(), pos.west(), pos.north(), pos.south(), pos.down()}) {
-            BlockState s = world.getBlockState(near);
-            if (s.isOf(this)) {
-                facing = s.get(FACING);
-                break;
-            }
-            if (s.getBlock() instanceof ElStairSideBlock) {
-                facing = s.get(ElStairSideBlock.FACING);
-                break;
-            }
-        }
+        // adopt the ascent of the roof run, a roof beside us or the course below
+        Direction facing = StairFamily.placementAscent(context);
         return compute(getDefaultState().with(FACING, facing), world, pos);
     }
 

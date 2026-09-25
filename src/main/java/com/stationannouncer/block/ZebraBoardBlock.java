@@ -1,18 +1,28 @@
 package com.stationannouncer.block;
 
+import com.stationannouncer.StationAnnouncer;
 import net.minecraft.block.Block;
+import net.minecraft.block.BlockEntityProvider;
 import net.minecraft.block.BlockState;
 import net.minecraft.block.ShapeContext;
+import net.minecraft.block.entity.BlockEntity;
+import net.minecraft.entity.player.PlayerEntity;
 import net.minecraft.item.ItemPlacementContext;
+import net.minecraft.item.ItemStack;
 import net.minecraft.state.StateManager;
 import net.minecraft.state.property.BooleanProperty;
+import net.minecraft.util.ActionResult;
+import net.minecraft.util.Hand;
+import net.minecraft.util.hit.BlockHitResult;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.util.math.Direction;
 import net.minecraft.util.shape.VoxelShape;
 import net.minecraft.util.shape.VoxelShapes;
 import net.minecraft.world.BlockView;
+import net.minecraft.world.World;
 import net.minecraft.world.WorldAccess;
 import org.jetbrains.annotations.Nullable;
+import java.util.function.Predicate;
 
 /**
  * A conductor's zebra board — the striped board a train berths against.
@@ -23,8 +33,16 @@ import org.jetbrains.annotations.Nullable;
  * <p>The wall and hanging variants are separate blocks and never merge with
  * each other — they sit at different depths in the block, so a mixed run
  * would step.</p>
+ *
+ * <p>Every block can carry a label plate ("R-160", "8", "5 Car"), kept in a
+ * {@link ZebraBoardBlockEntity} and edited with the MTR brush. The brush is
+ * reached through {@link #EDIT_TOOL} so this common class never names an MTR
+ * type; the MTR module installs the real test.</p>
  */
-public class ZebraBoardBlock extends FacingDecorBlock {
+public class ZebraBoardBlock extends FacingDecorBlock implements BlockEntityProvider {
+    /** Which held item opens the label editor; installed by the MTR module (the brush). */
+    public static Predicate<ItemStack> EDIT_TOOL = stack -> false;
+
     /** Whether another board of the same kind continues on that side (facing-relative). */
     public static final BooleanProperty LEFT = BooleanProperty.of("left");
     public static final BooleanProperty RIGHT = BooleanProperty.of("right");
@@ -81,6 +99,27 @@ public class ZebraBoardBlock extends FacingDecorBlock {
     private boolean connectsTo(WorldAccess world, BlockPos pos, Direction facing) {
         BlockState neighbor = world.getBlockState(pos);
         return neighbor.isOf(this) && neighbor.get(FACING) == facing;
+    }
+
+    @Nullable
+    @Override
+    public BlockEntity createBlockEntity(BlockPos pos, BlockState state) {
+        return new ZebraBoardBlockEntity(pos, state);
+    }
+
+    /** The brush opens the label editor; everything else passes through. */
+    @Override
+    public ActionResult onUse(BlockState state, World world, BlockPos pos, PlayerEntity player, Hand hand, BlockHitResult hit) {
+        if (!EDIT_TOOL.test(player.getStackInHand(hand))) {
+            return ActionResult.PASS;
+        }
+        if (world.isClient) {
+            if (world.getBlockEntity(pos) instanceof ZebraBoardBlockEntity board) {
+                StationAnnouncer.GUI_OPENER.accept(board);
+            }
+            return ActionResult.SUCCESS;
+        }
+        return ActionResult.CONSUME;
     }
 
     @Override

@@ -270,6 +270,14 @@ one long beam on two poles. Stack **PIDS Drop Poles** above an end block to hang
 lower from a tall ceiling. Wall and hanging boards never merge with each other (they sit at
 different depths, so a mixed run would step).
 
+**Labels (3.2.5):** right-click any board block with the **MTR brush** to put a label on it —
+"R-160", "8", "5 Car", up to 16 characters. It is drawn as a white plate with black
+lettering over the stripes, sized to the text, and a label wider than one block spills onto
+the neighbouring boards. **Position** puts the plate centred on the block or flush with its
+left / right edge (flush against the end plate on a run's last block). A label never runs
+past the run's end plates — one longer than the whole run is squeezed to fit. Hanging boards
+show the label on both faces. Clear the text to remove it.
+
 ### Bridge Creator (requires MTR, new in 3.2)
 
 One configurable tool that replaces juggling the pillar, railing and viaduct creators: it
@@ -559,6 +567,9 @@ a small companion mod could:
 ## License
 
 MIT — see `LICENSE`.
+
+The sign typeface is **TeX Gyre Heros Bold** (© GUST e-foundry), bundled unmodified under
+the GUST Font License — see `assets/station_announcer/font/gust-font-license.txt`.
 
 ### Service change posters
 

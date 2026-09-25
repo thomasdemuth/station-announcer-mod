@@ -4,7 +4,8 @@
   "green": "station_announcer:block/el2_green",
   "red": "station_announcer:block/el2_roof_red",
   "soffit": "station_announcer:block/el2_soffit",
-  "lattice": "station_announcer:block/el2_lattice_solid"
+  "lattice": "station_announcer:block/el2_lattice_solid",
+  "particle": "#green"
  },
  "elements": [
   {
@@ -350,56 +351,6 @@
     "axis": "x",
     "angle": 45,
     "rescale": true
-   }
-  },
-  {
-   "from": [
-    0,
-    0,
-    13.6
-   ],
-   "to": [
-    2.4,
-    10.8,
-    16
-   ],
-   "faces": {
-    "north": {
-     "uv": [
-      0,
-      0,
-      2.4,
-      10.8
-     ],
-     "texture": "#green"
-    },
-    "south": {
-     "uv": [
-      0,
-      0,
-      2.4,
-      10.8
-     ],
-     "texture": "#green"
-    },
-    "east": {
-     "uv": [
-      4,
-      0,
-      6.4,
-      10.8
-     ],
-     "texture": "#green"
-    },
-    "west": {
-     "uv": [
-      4,
-      0,
-      6.4,
-      10.8
-     ],
-     "texture": "#green"
-    }
    }
   }
  ]

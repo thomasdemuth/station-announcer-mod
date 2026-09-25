@@ -23,13 +23,13 @@ as the opped user `Rig`; `run/screenshot.flag` captures; scratchpad
 | block | class | what it does |
 |---|---|---|
 | `platform_edge` | `mtr/PlatformEdgeBlock` | Concrete + proud yellow tactile strip on TRACK_SIDE; **opens MTR train doors** (`implements org.mtr.mod.block.PlatformHelper` — MTR's only door test, `RenderVehicleHelper.canOpenDoors`, bytecode-verified). Adopts SLAB (1-4) + CLEAN from any neighbouring concrete floor / edge, reuses the floor models, recomputes world-grid joints. Also new 1-block concrete floors. |
-| `el_roof` | `block/ElRoofBlock` | Gable canopy: AXIS = ridge; each cell walks its crosswise neighbours -> SIDE (neg/pos/crown) + LEVEL (0..2); any length, width up to 7 (32 px ceiling). 22.5° slabs via rotation+rescale; **thickness parity** (+0.1 px on odd levels) kills the coplanar overlap at cell joints; ridge half-caps for even widths; lattice frieze + fascia on level-0 eaves; truss end panels on open run ends; rafter tie at x/z 7..9 on every underside (pids_pole / signs land on it). **z-ridge rule:** the y=90 turn maps model -z to world +x, so crossNeg(Z)=EAST. |
+| `el_roof` | `block/ElRoofBlock` | Gable canopy: AXIS = ridge; each cell walks its crosswise neighbours -> SIDE (neg/pos/crown) + LEVEL (0..3); any length, width up to 8 (7 odd with a crown row, 8 even with a ridge pair — raised from 7 on 2026-09-09: a 7-wide crown was clamping to level 2 and peaking BELOW its neighbours' slopes; level-3 descending pieces are authored from their LOW edge because the high edge sits at 32.5 px, past the JSON element ceiling, and the level-3 ridge cap is skipped). 22.5° slabs via rotation+rescale; **thickness parity** (+0.1 px on odd levels) kills the coplanar overlap at cell joints; ridge half-caps for even widths; lattice frieze + fascia on level-0 eaves; truss end panels on open run ends; rafter tie at x/z 7..9 on every underside (pids_pole / signs land on it). **z-ridge rule:** the y=90 turn maps model -z to world +x, so crossNeg(Z)=EAST. |
 | `el_post`, `el_post_named` | `mtr/ColumnBlock`, `StationColumnBlock` | 4 px I-section, base plate at stack bottom, cap beam + 45° knee struts at stack top (beam top flush with the block top -> sits under the roof tie). Named: 8 px black plates both flange faces, renderer paints the station name (boardOffset 0.1625). |
 | `el_railing`, `el_railing_sign` | `block/ElRailingBlock`, `mtr/ElRailingSignBlock` | 20 px picket railing, fence-style N/E/S/W + post at bends/ends (RailingBlock logic, own family only); sign segment = RailingSignBlock behaviour (merging runs, MTR brush for custom text). |
 | `el_wall`, `el_wall_glass`, `el_wall_sign` | `block/ElWallBlock`, `mtr/ElWallSignBlock` | Thin windscreen courses, same fence logic, own family: cream board panel / wired-glass band (cutout, mullion per block) / name band. Stack any order (each course self-framed). |
 | `el_platform_lamp`, `el_platform_lamp_head` | `mtr/ColumnBlock`, `DecorBlock` | Black pole (foot at stack bottom) + cone-hat head, luminance 14. (`el_lamp_head` was TAKEN by v1 — hence the ids.) |
 | `el_roof_light` | `FacingDecorBlock` | Fluorescent fixture placed in the block under a roof cell, rods up to the tie, luminance 15. |
-| `el_sign` | `mtr/ElNameBoardBlock` (2nd instance) | Black name board: hanging (centre rod onto the roof tie) / standing / wall; renderer table unchanged. |
+| `el_sign` | `mtr/ElNameBoardBlock` (2nd instance) | Black name board: hanging (centre rod onto the roof tie) / standing / wall; renderer table unchanged. **Boards side by side (same facing + mount) merge into one larger sign** (LEFT/RIGHT, 2026-09-20 — see SIGN_PLAN.md build log). |
 
 Rig lessons this pass: chat commands from the hook must be throttled (one per
 25 ticks) or the server kicks for spam; the rig user must be in `run/ops.json`
@@ -297,6 +297,56 @@ into build/resources/main and reloaded with F3+T). Fixed from his live feedback:
 STILL OPEN: Thomas's "stairs cut through the platform" stair house needs an in-game pass
 with the rim placement; deploy 2.4.53 after his next restart.
 
+### STAIR KIT v3 (2026-09-20) — QOL round: placement rule, bolts, restyled stair sides, triangle walls, in-cell sides; dev tree (mod_version was already 3.2.3 from another session), NOT built with Gradle, NOT in game
+
+Thomas's answers (do not re-ask): stair-family blocks were landing 90 degrees off -> NEIGHBOURS DECIDE the
+ascent, look direction is the fallback, SNEAK forces the look direction; the "concrete bolts" = the post stub
++ bolted bracket under every bottom wall/railing course; stair walls + stringer were "super ugly" (everything
+leaning 45 degrees, too heavy/busy, broken ends); he wants sides BOTH in the stair's own cell and in the cell
+beside; "triangle walls" (45-degree foot, level top at the ceiling); through-the-platform = open well + rim
+railing first; the Stair Creator is DEFERRED ("skip this part for now").
+
+- `block/StairFamily`: `placementAscent` (diagonal run cells -> pieces beside -> column; sneak = look),
+  `underCeiling` (first non-air, non-family block above within 8 shows a full face down), `postCell`
+  (parity along the ascent axis). Used by subway stairs, the divider, side courses, stair roof, sloped
+  handrails, the new upper block.
+- `EdgeRunBlock.BOTTOM` now also requires a full face on the block under the platform-side cell
+  (`pos.offset(facing).down()`): no slab, no bracket (mezzanine floors, stair houses, the street).
+- SIDE COURSES RESTYLED (`gen_el2_stairs.py`, section comment has the rules): only rails + stringer follow
+  the slope; boards / glass / pickets are WORLD-VERTICAL 2 px / 1 px strips whose flat ends hide inside the
+  sloped members (`vstrip`, `flat_strip` splits every 16 px for 1:1 texels, glass anchors v to the 4 px mesh
+  and uses the new glare-free `el2_wired_glass_plain`); slim channel stringer (web v 7.8..12.2 + flanges)
+  instead of beam + kick plate; no mid rail; a stacked course draws no bottom rail; x-layout table keeps
+  crossing members off each other's planes. New props on `ElStairSideBlock`: `post` (every other cell;
+  foot = capped newel, head = knuckle + newel) and `mode` band|fill|rect. `top` now means "a stair/landing
+  roof sits on this course" (posts no longer stick up without a roof). `ElStairRoofBlock` got `post` too
+  (stub model `el_stair_roof_stub`, same parity).
+- TRIANGLE WALLS: a wall/glass BOTTOM course under a ceiling becomes `fill` (own-column strips from the
+  stringer to the top of its cell, no sloped top rail - all inside y 0..16, no downhill-cell trick) and
+  whatever is stacked on a fill/rect cell is `rect` (plain vertical cell, same plane). The rect's bottom
+  edge hides in the stringer web for z < 8.4 and meets the fill strips beyond - that is why only BOTTOM
+  courses fill (a rect over a banded course would overlap its boards).
+- IN-CELL SIDES: `SubwayStairBlock` `left`/`right` = none|stringer|railing|wall|wall_fill + `post`; the
+  tread models narrow by 2.4 px per occupied edge (`_nl/_nr/_nb`, gen_stair_assets.py, blockstate is
+  MULTIPART now and references `el_stair_*_inl/_inr` = the side models shifted 13.6 px, written by
+  gen_el2_stairs.py - run BOTH generators). wall -> wall_fill under a ceiling or under an upper wall.
+  Set by SNEAK-clicking a tread's outer third with a course item (railing / wall / posts-only = bare
+  stringer; again = off); a new stair copies the sides of the run it continues. Collision = stepped
+  panel to 16 px over the nosings.
+- NEW `el_stair_upper` (`ElStairUpperBlock` + `ElStairUpperItem`): walk-through cell above the treads,
+  `left`/`right` = none|wall|glass, `post`, `head`. Click a tread's left/right third (middle = both);
+  clicking again climbs. Right-click air = boards/glass. Cutout layer registered.
+- RECIPE for a stair through a platform: hole exactly the stair's width; stairs with wall sides
+  (auto wall_fill under the slab) + upper cells up to the soffit; `el_railing` on the rim (far third
+  click, existing rim placement) on three sides.
+- Tooling: `tools/render_scene.py` = TEXTURED offline renderer (numpy+PIL, z-buffer, uv + cutout,
+  blockstate resolver `place(scene, block, props, pos)`); previews + prototype in `tools/previews/`.
+  Compile check without Gradle (the rig was up): javac against the running client's classpath
+  (`jcmd <pid> VM.system_properties` -> java.class.path, + jetbrains annotations jar, fresh classes FIRST).
+- NOT done: Gradle build, rig/in-game pass (blockstates need the new Java -> restart first), divider
+  restyle to the slim channel, stair-roof frieze position over in-cell sides (roof edge cells assume the
+  beside-cell plane), the Stair Creator, README.
+
 ### STRUCTURE, round 1 (2026-09-05, 2.4.53 dev tree): columns, girder, decks, diagonals, creators
 
 Thomas: "let's work on structure now"; then "supports for curved and graded track
@@ -511,3 +561,20 @@ globe lamp post), station cutaway, Jefferson St headhouse sign.
 Still unbuilt ideas: glass stair enclosures/elevator towers (modern rebuild
 kit), X-brace panels between columns, 125 St arch braces, cable troughs,
 track bumpers, catwalks.
+
+
+### 2026-09-20 — girder run ENDS frame into what they meet (Thomas: "el structure blocks should connect together better")
+
+His screenshot: a plate girder butting a street column at the same level left 3 px of daylight —
+a girder cell ends at its block boundary, the column's face is 3..4 px inside the next cell. Same
+hole (4 px to the flange, 7 to the web) where a girder meets a girder running ACROSS it.
+`ElGirderBlock` gained `end_neg` / `end_pos` = none | column | beam (grid axes only; `endAt()`:
+a `COLUMNS` block → column, a girder on `axis.across()` → beam). Generator `girder_end(kind)`,
+authored at the positive end and `mirror_x`'d: **column** = flanges + web on to x 20 (the column's
+web plate; its corner angles swallow the flange corners) with END FACES drawn so a lattice column
+shows a closed girder end; **beam** = flanges to x 20 (the crossing flange's edge — butt, no end
+face, two flange tops in one plane must not overlap) and the web on to x 23 under/over the crossing
+flanges; both get a pair of connection angles hard against the joint. `onBlockAdded` now computes
+the cell's own state too (/setblock, /fill, pastes). Old placements load `none` and heal on the next
+neighbour update. Verified offline AND on the rig (2026-09-22 screenshots: girders framing into a column from both sides, front/angled/back, no daylight; T-joint into a crossing girder; `/execute if block` probes confirm end_pos=column / end_neg=column / end_pos=beam / free end none). Shipped in 3.2.4.
+Not done: diagonal runs, decks framing into columns, ColumnBlock (platform iron columns) as targets.

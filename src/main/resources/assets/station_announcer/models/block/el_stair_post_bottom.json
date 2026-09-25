@@ -2,26 +2,27 @@
  "textures": {
   "green": "station_announcer:block/el2_green",
   "cream": "station_announcer:block/el2_cream",
-  "glass": "station_announcer:block/el2_wired_glass"
+  "glass": "station_announcer:block/el2_wired_glass_plain",
+  "particle": "#green"
  },
  "elements": [
   {
    "from": [
-    0,
-    -7.199999999999999,
-    13.6
+    0.2,
+    0.7999999999999989,
+    13.8
    ],
    "to": [
-    2.4,
-    26.4,
-    16
+    2.2,
+    25.0,
+    15.8
    ],
    "faces": {
     "north": {
      "uv": [
       0,
       0,
-      2.4,
+      2.0,
       16
      ],
      "texture": "#green"
@@ -30,25 +31,25 @@
      "uv": [
       0,
       0,
-      2.4,
+      2.0,
       16
      ],
      "texture": "#green"
     },
     "east": {
      "uv": [
-      4,
       0,
-      6.4,
+      0,
+      2.0,
       16
      ],
      "texture": "#green"
     },
     "west": {
      "uv": [
-      4,
       0,
-      6.4,
+      0,
+      2.0,
       16
      ],
      "texture": "#green"
@@ -56,9 +57,9 @@
     "up": {
      "uv": [
       0,
-      13.6,
-      2.4,
-      16
+      0,
+      2.0,
+      2.0
      ],
      "texture": "#green"
     }

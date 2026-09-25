@@ -140,7 +140,19 @@ public class StationDecorBlockEntity extends BlockEntity {
     /** The MTA-style sign on this block, or null when it was never edited as one. */
     @Nullable
     public com.stationannouncer.mtr.sign.SignFaces getSign() {
-        return sign;
+        return previewSign != null ? previewSign : sign;
+    }
+
+    /**
+     * Client only, never saved or synced: the sign editor's unsaved draft, so
+     * the block in the world shows what is being edited (the editor's "in
+     * world" view). Null = draw the stored sign.
+     */
+    @Nullable
+    private transient com.stationannouncer.mtr.sign.SignFaces previewSign;
+
+    public void setPreviewSign(@Nullable com.stationannouncer.mtr.sign.SignFaces preview) {
+        this.previewSign = preview;
     }
 
     public void setSign(@Nullable com.stationannouncer.mtr.sign.SignFaces sign) {

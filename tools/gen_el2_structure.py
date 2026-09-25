@@ -267,6 +267,46 @@ def girder_body(x0=0.0, x1=16.0, ribs=RIB_X):
     return els
 
 
+# A girder cell ends at its block boundary, but what it frames INTO does not
+# start there: a column's face is 3..4 px inside the next cell and a crossing
+# girder's flange edge 4 px / its web 7 px - so a run that stopped at x 16 left
+# daylight before the member it was supposed to be bolted to (Thomas,
+# 2026-09-20: "el structure blocks should connect together better"). The end
+# pieces carry the section on across that gap, authored at the POSITIVE end
+# (x 16..) and mirrored for the negative one:
+#   column  flanges + web to x 20 = the column's web plate (its corner angles,
+#           x 19..21, swallow the flange corners), end faces drawn so a
+#           see-through lattice column shows a closed girder end
+#   beam    flanges to x 20 = the crossing girder's flange edge (butt, no end
+#           face: two flange tops in one plane may not overlap), web on to x 23
+#           = its web, under/over its flanges
+# plus a pair of connection angles on the web at the joint.
+END_COLUMN = 4.0
+END_BEAM_FLANGE = 4.0
+END_BEAM_WEB = 7.0
+
+
+def girder_end(kind):
+    fl = END_COLUMN if kind == "column" else END_BEAM_FLANGE
+    web = END_COLUMN if kind == "column" else END_BEAM_WEB
+    closed = kind == "column"
+    els = []
+    for y0, v in ((0.0, 13.5), (16 - FL_T, 0.5)):
+        els.append(wbox(16, y0, FL_Z0, 16 + fl, y0 + FL_T, FL_Z1, S,
+                        faces=["north", "south", "up", "down"] + (["east"] if closed else []),
+                        uv={"north": [0, v, fl, v + FL_T], "south": [0, v, fl, v + FL_T],
+                            "up": [0, 4, fl, 12], "down": [0, 4, fl, 12], "east": [4, 5, 12, 5 + FL_T]}))
+    els.append(wbox(16, FL_T, WEB_Z0, 16 + web, 16 - FL_T, WEB_Z1, S,
+                    faces=["north", "south"] + (["east"] if closed else []),
+                    uv={"north": [5, 2, 5 + web, 14], "south": [5, 2, 5 + web, 14], "east": [4, 2, 6, 14]}))
+    # connection angles hard against the member we frame into
+    cx = 16 + web - RIB_W - 0.15
+    els.append(wbox(cx, FL_T, RIB_Z0, cx + RIB_W, 16 - FL_T, RIB_Z1, S, faces=["north", "south", "east", "west"],
+                    uv={"north": [0.5, 2, 1.7, 14], "south": [0.5, 2, 1.7, 14],
+                        "east": [4, 2, 4 + (RIB_Z1 - RIB_Z0), 14], "west": [4, 2, 4 + (RIB_Z1 - RIB_Z0), 14]}))
+    return els
+
+
 def brace_bar(x0, y0, length):
     """45-degree diagonal bar rising toward +x from (x0, y0)."""
     return wbox(x0, y0 - BR_T / 2, BR_Z0, x0 + length, y0 + BR_T / 2, BR_Z1, S,
@@ -502,7 +542,8 @@ def icon_structure_creator():
 
 COLUMN_PROPS = {"facing": {"north", "east", "south", "west"}, "up": {"true", "false"}, "down": {"true", "false"}}
 GIRDER_PROPS = {"axis": {"x", "z", "xz", "zx"}, "braced": {"true", "false"}, "brace_neg": {"true", "false"},
-                "brace_pos": {"true", "false"}}
+                "brace_pos": {"true", "false"}, "end_neg": {"none", "column", "beam"},
+                "end_pos": {"none", "column", "beam"}}
 DECK_PROPS = {"axis": {"x", "z", "xz", "zx"}}
 VERIFY = [("el_street_column", COLUMN_PROPS), ("el_street_column_lattice", COLUMN_PROPS),
           ("el_girder_plate", GIRDER_PROPS), ("el_track_deck", DECK_PROPS), ("el_plate_deck", DECK_PROPS)]
@@ -561,6 +602,9 @@ def build():
     K.model("el_girder_brace_here", brace_here(), tex)
     K.model("el_girder_brace_neg", brace_neg(), tex)
     K.model("el_girder_brace_pos", [K.mirror_x(e) for e in brace_neg()], tex)
+    for kind in ("column", "beam"):
+        K.model(f"el_girder_end_{kind}_pos", girder_end(kind), tex)
+        K.model(f"el_girder_end_{kind}_neg", [K.mirror_x(e) for e in girder_end(kind)], tex)
     # diagonal run: 22.63 px members, column root measured along the diagonal
     DROOT = 8 + 5 * 2 ** 0.5
     ribs_d = (DX0 + 0.1, 7.4, DX1 - 1.3)
@@ -580,6 +624,11 @@ def build():
         parts.append({"when": {"axis": axis, "braced": "true"}, "apply": ap("el_girder_brace_here")})
         parts.append({"when": {"axis": axis, "brace_neg": "true"}, "apply": ap("el_girder_brace_neg")})
         parts.append({"when": {"axis": axis, "brace_pos": "true"}, "apply": ap("el_girder_brace_pos")})
+        if not suf:  # only grid-axis runs frame into columns / crossing girders
+            for kind in ("column", "beam"):
+                for end in ("neg", "pos"):
+                    parts.append({"when": {"axis": axis, f"end_{end}": kind},
+                                  "apply": ap(f"el_girder_end_{kind}_{end}")})
     K.write_json(os.path.join(K.BLOCKSTATES, "el_girder_plate.json"), {"multipart": parts})
     loot("el_girder_plate")
     icon("el_girder_plate", icon_girder())

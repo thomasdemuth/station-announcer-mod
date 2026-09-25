@@ -122,11 +122,11 @@ public final class MtrStationDecor {
     /** El kit v2 (tools/gen_el2_assets.py): the slim canopy post, plain and station-named. */
     private static final VoxelShape EL2_POST_SHAPE = Block.createCuboidShape(6.0, 0.0, 6.0, 10.0, 16.0, 10.0);
     public static final ColumnBlock EL_POST = new ColumnBlock(settings(), EL2_POST_SHAPE);
-    public static final StationColumnBlock EL_POST_NAMED = new StationColumnBlock(settings(), EL2_POST_SHAPE, 0.1625f, 24, 12);
+    public static final StationColumnBlock EL_POST_NAMED = new StationColumnBlock(settings(), EL2_POST_SHAPE, 0.125f, 24, 12);
     public static final ElRailingSignBlock EL_RAILING_SIGN = new ElRailingSignBlock(settings());
     public static final ElWallSignBlock EL_WALL_SIGN = new ElWallSignBlock(settings());
     public static final ElNameBoardBlock EL_SIGN = new ElNameBoardBlock(settings(),
-            Block.createCuboidShape(1.0, 0.0, 7.2, 15.0, 13.6, 8.8));
+            Block.createCuboidShape(1.0, 0.0, 7.2, 15.0, 13.6, 8.8), true);
     /** Lit black entrance sign under the stair hood (tools/gen_el2_stairs.py). */
     public static final ElEntranceSignBlock EL_ENTRANCE_SIGN = new ElEntranceSignBlock(
             AbstractBlock.Settings.create().strength(1.0f).sounds(BlockSoundGroup.METAL).nonOpaque().luminance(state -> 12));
@@ -382,6 +382,8 @@ public final class MtrStationDecor {
         // Station furniture: things you build a station OUT of.
         // The tile-wall set registers itself (blocks, block entity, packet).
         SubwayWalls.register();
+        // Zebra board labels: the brush edits them (board blocks are common).
+        ZebraLabels.register();
 
         registerBlock("platform_edge", PLATFORM_EDGE, ModContent.DECORATION_ENTRIES);
         registerBlock("el_post", EL_POST, ModContent.DECORATION_ENTRIES);

@@ -52,7 +52,8 @@ RISE = 16 * math.tan(math.radians(PITCH_DEG))     # 6.627 px per block of run
 BASE = 6.0            # eave underside height at the eave line, level 0
 DECK_T = 1.6          # roof sheet thickness
 PARITY_T = 0.1        # thickness added on odd levels (see module docstring)
-MAX_LEVEL = 2         # 7-wide max: BASE + 3*RISE + deck < 32
+MAX_LEVEL = 3         # 8-wide max (7 odd / 8 even): a level-3 row peaks at BASE + 4*RISE = 32.5,
+                      # so its descending pieces are authored from their LOW edge (see deck_slab)
 
 WRITTEN = []          # every model name written, for verify()
 
@@ -237,6 +238,10 @@ def model(name, elements, textures, parent=None, ao=None):
     if ao is False:
         obj["ambientocclusion"] = False
     obj["textures"] = {k: f"{MOD}:block/{v}" for k, v in textures.items()}
+    if textures and "particle" not in textures:
+        # No `particle` = magenta-black missing-sprite breaking particles in
+        # game. Point it at the first texture key so it can never dangle.
+        obj["textures"]["particle"] = "#" + next(iter(textures))
     obj["elements"] = elements
     os.makedirs(MODELS, exist_ok=True)
     with open(os.path.join(MODELS, name + ".json"), "w") as fh:
@@ -276,6 +281,11 @@ def deck_slab(level, z0, z1, descend_to_pos, thick):
         origin_z = z0
         angle = PITCH_DEG
         yb = y_high
+        if yb + thick > 32:
+            # JSON elements stop at y 32: author the level-3 slab at its LOW
+            # edge and rotate about that end instead - identical surface
+            origin_z = z1
+            yb = y_high - rise
     else:
         origin_z = z0
         angle = -PITCH_DEG
@@ -381,16 +391,20 @@ def chord(x0, x1, level, z0, z1, descend_to_pos, half=False):
     run = z1 - z0
     rise = run * math.tan(math.radians(PITCH_DEG))
     low = BASE + RISE * level
+    origin_z = z0
     if descend_to_pos:
         yb = low + rise - 1.4
         angle = PITCH_DEG
+        if yb + 1.4 > 32:           # level 3: author from the low end (see deck_slab)
+            origin_z = z1
+            yb = low - 1.4
     else:
         yb = low - 1.4
         angle = -PITCH_DEG
     return box(x0, yb, z0, x1, yb + 1.4, z1, "#green",
                uv={"east": [z0, 4, z1, 5.4], "west": [z0, 4, z1, 5.4], "up": [x0, z0, x1, z1],
                    "down": [x0, z0, x1, z1], "north": [x0, 4, x1, 5.4], "south": [x0, 4, x1, 5.4]},
-               rotation={"origin": [8, yb, z0], "axis": "x", "angle": angle, "rescale": True})
+               rotation={"origin": [8, yb, origin_z], "axis": "x", "angle": angle, "rescale": True})
 
 
 def roof_models():
@@ -417,11 +431,14 @@ def roof_models():
         # --- ridge half-caps for the even-width middle pair (pos at z 0..1, neg at z 15..16)
         for side in ("pos", "neg"):
             peak = BASE + RISE * (level + 1)
-            cap = box(0, peak + thick - 0.6, 0, 16, peak + thick + 1.0, 1.4, "#green",
-                      uv={"up": [0, 0, 16, 1.4], "down": [0, 0, 16, 1.4],
-                          "north": [0, 4, 16, 5.6], "south": [0, 4, 16, 5.6],
-                          "east": [0, 4, 1.4, 5.6], "west": [0, 4, 1.4, 5.6]})
-            model(f"el_roof_ridge_{side}_{level}", [cap if side == "pos" else mirror_z(cap)], tex)
+            # the level-3 ridge (34 px) is above the element ceiling: the two
+            # slabs' vertical end faces meet flush there, so the cap is skipped
+            cap = [] if peak + thick + 1.0 > 32 else [box(
+                0, peak + thick - 0.6, 0, 16, peak + thick + 1.0, 1.4, "#green",
+                uv={"up": [0, 0, 16, 1.4], "down": [0, 0, 16, 1.4],
+                    "north": [0, 4, 16, 5.6], "south": [0, 4, 16, 5.6],
+                    "east": [0, 4, 1.4, 5.6], "west": [0, 4, 1.4, 5.6]})]
+            model(f"el_roof_ridge_{side}_{level}", cap if side == "pos" else [mirror_z(e) for e in cap], tex)
         # --- run-end truss panels
         for side in ("pos", "neg", "crown"):
             for end, at_neg in (("neg", True), ("pos", False)):
@@ -461,9 +478,13 @@ def deck_slab_x(level, x0, x1, descend_to_pos, thick, z0, z1):
     Right-hand rotation about z by +A RISES toward +x, so descending is -A."""
     s_ = math.tan(math.radians(PITCH_DEG))
     low = BASE + RISE * level
+    origin_x = x0
     if descend_to_pos:
         yb = low + (16 - x0) * s_
         angle = -PITCH_DEG
+        if yb + thick > 32:         # level 3: author from the low end (see deck_slab)
+            origin_x = x1
+            yb = low + (16 - x1) * s_
     else:
         yb = low
         angle = PITCH_DEG
@@ -471,12 +492,13 @@ def deck_slab_x(level, x0, x1, descend_to_pos, thick, z0, z1):
              uv={"up": [z0, x0, z1, x1], "down": [z0, x0, z1, x1],
                  "north": [x0, 8, x1, 8 + thick], "south": [x0, 8, x1, 8 + thick],
                  "east": [z0, 8, z1, 8 + thick], "west": [z0, 8, z1, 8 + thick]},
-             rotation={"origin": [x0, yb, 8], "axis": "z", "angle": angle, "rescale": True})
+             rotation={"origin": [origin_x, yb, 8], "axis": "z", "angle": angle, "rescale": True})
     el["faces"]["up"]["rotation"] = 90      # seams run down the x slope
     return el
 
 
 def flat_square(x0, z0, x1, z1, y_top, thick):
+    y_top = min(32.0, y_top)        # level-3 hip/peak corner squares clip at the element ceiling
     return box(x0, y_top - thick, z0, x1, y_top, z1, {"up": "#red", "down": "#soffit", "*": "#green"},
                uv={"up": [x0, z0, x1, z1], "down": [x0, z0, x1, z1],
                    "north": [x0, 8, x1, 8 + thick], "south": [x0, 8, x1, 8 + thick],
@@ -692,21 +714,11 @@ def post_cap():
     return els
 
 
-def post_plates():
-    """Black name plates on both flange faces (text painted by the renderer)."""
-    b = "#black"
-    return [
-        box(5, 8.5, 5.4, 11, 11.5, 6, b, uv=[0, 0, 6, 3], faces=["north", "up", "down", "east", "west"]),
-        box(5, 8.5, 10, 11, 11.5, 10.6, b, uv=[0, 0, 6, 3], faces=["south", "up", "down", "east", "west"]),
-    ]
-
-
 def post_assets():
     tex = {"green": "el2_green", "black": "el2_black"}
     model("el_post_shaft", post_shaft(), tex, ao=False)
     model("el_post_foot", post_foot(), tex, ao=False)
     model("el_post_cap", post_cap(), tex, ao=False)
-    model("el_post_plates", post_plates(), tex)
     model("el_post_item", post_shaft() + post_foot() + post_cap(), tex)
     for name, named in (("el_post", False), ("el_post_named", True)):
         parts = []
@@ -719,8 +731,8 @@ def post_assets():
             parts.append({"when": {"facing": facing}, "apply": ap("el_post_shaft")})
             parts.append({"when": {"facing": facing, "down": "false"}, "apply": ap("el_post_foot")})
             parts.append({"when": {"facing": facing, "up": "false"}, "apply": ap("el_post_cap")})
-            if named:
-                parts.append({"when": {"facing": facing}, "apply": ap("el_post_plates")})
+            # The named post's plate is drawn by the renderer (StationDecorRenderer
+            # .paintColumnBoard) so it follows the plate size set in the sign editor.
         write_json(os.path.join(BLOCKSTATES, name + ".json"), {"multipart": parts})
         write_json(os.path.join(ITEM_MODELS, name + ".json"), {
             "parent": f"{MOD}:block/el_post_item",
@@ -1044,15 +1056,17 @@ def tex_cream():
     return rows
 
 
-def tex_wired_glass():
-    """Wired glass, cutout: mostly clear, a diamond wire grid, a glare run."""
+def tex_wired_glass(glare=True):
+    """Wired glass, cutout: mostly clear, a diamond wire grid, a glare run.
+    `glare=False` is the plain grid for panes assembled from narrow vertical
+    strips (stair sides), where a diagonal glare would break at every strip."""
     rows = [[(0, 0, 0, 0)] * 32 for _ in range(32)]
     wire = (96, 104, 100, 255)
     for y in range(32):
         for x in range(32):
             if (x + y) % 8 == 0 or (x - y) % 8 == 0:
                 put(rows, x, y, wire)
-    for x in range(32):
+    for x in range(32 if glare else 0):
         for y in range(32):
             if 4 <= (x - y // 3) % 32 <= 6 and rows[y][x][3] == 0:
                 put(rows, x, y, (220, 232, 236, 255))
@@ -1085,6 +1099,7 @@ def tex_green_panel():
 def walls_assets():
     write_png("el2_cream", tex_cream())
     write_png("el2_wired_glass", tex_wired_glass())
+    write_png("el2_wired_glass_plain", tex_wired_glass(glare=False))
     write_png("el2_cream_ridged", tex_cream_ridged())
     write_png("el2_green_panel", tex_green_panel())
     tex = {"green": "el2_green", "cream": "el2_cream", "glass": "el2_wired_glass",
@@ -1358,32 +1373,54 @@ def roof_light_assets():
 #   wall      x 1..15  y 5..12  z 13.8..15  (front only)
 # =====================================================================
 
-def sign_plate(y0, y1, z0, z1, faces=None):
-    return box(1, y0, z0, 15, y1, z1, "#black", uv=[0, 0, 14, y1 - y0], faces=faces)
-
-
 def sign_models():
+    """Boards side by side (same facing + mount) merge into one sign:
+    ElNameBoardBlock's LEFT (model -x) / RIGHT (model +x). A connected side
+    runs the plate and cap to the block edge and drops that end face (it is
+    buried against the neighbour's, and two coplanar end faces would z-fight
+    through the seam). Legs, rod and wall brackets stay per block."""
     tex = {"black": "el2_black", "green": "el2_green"}
-    standing = [sign_plate(6, 13, 7.4, 8.6),
-                box(2, 0, 7.5, 3.2, 6, 8.5, "#green", uv=[0, 0, 1.2, 6]),
-                box(12.8, 0, 7.5, 14, 6, 8.5, "#green", uv=[0, 0, 1.2, 6]),
-                box(1, 13, 7.2, 15, 13.6, 8.8, "#green", uv=[0, 0, 14, 0.6])]
-    hanging = [sign_plate(5, 12, 7.4, 8.6),
-               box(7, 12, 7, 9, 16, 9, "#green", uv=[0, 0, 2, 4], faces=["north", "south", "east", "west"]),
-               box(1, 12, 7.2, 15, 12.6, 8.8, "#green", uv=[0, 0, 14, 0.6])]
-    wall = [sign_plate(5, 12, 13.8, 15, faces=["north", "up", "down", "east", "west"]),
-            box(2, 6, 15, 3.2, 11, 16, "#green", uv=[0, 0, 1.2, 5], faces=["north", "east", "west", "up", "down"]),
-            box(12.8, 6, 15, 14, 11, 16, "#green", uv=[0, 0, 1.2, 5], faces=["north", "east", "west", "up", "down"])]
-    model("el_sign_standing", standing, tex)
-    model("el_sign_hanging", hanging, tex)
-    model("el_sign_wall", wall, tex)
+    sides = ["north", "south", "east", "west", "up", "down"]
+
+    def span(left, right):
+        x0, x1 = (0 if left else 1), (16 if right else 15)
+        drop = (["west"] if left else []) + (["east"] if right else [])
+        return x0, x1, drop
+
+    def plate(left, right, y0, y1, z0, z1, faces=None):
+        x0, x1, drop = span(left, right)
+        keep = [f for f in (faces or sides) if f not in drop]
+        return box(x0, y0, z0, x1, y1, z1, "#black", uv=[0, 0, x1 - x0, y1 - y0], faces=keep)
+
+    def cap(left, right, y0, y1):
+        x0, x1, drop = span(left, right)
+        return box(x0, y0, 7.2, x1, y1, 8.8, "#green", uv=[0, 0, x1 - x0, 0.6],
+                   faces=[f for f in sides if f not in drop])
+
     variants = {}
-    for facing, rot in (("north", 0), ("east", 90), ("south", 180), ("west", 270)):
-        for mount in ("standing", "hanging", "wall"):
-            v = {"model": f"{MOD}:block/el_sign_{mount}"}
-            if rot:
-                v["y"] = rot
-            variants[f"facing={facing},mount={mount}"] = v
+    for left in (False, True):
+        for right in (False, True):
+            suffix = ("_l" if left else "") + ("_r" if right else "")
+            standing = [plate(left, right, 6, 13, 7.4, 8.6),
+                        box(2, 0, 7.5, 3.2, 6, 8.5, "#green", uv=[0, 0, 1.2, 6]),
+                        box(12.8, 0, 7.5, 14, 6, 8.5, "#green", uv=[0, 0, 1.2, 6]),
+                        cap(left, right, 13, 13.6)]
+            hanging = [plate(left, right, 5, 12, 7.4, 8.6),
+                       box(7, 12, 7, 9, 16, 9, "#green", uv=[0, 0, 2, 4], faces=["north", "south", "east", "west"]),
+                       cap(left, right, 12, 12.6)]
+            wall = [plate(left, right, 5, 12, 13.8, 15, faces=["north", "up", "down", "east", "west"]),
+                    box(2, 6, 15, 3.2, 11, 16, "#green", uv=[0, 0, 1.2, 5], faces=["north", "east", "west", "up", "down"]),
+                    box(12.8, 6, 15, 14, 11, 16, "#green", uv=[0, 0, 1.2, 5], faces=["north", "east", "west", "up", "down"])]
+            model("el_sign_standing" + suffix, standing, tex)
+            model("el_sign_hanging" + suffix, hanging, tex)
+            model("el_sign_wall" + suffix, wall, tex)
+            for facing, rot in (("north", 0), ("east", 90), ("south", 180), ("west", 270)):
+                for mount in ("standing", "hanging", "wall"):
+                    v = {"model": f"{MOD}:block/el_sign_{mount}{suffix}"}
+                    if rot:
+                        v["y"] = rot
+                    key = f"facing={facing},left={str(left).lower()},mount={mount},right={str(right).lower()}"
+                    variants[key] = v
     write_json(os.path.join(BLOCKSTATES, "el_sign.json"), {"variants": variants})
     write_json(os.path.join(ITEM_MODELS, "el_sign.json"), {
         "parent": f"{MOD}:block/el_sign_hanging",
@@ -1413,11 +1450,13 @@ WALL_PROPS = {"facing": {"north", "east", "south", "west"}, "left": {"true", "fa
               "inner_left": {"true", "false"}, "inner_right": {"true", "false"},
               "right": {"true", "false"}, "corner_left": {"true", "false"}, "corner_right": {"true", "false"},
               "bottom": {"true", "false"}}
+SIGN_PROPS = {"facing": {"north", "east", "south", "west"}, "mount": {"standing", "hanging", "wall"},
+              "left": {"true", "false"}, "right": {"true", "false"}}
 LIGHT_PROPS = {"facing": {"north", "east", "south", "west"}, "front": {"true", "false"},
                "back": {"true", "false"}}
 POST_PROPS = {"facing": {"north", "east", "south", "west"}, "up": {"true", "false"},
               "down": {"true", "false"}}
-ROOF_PROPS = {"axis": {"x", "z"}, "side": {"pos", "neg", "crown"}, "level": {"0", "1", "2"},
+ROOF_PROPS = {"axis": {"x", "z"}, "side": {"pos", "neg", "crown"}, "level": {str(i) for i in range(MAX_LEVEL + 1)},
               "end_neg": {"true", "false"}, "end_pos": {"true", "false"},
               "ridge": {"true", "false"},
               "join": {"none", "hip_pos", "hip_neg", "valley_pos", "valley_neg", "peak"}}
@@ -1431,7 +1470,8 @@ def verify():
                          ("el_railing", RAIL_PROPS), ("el_railing_sign", RAIL_PROPS),
                          ("el_wall", WALL_PROPS), ("el_wall_glass", WALL_PROPS), ("el_wall_sign", WALL_PROPS),
                          ("el_wall_cream", WALL_PROPS), ("el_wall_green", WALL_PROPS), ("el_wall_doorway", WALL_PROPS),
-                         ("el_platform_lamp", POST_PROPS), ("el_roof_light", LIGHT_PROPS)] + gen_el2_stairs.VERIFY + gen_el2_structure.VERIFY:
+                         ("el_platform_lamp", POST_PROPS), ("el_roof_light", LIGHT_PROPS),
+                         ("el_sign", SIGN_PROPS)] + gen_el2_stairs.VERIFY + gen_el2_structure.VERIFY:
         bs = json.load(open(os.path.join(BLOCKSTATES, block + ".json")))
         if "variants" in bs:
             for key, variant in bs["variants"].items():

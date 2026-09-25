@@ -85,7 +85,7 @@ public class PidsNycRenderer implements BlockEntityRenderer<PidsBlockEntity> {
 
     /** Body of the two-wide hanging clock (mounting poles come from the models). */
     private void drawHangingPanel(MatrixStack matrices, VertexConsumerProvider vertexConsumers, PidsStyle style) {
-        VertexConsumer buffer = vertexConsumers.getBuffer(RenderLayer.getDebugQuads());
+        VertexConsumer buffer = vertexConsumers.getBuffer(CanvasPainter.layer());
         Matrix4f matrix = matrices.peek().getPositionMatrix();
         float bottom = style == PidsStyle.HANGING_MINI ? 4.0f / 16.0f : 0.0f; // mini panel is shorter
         CanvasPainter.box(buffer, matrix, -15.0f / 16.0f, bottom, -1.5f / 16.0f, 15.0f / 16.0f, 12.0f / 16.0f, 1.5f / 16.0f, PANEL_GRAY);

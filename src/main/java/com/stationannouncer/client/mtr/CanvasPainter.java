@@ -16,8 +16,8 @@ import java.util.List;
 /**
  * Canvas-space drawing helpers shared by the PIDS and station-decor block
  * entity renderers (x right, y down, z toward the viewer at negative values).
- * Everything is emissive: full-bright position-color quads on the debug-quad
- * layer plus polygon-offset text — the pipeline proven by the PIDS screens.
+ * Everything is emissive: full-bright position-color quads on {@link #layer()}
+ * plus polygon-offset text — the pipeline proven by the PIDS screens.
  *
  * <p>Extracted unchanged from PidsNycRenderer's inner Painter class in 1.7.
  */
@@ -27,6 +27,49 @@ public class CanvasPainter {
     private static final int TEXT_BLACK = 0xFF101010;
 
     public static final int FULL_LIGHT = 0xF000F0;
+
+    /**
+     * The quad layer every block-entity painter draws on: vanilla's
+     * {@code debug_quads} (position-colour, translucent, no culling) with ONE
+     * difference — {@code hasCrumbling} is true.
+     *
+     * <p>Why that matters: while a block is being mined, WorldRenderer hands the
+     * block-entity renderer a provider that unions each buffer with the crack
+     * overlay — but only for layers whose {@code hasCrumbling()} is true, and
+     * debug_quads says false. So everything drawn by our renderers (PIDS
+     * screens, mosaic bands, sign panels, stop-marker plates, poster sheets, the
+     * hanging PIDS cases…) showed no breaking animation at all; blocks whose
+     * model is empty or only a mounting stub looked as if mining did nothing.
+     * The overlay consumer projects the crack texture along each vertex's
+     * normal, so {@link #quad3d} now also emits one (a no-op for this layer's
+     * own position-colour buffer, which has no normal element).</p>
+     */
+    private static final RenderLayer CANVAS = Layers.CANVAS;
+
+    /** The crumbling-aware position-colour quad layer for block-entity painters. */
+    public static RenderLayer layer() {
+        return CANVAS;
+    }
+
+    /** Subclass only to reach the protected phase builder (the usual custom-layer idiom). */
+    private static final class Layers extends RenderLayer {
+        static final RenderLayer CANVAS = of(
+                "station_announcer_canvas",
+                net.minecraft.client.render.VertexFormats.POSITION_COLOR,
+                net.minecraft.client.render.VertexFormat.DrawMode.QUADS,
+                1536, true, true,
+                MultiPhaseParameters.builder()
+                        .program(COLOR_PROGRAM)
+                        .transparency(TRANSLUCENT_TRANSPARENCY)
+                        .cull(DISABLE_CULLING)
+                        .build(false));
+
+        private Layers(String name, net.minecraft.client.render.VertexFormat format,
+                       net.minecraft.client.render.VertexFormat.DrawMode mode, int size,
+                       boolean crumbling, boolean translucent, Runnable start, Runnable end) {
+            super(name, format, mode, size, crumbling, translucent, start, end);
+        }
+    }
 
     /** One-shot announcement scroll speed, canvas units/second per unit of text size. */
     public static final float SCROLL_ONCE_SPEED = 2.5f;
@@ -62,7 +105,7 @@ public class CanvasPainter {
     }
 
     public void quad(float x1, float y1, float x2, float y2, float z, int argb) {
-        VertexConsumer buffer = consumers.getBuffer(RenderLayer.getDebugQuads());
+        VertexConsumer buffer = consumers.getBuffer(layer());
         Matrix4f matrix = matrices.peek().getPositionMatrix();
         quad3d(buffer, matrix, x1, y1, z, x2, y1, z, x2, y2, z, x1, y2, z, argb);
     }
@@ -83,7 +126,7 @@ public class CanvasPainter {
 
     /** Proper circular route bullet with a centered label. */
     public void circleBullet(float cx, float cy, float radius, int color, String label, boolean inverted) {
-        VertexConsumer buffer = consumers.getBuffer(RenderLayer.getDebugQuads());
+        VertexConsumer buffer = consumers.getBuffer(layer());
         Matrix4f matrix = matrices.peek().getPositionMatrix();
         for (int i = 0; i < CIRCLE_SEGMENTS; i++) {
             float a1 = (float) (2 * Math.PI * i / CIRCLE_SEGMENTS);
@@ -255,7 +298,9 @@ public class CanvasPainter {
 
     public float width(String string, float size) {
         if (fontId != null) {
-            return font.getWidth(styled(string)) * size / 8.0f;
+            // Exact advance, not TextRenderer's rounded-up int: every word of a sign is measured on
+            // its own, and a pixel of rounding per word doubled the gaps between them.
+            return font.getTextHandler().getWidth(styled(string)) * size / 8.0f;
         }
         return font.getWidth(string) * size / 8.0f;
     }
@@ -323,7 +368,17 @@ public class CanvasPainter {
         quad3d(buffer, matrix, x1, y1, z1, x1, y1, z2, x2, y1, z2, x2, y1, z1, argb);
     }
 
-    /** Double-sided quad (both windings) so cull state never hides it. */
+    /**
+     * Double-sided quad (both windings) so cull state never hides it.
+     *
+     * <p>Each winding carries its own face normal (the vanilla crack overlay
+     * needs one to pick the projection plane; the crumbling layer culls back
+     * faces, so the two opposite normals give each side exactly one crack
+     * pattern). The normal is computed from the already-transformed corners —
+     * the overlay consumer sees view-space positions and undoes the block's
+     * own matrix itself — and via the diagonals, so a fan triangle written as
+     * a quad with a repeated corner still gets a proper one.</p>
+     */
     public static void quad3d(VertexConsumer buffer, Matrix4f matrix,
                               float ax, float ay, float az, float bx, float by, float bz,
                               float cx, float cy, float cz, float dx, float dy, float dz, int argb) {
@@ -331,13 +386,46 @@ public class CanvasPainter {
         float r = (argb >> 16 & 0xFF) / 255.0f;
         float g = (argb >> 8 & 0xFF) / 255.0f;
         float b = (argb & 0xFF) / 255.0f;
-        buffer.vertex(matrix, ax, ay, az).color(r, g, b, a).next();
-        buffer.vertex(matrix, bx, by, bz).color(r, g, b, a).next();
-        buffer.vertex(matrix, cx, cy, cz).color(r, g, b, a).next();
-        buffer.vertex(matrix, dx, dy, dz).color(r, g, b, a).next();
-        buffer.vertex(matrix, dx, dy, dz).color(r, g, b, a).next();
-        buffer.vertex(matrix, cx, cy, cz).color(r, g, b, a).next();
-        buffer.vertex(matrix, bx, by, bz).color(r, g, b, a).next();
-        buffer.vertex(matrix, ax, ay, az).color(r, g, b, a).next();
+        // Transform the corners once by hand (no per-quad vector allocation —
+        // this runs for every quad of every screen, every frame).
+        float m00 = matrix.m00(), m10 = matrix.m10(), m20 = matrix.m20(), m30 = matrix.m30();
+        float m01 = matrix.m01(), m11 = matrix.m11(), m21 = matrix.m21(), m31 = matrix.m31();
+        float m02 = matrix.m02(), m12 = matrix.m12(), m22 = matrix.m22(), m32 = matrix.m32();
+        float pax = m00 * ax + m10 * ay + m20 * az + m30;
+        float pay = m01 * ax + m11 * ay + m21 * az + m31;
+        float paz = m02 * ax + m12 * ay + m22 * az + m32;
+        float pbx = m00 * bx + m10 * by + m20 * bz + m30;
+        float pby = m01 * bx + m11 * by + m21 * bz + m31;
+        float pbz = m02 * bx + m12 * by + m22 * bz + m32;
+        float pcx = m00 * cx + m10 * cy + m20 * cz + m30;
+        float pcy = m01 * cx + m11 * cy + m21 * cz + m31;
+        float pcz = m02 * cx + m12 * cy + m22 * cz + m32;
+        float pdx = m00 * dx + m10 * dy + m20 * dz + m30;
+        float pdy = m01 * dx + m11 * dy + m21 * dz + m31;
+        float pdz = m02 * dx + m12 * dy + m22 * dz + m32;
+        // Right-hand rule over the diagonals: (c - a) x (d - b).
+        float e1x = pcx - pax, e1y = pcy - pay, e1z = pcz - paz;
+        float e2x = pdx - pbx, e2y = pdy - pby, e2z = pdz - pbz;
+        float nx = e1y * e2z - e1z * e2y;
+        float ny = e1z * e2x - e1x * e2z;
+        float nz = e1x * e2y - e1y * e2x;
+        float len = MathHelper.sqrt(nx * nx + ny * ny + nz * nz);
+        if (len > 1.0e-12f) {
+            nx /= len;
+            ny /= len;
+            nz /= len;
+        } else {
+            nx = 0.0f;
+            ny = 1.0f;
+            nz = 0.0f;
+        }
+        buffer.vertex(pax, pay, paz).color(r, g, b, a).normal(nx, ny, nz).next();
+        buffer.vertex(pbx, pby, pbz).color(r, g, b, a).normal(nx, ny, nz).next();
+        buffer.vertex(pcx, pcy, pcz).color(r, g, b, a).normal(nx, ny, nz).next();
+        buffer.vertex(pdx, pdy, pdz).color(r, g, b, a).normal(nx, ny, nz).next();
+        buffer.vertex(pdx, pdy, pdz).color(r, g, b, a).normal(-nx, -ny, -nz).next();
+        buffer.vertex(pcx, pcy, pcz).color(r, g, b, a).normal(-nx, -ny, -nz).next();
+        buffer.vertex(pbx, pby, pbz).color(r, g, b, a).normal(-nx, -ny, -nz).next();
+        buffer.vertex(pax, pay, paz).color(r, g, b, a).normal(-nx, -ny, -nz).next();
     }
 }

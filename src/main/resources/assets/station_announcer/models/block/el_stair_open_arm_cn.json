@@ -2,7 +2,8 @@
  "textures": {
   "green": "station_announcer:block/el2_green",
   "cream": "station_announcer:block/el2_cream",
-  "glass": "station_announcer:block/el2_wired_glass"
+  "glass": "station_announcer:block/el2_wired_glass_plain",
+  "particle": "#green"
  },
  "elements": []
 }

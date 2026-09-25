@@ -109,7 +109,7 @@ public class RailroadHangingRenderer implements BlockEntityRenderer<RailroadPids
 
     /** The case: a deep box, the way the real railroad units are built. */
     private void drawCase(MatrixStack matrices, VertexConsumerProvider vertexConsumers) {
-        VertexConsumer buffer = vertexConsumers.getBuffer(RenderLayer.getDebugQuads());
+        VertexConsumer buffer = vertexConsumers.getBuffer(CanvasPainter.layer());
         Matrix4f matrix = matrices.peek().getPositionMatrix();
         float front = (RailroadPidsHangingBlock.BOX_FRONT - 8.0f) / 16.0f;
         float back = (RailroadPidsHangingBlock.BOX_BACK - 8.0f) / 16.0f;

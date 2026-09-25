@@ -102,6 +102,8 @@ public final class MtrPidsClient {
         BlockEntityRendererFactories.register(MtrPids.PIDS_BLOCK_ENTITY, context -> new PidsNycRenderer());
         BlockEntityRendererFactories.register(MtrStationDecor.DECOR_BLOCK_ENTITY, context -> new StationDecorRenderer());
         BlockEntityRendererFactories.register(MtrStationDecor.STOP_MARKER_BLOCK_ENTITY, context -> new StopMarkerRenderer());
+        BlockEntityRendererFactories.register(com.stationannouncer.ModContent.ZEBRA_BOARD_BLOCK_ENTITY,
+                context -> new ZebraBoardRenderer());
         BlockEntityRendererFactories.register(MtrPids.RAILROAD_PIDS_BLOCK_ENTITY, context -> new RailroadPidsRenderer());
         BlockEntityRendererFactories.register(MtrStationDecor.SERVICE_POSTER_BLOCK_ENTITY, context -> new ServicePosterRenderer());
         BlockEntityRendererFactories.register(MtrStationDecor.TURNSTILE_BLOCK_ENTITY, context -> new TurnstileRenderer());
@@ -190,6 +192,8 @@ public final class MtrPidsClient {
                 MinecraftClient.getInstance().setScreen(new RailroadPidsScreen(railroad));
             } else if (blockEntity instanceof com.stationannouncer.mtr.StopMarkerBlockEntity marker) {
                 MinecraftClient.getInstance().setScreen(new StopMarkerScreen(marker));
+            } else if (blockEntity instanceof com.stationannouncer.block.ZebraBoardBlockEntity zebra) {
+                MinecraftClient.getInstance().setScreen(new ZebraBoardScreen(zebra));
             } else if (blockEntity instanceof PidsBlockEntity pids) {
                 MinecraftClient.getInstance().setScreen(new MiniPidsScreen(pids));
             } else if (blockEntity instanceof StationDecorBlockEntity decor) {

@@ -1,7 +1,8 @@
 {
  "textures": {
   "plate": "station_announcer:block/mta_sign_plate",
-  "steel": "station_announcer:block/mta_sign_steel"
+  "steel": "station_announcer:block/mta_sign_steel",
+  "particle": "#plate"
  },
  "elements": [
   {

@@ -39,6 +39,7 @@ over the DOWNHILL cell's floor (world z 16..32 of this cell) - that keeps
 their authored y inside -16..32. The level-off cell draws its own.
 """
 
+import json
 import math
 import os
 import random
@@ -122,159 +123,220 @@ def wbox(x0, y0, z0, x1, y1, z1, tex, faces=None, uv=None, shade_=None):
 # side courses
 # ---------------------------------------------------------------------------
 
-def stringer_kick(up, down):
-    """Bottom-course extras: the stringer beam under the steps and the solid
-    kick plate covering the step ends up to the course's bottom rail."""
-    els = []
-    els += member(0.2, 2.2, STRINGER[0], STRINGER[1], G, up=up, down=down,
-                  uv={"east": [0, 4, 16, 8], "west": [0, 4, 16, 8], "up": [0, 0, 2, 16],
-                      "down": [0, 0, 2, 16], "north": [0, 4, 2, 8], "south": [0, 4, 2, 8]})
-    els += member(0.6, 1.8, KICK[0], KICK[1], G, up=up, down=down,
-                  faces=["east", "west", "north", "south"],
-                  uv={"east": [0, 8, 16, 13.6], "west": [0, 8, 16, 13.6],
-                      "north": [0, 8, 1.2, 13.6], "south": [0, 8, 1.2, 13.6]})
+# v3 (2026-09-20, Thomas: "everything leans 45 degrees / too heavy / ends look
+# broken"): nothing but the rails and the stringer follows the slope. Boards,
+# glass and pickets are WORLD-VERTICAL strips whose flat ends hide inside the
+# sloped members (a strip over z0..z1 may end anywhere between the member's
+# highest bottom point and lowest top point over that stretch). The stringer
+# is a slim channel (web + two flanges) instead of beam + kick plate, there is
+# no mid rail, a stacked course draws no bottom rail (the course below owns the
+# shared rail), posts stand on every OTHER cell (`post`, parity along the run
+# axis so stacked courses line up), the foot ends in a capped newel and the top
+# turns level under a knuckle into a second newel.
+#
+# x layout on the panel plane (never two parts with the same x faces - coplanar
+# faces of crossing members z-fight): posts 0.2..2.2, knuckle 0.1..2.3, rails /
+# flanges / sill 0.3..2.1, foot rail 0.5..1.9, web + pickets 0.7..1.7, boards
+# 0.8..1.6.
+#
+# TRIANGLE WALLS (`mode`): under a ceiling a wall or glass bottom course turns
+# into `fill` - own-column strips from the stringer up to the top of its cell,
+# no top rail - and the courses stacked above it are `rect` (plain vertical
+# cells in the same plane), so the wall reaches the soffit with a level top and
+# a 45-degree bottom. Fill cells never use the over-the-downhill-cell trick:
+# their strips stay inside y 0..16 of their own column.
+
+HAND = (19.2, 20.0)          # top rail / handrail
+FOOTRAIL = (13.0, 13.6)      # railing bottom rail, 2 px over the nosings
+WEB = (7.8, 12.2)            # stringer web; flanges FLANGE thick outside it
+FLANGE = 0.5
+LOWER = (11.2, 12.0)         # what boards stand in: the course below's top rail = the stringer's top edge
+FLOOR = 16.0                 # floor height at the head of a flight
+LEVEL_RAIL = (FLOOR + 13.8, FLOOR + 15.4)
+
+
+def stringer(up, down, sill=False):
+    els = member(0.7, 1.7, WEB[0], WEB[1], G, up=up, down=down)
+    els += member(0.3, 2.1, WEB[0] - FLANGE, WEB[0], G, up=up, down=down)
+    els += member(0.3, 2.1, WEB[1], WEB[1] + FLANGE, G, up=up, down=down)
+    if sill:
+        # level channel closing the stringer under the head of the flight
+        els.append(wbox(0.3, FLOOR - 1.6, 0, 2.1, FLOOR + 0.4, 8.6, G))
     return els
 
 
-def rails(up, down):
-    """Bottom and top rails of a course band."""
-    els = []
-    for v0, v1 in ((V0, V0 + RAIL_T), (V1 - RAIL_T, V1)):
-        els += member(0.2, 2.2, v0, v1, G, up=up, down=down,
-                      uv={"east": [0, 4, 16, 5.4], "west": [0, 4, 16, 5.4], "up": [0, 0, 2, 16],
-                          "down": [0, 0, 2, 16], "north": [0, 4, 2, 5.4], "south": [0, 4, 2, 5.4]})
-    return els
+def top_rail(up, down):
+    return member(0.3, 2.1, HAND[0], HAND[1], G, up=up, down=down)
 
 
-def pickets(zs, top_v=PANEL[1], bot_v=PANEL[0]):
-    """World-vertical pickets at the given world z centres, feet and heads
-    buried 0.8 px inside the sloped rails."""
-    els = []
+def foot_rail(up, down):
+    return member(0.5, 1.9, FOOTRAIL[0], FOOTRAIL[1], G, up=up, down=down)
+
+
+def flat_strip(z0, z1, yb, yt, tex, x0, x1, faces, u0):
+    """World-vertical strip with 1:1 texels: split every 16 px from the top so
+    no face window exceeds the sprite. Glass anchors v to the 4 px wire mesh."""
+    out = []
+    top = yt
+    while top - yb > 0.05:
+        bot = max(yb, top - 16.0)
+        h = top - bot
+        v0 = ((-top) % 4) if tex == "#glass" else 0.0
+        if v0 + h > 16:
+            v0 = 0.0
+        uv = {}
+        for f in faces:
+            if f in ("east", "west"):
+                uv[f] = [u0, v0, u0 + (z1 - z0), v0 + h]
+            elif f in ("north", "south"):
+                uv[f] = [4, v0, 4 + (x1 - x0), v0 + h]
+            else:
+                uv[f] = [4, 0, 4 + (x1 - x0), z1 - z0]
+        out.append(wbox(x0, bot, z0, x1, top, z1, tex, faces=list(faces), uv=uv))
+        top = bot
+    return out
+
+
+def vstrip(z0, z1, lo, hi, tex, x0=0.8, x1=1.6, faces=("east", "west"), u0=None, top=None):
+    """Strip between two sloped members lo/hi = (v0, v1), ends buried in them;
+    `top` replaces hi with a flat height (fill mode)."""
+    yb = ((2 * lo[0] - z0) + (2 * lo[1] - z1)) / 2
+    yt = top if top is not None else ((2 * hi[0] - z0) + (2 * hi[1] - z1)) / 2
+    if yt - yb < 0.1:
+        return []
+    return flat_strip(z0, z1, yb, yt, tex, x0, x1, faces, (z0 % 16) if u0 is None else u0)
+
+
+ALL4 = ("north", "south", "east", "west")
+
+
+def pickets(zs, lo=FOOTRAIL, hi=HAND):
+    out = []
     for zc in zs:
-        yb = world_y(bot_v, zc) - 0.8
-        yt = world_y(top_v, zc) + 0.8
-        els.append(wbox(0.6, yb, zc - 0.6, 1.8, yt, zc + 0.6, G,
-                        faces=["north", "south", "east", "west"],
-                        uv={"north": [4, 0, 5.2, min(16, yt - yb)], "south": [4, 0, 5.2, min(16, yt - yb)],
-                            "east": [4, 0, 5.2, min(16, yt - yb)], "west": [4, 0, 5.2, min(16, yt - yb)]}))
-    return els
+        out += vstrip(zc - 0.5, zc + 0.5, lo, hi, G, x0=0.7, x1=1.7, faces=ALL4, u0=4)
+    return out
 
 
-def mid_rail(up, down):
-    return member(0.4, 2.0, 15.6, 16.4, G, up=up, down=down,
-                  uv={"east": [0, 5, 16, 5.8], "west": [0, 5, 16, 5.8], "up": [0, 0, 1.6, 16],
-                      "down": [0, 0, 1.6, 16], "north": [0, 5, 1.6, 5.8], "south": [0, 5, 1.6, 5.8]})
+def boards(tex, z_from, z_to, top=None):
+    out = []
+    z = z_from
+    while z < z_to - 0.01:
+        out += vstrip(z, z + 2, LOWER, HAND, tex, top=top)
+        z += 2
+    return out
 
 
-def panel(tex, up, down, glass=False):
-    """Panel between the rails (cream boards run ALONG the slope - face
-    rotation 90; a 45-degree tilt of vertical battens read wrong)."""
-    els = member(0.6, 1.8, PANEL[0], PANEL[1], tex, up=up, down=down,
-                 faces=["east", "west"],
-                 uv={"east": [0, 0, 16, 5.2], "west": [16, 0, 0, 5.2]},
-                 rot={"east": 90, "west": 90})
-    if glass and down != "contain":
-        # world-vertical mullion over the downhill cell (see module docstring);
-        # none at the foot of the flight, where the downhill cell is the street
-        for zc in (24.0,):
-            yb = world_y(PANEL[0], zc) - 0.6
-            yt = world_y(PANEL[1], zc) + 0.6
-            els.append(wbox(0.4, yb, zc - 0.6, 2.0, yt, zc + 0.6, G,
-                            faces=["north", "south", "east", "west"],
-                            uv={"north": [0, 3.2, 1.6, 16], "south": [0, 3.2, 1.6, 16],
-                                "east": [0, 3.2, 1.2, 16], "west": [0, 3.2, 1.2, 16]}))
-    return els
+def mullions(zs, top=None):
+    out = []
+    for zc in zs:
+        out += vstrip(zc - 0.5, zc + 0.5, LOWER, HAND, G, x0=0.5, x1=1.9, faces=ALL4, u0=4, top=top)
+    return out
 
 
-def down_post(bottom, top=False):
-    """The post at this cell's downhill edge (z 13.6..16) on the panel plane,
-    from the stringer bottom (bottom course) or the chain point (the course
-    below ends at 2*20 - 13.6 = 26.4 -> 10.4 here) up to the rail top; the
-    TOP course (nothing of the family above) runs its post on up to y 32 so
-    it meets the roof band above (Thomas: poles must reach the roof)."""
-    y0 = world_y(STRINGER[0], 16) if bottom else world_y(V1, 13.6) - 16
-    y1 = 32.0 if top else world_y(V1, 13.6)
-    return [wbox(0, y0, 13.6, 2.4, y1, 16, G, faces=["north", "south", "east", "west", "up"],
-                 uv={"north": [0, 0, 2.4, 16], "south": [0, 0, 2.4, 16],
-                     "east": [4, 0, 6.4, 16], "west": [4, 0, 6.4, 16], "up": [0, 13.6, 2.4, 16]})]
-
-
-def level_section(kind):
-    """Top-of-flight level-off over world z 0..8 (the last tread, flush with
-    the floor at y 16): rails 2..3.2 and 14..16 above the floor, pickets /
-    panel between, an end post at z 0..2.4 from the floor to the rail cap,
-    plus this cell's own z 8..16 verticals (normally the uphill cell's job).
-    Everything tops out at y 32, the authored-coordinate limit."""
-    F = 16.0
-    els = [wbox(0.2, F + 14, 0, 2.2, F + 16, 8.6, G, uv={"north": [0, 4, 2, 6], "south": [0, 4, 2, 6],
-                                                          "east": [0, 4, 8.6, 6], "west": [0, 4, 8.6, 6],
-                                                          "up": [0, 0, 2, 8.6], "down": [0, 0, 2, 8.6]}),
-           wbox(0, F, 0, 2.4, F + 15, 2.4, G, faces=["north", "south", "east", "west"],
-                uv={"north": [0, 0, 2.4, 15], "south": [0, 0, 2.4, 15], "east": [4, 0, 6.4, 15],
-                    "west": [4, 0, 6.4, 15]}),
-           wbox(-0.6, F + 15, -0.6, 3.0, F + 16, 3.0, G, uv={"north": [4, 8, 7.6, 9], "south": [4, 8, 7.6, 9],
-                                                             "east": [4, 8, 7.6, 9], "west": [4, 8, 7.6, 9],
-                                                             "up": [0, 12.4, 3.6, 16], "down": [0, 12.4, 3.6, 16]}),
-           # newel post where the sloped rail meets the level rail (hides the 45-degree seam)
-           wbox(0, F, 6.8, 2.4, F + 16, 9.2, G, faces=["north", "south", "east", "west", "up"],
-                uv={"north": [0, 0, 2.4, 16], "south": [0, 0, 2.4, 16], "east": [4, 0, 6.4, 16],
-                    "west": [4, 0, 6.4, 16], "up": [0, 6.8, 2.4, 9.2]})]
-    if kind == "open":
-        return els[1:2] + els[3:]          # end post + newel only
-    if kind == "railing":
-        els.append(wbox(0.2, F + 2, 0, 2.2, F + 3.2, 8.6, G, uv={"north": [0, 5, 2, 6.2], "south": [0, 5, 2, 6.2],
-                                                                  "east": [0, 5, 8.6, 6.2], "west": [0, 5, 8.6, 6.2],
-                                                                  "up": [0, 0, 2, 8.6], "down": [0, 0, 2, 8.6]}))
-        els.append(wbox(0.4, F + 7.4, 0, 2.0, F + 8.2, 8.6, G, uv={"north": [0, 5, 1.6, 5.8], "south": [0, 5, 1.6, 5.8],
-                                                                    "east": [0, 5, 8.6, 5.8], "west": [0, 5, 8.6, 5.8],
-                                                                    "up": [0, 0, 1.6, 8.6], "down": [0, 0, 1.6, 8.6]}))
-        for zc in (5.5,):
-            els.append(wbox(0.6, F + 3.2, zc - 0.6, 1.8, F + 14, zc + 0.6, G,
-                            faces=["north", "south", "east", "west"],
-                            uv={"north": [4, 0, 5.2, 10.8], "south": [4, 0, 5.2, 10.8],
-                                "east": [4, 0, 5.2, 10.8], "west": [4, 0, 5.2, 10.8]}))
-        els += pickets((10.5,))
-    else:
-        tex = "#glass" if kind == "glass" else "#cream"
-        els.append(wbox(0.2, F + 2, 0, 2.2, F + 3.4, 8.6, G, uv={"north": [0, 5, 2, 6.4], "south": [0, 5, 2, 6.4],
-                                                                  "east": [0, 5, 8.6, 6.4], "west": [0, 5, 8.6, 6.4],
-                                                                  "up": [0, 0, 2, 8.6], "down": [0, 0, 2, 8.6]}))
-        els.append(wbox(0.6, F + 3.4, 0, 1.8, F + 14, 8.6, tex, faces=["east", "west"],
-                        uv={"east": [0, 5.4, 8.6, 16], "west": [8.6, 5.4, 0, 16]}))
-        if kind == "glass":
-            els.append(wbox(0.4, F + 3.4, 4.2, 2.0, F + 14, 5.4, G, faces=["north", "south", "east", "west"],
-                            uv={"north": [0, 3.2, 1.6, 16], "south": [0, 3.2, 1.6, 16],
-                                "east": [0, 3.2, 1.2, 16], "west": [0, 3.2, 1.2, 16]}))
-            zc = 11.0
-            yb = world_y(PANEL[0], zc) - 0.6
-            yt = world_y(PANEL[1], zc) + 0.6
-            els.append(wbox(0.4, yb, zc - 0.6, 2.0, yt, zc + 0.6, G, faces=["north", "south", "east", "west"],
-                            uv={"north": [0, 3.2, 1.6, 16], "south": [0, 3.2, 1.6, 16],
-                                "east": [0, 3.2, 1.2, 16], "west": [0, 3.2, 1.2, 16]}))
-    return els
+def kind_tex(kind):
+    return "#glass" if kind == "glass" else "#cream"
 
 
 def course_arm(kind, up, down):
-    """The chaining band of one course: rails + (pickets | panel). `up` is
-    None / contain / cover, `down` None / contain. Pickets belong to the
-    downhill cell's floor and are dropped at the foot (down=contain).
-    `open` (Van Siclen Av photo): nothing but the posts - open air between
-    the railing and the roof."""
+    """Band mode, one chaining cell: rails + the verticals over the DOWNHILL
+    cell's floor (world z 16..32, see the module docstring); dropped at the
+    foot, where the downhill cell is the street."""
     if kind == "open":
         return []
-    els = rails(up, down)
+    els = top_rail(up, down)
+    over = down != "contain"
     if kind == "railing":
-        els += mid_rail(up, down)
-        if down != "contain":
-            els += pickets((19.0, 23.0, 27.0))
-    else:
-        tex = "#glass" if kind == "glass" else "#cream"
-        els += panel(tex, up, down, glass=(kind == "glass"))
+        els += foot_rail(up, down)
+        if over:
+            els += pickets((18.5, 22.5, 26.5, 30.5))
+    elif over:
+        els += boards(kind_tex(kind), 16, 32)
+        if kind == "glass":
+            els += mullions((24.5,))
     return els
 
 
+def newel(z0, y0, y1, cap=True):
+    els = [wbox(0.2, y0, z0, 2.2, y1, z0 + 2.0, G, faces=["north", "south", "east", "west"])]
+    if cap:
+        els.append(wbox(-0.1, y1, z0 - 0.3, 2.5, y1 + 0.6, z0 + 2.3, G))
+    return els
+
+
+def level_section(kind):
+    """Head of the flight: the slope runs to world z 8 (nosing line = floor),
+    a knuckle turns the rail level and it dies into a capped newel. The cell
+    draws its own z 8..16 verticals besides the usual downhill ones."""
+    els = []
+    sill_top = FLOOR - 1.6 + 0.6           # boards start inside the sill / the lower level rail
+    if kind != "open":
+        els.append(wbox(0.3, LEVEL_RAIL[0], 1.0, 2.1, LEVEL_RAIL[1], 8.4, G))
+        els.append(wbox(0.1, FLOOR + 13.4, 6.8, 2.3, 32.0, 9.4, G, faces=["north", "south", "east", "west", "down"]))
+    if kind == "railing":
+        els.append(wbox(0.5, FLOOR + 2, 1.0, 1.9, FLOOR + 3.2, 8.4, G))
+        els += pickets((10.5, 14.5))
+        els.append(wbox(0.7, FLOOR + 3.0, 5.0, 1.7, LEVEL_RAIL[0] + 0.2, 6.0, G, faces=list(ALL4)))
+    elif kind in ("wall", "glass"):
+        tex = kind_tex(kind)
+        els += boards(tex, 8, 16)
+        els += flat_strip(1.0, 8.0, sill_top, LEVEL_RAIL[0] + 0.2, tex, 0.8, 1.6, ("east", "west"), 1.0)
+        if kind == "glass":
+            els += mullions((12.5,))
+    if kind == "open":
+        els += newel(-0.4, FLOOR - 1.6, 32.0, cap=False)
+    else:
+        els += newel(-0.4, FLOOR - 1.6, LEVEL_RAIL[1], cap=True)
+    return els
+
+
+def fill_cell(kind, top, level):
+    """Triangle wall: own-column strips from the stringer line up to a flat
+    `top` (16 = the top of the cell). At the head of the flight the z 0..8
+    half stands on the floor sill instead."""
+    tex = kind_tex(kind)
+    if level:
+        els = boards(tex, 8, 16, top=top)
+        els += flat_strip(0.0, 8.0, FLOOR - 1.0, top, tex, 0.8, 1.6, ("east", "west"), 0.0)
+    else:
+        els = boards(tex, 0, 16, top=top)
+    if kind == "glass":
+        els += mullions((8.5,), top=top)
+    return els
+
+
+def rect_cell(kind):
+    tex = kind_tex(kind)
+    els = flat_strip(0.0, 16.0, 0.0, 16.0, tex, 0.8, 1.6, ("east", "west"), 0.0)
+    if kind == "glass":
+        els += flat_strip(8.0, 9.0, 0.0, 16.0, G, 0.5, 1.9, ALL4, 4)
+    return els
+
+
+def edge_post(y0, y1, up_face=True):
+    faces = ["north", "south", "east", "west"] + (["up"] if up_face else [])
+    return [wbox(0.2, y0, 13.8, 2.2, y1, 15.8, G, faces=faces)]
+
+
+IN_CELL_DX = 13.6
+IN_CELL = ({f"el_stair_{k}_{part}" for k in ("railing", "wall") for part in
+            ("arm_nn", "arm_nc", "arm_ln", "arm_lc", "level")}
+           | {f"el_stair_stringer_{c}" for c in ("nn", "nc", "ln", "lc")}
+           | {"el_stair_wall_fill", "el_stair_wall_fill_level", "el_stair_wall_rect", "el_stair_glass_rect",
+              "el_stair_post_bottom", "el_stair_post_bottom_fill", "el_stair_newel_bottom",
+              "el_stair_newel_bottom_fill", "el_stair_post_rect", "el_stair_post_rect_head"})
+
+
+def shift_x(el, dx):
+    e = json.loads(json.dumps(el))
+    e["from"][0] += dx
+    e["to"][0] += dx
+    if "rotation" in e:
+        e["rotation"]["origin"][0] += dx
+    return e
+
+
 def side_assets():
-    tex = {"green": "el2_green", "cream": "el2_cream", "glass": "el2_wired_glass"}
+    tex = {"green": "el2_green", "cream": "el2_cream", "glass": "el2_wired_glass_plain"}
     written = {}
 
     def emit(name, els):
@@ -282,30 +344,51 @@ def side_assets():
         # neighbour in its face direction, and a post beside a solid floor went black
         K.model(name, els, tex)
         K.model(name + "_r", [K.mirror_x(e) for e in els], tex)
+        if name in IN_CELL:
+            # the same side ON THE STAIR'S OWN EDGE (subway_stairs left/right,
+            # el_stair_upper): shifted to the cell's east edge = the stair's
+            # right side when ascending north; the left side is its mirror
+            inr = [shift_x(e, IN_CELL_DX) for e in els]
+            K.model(name + "_inr", inr, tex)
+            K.model(name + "_inl", [K.mirror_x(e) for e in inr], tex)
         written[name] = True
 
     cuts_up = {"n": None, "c": "contain", "l": "cover"}
     cuts_down = {"n": None, "c": "contain"}
+    rail_top = world_y(HAND[1], 14.8)
+    post_y0 = {"bottom": world_y(WEB[0], 14.8), "chain": world_y(HAND[0], 14.8) - 16}
     for kind in ("railing", "wall", "glass", "open"):
         for uk, up in cuts_up.items():
             for dk, down in cuts_down.items():
                 emit(f"el_stair_{kind}_arm_{uk}{dk}", course_arm(kind, up, down))
         emit(f"el_stair_{kind}_level", level_section(kind))
-    for uk, up in (("n", None), ("c", "contain")):
+    for kind in ("wall", "glass"):
+        emit(f"el_stair_{kind}_fill", fill_cell(kind, 16.0, False))
+        emit(f"el_stair_{kind}_fill_level", fill_cell(kind, 16.0, True))
+        emit(f"el_stair_{kind}_rect", rect_cell(kind))
+    for uk, up in cuts_up.items():
         for dk, down in cuts_down.items():
-            emit(f"el_stair_stringer_{uk}{dk}", stringer_kick(up, down))
-    emit("el_stair_post_bottom", down_post(True))
-    emit("el_stair_post_chain", down_post(False))
-    emit("el_stair_post_bottom_top", down_post(True, True))
-    emit("el_stair_post_chain_top", down_post(False, True))
+            emit(f"el_stair_stringer_{uk}{dk}", stringer(up, down, sill=(uk == "l")))
+    # posts on the downhill edge: mid-run (every other cell), capped newel at the foot
+    for where, y0 in post_y0.items():
+        emit(f"el_stair_post_{where}", edge_post(y0, rail_top - 0.2))
+        emit(f"el_stair_post_{where}_top", edge_post(y0, 32.0))
+        emit(f"el_stair_post_{where}_fill", edge_post(y0, 16.0, up_face=False))
+        foot_y0 = 0.0 if where == "bottom" else y0
+        emit(f"el_stair_newel_{where}", newel(13.8, foot_y0, rail_top + 0.4))
+        emit(f"el_stair_newel_{where}_top", newel(13.8, foot_y0, 32.0, cap=False))
+        emit(f"el_stair_newel_{where}_fill", newel(13.8, foot_y0, 16.0, cap=False))
+    emit("el_stair_post_rect", edge_post(0.0, 16.0, up_face=False))
+    emit("el_stair_post_rect_head", [wbox(0.2, 0.0, -0.4, 2.2, 16.0, 1.6, G, faces=list(ALL4))])
     # items: a bottom-course segment
     KINDS = (("railing", "el_stair_railing"), ("wall", "el_stair_wall"), ("glass", "el_stair_wall_glass"),
              ("open", "el_stair_open"))
     for kind, name in KINDS:
-        K.model(name + "_item", course_arm(kind, None, "contain") + stringer_kick(None, "contain")
-                + down_post(True), tex)
+        K.model(name + "_item", course_arm(kind, None, "contain") + stringer(None, "contain")
+                + newel(13.8, 0.0, rail_top + 0.4), tex)
 
     for kind, name in KINDS:
+        fills = kind in ("wall", "glass")
         parts = []
         for facing, rot in (("north", 0), ("east", 90), ("south", 180), ("west", 270)):
             for side, suf in (("left", ""), ("right", "_r")):
@@ -315,22 +398,36 @@ def side_assets():
                         a["y"] = rot
                     return a
                 base = {"facing": facing, "side": side}
-                # arm: up cut depends on end_up + level, down cut on end_down
+                band = dict(base, mode="band")
+                # band arm: up cut depends on end_up + level, down cut on end_down
                 for level in ("true", "false"):
                     for end_up in ("true", "false"):
                         uk = "l" if level == "true" else ("c" if end_up == "true" else "n")
                         for end_down in ("true", "false"):
                             dk = "c" if end_down == "true" else "n"
-                            parts.append({"when": dict(base, level=level, end_up=end_up, end_down=end_down),
-                                          "apply": ap(f"el_stair_{kind}_arm_{uk}{dk}")})
-                            parts.append({"when": dict(base, bottom="true", level=level, end_up=end_up,
-                                                       end_down=end_down),
-                                          "apply": ap(f"el_stair_stringer_{'c' if uk != 'n' else 'n'}{dk}")})
-                parts.append({"when": dict(base, level="true"), "apply": ap(f"el_stair_{kind}_level")})
-                parts.append({"when": dict(base, bottom="true", top="false"), "apply": ap("el_stair_post_bottom")})
-                parts.append({"when": dict(base, bottom="false", top="false"), "apply": ap("el_stair_post_chain")})
-                parts.append({"when": dict(base, bottom="true", top="true"), "apply": ap("el_stair_post_bottom_top")})
-                parts.append({"when": dict(base, bottom="false", top="true"), "apply": ap("el_stair_post_chain_top")})
+                            cond = dict(level=level, end_up=end_up, end_down=end_down)
+                            parts.append({"when": dict(band, **cond), "apply": ap(f"el_stair_{kind}_arm_{uk}{dk}")})
+                            # the stringer belongs to the bottom course in band AND fill mode
+                            parts.append({"when": dict(base, mode="band|fill", bottom="true", **cond),
+                                          "apply": ap(f"el_stair_stringer_{uk}{dk}")})
+                parts.append({"when": dict(band, level="true"), "apply": ap(f"el_stair_{kind}_level")})
+                for where, bottom in (("bottom", "true"), ("chain", "false")):
+                    for top in ("true", "false"):
+                        sfx = "_top" if top == "true" else ""
+                        parts.append({"when": dict(band, bottom=bottom, top=top, end_down="false", post="true"),
+                                      "apply": ap(f"el_stair_post_{where}{sfx}")})
+                        parts.append({"when": dict(band, bottom=bottom, top=top, end_down="true"),
+                                      "apply": ap(f"el_stair_newel_{where}{sfx}")})
+                if fills:
+                    parts.append({"when": dict(base, mode="fill", level="false"), "apply": ap(f"el_stair_{kind}_fill")})
+                    parts.append({"when": dict(base, mode="fill", level="true"), "apply": ap(f"el_stair_{kind}_fill_level")})
+                    parts.append({"when": dict(base, mode="fill", end_down="false", post="true"),
+                                  "apply": ap("el_stair_post_bottom_fill")})
+                    parts.append({"when": dict(base, mode="fill", end_down="true"),
+                                  "apply": ap("el_stair_newel_bottom_fill")})
+                    parts.append({"when": dict(base, mode="rect"), "apply": ap(f"el_stair_{kind}_rect")})
+                    parts.append({"when": dict(base, mode="rect", post="true"), "apply": ap("el_stair_post_rect")})
+                    parts.append({"when": dict(base, mode="rect", level="true"), "apply": ap("el_stair_post_rect_head")})
         K.write_json(os.path.join(K.BLOCKSTATES, name + ".json"), {"multipart": parts})
         K.write_json(os.path.join(K.ITEM_MODELS, name + ".json"), {
             "parent": f"{MOD}:block/{name}_item",
@@ -402,12 +499,6 @@ def frieze(up, down):
     els += member(-2.0, -1.0, DECK[0] - 1.0, DECK[1] + 0.2, G, up=up, down=down,
                   uv={"east": [0, 6, 16, 8.8], "west": [0, 6, 16, 8.8], "up": [0, 0, 1, 16],
                       "down": [0, 0, 1, 16], "north": [0, 6, 1, 8.8], "south": [0, 6, 1, 8.8]})
-    # post stub: the course post below ends at this cell's floor, the frieze
-    # chord starts 8..10 px up - continue the post into the chord so the
-    # roof visibly rests on it (Thomas: not just air)
-    els.append(wbox(0, 0, 13.6, 2.4, 10.8, 16, G, faces=["north", "south", "east", "west"],
-                    uv={"north": [0, 0, 2.4, 10.8], "south": [0, 0, 2.4, 10.8],
-                        "east": [4, 0, 6.4, 10.8], "west": [4, 0, 6.4, 10.8]}))
     if up == "cover0":
         # top of a flight: the course below levels off (its rail top is y 16 here)
         # but the sloped frieze bottom rises to 24 at the boundary - fill the wedge
@@ -423,6 +514,17 @@ def frieze(up, down):
                             "east": [0, 4, 1.4, 4 + min(12, y1 - y0)], "west": [0, 4, 1.4, 4 + min(12, y1 - y0)],
                             "up": [0, 0, 2, 1.4], "down": [0, 0, 2, 1.4]}))
     return els
+
+
+def roof_post_stub():
+    """The course post below ends at this cell's floor and the frieze chord
+    starts 8..10 px up: continue the post into the chord so the roof visibly
+    rests on it. Its own model since v3 - posts stand on every other cell
+    (`post`), and a hair fatter than post and chord (0.2..2.2) so no side
+    faces are coplanar."""
+    return [wbox(0.1, 0, 13.7, 2.3, 10.8, 15.9, G, faces=["north", "south", "east", "west"],
+                 uv={"north": [0, 0, 2.2, 10.8], "south": [0, 0, 2.2, 10.8],
+                     "east": [4, 0, 6.2, 10.8], "west": [4, 0, 6.2, 10.8]})]
 
 
 def roof_end_down():
@@ -861,6 +963,17 @@ def icon_doorway():
     return r
 
 
+def icon_stair_upper():
+    """Two wall panels either side of a clear walkway."""
+    r = icon_canvas()
+    for x0 in (3, 23):
+        irect(r, x0, 3, x0 + 6, 29, CREAM_I)
+        irect(r, x0 + 2, 3, x0 + 3, 29, CREAM_D)
+        irect(r, x0, 2, x0 + 6, 4, GREEN_I)
+        irect(r, x0, 28, x0 + 6, 30, GREEN_I)
+    return r
+
+
 def icon_assets():
     os.makedirs(ICON_DIR, exist_ok=True)
     icons = {
@@ -872,6 +985,7 @@ def icon_assets():
         "el_platform_lamp_head": icon_lamp_head(), "el_roof_light": icon_roof_light(), "el_sign": icon_el_sign(),
         "el_stair_railing": icon_stair_railing(), "el_stair_wall": icon_stair_wall(),
         "el_stair_wall_glass": icon_stair_glass(), "el_stair_open": icon_stair_open(),
+        "el_stair_upper": icon_stair_upper(),
         "el_stair_roof": icon_stair_roof(), "el_landing_roof": icon_landing_roof(),
         "el_stair_landing": icon_stair_landing(), "el_entrance_sign": icon_entrance_sign(),
         "el_wall_cream": icon_wall(CREAM_I, CREAM_D, CREAM_D), "el_wall_green": icon_wall(GREEN_I, GREEN_D, GREEN_D),
@@ -922,6 +1036,8 @@ def roof_assets():
             fr = frieze(up, down)
             K.model(f"el_stair_roof_frieze_{uk}{dk}", fr, tex, ao=False)
             K.model(f"el_stair_roof_frieze_{uk}{dk}_r", [K.mirror_x(e) for e in fr], tex, ao=False)
+    K.model("el_stair_roof_stub", roof_post_stub(), tex, ao=False)
+    K.model("el_stair_roof_stub_r", [K.mirror_x(e) for e in roof_post_stub()], tex, ao=False)
     K.model("el_stair_roof_end_down", roof_end_down(), tex, ao=False)
     K.model("el_stair_roof_end_up", roof_end_up(), tex, ao=False)
     K.model("el_stair_roof_item", deck(None, "overhang") + ties(None, "overhang") + frieze(None, "overhang")
@@ -939,6 +1055,8 @@ def roof_assets():
                 parts.append({"when": w, "apply": ap(f"el_stair_roof_deck_{uk}{dk}")})
                 parts.append({"when": dict(w, edge_left="true"), "apply": ap(f"el_stair_roof_frieze_{uk}{dk}")})
                 parts.append({"when": dict(w, edge_right="true"), "apply": ap(f"el_stair_roof_frieze_{uk}{dk}_r")})
+        parts.append({"when": {"facing": facing, "edge_left": "true", "post": "true"}, "apply": ap("el_stair_roof_stub")})
+        parts.append({"when": {"facing": facing, "edge_right": "true", "post": "true"}, "apply": ap("el_stair_roof_stub_r")})
         parts.append({"when": {"facing": facing, "down": "end"}, "apply": ap("el_stair_roof_end_down")})
         parts.append({"when": {"facing": facing, "up": "end"}, "apply": ap("el_stair_roof_end_up")})
     K.write_json(os.path.join(K.BLOCKSTATES, "el_stair_roof.json"), {"multipart": parts})
@@ -956,22 +1074,61 @@ def roof_assets():
         "pattern": ["RR ", "IRR", "DI "], "result": {"item": f"{MOD}:el_stair_roof", "count": 4}})
 
 
+def _upper_recipe():
+    K.write_json(os.path.join(K.DATA, "recipes/el_stair_upper.json"), {
+        "type": "minecraft:crafting_shapeless", "category": "building",
+        "ingredients": [{"item": f"{MOD}:el_stair_wall"}],
+        "result": {"item": f"{MOD}:el_stair_upper", "count": 1}})
+
+
+UPPER_PROPS = {"facing": {"north", "east", "south", "west"}, "left": {"none", "wall", "glass"},
+               "right": {"none", "wall", "glass"}, "post": {"true", "false"}, "head": {"true", "false"}}
+
+
 SIDE_PROPS = {"facing": {"north", "east", "south", "west"}, "side": {"left", "right"},
+              "mode": {"band", "fill", "rect"}, "post": {"true", "false"},
               "bottom": {"true", "false"}, "top": {"true", "false"}, "end_up": {"true", "false"},
               "end_down": {"true", "false"}, "level": {"true", "false"}}
-ROOF_PROPS = {"facing": {"north", "east", "south", "west"}, "edge_left": {"true", "false"},
+ROOF_PROPS = {"facing": {"north", "east", "south", "west"}, "edge_left": {"true", "false"}, "post": {"true", "false"},
               "edge_right": {"true", "false"}, "up": {"run", "end", "landing"}, "down": {"run", "end", "landing"}}
 LAND_PROPS = {"edge_north": {"true", "false"}, "edge_east": {"true", "false"},
               "edge_south": {"true", "false"}, "edge_west": {"true", "false"}}
 SIGN_PROPS = {"facing": {"north", "east", "south", "west"}, "left": {"true", "false"}, "right": {"true", "false"}}
 VERIFY = [("el_entrance_sign", SIGN_PROPS), ("el_stair_railing", SIDE_PROPS), ("el_stair_wall", SIDE_PROPS), ("el_stair_wall_glass", SIDE_PROPS),
-          ("el_stair_open", SIDE_PROPS),
+          ("el_stair_open", SIDE_PROPS), ("el_stair_upper", UPPER_PROPS),
           ("el_stair_roof", ROOF_PROPS), ("el_landing_roof", LAND_PROPS)]
+
+
+def upper_assets():
+    """el_stair_upper: the walk-through cell ABOVE the treads carrying the in-cell
+    walls on up to the ceiling (plain vertical cells: left / right = none, wall,
+    glass; `post` on every other cell, `head` = the post at the head of the flight)."""
+    parts = []
+    for facing, rot in (("north", 0), ("east", 90), ("south", 180), ("west", 270)):
+        def ap(m):
+            a = {"model": f"{MOD}:block/{m}"}
+            if rot:
+                a["y"] = rot
+            return a
+        for prop, suf in (("left", "inl"), ("right", "inr")):
+            parts.append({"when": {"facing": facing, prop: "wall"}, "apply": ap(f"el_stair_wall_rect_{suf}")})
+            parts.append({"when": {"facing": facing, prop: "glass"}, "apply": ap(f"el_stair_glass_rect_{suf}")})
+            parts.append({"when": {"facing": facing, prop: "wall|glass", "post": "true"},
+                          "apply": ap(f"el_stair_post_rect_{suf}")})
+            parts.append({"when": {"facing": facing, prop: "wall|glass", "head": "true"},
+                          "apply": ap(f"el_stair_post_rect_head_{suf}")})
+    K.write_json(os.path.join(K.BLOCKSTATES, "el_stair_upper.json"), {"multipart": parts})
+    K.write_json(os.path.join(K.DATA, "loot_tables/blocks", "el_stair_upper.json"), {
+        "type": "minecraft:block",
+        "pools": [{"rolls": 1, "entries": [{"type": "minecraft:item", "name": f"{MOD}:el_stair_upper"}],
+                   "conditions": [{"condition": "minecraft:survives_explosion"}]}]})
 
 
 def build():
     K.write_png("el2_lattice_solid", tex_lattice_solid())
     side_assets()
+    upper_assets()
+    _upper_recipe()
     roof_assets()
     landing_assets()
     landing_floor_assets()

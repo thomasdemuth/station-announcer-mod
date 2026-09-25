@@ -313,10 +313,18 @@ def write_stairs(prefix, old):
     builder = solid_stair_elements if old else thin_stair_elements
     for suffix, yb, yt in (("plain", False, False), ("bottom", True, False),
                            ("top", False, True), ("both", True, True)):
-        model(f"{prefix}_{suffix}", textures(yb, yt), builder(yb, yt))
-        if not old:
-            model(f"{prefix}_solid_{suffix}", textures(yb, yt, solid=True),
-                  solid_stair_elements(yb, yt))
+        # narrow variants make room for an in-cell side (left / right property:
+        # stringer, railing or wall on the stair's own edge, 2.4 px wide)
+        for nsuffix, x0, x1 in NARROW:
+            model(f"{prefix}_{suffix}{nsuffix}", textures(yb, yt), builder(yb, yt, x0, x1))
+            if not old:
+                model(f"{prefix}_solid_{suffix}{nsuffix}", textures(yb, yt, solid=True),
+                      solid_stair_elements(yb, yt, x0, x1))
+
+
+SIDE_W = 2.4
+NARROW = (("", 0, 16), ("_nl", SIDE_W, 16), ("_nr", 0, 16 - SIDE_W), ("_nb", SIDE_W, 16 - SIDE_W))
+IN_SIDES = "stringer|railing|wall|wall_fill"
 
 
 DIV_TEX = {"steel": f"{MOD}:block/stair_divider_steel",
@@ -646,23 +654,53 @@ def ap(mdl, rot):
 
 
 def stairs_blockstate(prefix, solid_toggle=False):
-    """solid_toggle: the Java block carries SOLID on both stairs (the
-    super-constructor gotcha), but only the modern blockstate maps it —
-    the old blockstate omits the key, which vanilla treats as a wildcard."""
-    variants = {}
+    """Multipart since the in-cell sides (2026-09-20): the tread model by
+    facing / bottom / top (/ solid) and which edges are narrowed, plus the
+    side parts on the stair's own edges - el_stair_*_inl / _inr models written
+    by tools/gen_el2_stairs.py (run that generator too; verify() checks the
+    files exist). solid_toggle: the Java block carries SOLID on both stairs
+    (the super-constructor gotcha), but only the modern blockstate maps it."""
+    parts = []
     for facing, rot in ROTS:
         for bottom in ("true", "false"):
             for top in ("true", "false"):
                 suffix = ("both" if bottom == "true" and top == "true"
                           else "bottom" if bottom == "true"
                           else "top" if top == "true" else "plain")
-                key = f"facing={facing},bottom={bottom},top={top}"
-                if solid_toggle:
-                    variants[key + ",solid=false"] = ap(f"{prefix}_{suffix}", rot)
-                    variants[key + ",solid=true"] = ap(f"{prefix}_solid_{suffix}", rot)
-                else:
-                    variants[key] = ap(f"{prefix}_{suffix}", rot)
-    return {"variants": variants}
+                for nsuffix, left, right in (("", "none", "none"), ("_nl", IN_SIDES, "none"),
+                                             ("_nr", "none", IN_SIDES), ("_nb", IN_SIDES, IN_SIDES)):
+                    when = {"facing": facing, "bottom": bottom, "top": top, "left": left, "right": right}
+                    if solid_toggle:
+                        parts.append({"when": dict(when, solid="false"), "apply": ap(f"{prefix}_{suffix}{nsuffix}", rot)})
+                        parts.append({"when": dict(when, solid="true"), "apply": ap(f"{prefix}_solid_{suffix}{nsuffix}", rot)})
+                    else:
+                        parts.append({"when": when, "apply": ap(f"{prefix}_{suffix}{nsuffix}", rot)})
+                # the side on each edge: the stair's TOP is the side's level-off, its BOTTOM the foot
+                uk = "l" if top == "true" else "n"
+                dk = "c" if bottom == "true" else "n"
+                for prop, suf in (("left", "inl"), ("right", "inr")):
+                    ends = {"facing": facing, "bottom": bottom, "top": top}
+                    parts.append({"when": dict(ends, **{prop: IN_SIDES}),
+                                  "apply": ap(f"el_stair_stringer_{uk}{dk}_{suf}", rot)})
+                    for kind in ("railing", "wall"):
+                        parts.append({"when": dict(ends, **{prop: kind}),
+                                      "apply": ap(f"el_stair_{kind}_arm_{uk}{dk}_{suf}", rot)})
+                    fill = "el_stair_wall_fill_level" if top == "true" else "el_stair_wall_fill"
+                    parts.append({"when": dict(ends, **{prop: "wall_fill"}), "apply": ap(f"{fill}_{suf}", rot)})
+        for prop, suf in (("left", "inl"), ("right", "inr")):
+            for kind in ("railing", "wall"):
+                parts.append({"when": {"facing": facing, "top": "true", prop: kind},
+                              "apply": ap(f"el_stair_{kind}_level_{suf}", rot)})
+            band = "railing|wall"
+            parts.append({"when": {"facing": facing, "bottom": "false", "post": "true", prop: band},
+                          "apply": ap(f"el_stair_post_bottom_{suf}", rot)})
+            parts.append({"when": {"facing": facing, "bottom": "true", prop: band},
+                          "apply": ap(f"el_stair_newel_bottom_{suf}", rot)})
+            parts.append({"when": {"facing": facing, "bottom": "false", "post": "true", prop: "wall_fill"},
+                          "apply": ap(f"el_stair_post_bottom_fill_{suf}", rot)})
+            parts.append({"when": {"facing": facing, "bottom": "true", prop: "wall_fill"},
+                          "apply": ap(f"el_stair_newel_bottom_fill_{suf}", rot)})
+    return {"multipart": parts}
 
 
 def divider_blockstate():
@@ -766,7 +804,9 @@ RECIPES = {
 PROPS = {
     "subway_stairs": {"facing": {"north", "south", "east", "west"},
                       "bottom": {"true", "false"}, "top": {"true", "false"},
-                      "solid": {"true", "false"}},
+                      "solid": {"true", "false"}, "post": {"true", "false"},
+                      "left": {"none", "stringer", "railing", "wall", "wall_fill"},
+                      "right": {"none", "stringer", "railing", "wall", "wall_fill"}},
     "subway_stair_divider": {"facing": {"north", "south", "east", "west"},
                              "bottom": {"true", "false"}, "top": {"true", "false"},
                              "left": {"none", "modern", "old"},
@@ -792,7 +832,7 @@ def verify():
             entries = [(part["when"], part["apply"]) for part in data["multipart"]]
         for when, entry in entries:
             for name, value in when.items():
-                assert name in props and value in props[name], f"{block}: {name}={value}"
+                assert name in props and all(v in props[name] for v in value.split("|")), f"{block}: {name}={value}"
             mdl = entry["model"].split("/")[-1]
             mpath = os.path.join(ASSETS, "models/block", mdl + ".json")
             assert os.path.exists(mpath), f"{block}: missing model {mdl}"

@@ -32,7 +32,13 @@ public abstract class EdgeRunBlock extends FacingDecorBlock {
      */
     public static final BooleanProperty CORNER_LEFT = BooleanProperty.of("corner_left");
     public static final BooleanProperty CORNER_RIGHT = BooleanProperty.of("corner_right");
-    /** Nothing of this family below: the bottom course, whose posts continue down and bolt to the platform edge. */
+    /**
+     * The bottom course of a run that stands against a PLATFORM SLAB: nothing of
+     * this family below, and the block under the platform-side cell shows us a
+     * full face. Only then do the posts continue down and bolt to the slab's
+     * edge - a wall on a mezzanine floor, a stair house or the street has no
+     * slab to bolt to and draws no bracket.
+     */
     public static final BooleanProperty BOTTOM = BooleanProperty.of("bottom");
     /**
      * Concave (inner) platform corner: the cell BEHIND this one holds a
@@ -160,6 +166,15 @@ public abstract class EdgeRunBlock extends FacingDecorBlock {
                 .with(INNER_LEFT, innerLeft)
                 .with(INNER_RIGHT, innerRight)
                 .with(CORNER_CELL, cornerCell)
-                .with(BOTTOM, !sameFamily(world.getBlockState(pos.down()))), world, pos);
+                .with(BOTTOM, boltsToSlab(world, pos, facing)), world, pos);
+    }
+
+    /** FACING points at the platform; the slab whose edge face the bracket bolts to is one down from there. */
+    private boolean boltsToSlab(WorldAccess world, BlockPos pos, Direction facing) {
+        if (sameFamily(world.getBlockState(pos.down()))) {
+            return false;
+        }
+        BlockPos slab = pos.offset(facing).down();
+        return world.getBlockState(slab).isSideSolidFullSquare(world, slab, facing.getOpposite());
     }
 }

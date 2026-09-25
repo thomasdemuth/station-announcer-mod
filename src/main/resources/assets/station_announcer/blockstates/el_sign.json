@@ -1,48 +1,183 @@
 {
  "variants": {
-  "facing=north,mount=standing": {
+  "facing=north,left=false,mount=standing,right=false": {
    "model": "station_announcer:block/el_sign_standing"
   },
-  "facing=north,mount=hanging": {
+  "facing=north,left=false,mount=hanging,right=false": {
    "model": "station_announcer:block/el_sign_hanging"
   },
-  "facing=north,mount=wall": {
+  "facing=north,left=false,mount=wall,right=false": {
    "model": "station_announcer:block/el_sign_wall"
   },
-  "facing=east,mount=standing": {
+  "facing=east,left=false,mount=standing,right=false": {
    "model": "station_announcer:block/el_sign_standing",
    "y": 90
   },
-  "facing=east,mount=hanging": {
+  "facing=east,left=false,mount=hanging,right=false": {
    "model": "station_announcer:block/el_sign_hanging",
    "y": 90
   },
-  "facing=east,mount=wall": {
+  "facing=east,left=false,mount=wall,right=false": {
    "model": "station_announcer:block/el_sign_wall",
    "y": 90
   },
-  "facing=south,mount=standing": {
+  "facing=south,left=false,mount=standing,right=false": {
    "model": "station_announcer:block/el_sign_standing",
    "y": 180
   },
-  "facing=south,mount=hanging": {
+  "facing=south,left=false,mount=hanging,right=false": {
    "model": "station_announcer:block/el_sign_hanging",
    "y": 180
   },
-  "facing=south,mount=wall": {
+  "facing=south,left=false,mount=wall,right=false": {
    "model": "station_announcer:block/el_sign_wall",
    "y": 180
   },
-  "facing=west,mount=standing": {
+  "facing=west,left=false,mount=standing,right=false": {
    "model": "station_announcer:block/el_sign_standing",
    "y": 270
   },
-  "facing=west,mount=hanging": {
+  "facing=west,left=false,mount=hanging,right=false": {
    "model": "station_announcer:block/el_sign_hanging",
    "y": 270
   },
-  "facing=west,mount=wall": {
+  "facing=west,left=false,mount=wall,right=false": {
    "model": "station_announcer:block/el_sign_wall",
+   "y": 270
+  },
+  "facing=north,left=false,mount=standing,right=true": {
+   "model": "station_announcer:block/el_sign_standing_r"
+  },
+  "facing=north,left=false,mount=hanging,right=true": {
+   "model": "station_announcer:block/el_sign_hanging_r"
+  },
+  "facing=north,left=false,mount=wall,right=true": {
+   "model": "station_announcer:block/el_sign_wall_r"
+  },
+  "facing=east,left=false,mount=standing,right=true": {
+   "model": "station_announcer:block/el_sign_standing_r",
+   "y": 90
+  },
+  "facing=east,left=false,mount=hanging,right=true": {
+   "model": "station_announcer:block/el_sign_hanging_r",
+   "y": 90
+  },
+  "facing=east,left=false,mount=wall,right=true": {
+   "model": "station_announcer:block/el_sign_wall_r",
+   "y": 90
+  },
+  "facing=south,left=false,mount=standing,right=true": {
+   "model": "station_announcer:block/el_sign_standing_r",
+   "y": 180
+  },
+  "facing=south,left=false,mount=hanging,right=true": {
+   "model": "station_announcer:block/el_sign_hanging_r",
+   "y": 180
+  },
+  "facing=south,left=false,mount=wall,right=true": {
+   "model": "station_announcer:block/el_sign_wall_r",
+   "y": 180
+  },
+  "facing=west,left=false,mount=standing,right=true": {
+   "model": "station_announcer:block/el_sign_standing_r",
+   "y": 270
+  },
+  "facing=west,left=false,mount=hanging,right=true": {
+   "model": "station_announcer:block/el_sign_hanging_r",
+   "y": 270
+  },
+  "facing=west,left=false,mount=wall,right=true": {
+   "model": "station_announcer:block/el_sign_wall_r",
+   "y": 270
+  },
+  "facing=north,left=true,mount=standing,right=false": {
+   "model": "station_announcer:block/el_sign_standing_l"
+  },
+  "facing=north,left=true,mount=hanging,right=false": {
+   "model": "station_announcer:block/el_sign_hanging_l"
+  },
+  "facing=north,left=true,mount=wall,right=false": {
+   "model": "station_announcer:block/el_sign_wall_l"
+  },
+  "facing=east,left=true,mount=standing,right=false": {
+   "model": "station_announcer:block/el_sign_standing_l",
+   "y": 90
+  },
+  "facing=east,left=true,mount=hanging,right=false": {
+   "model": "station_announcer:block/el_sign_hanging_l",
+   "y": 90
+  },
+  "facing=east,left=true,mount=wall,right=false": {
+   "model": "station_announcer:block/el_sign_wall_l",
+   "y": 90
+  },
+  "facing=south,left=true,mount=standing,right=false": {
+   "model": "station_announcer:block/el_sign_standing_l",
+   "y": 180
+  },
+  "facing=south,left=true,mount=hanging,right=false": {
+   "model": "station_announcer:block/el_sign_hanging_l",
+   "y": 180
+  },
+  "facing=south,left=true,mount=wall,right=false": {
+   "model": "station_announcer:block/el_sign_wall_l",
+   "y": 180
+  },
+  "facing=west,left=true,mount=standing,right=false": {
+   "model": "station_announcer:block/el_sign_standing_l",
+   "y": 270
+  },
+  "facing=west,left=true,mount=hanging,right=false": {
+   "model": "station_announcer:block/el_sign_hanging_l",
+   "y": 270
+  },
+  "facing=west,left=true,mount=wall,right=false": {
+   "model": "station_announcer:block/el_sign_wall_l",
+   "y": 270
+  },
+  "facing=north,left=true,mount=standing,right=true": {
+   "model": "station_announcer:block/el_sign_standing_l_r"
+  },
+  "facing=north,left=true,mount=hanging,right=true": {
+   "model": "station_announcer:block/el_sign_hanging_l_r"
+  },
+  "facing=north,left=true,mount=wall,right=true": {
+   "model": "station_announcer:block/el_sign_wall_l_r"
+  },
+  "facing=east,left=true,mount=standing,right=true": {
+   "model": "station_announcer:block/el_sign_standing_l_r",
+   "y": 90
+  },
+  "facing=east,left=true,mount=hanging,right=true": {
+   "model": "station_announcer:block/el_sign_hanging_l_r",
+   "y": 90
+  },
+  "facing=east,left=true,mount=wall,right=true": {
+   "model": "station_announcer:block/el_sign_wall_l_r",
+   "y": 90
+  },
+  "facing=south,left=true,mount=standing,right=true": {
+   "model": "station_announcer:block/el_sign_standing_l_r",
+   "y": 180
+  },
+  "facing=south,left=true,mount=hanging,right=true": {
+   "model": "station_announcer:block/el_sign_hanging_l_r",
+   "y": 180
+  },
+  "facing=south,left=true,mount=wall,right=true": {
+   "model": "station_announcer:block/el_sign_wall_l_r",
+   "y": 180
+  },
+  "facing=west,left=true,mount=standing,right=true": {
+   "model": "station_announcer:block/el_sign_standing_l_r",
+   "y": 270
+  },
+  "facing=west,left=true,mount=hanging,right=true": {
+   "model": "station_announcer:block/el_sign_hanging_l_r",
+   "y": 270
+  },
+  "facing=west,left=true,mount=wall,right=true": {
+   "model": "station_announcer:block/el_sign_wall_l_r",
    "y": 270
   }
  }

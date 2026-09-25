@@ -29,6 +29,12 @@ import java.util.Set;
  * a stub. Those two flags depend on a block two cells away (diagonally
  * below), which vanilla neighbour updates never reach - a braced cell
  * refreshes its axis neighbours itself.
+ *
+ * <p>A run END that frames into something carries its section on across the
+ * gap the next cell leaves ({@link #END_NEG}/{@link #END_POS}): a street
+ * column beside it (its face is 3..4 px inside its cell) or a girder running
+ * across it (flange edge 4 px in, web 7). Grid axes only. Old placements load
+ * with both ends {@code none} and heal on their next neighbour update.
  */
 public class ElGirderBlock extends Block {
     /** Still named "axis" with values x/z (plus the diagonals xz/zx) so old placements load. */
@@ -36,6 +42,18 @@ public class ElGirderBlock extends Block {
     public static final BooleanProperty BRACED = BooleanProperty.of("braced");
     public static final BooleanProperty BRACE_NEG = BooleanProperty.of("brace_neg");
     public static final BooleanProperty BRACE_POS = BooleanProperty.of("brace_pos");
+    public static final EnumProperty<End> END_NEG = EnumProperty.of("end_neg", End.class);
+    public static final EnumProperty<End> END_POS = EnumProperty.of("end_pos", End.class);
+
+    /** What a run end is bolted to. */
+    public enum End implements net.minecraft.util.StringIdentifiable {
+        NONE, COLUMN, BEAM;
+
+        @Override
+        public String asString() {
+            return name().toLowerCase(java.util.Locale.ROOT);
+        }
+    }
 
     /** The columns a girder braces against (filled at registration). */
     public static final Set<Block> COLUMNS = new HashSet<>();
@@ -47,14 +65,14 @@ public class ElGirderBlock extends Block {
     public ElGirderBlock(Settings settings) {
         super(settings);
         setDefaultState(getDefaultState().with(AXIS, ElRun.X).with(BRACED, false)
-                .with(BRACE_NEG, false).with(BRACE_POS, false));
+                .with(BRACE_NEG, false).with(BRACE_POS, false).with(END_NEG, End.NONE).with(END_POS, End.NONE));
         this.shapeX = createCuboidShape(0.0, 0.0, 4.0, 16.0, 16.0, 12.0);
         this.shapeZ = createCuboidShape(4.0, 0.0, 0.0, 12.0, 16.0, 16.0);
     }
 
     @Override
     protected void appendProperties(StateManager.Builder<Block, BlockState> builder) {
-        builder.add(AXIS, BRACED, BRACE_NEG, BRACE_POS);
+        builder.add(AXIS, BRACED, BRACE_NEG, BRACE_POS, END_NEG, END_POS);
     }
 
     @Override
@@ -79,6 +97,13 @@ public class ElGirderBlock extends Block {
     @Override
     public void onBlockAdded(BlockState state, World world, BlockPos pos, BlockState oldState, boolean notify) {
         super.onBlockAdded(state, world, pos, oldState, notify);
+        if (!world.isClient && !oldState.isOf(this)) {
+            // /setblock, /fill and pastes never ran getPlacementState
+            BlockState fresh = compute(state, world, pos);
+            if (fresh != state) {
+                world.setBlockState(pos, fresh, Block.NOTIFY_ALL);
+            }
+        }
         refreshNeighbors(world, pos, state.get(AXIS));
     }
 
@@ -117,7 +142,20 @@ public class ElGirderBlock extends Block {
         BlockPos posPos = pos.add(axis.step());
         boolean braceNeg = !braced && girderAlong(world.getBlockState(negPos), axis) && overColumn(world, negPos);
         boolean bracePos = !braced && girderAlong(world.getBlockState(posPos), axis) && overColumn(world, posPos);
-        return state.with(BRACED, braced).with(BRACE_NEG, braceNeg).with(BRACE_POS, bracePos);
+        return state.with(BRACED, braced).with(BRACE_NEG, braceNeg).with(BRACE_POS, bracePos)
+                .with(END_NEG, endAt(world.getBlockState(negPos), axis))
+                .with(END_POS, endAt(world.getBlockState(posPos), axis));
+    }
+
+    /** What the cell past a run end offers to frame into. */
+    private static End endAt(BlockState beyond, ElRun axis) {
+        if (axis.diagonal()) {
+            return End.NONE;
+        }
+        if (COLUMNS.contains(beyond.getBlock())) {
+            return End.COLUMN;
+        }
+        return girderAlong(beyond, axis.across()) ? End.BEAM : End.NONE;
     }
 
     private static void refreshNeighbors(World world, BlockPos pos, ElRun axis) {

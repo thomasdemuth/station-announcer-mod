@@ -347,6 +347,21 @@ Four fixes/features from Thomas's feedback round (his answers, do not re-ask):
 
 ### MTA SIGN SYSTEM (2026-09-06) — modular NYC signs + unified text-sign layout; shipped in 2.4.57, photo follow-up (wheelchair / 3-line text / red exit field) in 3.1.0 — READ `SIGN_PLAN.md`
 
+**2026-09-20 round (shipped in 3.2.3, deployed to both profiles; detail in SIGN_PLAN.md build log):** (1) rows are THREE ZONES — left / centred on the panel / right; every tile has a
+`SignSpec.Place` (AUTO follows the row's `Align`, which gained RIGHT), multi-line tiles range their
+lines the same way; tiles DRAG on the editor canvas (writes dx/dy, snaps to slot / row line / panel
+centre with magenta guides, Alt = free; arrow keys nudge). (2) centre pane switch **Editor | In
+world**: `SignWorldView` = client-only MarkerEntity as camera entity, orbit/zoom, sign centred in the
+PANE via an NDC yaw/pitch offset, wall-clipped, follows Front|Back; the block always shows the
+unsaved draft through `StationDecorBlockEntity.previewSign` (transient; cleared in `removed()`).
+(3) `el_sign` boards side by side MERGE (ElNameBoardBlock LEFT/RIGHT, `merges` ctor flag; v1
+el_name_board never connects); the editor opens on the run's owning segment
+(`MtaSignPainter.signOwner`, also fixes el_wall_sign / el_railing_sign runs). RIG-VERIFIED
+(screenshots): 3-wide hanging + 2-wide wall + 2-wide standing merges, zones + right-ranged lines in
+the world, editor canvas + inspector, In-world view front and back, camera/HUD restored on close.
+NOT verified (headless cannot click): dragging, snapping guides, arrow-key nudge, orbit/zoom, the
+view switch by mouse, real placement of merging el_signs.
+
 Thomas's decisions (do not re-ask): content MODULES inside one panel; font = MTR's
 `mtr:mtr` Noto Sans (no TTF of ours); half AND full height panels, wall/hanging/
 standing; directional + exit (fed by MTR station exits) + station plates + line &
@@ -413,6 +428,47 @@ destination first; FULL editor from day one; the old text signs migrate onto it.
   lines, routes, MTR exits). Right-click (any hand) on mta signs; the MTR brush on
   the legacy blocks. Dev hooks: `#sign-editor x y z [tile:R:T|row:R|templates|add]`,
   `#sign-load x y z <file under run/>`, `#sign-close`.
+- **Plate size + symbols (2026-09-20)**: Thomas could not resize the column plates —
+  the Panel controls existed but (1) the inspector did not scroll and fell off a ~266 px
+  window, (2) a resized plate was a paper-thin painted quad, and the el post's plate was
+  baked into its model. Now the inspector SCROLLS (`inspectorScroll`, hit rectangles and
+  text boxes clipped via `clipTop/clipBottom` + `showBox`; delete button is a fixed footer),
+  "Plate size" (width/height) is the FIRST thing in the Sign inspector and the Sign card
+  reads "plate W x H". `MtaSignPainter.plateSlab` draws the plate as real geometry (open
+  front — the painted panel is the front; back + 4 sides) behind every sign face whose
+  panel is custom, and ALWAYS for column boards: `el_post_plates` model is DELETED
+  (generator + blockstate), `boardOffset` now means the FLANGE face for every column
+  (el post 0.125) and the renderer stands the plate 0.6 px proud of it. Non-column signs
+  still carry their stock plate in the block model, so SHRINKING those leaves the model
+  plate visible (enlarging is clean). The ARROW tile is now the **Symbol** tile:
+  `num` 0..7 arrows, `SignSymbols.FIRST`(16)+i = wheelchair / ramp / elevator / escalator /
+  stairs / do not enter / information / bus / train (`client/mtr/SignSymbols`, 100-unit
+  glyphs on Surface primitives; no storage change). Rig-verified (screenshots 20:05–20:07).
+- **Sign vocabulary pass (2026-09-20, Thomas approved after a gap analysis vs real MTA
+  signs)**: FONT is now **TeX Gyre Heros Bold** (free Helvetica clone; Thomas reversed
+  his "no TTF of ours" rule for it) — `assets/station_announcer/font/` holds the
+  UNMODIFIED `.otf` (vanilla's STB loader reads CFF fine), `gust-font-license.txt`,
+  `readme.txt` (resource paths must be lowercase — `README.txt` logged "Invalid path")
+  and `sign.json` (font id `station_announcer:sign`, `mtr:mtr` as `reference` fallback).
+  Its size 12.357 / shift −0.29 make caps exactly Noto-at-12 (STB scales ascent−descent
+  to `size`: cap px = size·729/1432; cap top = size·(1125−729)/1432 − 3 + shift), so
+  `CAP_PER_SIZE`/`TOP_PER_SIZE` did not change. Sign text widths now come from
+  `TextHandler.getWidth` (float) — TextRenderer's int rounded every word up a pixel and
+  doubled the word gaps. New tiles (appended to `TileType`, the editor indexes by
+  ordinal): `RULE` (thin vertical divider) and `BADGE` (text in a rounded colour box:
+  LIRR / M15 SBS / PATH); TEXT tiles take a colour FIELD in `arg` (`SignLayout.COLOR_NAMES`
+  red/yellow/green/blue/orange/white/black/grey or `#RRGGBB`, full row height like the
+  Exit field, ink by `inkOn`); inline `{s:KEY}` tokens draw any pictogram
+  (`SignSymbols.KEYS`; `PosterLayout.symbol` gained a background overload);
+  `MAX_TILES` 8 → 12, `MAX_JSON` 6000 → 9000 and the editor's `save()` refuses (toast)
+  instead of throwing on an oversize sign. Editor: colour swatch rows, Divider/Badge
+  inspectors, pictogram insert row, **Copy / Paste** of a whole face (static clipboard +
+  JSON on the system clipboard, ctrl+C/V when no box is focused), **user templates**
+  (`SignUserTemplates` → `config/station_announcer/sign_templates.json`, listed above
+  the built-ins with a name box + Save), 7 more built-in templates. Rig-verified in world
+  and in the editor at the small 427×240 window. NOT done from that analysis: more
+  pictograms (airplane, ferry, restrooms, police, help point…), live tiles (auto-arrow,
+  next train, service-alert strip), lit signs.
 - **Migration**: `mtr/sign/LegacySigns` derives a sign from the old fields
   (CustomName / SignFront|Back / RoutesFront|Back) for entrance_railing_sign
   (name row + bullet row), el_entrance_sign (bullets + name), el_sign / el_name_board
@@ -556,6 +612,46 @@ jar in run/mods (the world will not boot without it), RCON on 25575 / `rigpass`
 (scratchpad rcon.py). Loom's runServer wrapper can exit while the JVM keeps serving;
 a second launch then dies on session.lock — check `lsof -i :25565` first.
 
+### ZEBRA BOARD LABELS (2026-09-23) — 3.2.5, built, NOT deployed
+
+Thomas's photo (R-160 / 8 / R-160 plates on a wall zebra board): both zebra boards now carry a
+per-block label, edited with the MTR brush. `block/ZebraBoardBlockEntity` (common, `Label` ≤16
+chars + `Align` LEFT/CENTER/RIGHT byte; BE type `ModContent.ZEBRA_BOARD_BLOCK_ENTITY`, id
+`zebra_board`, old placements get one lazily). The common block reaches the brush through
+`ZebraBoardBlock.EDIT_TOOL` (installed by `mtr/ZebraLabels`, which also owns the
+`update_zebra_label` C2S). `client/mtr/ZebraBoardRenderer`: white plate over the panel (model y
+6..12, between the rails, 0.004 off the panel front), text in `SignLayout.FONT` at cap 16 canvas
+units; plate may spill onto neighbours but is clamped inside the run's end plates (walks ≤8 blocks
+each way), too-long text is CONDENSED (x-scale), never trimmed; hanging draws both faces at the
+same stretch of beam; colours are darkened by the block's light (canvas layer is full-bright).
+Screen: `ZebraBoardScreen` (vanilla widgets, like the tile tablet). Rig-verified (screenshots
+07:58–07:59): wall run with R-160 / 8 / flush-right R-160, hanging 5 Car front + back, condensed
+"10 CAR R-211A" on a 2-block run, angled view clean. NOT verified: the brush click + screen.
+
+### EL GIRDER ENDS FRAME INTO COLUMNS / CROSSING GIRDERS (2026-09-22) — 3.2.4
+
+Thomas: "el structure blocks should connect together better" (screenshot: 3 px of daylight between
+a plate girder and the street column beside it). `ElGirderBlock` gained `end_neg`/`end_pos` =
+none|column|beam (grid axes only): a `COLUMNS` block past the run end → the section carries on
+4 px to the column's web plate with closed end faces; a girder on `axis.across()` → flanges butt
+its flange edge (4 px, no end face), web runs on 7 px to its web; both add connection angles.
+Generator `girder_end(kind)` in gen_el2_structure.py, `_pos` authored / `_neg` = mirror_x.
+`onBlockAdded` now computes the cell's own state (/setblock, pastes). Rig-verified 2026-09-22
+(screenshots + `/execute if block` probes). Not done: diagonal runs, decks into columns, platform
+iron columns as targets. Detail in EL_STATION_PLAN.md (2026-09-20 girder-ends section).
+
+### STAIR KIT v3 (2026-09-20) — dev tree (3.2.3), javac-verified only, NOT built/deployed/in game — READ `EL_STATION_PLAN.md` "STAIR KIT v3"
+
+QOL round with Thomas's answers recorded there (do not re-ask): stair-family placement = neighbours
+first, look fallback, SNEAK forces look (`block/StairFamily`); slab bracket only against a real slab
+(`EdgeRunBlock.BOTTOM`); el stair sides restyled (vertical boards/pickets between sloped rails, slim
+channel stringer, posts every other cell, newel ends); TRIANGLE WALLS (`mode` band|fill|rect under a
+ceiling); IN-CELL SIDES on `subway_stairs` (`left`/`right`, narrow treads, sneak-click with the course
+items) + new walk-through `el_stair_upper`. `subway_stairs*.json` blockstates are MULTIPART now and
+reference el models: run `gen_el2_assets.py` AND `gen_stair_assets.py`. Textured offline renderer:
+`tools/render_scene.py`. Stair Creator deferred by Thomas. Open: divider restyle, roof frieze over
+in-cell sides, in-game pass.
+
 ### EL ROOF WIDTH 8 (2026-09-09) — 7-wide roofs were breaking at the peak
 
 Thomas's 7-wide `el_roof` showed a notch at the ridge: `MAX_LEVEL` was 2, so the middle
@@ -572,6 +668,13 @@ Not verified: level-3 hips/valleys/peaks (an 8-wide L corner) — the corner squ
 at 32 px there.
 
 ### TURNSTILES + HEET v2 (2026-09-06/07) — from-scratch rebuild WITH ANIMATION + BLOCKING; awaiting Thomas's verdict, NOT deployed, version still 2.4.54
+
+**2026-09-20 follow-up (3.2.2 deployed by Thomas; 3.2.3 adds the reader-box removal — lid is now flat with a twin-fin SWIPE SLOT + flush LCD plate, built, in releases/, DEPLOYED to both profiles 2026-09-20):** Thomas's
+screenshot feedback: OMNY tablet removed (MetroCard reader box stays); z-fighting fixed — the 45°
+`chamfer_x` boxes' buried side faces were coplanar with the cabinet/pylon sides at x 11/16, now
+inset 0.03 (plus top rail poking through the slope, omitted recess jambs, twin collar lids);
+`brushed()` is now uniform satin (soft drift + grain, no stripe columns). Rotation-aware coplanar
+audit = 0 pairs on the low unit/cap. Detail in TURNSTILE_V2.md's last section. Not seen in game.
 
 Thomas: "complete redo… they don't look right… add animation"; answers (do not re-ask): research
 the real hardware myself + show previews, everything was wrong (start from zero), animation =

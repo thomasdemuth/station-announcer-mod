@@ -729,6 +729,11 @@
   "block.station_announcer.el_stair_wall_glass": "El Stair Wall (Wired Glass)",
   "block.station_announcer.el_stair_roof": "El Stair Roof",
   "block.station_announcer.el_stair_open": "El Stair Open Course (posts only)",
+  "block.station_announcer.el_stair_upper": "El Stair Upper Wall (over the treads)",
+  "gui.station_announcer.stair_upper_kind": "Upper wall: %s",
+  "gui.station_announcer.stair_upper_kind.wall": "Cream boards",
+  "gui.station_announcer.stair_upper_kind.glass": "Wired glass",
+  "gui.station_announcer.stair_upper_hint": "Click a tread's left / right third (middle = both); click again to stack. Right-click air: boards / glass",
   "block.station_announcer.el_landing_roof": "El Landing Roof",
   "block.station_announcer.el_stair_landing": "El Stair Landing (Steel Deck)",
   "block.station_announcer.service_poster": "Service Change Poster",
@@ -781,5 +786,13 @@
   "gui.station_announcer.posters.sign_clear": "Take poster down",
   "gui.station_announcer.posters.sign_current": "Currently hanging: %s",
   "gui.station_announcer.posters.sign_empty": "Empty frame",
-  "gui.station_announcer.posters.sign_detached": "(disruption no longer exists — snapshot)"
+  "gui.station_announcer.posters.sign_detached": "(disruption no longer exists — snapshot)",
+  "gui.station_announcer.zebra_label.title": "Zebra Board Label",
+  "gui.station_announcer.zebra_label.text": "Label",
+  "gui.station_announcer.zebra_label.text.hint": "e.g. R-160, 8, 5 Car (empty = no label)",
+  "gui.station_announcer.zebra_label.align": "Position: %s",
+  "gui.station_announcer.zebra_label.align.left": "Left edge",
+  "gui.station_announcer.zebra_label.align.center": "Centred",
+  "gui.station_announcer.zebra_label.align.right": "Right edge",
+  "gui.station_announcer.zebra_label.hint": "Long labels spill onto the next board blocks"
 }

@@ -27,6 +27,13 @@ import java.util.List;
  *   <li>{@code TEXT} — {@code text}: copy with inline tokens ({@code {b:LINE}}
  *       bullet, {@code {d:LINE}} diamond, {@code {wc}}, {@code {<} {^} {v} {>}});
  *       a newline makes a second line. {@code num}: 0 normal, 1 small, 2 large.</li>
+ *   <li>{@code TEXT} {@code arg}: a colour FIELD behind the copy ("red", "yellow",
+ *       "green", "blue", "white", "black", "orange" or {@code #RRGGBB}; empty = none) —
+ *       the red "No exit", the yellow part-time note. Inline {@code {s:KEY}} draws a
+ *       pictogram (keys in the client's SignSymbols).</li>
+ *   <li>{@code RULE} — a thin vertical divider between groups of modules.</li>
+ *   <li>{@code BADGE} — {@code text}: a short label in a rounded box, {@code arg}: its
+ *       colour (same names) — other operators and bus routes.</li>
  *   <li>{@code ARROW} — {@code num}: direction, 0 = right counting anticlockwise
  *       in 45° steps; {@code arg}: {@code "left"} / {@code "right"} pins it to
  *       that panel edge (the Vignelli rule), empty = inline.</li>
@@ -106,10 +113,36 @@ public record SignSpec(Style style, List<Row> rows, Panel panel) {
 
     public enum Align {
         LEFT,
-        CENTER;
+        CENTER,
+        RIGHT;
 
         public static Align byName(String name) {
-            return "CENTER".equalsIgnoreCase(name) ? CENTER : LEFT;
+            return "CENTER".equalsIgnoreCase(name) ? CENTER : "RIGHT".equalsIgnoreCase(name) ? RIGHT : LEFT;
+        }
+    }
+
+    /**
+     * Where a tile sits in its row. A row is three zones — tiles flush to the
+     * left edge, tiles centred on the panel, tiles flush to the right edge —
+     * and {@code AUTO} sends the tile to the zone the ROW's alignment names
+     * (an arrow with the older {@code arg} "left"/"right" pin still goes to
+     * that edge). Multi-line tiles align their lines the same way.
+     */
+    public enum Place {
+        AUTO,
+        LEFT,
+        CENTER,
+        RIGHT;
+
+        public static Place byName(String name) {
+            if (name != null) {
+                for (Place place : values()) {
+                    if (place.name().equalsIgnoreCase(name)) {
+                        return place;
+                    }
+                }
+            }
+            return AUTO;
         }
     }
 
@@ -120,7 +153,11 @@ public record SignSpec(Style style, List<Row> rows, Panel panel) {
         STATION_NAME,
         EXIT,
         DESTINATION,
-        SPACER;
+        SPACER,
+        /** A thin vertical line between groups of modules (new types go at the END: the editor indexes by ordinal). */
+        RULE,
+        /** Short text in a rounded colour box: another operator or a bus route ("LIRR", "M15 SBS"). */
+        BADGE;
 
         public static TileType byOrdinal(int ordinal) {
             TileType[] values = values();
@@ -149,16 +186,24 @@ public record SignSpec(Style style, List<Row> rows, Panel panel) {
     public static final int EXIT_NAME = 4;
 
     /**
-     * {@code scale} multiplies this tile's module size (1 = the row's), and
-     * {@code dx}/{@code dy} nudge it in canvas units from where the row put it.
+     * {@code scale} multiplies this tile's module size (1 = the row's),
+     * {@code dx}/{@code dy} move it in canvas units from where the row put it
+     * (dragging a tile in the editor writes these), and {@code place} picks
+     * its zone in the row.
      */
     public record Tile(TileType type, String text, String arg, int num, List<String> routes,
-                       float scale, float dx, float dy) {
+                       float scale, float dx, float dy, Place place) {
         public Tile(TileType type, String text, String arg, int num, List<String> routes) {
-            this(type, text, arg, num, routes, 1, 0, 0);
+            this(type, text, arg, num, routes, 1, 0, 0, Place.AUTO);
+        }
+
+        public Tile(TileType type, String text, String arg, int num, List<String> routes,
+                    float scale, float dx, float dy) {
+            this(type, text, arg, num, routes, scale, dx, dy, Place.AUTO);
         }
 
         public Tile {
+            place = place == null ? Place.AUTO : place;
             text = clip(text, MAX_TEXT);
             arg = clip(arg, MAX_ARG);
             scale = scale <= 0 ? 1 : clampF(scale, MIN_SCALE, MAX_SCALE);
@@ -180,6 +225,7 @@ public record SignSpec(Style style, List<Row> rows, Panel panel) {
                 case EXIT -> new Tile(type, "", "", EXIT_WORD | EXIT_STREETS, List.of());
                 case SPACER -> new Tile(type, "", "", 8, List.of());
                 case ARROW -> new Tile(type, "", "right", 0, List.of());
+                case BADGE -> new Tile(type, "LIRR", "blue", 0, List.of());
                 default -> new Tile(type, "", "", 0, List.of());
             };
         }
@@ -197,27 +243,31 @@ public record SignSpec(Style style, List<Row> rows, Panel panel) {
         }
 
         public Tile withText(String newText) {
-            return new Tile(type, newText, arg, num, routes, scale, dx, dy);
+            return new Tile(type, newText, arg, num, routes, scale, dx, dy, place);
         }
 
         public Tile withArg(String newArg) {
-            return new Tile(type, text, newArg, num, routes, scale, dx, dy);
+            return new Tile(type, text, newArg, num, routes, scale, dx, dy, place);
         }
 
         public Tile withNum(int newNum) {
-            return new Tile(type, text, arg, newNum, routes, scale, dx, dy);
+            return new Tile(type, text, arg, newNum, routes, scale, dx, dy, place);
         }
 
         public Tile withRoutes(List<String> newRoutes) {
-            return new Tile(type, text, arg, num, newRoutes, scale, dx, dy);
+            return new Tile(type, text, arg, num, newRoutes, scale, dx, dy, place);
         }
 
         public Tile withScale(float newScale) {
-            return new Tile(type, text, arg, num, routes, newScale, dx, dy);
+            return new Tile(type, text, arg, num, routes, newScale, dx, dy, place);
         }
 
         public Tile withOffset(float newDx, float newDy) {
-            return new Tile(type, text, arg, num, routes, scale, newDx, newDy);
+            return new Tile(type, text, arg, num, routes, scale, newDx, newDy, place);
+        }
+
+        public Tile withPlace(Place newPlace) {
+            return new Tile(type, text, arg, num, routes, scale, dx, dy, newPlace);
         }
 
         public boolean hasFlag(int flag) {
@@ -251,13 +301,13 @@ public record SignSpec(Style style, List<Row> rows, Panel panel) {
     // ---------------------------------------------------------------- caps
 
     public static final int MAX_ROWS = 4;
-    public static final int MAX_TILES = 8;
+    public static final int MAX_TILES = 12;
     public static final int MAX_TEXT = 96;
     public static final int MAX_ARG = 64;
     public static final int MAX_ROUTES = 8;
     public static final int MAX_ROUTE_NAME = 64;
     /** Hard cap on the JSON string on the wire and in NBT. */
-    public static final int MAX_JSON = 6000;
+    public static final int MAX_JSON = 9000;
 
     public static final SignSpec EMPTY = new SignSpec(Style.BLACK, List.of());
 
@@ -324,6 +374,9 @@ public record SignSpec(Style style, List<Row> rows, Panel panel) {
                 if (tile.dy() != 0) {
                     t.addProperty("dy", tile.dy());
                 }
+                if (tile.place() != Place.AUTO) {
+                    t.addProperty("place", tile.place().name());
+                }
                 if (!tile.routes().isEmpty()) {
                     JsonArray routes = new JsonArray(tile.routes().size());
                     tile.routes().forEach(routes::add);
@@ -368,7 +421,7 @@ public record SignSpec(Style style, List<Row> rows, Panel panel) {
                         }
                         tiles.add(new Tile(TileType.byName(str(t, "type")), str(t, "text"), str(t, "arg"),
                                 t.has("num") ? t.get("num").getAsInt() : 0, routes,
-                                num(t, "scale", 1), num(t, "dx", 0), num(t, "dy", 0)));
+                                num(t, "scale", 1), num(t, "dx", 0), num(t, "dy", 0), Place.byName(str(t, "place"))));
                     }
                 }
                 rows.add(new Row(Align.byName(str(entry, "align")), tiles));

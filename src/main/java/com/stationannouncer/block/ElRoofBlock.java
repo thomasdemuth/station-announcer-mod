@@ -19,7 +19,8 @@ import net.minecraft.world.WorldAccess;
 
 /**
  * El canopy roof: a shallow red standing-seam gable over a platform, any
- * length, any width up to {@code 2 * (MAX_LEVEL + 1) + 1} = 7 blocks.
+ * length, any width up to {@code 2 * MAX_LEVEL + 2} = 8 blocks (7 odd, with a
+ * crown row; 8 even, with a ridge pair).
  *
  * <p>{@link #AXIS} is the ridge direction (the way the placer looks). Each
  * cell works out where it sits ACROSS the roof by walking its crosswise
@@ -37,7 +38,7 @@ import net.minecraft.world.WorldAccess;
  * {@link #onBlockAdded} for fills and pastes. Assets: tools/gen_el2_assets.py.
  */
 public class ElRoofBlock extends Block {
-    public static final int MAX_LEVEL = 2;
+    public static final int MAX_LEVEL = 3;
 
     public enum Side implements StringIdentifiable {
         NEG("neg"), POS("pos"), CROWN("crown");

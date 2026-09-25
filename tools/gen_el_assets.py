@@ -173,6 +173,12 @@ class Gen:
             fh.write("\n")
 
     def model(self, name, textures, elements):
+        # Every model needs a `particle` texture: without one the breaking /
+        # landing particles are the magenta-black missing sprite (the whole el
+        # kit broke that way). Reference the first texture key rather than
+        # picking a sheet, so it always exists.
+        if textures and "particle" not in textures:
+            textures = {**textures, "particle": "#" + next(iter(textures))}
         self.wj(os.path.join(self.assets, "models/block", name + ".json"),
                 {"parent": "minecraft:block/block", "textures": textures, "elements": elements})
 

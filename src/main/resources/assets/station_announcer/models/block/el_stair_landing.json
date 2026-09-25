@@ -2,7 +2,8 @@
  "textures": {
   "green": "station_announcer:block/el2_green",
   "plate": "station_announcer:block/el2_plate",
-  "gpan": "station_announcer:block/el2_green_panel"
+  "gpan": "station_announcer:block/el2_green_panel",
+  "particle": "#green"
  },
  "elements": [
   {

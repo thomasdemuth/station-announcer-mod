@@ -78,7 +78,7 @@ public class StopMarkerRenderer implements BlockEntityRenderer<StopMarkerBlockEn
         // Two passes on purpose: drawing text switches render layer, which
         // flushes the quad buffer, so a buffer reference must never be held
         // across a text draw.
-        VertexConsumer buffer = vertexConsumers.getBuffer(RenderLayer.getDebugQuads());
+        VertexConsumer buffer = vertexConsumers.getBuffer(CanvasPainter.layer());
         Matrix4f matrix = matrices.peek().getPositionMatrix();
         for (int i = 0; i < signs.size(); i++) {
             double top = stackTop - StopMarkerBlock.PLATE_SIZE * i;
