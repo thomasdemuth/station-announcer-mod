@@ -95,6 +95,8 @@ public class ElStairSideBlock extends Block {
     private final VoxelShape[][] panelShapes = new VoxelShape[2][];
     /** Wall and glass courses fill up to a ceiling; railings and posts-only courses never do. */
     private final boolean fills;
+    /** What sneak-clicking a stair tread with this course's item puts on the stair's OWN edge. */
+    private SubwayStairBlock.InSide inCell = SubwayStairBlock.InSide.WALL;
 
     public ElStairSideBlock(Settings settings) {
         this(settings, false);
@@ -130,6 +132,16 @@ public class ElStairSideBlock extends Block {
     @Override
     protected void appendProperties(StateManager.Builder<Block, BlockState> builder) {
         builder.add(FACING, SIDE, BOTTOM, TOP, END_UP, END_DOWN, LEVEL, POST, MODE);
+    }
+
+    /** Sets the in-cell side this course's item places (railing / stringer / wall, classic or ESI). */
+    public ElStairSideBlock inCell(SubwayStairBlock.InSide side) {
+        this.inCell = side;
+        return this;
+    }
+
+    public SubwayStairBlock.InSide inCell() {
+        return inCell;
     }
 
     @Override

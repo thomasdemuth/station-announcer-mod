@@ -37,10 +37,7 @@ public class ElStairSideItem extends BlockItem {
                 if (Math.abs(lateral) > 0.12 && context.getPlayer() != null && context.getPlayer().isSneaking()) {
                     // SNEAK: the side goes ON THE STAIR'S OWN EDGE instead of into the cell beside
                     // it (tight wells, lane dividers). Same item again takes it off.
-                    SubwayStairBlock.InSide side = getBlock() == com.stationannouncer.ModContent.EL_STAIR_RAILING
-                            ? SubwayStairBlock.InSide.RAILING
-                            : getBlock() == com.stationannouncer.ModContent.EL_STAIR_OPEN
-                            ? SubwayStairBlock.InSide.STRINGER : SubwayStairBlock.InSide.WALL;
+                    SubwayStairBlock.InSide side = ((com.stationannouncer.block.ElStairSideBlock) getBlock()).inCell();
                     if (!context.getWorld().isClient) {
                         ((SubwayStairBlock) stair.getBlock()).toggleSide(context.getWorld(), clicked, stair, lateral < 0, side);
                         context.getWorld().playSound(null, clicked, net.minecraft.sound.SoundEvents.BLOCK_METAL_PLACE,

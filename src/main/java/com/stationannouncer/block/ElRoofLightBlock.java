@@ -55,4 +55,11 @@ public class ElRoofLightBlock extends FacingDecorBlock {
                                                 WorldAccess world, BlockPos pos, BlockPos neighborPos) {
         return withConnections(state, world, pos);
     }
+
+    /** /fill, pastes and creator tools never call getPlacementState: settle from the neighbours. */
+    @Override
+    public void onBlockAdded(BlockState state, net.minecraft.world.World world, BlockPos pos, BlockState oldState, boolean notify) {
+        super.onBlockAdded(state, world, pos, oldState, notify);
+        com.stationannouncer.block.SelfSettle.settle(state, world, pos, Direction.DOWN);
+    }
 }

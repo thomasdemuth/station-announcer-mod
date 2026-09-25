@@ -1017,6 +1017,34 @@ def wall_doorway_arm():
                 faces=["north", "south", "up", "down"])]
 
 
+def wall_window_arm():
+    """Station-house window course (mezzanine walls): a pair of double-hung
+    sashes per block - sill, head, meeting rail, stiles and a centre mullion
+    in the green frame, old sash glass (cutout) behind them. Rails match the
+    other courses, so it stacks between cream courses like any wall course."""
+    g = "#green"
+    fr = {"north": [0, 4, 16, 5], "south": [0, 4, 16, 5], "up": [0, 0, 16, 1.8], "down": [0, 0, 16, 1.8]}
+    els = [
+        box(0, 0, 13.8, 16, 1.6, 15.8, g, uv={"north": [0, 4, 16, 5.6], "south": [0, 4, 16, 5.6],
+                                              "up": [0, 0, 16, 2], "down": [0, 0, 16, 2]},
+            faces=["north", "south", "up", "down"]),
+        box(0, 14.4, 13.8, 16, 16, 15.8, g, uv={"north": [0, 4, 16, 5.6], "south": [0, 4, 16, 5.6],
+                                                "up": [0, 0, 16, 2], "down": [0, 0, 16, 2]},
+            faces=["north", "south", "up", "down"]),
+        box(0, 1.6, 13.9, 16, 2.6, 15.7, g, uv=fr, faces=["north", "south", "up"]),        # sill rail
+        box(0, 13.4, 13.9, 16, 14.4, 15.7, g, uv=fr, faces=["north", "south", "down"]),    # head
+        box(0, 7.6, 13.9, 16, 8.6, 15.7, g, uv=fr, faces=["north", "south", "up", "down"]),  # meeting rail
+        box(0, 2.6, 14.6, 16, 13.4, 15.0, "#wglass", uv={"north": [0, 2.6, 16, 13.4], "south": [16, 2.6, 0, 13.4]},
+            faces=["north", "south"]),
+    ]
+    for x0 in (0.2, 7.4, 14.6):
+        els.append(box(x0, 2.6, 13.9, x0 + 1.2, 13.4, 15.7, g,
+                       uv={"north": [0, 3, 1.2, 13.8], "south": [0, 3, 1.2, 13.8],
+                           "east": [0, 3, 1.8, 13.8], "west": [0, 3, 1.8, 13.8]},
+                       faces=["north", "south", "east", "west"]))
+    return els
+
+
 def mirror_x(el):
     """Mirror an element across x=8: geometry and east<->west; flip u on faces whose u runs along x."""
     e = json.loads(json.dumps(el))
@@ -1102,8 +1130,11 @@ def walls_assets():
     write_png("el2_wired_glass_plain", tex_wired_glass(glare=False))
     write_png("el2_cream_ridged", tex_cream_ridged())
     write_png("el2_green_panel", tex_green_panel())
+    import gen_el2_mezz
+    write_png("el2_window_glass", gen_el2_mezz.tex_window_glass())
     tex = {"green": "el2_green", "cream": "el2_cream", "glass": "el2_wired_glass",
            "creamr": "el2_cream_ridged", "gpanel": "el2_green_panel"}
+    wtex = dict(tex, wglass="el2_window_glass")
     NEAR_SIDE.update({"el_wall_post_left", "el_wall_post_right", "el_wall_arm", "el_wall_glass_arm",
                       "el_wall_item", "el_wall_glass_item"})
     model("el_wall_post_left", wall_left_post(), tex)
@@ -1135,6 +1166,9 @@ def walls_assets():
     model("el_wall_green_return_left", wall_return("#gpanel", rail="#gpanel"), tex)
     model("el_wall_green_return_right", [mirror_x(e) for e in wall_return("#gpanel", rail="#gpanel")], tex)
     model("el_wall_green_item", wall_left_post() + wall_right_post() + wall_arm("#gpanel", rail="#gpanel"), tex)
+    NEAR_SIDE.update({"el_wall_window_arm", "el_wall_window_item"})
+    model("el_wall_window_arm", wall_window_arm(), wtex)
+    model("el_wall_window_item", wall_left_post() + wall_right_post() + wall_window_arm(), wtex)
     NEAR_SIDE.update({"el_wall_doorway_arm", "el_wall_doorway_item"})
     model("el_wall_doorway_arm", wall_doorway_arm(), tex)
     model("el_wall_doorway_item", wall_left_post() + wall_right_post() + wall_doorway_arm(), tex)
@@ -1143,7 +1177,8 @@ def walls_assets():
                             ("el_wall_sign", "el_wall_arm", "el_wall_item"),
                             ("el_wall_cream", "el_wall_cream_arm", "el_wall_cream_item"),
                             ("el_wall_green", "el_wall_green_arm", "el_wall_green_item"),
-                            ("el_wall_doorway", "el_wall_doorway_arm", "el_wall_doorway_item")):
+                            ("el_wall_doorway", "el_wall_doorway_arm", "el_wall_doorway_item"),
+                            ("el_wall_window", "el_wall_window_arm", "el_wall_window_item")):
         parts = []
         for facing, rot in (("north", 0), ("east", 90), ("south", 180), ("west", 270)):
             def ap(m):
@@ -1152,7 +1187,11 @@ def walls_assets():
                     a["y"] = rot
                 return a
             n = {"facing": facing, "corner_cell": "none"}
-            parts.append({"when": dict(n), "apply": ap(arm)})
+            if name == "el_wall_doorway":
+                # stacked doorways make one tall opening: only the top one has the header
+                parts.append({"when": dict(n, header="true"), "apply": ap(arm)})
+            else:
+                parts.append({"when": dict(n), "apply": ap(arm)})
             post = "el_wall_cream_post" if name == "el_wall_cream" else "el_wall_post"
             if name == "el_wall_sign":
                 # the name board takes priority over posts: only run-end posts
@@ -1167,7 +1206,7 @@ def walls_assets():
             parts.append({"when": {"facing": facing, "corner_cell": "left"}, "apply": ap(post + "_left")})
             parts.append({"when": {"facing": facing, "corner_cell": "right", "bottom": "true"}, "apply": ap("el_stub_right")})
             parts.append({"when": {"facing": facing, "corner_cell": "left", "bottom": "true"}, "apply": ap("el_stub_left")})
-            ret = {"el_wall_glass": "el_wall_glass_return", "el_wall_cream": "el_wall_cream_return",
+            ret = {"el_wall_glass": "el_wall_glass_return", "el_wall_window": "el_wall_return", "el_wall_cream": "el_wall_cream_return",
                    "el_wall_green": "el_wall_green_return"}.get(name, "el_wall_return")
             if name == "el_wall_doorway":
                 ret = None
@@ -1198,6 +1237,10 @@ def walls_assets():
         "type": "minecraft:crafting_shaped", "category": "building",
         "key": {"I": {"item": "minecraft:iron_ingot"}, "D": {"item": "minecraft:green_dye"}},
         "pattern": ["IDI", "IDI"], "result": {"item": f"{MOD}:el_wall_green", "count": 6}})
+    write_json(os.path.join(DATA, "recipes/el_wall_window.json"), {
+        "type": "minecraft:crafting_shaped", "category": "building",
+        "key": {"P": {"item": "minecraft:glass_pane"}, "I": {"item": "minecraft:iron_ingot"}},
+        "pattern": ["IPI", "PIP"], "result": {"item": f"{MOD}:el_wall_window", "count": 6}})
     write_json(os.path.join(DATA, "recipes/el_wall_doorway.json"), {
         "type": "minecraft:crafting_shaped", "category": "building",
         "key": {"I": {"item": "minecraft:iron_ingot"}},
@@ -1466,12 +1509,15 @@ def verify():
     problems = []
     import gen_el2_stairs
     import gen_el2_structure
+    import gen_el2_mezz
     for block, props in [("el_roof", ROOF_PROPS), ("el_post", POST_PROPS), ("el_post_named", POST_PROPS),
                          ("el_railing", RAIL_PROPS), ("el_railing_sign", RAIL_PROPS),
                          ("el_wall", WALL_PROPS), ("el_wall_glass", WALL_PROPS), ("el_wall_sign", WALL_PROPS),
-                         ("el_wall_cream", WALL_PROPS), ("el_wall_green", WALL_PROPS), ("el_wall_doorway", WALL_PROPS),
+                         ("el_wall_cream", WALL_PROPS), ("el_wall_green", WALL_PROPS),
+                         ("el_wall_doorway", dict(WALL_PROPS, header={"true", "false"})),
+                         ("el_wall_window", WALL_PROPS),
                          ("el_platform_lamp", POST_PROPS), ("el_roof_light", LIGHT_PROPS),
-                         ("el_sign", SIGN_PROPS)] + gen_el2_stairs.VERIFY + gen_el2_structure.VERIFY:
+                         ("el_sign", SIGN_PROPS)] + gen_el2_stairs.VERIFY + gen_el2_structure.VERIFY + gen_el2_mezz.VERIFY:
         bs = json.load(open(os.path.join(BLOCKSTATES, block + ".json")))
         if "variants" in bs:
             for key, variant in bs["variants"].items():
@@ -1532,7 +1578,13 @@ def main():
     gen_el2_stairs.build()
     import gen_el2_structure
     gen_el2_structure.build()
+    import gen_el2_mezz
+    gen_el2_mezz.build()
     verify()
+    # the ESI theme is derived from everything above (and from gen_stair_assets'
+    # subway_stairs blockstate) - always regenerate it last
+    import gen_esi_theme
+    gen_esi_theme.build()
 
 
 if __name__ == "__main__":

@@ -44,6 +44,23 @@ rig's Gradle wrappers (and sometimes the JVMs) get SIGKILLed — forbid agents f
 entirely and check rig health after each one finishes; an orphaned JVM keeps serving but
 loses the console fifo.
 
+### EL KIT COMPLETION + ESI THEME (2026-09-25) — READ `EL_STATION_PLAN.md` "KIT COMPLETION" + `ESI_PLAN.md`
+
+Thomas: "actually get it done ... platform to staircase to mezzanine ... modular; next: the same
+blocks with the ESI theme". A full station (street entrance -> mezzanine -> platform stairs through
+the slab -> platforms) was built on the rig from kit blocks only, classic AND ESI
+(`tools/el_demo_station/`, placed through the real item code with the dev-only `/rigplace`;
+`/rigstate x y z` prints a block state), and every defect found was fixed in the kit.
+- New: `el_mezzanine_floor`, `el_ceiling(_light)`, `el_wall_window` (gen_el2_mezz.py), stacked
+  doorways (HEADER), clickable flights (`StairFlightItem`), `SelfSettle` for /fill/pastes on every
+  connecting kit block. Fixed from Thomas's live report: well-rim railing switching sides, a stepped
+  gap between treads and upper walls.
+- ESI: `tools/gen_esi_theme.py` (runs last in gen_el2_assets / gen_stair_assets) derives 28 `esi_*`
+  blocks from the classic ones (same Java classes, `mtr/EsiKit`, own creative tab); ESI in-cell stair
+  sides on subway_stairs; `ElStackWallBlock` makes glass/mesh bays seamless when stacked.
+- Thomas played on the rig server with his own client during this session — restarting the rig or
+  running Gradle kills his connection; say so first.
+
 ### BRIDGE CREATOR (2026-09-09) — configurable multi-track bridge/viaduct tool, 3.2.0
 
 Thomas's ask: "a full custom bridge creator" — settings menu (pillar distance, custom

@@ -208,4 +208,11 @@ public class GateWallBlock extends Block implements GateSection {
     public VoxelShape getOutlineShape(BlockState state, BlockView world, BlockPos pos, ShapeContext context) {
         return bendOutlines[state.get(FACING).ordinal()][state.get(BEND).ordinal()];
     }
+
+    /** /fill, pastes and creator tools never call getPlacementState: settle from the neighbours. */
+    @Override
+    public void onBlockAdded(BlockState state, net.minecraft.world.World world, BlockPos pos, BlockState oldState, boolean notify) {
+        super.onBlockAdded(state, world, pos, oldState, notify);
+        com.stationannouncer.block.SelfSettle.settle(state, world, pos, Direction.DOWN);
+    }
 }

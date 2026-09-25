@@ -3,7 +3,8 @@
   {
    "when": {
     "facing": "north",
-    "corner_cell": "none"
+    "corner_cell": "none",
+    "header": "true"
    },
    "apply": {
     "model": "station_announcer:block/el_wall_doorway_arm"
@@ -102,7 +103,8 @@
   {
    "when": {
     "facing": "east",
-    "corner_cell": "none"
+    "corner_cell": "none",
+    "header": "true"
    },
    "apply": {
     "model": "station_announcer:block/el_wall_doorway_arm",
@@ -211,7 +213,8 @@
   {
    "when": {
     "facing": "south",
-    "corner_cell": "none"
+    "corner_cell": "none",
+    "header": "true"
    },
    "apply": {
     "model": "station_announcer:block/el_wall_doorway_arm",
@@ -320,7 +323,8 @@
   {
    "when": {
     "facing": "west",
-    "corner_cell": "none"
+    "corner_cell": "none",
+    "header": "true"
    },
    "apply": {
     "model": "station_announcer:block/el_wall_doorway_arm",

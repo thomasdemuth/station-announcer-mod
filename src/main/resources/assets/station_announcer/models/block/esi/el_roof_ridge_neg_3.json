@@ -1,0 +1,10 @@
+{
+ "textures": {
+  "green": "station_announcer:block/esi/esi_steel",
+  "red": "station_announcer:block/esi/esi_roof",
+  "soffit": "station_announcer:block/esi/esi_soffit",
+  "lattice": "station_announcer:block/esi/esi_lattice",
+  "particle": "#green"
+ },
+ "elements": []
+}

@@ -169,6 +169,28 @@ public abstract class EdgeRunBlock extends FacingDecorBlock {
                 .with(BOTTOM, boltsToSlab(world, pos, facing)), world, pos);
     }
 
+    /**
+     * The bracket depends on the slab DIAGONALLY below (one toward the platform,
+     * one down), which is not a vanilla neighbour of the course - so floor blocks
+     * call this when they appear or go (a stair well dug through a finished
+     * platform would otherwise leave brackets bolted to nothing).
+     */
+    public static void refreshBrackets(net.minecraft.world.World world, BlockPos slab) {
+        if (world.isClient) {
+            return;
+        }
+        for (Direction d : Direction.Type.HORIZONTAL) {
+            BlockPos at = slab.up().offset(d);
+            BlockState state = world.getBlockState(at);
+            if (state.getBlock() instanceof EdgeRunBlock block && state.get(FACING) == d.getOpposite()) {
+                BlockState fresh = block.withConnections(state, world, at);
+                if (fresh != state) {
+                    world.setBlockState(at, fresh, net.minecraft.block.Block.NOTIFY_LISTENERS);
+                }
+            }
+        }
+    }
+
     /** FACING points at the platform; the slab whose edge face the bracket bolts to is one down from there. */
     private boolean boltsToSlab(WorldAccess world, BlockPos pos, Direction facing) {
         if (sameFamily(world.getBlockState(pos.down()))) {
@@ -176,5 +198,12 @@ public abstract class EdgeRunBlock extends FacingDecorBlock {
         }
         BlockPos slab = pos.offset(facing).down();
         return world.getBlockState(slab).isSideSolidFullSquare(world, slab, facing.getOpposite());
+    }
+
+    /** /fill, pastes and creator tools never call getPlacementState: settle from the neighbours. */
+    @Override
+    public void onBlockAdded(BlockState state, net.minecraft.world.World world, BlockPos pos, BlockState oldState, boolean notify) {
+        super.onBlockAdded(state, world, pos, oldState, notify);
+        com.stationannouncer.block.SelfSettle.settle(state, world, pos, Direction.DOWN);
     }
 }

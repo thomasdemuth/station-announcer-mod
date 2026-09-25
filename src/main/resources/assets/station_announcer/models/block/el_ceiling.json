@@ -1,0 +1,46 @@
+{
+ "textures": {
+  "green": "station_announcer:block/el2_green",
+  "concrete": "station_announcer:block/platform_concrete_floor_side",
+  "top": "station_announcer:block/platform_concrete_floor_top_c0_0",
+  "pan": "station_announcer:block/el2_corrugated",
+  "cream": "station_announcer:block/el2_cream",
+  "panel": "station_announcer:block/el2_ceiling",
+  "light": "station_announcer:block/el2_troffer",
+  "particle": "#green"
+ },
+ "elements": [
+  {
+   "from": [
+    0,
+    0,
+    0
+   ],
+   "to": [
+    16,
+    2,
+    16
+   ],
+   "faces": {
+    "down": {
+     "uv": [
+      0,
+      0,
+      16,
+      16
+     ],
+     "texture": "#panel"
+    },
+    "up": {
+     "uv": [
+      0,
+      0,
+      16,
+      16
+     ],
+     "texture": "#cream"
+    }
+   }
+  }
+ ]
+}

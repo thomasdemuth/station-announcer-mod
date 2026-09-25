@@ -1,0 +1,42 @@
+{
+ "textures": {
+  "green": "station_announcer:block/esi/esi_steel",
+  "cream": "station_announcer:block/esi/esi_panel_black",
+  "glass": "station_announcer:block/esi/esi_glass_plain",
+  "particle": "#green"
+ },
+ "elements": [
+  {
+   "from": [
+    0.8000000000000007,
+    0.0,
+    0.0
+   ],
+   "to": [
+    1.5999999999999996,
+    16.0,
+    16.0
+   ],
+   "faces": {
+    "west": {
+     "uv": [
+      0.0,
+      0.0,
+      16.0,
+      16.0
+     ],
+     "texture": "#cream"
+    },
+    "east": {
+     "uv": [
+      0.0,
+      0.0,
+      16.0,
+      16.0
+     ],
+     "texture": "#cream"
+    }
+   }
+  }
+ ]
+}

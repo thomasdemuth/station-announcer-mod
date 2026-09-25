@@ -92,5 +92,16 @@ public class ConcreteFloorBlock extends Block {
         if (wanted != state) {
             world.setBlockState(pos, wanted, Block.NOTIFY_LISTENERS);
         }
+        if (!oldState.isOf(this)) {
+            EdgeRunBlock.refreshBrackets(world, pos);
+        }
+    }
+
+    @Override
+    public void onStateReplaced(BlockState state, World world, BlockPos pos, BlockState newState, boolean moved) {
+        super.onStateReplaced(state, world, pos, newState, moved);
+        if (!newState.isOf(this)) {
+            EdgeRunBlock.refreshBrackets(world, pos);
+        }
     }
 }

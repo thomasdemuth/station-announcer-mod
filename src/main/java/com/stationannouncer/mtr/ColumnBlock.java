@@ -58,4 +58,11 @@ public class ColumnBlock extends FacingDecorBlock {
     protected boolean connectsDown(BlockState below) {
         return below.getBlock() instanceof ColumnBlock;
     }
+
+    /** /fill, pastes and creator tools never call getPlacementState: settle from the neighbours. */
+    @Override
+    public void onBlockAdded(BlockState state, net.minecraft.world.World world, BlockPos pos, BlockState oldState, boolean notify) {
+        super.onBlockAdded(state, world, pos, oldState, notify);
+        com.stationannouncer.block.SelfSettle.settle(state, world, pos, Direction.DOWN);
+    }
 }

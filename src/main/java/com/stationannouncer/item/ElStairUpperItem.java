@@ -94,6 +94,19 @@ public class ElStairUpperItem extends BlockItem {
             }
             if (!world.isClient) {
                 world.setBlockState(cell, next, Block.NOTIFY_ALL);
+                // the wall continues down onto the stair's own edge (no slot above the treads)
+                BlockPos stairPos = stairUnder(world, cell);
+                if (stairPos != null) {
+                    BlockState stair = world.getBlockState(stairPos);
+                    SubwayStairBlock.InSide wall = ((ElStairUpperBlock) getBlock()).inCell();
+                    if (wantLeft) {
+                        ((SubwayStairBlock) stair.getBlock()).ensureWall(world, stairPos, stair, true, wall);
+                        stair = world.getBlockState(stairPos);
+                    }
+                    if (wantRight) {
+                        ((SubwayStairBlock) stair.getBlock()).ensureWall(world, stairPos, stair, false, wall);
+                    }
+                }
                 BlockSoundGroup sound = next.getSoundGroup();
                 world.playSound(null, cell, sound.getPlaceSound(), SoundCategory.BLOCKS,
                         (sound.getVolume() + 1.0f) / 2.0f, sound.getPitch() * 0.8f);
@@ -105,6 +118,21 @@ public class ElStairUpperItem extends BlockItem {
             return ActionResult.success(world.isClient);
         }
         return ActionResult.FAIL;
+    }
+
+    /** The stair at the foot of the upper-course column containing {@code cell}. */
+    private static BlockPos stairUnder(World world, BlockPos cell) {
+        BlockPos p = cell.down();
+        for (int i = 0; i < CLIMB; i++, p = p.down()) {
+            BlockState state = world.getBlockState(p);
+            if (state.getBlock() instanceof SubwayStairBlock) {
+                return p;
+            }
+            if (!(state.getBlock() instanceof ElStairUpperBlock)) {
+                return null;
+            }
+        }
+        return null;
     }
 
     @Override

@@ -1,0 +1,142 @@
+{
+ "textures": {
+  "black": "station_announcer:block/esi/esi_steel",
+  "lamp": "station_announcer:block/esi/esi_led",
+  "particle": "#black"
+ },
+ "elements": [
+  {
+   "from": [
+    7.5,
+    14,
+    7.5
+   ],
+   "to": [
+    8.5,
+    16,
+    8.5
+   ],
+   "faces": {
+    "north": {
+     "uv": [
+      0,
+      0,
+      1,
+      2
+     ],
+     "texture": "#black"
+    },
+    "south": {
+     "uv": [
+      0,
+      0,
+      1,
+      2
+     ],
+     "texture": "#black"
+    },
+    "east": {
+     "uv": [
+      0,
+      0,
+      1,
+      2
+     ],
+     "texture": "#black"
+    },
+    "west": {
+     "uv": [
+      0,
+      0,
+      1,
+      2
+     ],
+     "texture": "#black"
+    }
+   }
+  },
+  {
+   "from": [
+    6,
+    12.4,
+    0
+   ],
+   "to": [
+    10,
+    14,
+    16
+   ],
+   "faces": {
+    "up": {
+     "uv": [
+      6,
+      0,
+      10,
+      16
+     ],
+     "texture": "#black"
+    },
+    "east": {
+     "uv": [
+      0,
+      0,
+      16,
+      1.6
+     ],
+     "texture": "#black"
+    },
+    "west": {
+     "uv": [
+      0,
+      0,
+      16,
+      1.6
+     ],
+     "texture": "#black"
+    }
+   }
+  },
+  {
+   "from": [
+    6.6,
+    11.4,
+    0
+   ],
+   "to": [
+    9.4,
+    12.4,
+    16
+   ],
+   "faces": {
+    "down": {
+     "uv": [
+      0,
+      0,
+      2.8,
+      16
+     ],
+     "texture": "#lamp"
+    },
+    "east": {
+     "uv": [
+      0,
+      0,
+      16,
+      1
+     ],
+     "texture": "#lamp"
+    },
+    "west": {
+     "uv": [
+      0,
+      0,
+      16,
+      1
+     ],
+     "texture": "#lamp"
+    }
+   },
+   "shade": false
+  }
+ ]
+}

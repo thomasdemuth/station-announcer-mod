@@ -1,0 +1,44 @@
+{
+ "multipart": [
+  {
+   "apply": {
+    "model": "station_announcer:block/esi/el_landing_roof_deck__475e2b"
+   }
+  },
+  {
+   "when": {
+    "edge_north": "true"
+   },
+   "apply": {
+    "model": "station_announcer:block/esi/el_landing_roof_edge__475e2b"
+   }
+  },
+  {
+   "when": {
+    "edge_east": "true"
+   },
+   "apply": {
+    "model": "station_announcer:block/esi/el_landing_roof_edge__475e2b",
+    "y": 90
+   }
+  },
+  {
+   "when": {
+    "edge_south": "true"
+   },
+   "apply": {
+    "model": "station_announcer:block/esi/el_landing_roof_edge__475e2b",
+    "y": 180
+   }
+  },
+  {
+   "when": {
+    "edge_west": "true"
+   },
+   "apply": {
+    "model": "station_announcer:block/esi/el_landing_roof_edge__475e2b",
+    "y": 270
+   }
+  }
+ ]
+}

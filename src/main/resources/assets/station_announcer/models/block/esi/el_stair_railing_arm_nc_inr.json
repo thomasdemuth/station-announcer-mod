@@ -1,0 +1,166 @@
+{
+ "textures": {
+  "green": "station_announcer:block/esi/esi_steel",
+  "cream": "station_announcer:block/esi/esi_panel_black",
+  "glass": "station_announcer:block/esi/esi_glass_plain",
+  "particle": "#green"
+ },
+ "elements": [
+  {
+   "from": [
+    13.9,
+    19.2,
+    0.0
+   ],
+   "to": [
+    15.7,
+    20.0,
+    4.0
+   ],
+   "faces": {
+    "north": {
+     "uv": [
+      0,
+      0,
+      1.8,
+      0.8000000000000007
+     ],
+     "texture": "#green"
+    },
+    "south": {
+     "uv": [
+      0,
+      0,
+      1.8,
+      0.8000000000000007
+     ],
+     "texture": "#green"
+    },
+    "east": {
+     "uv": [
+      0,
+      0,
+      4.0,
+      0.8000000000000007
+     ],
+     "texture": "#green"
+    },
+    "west": {
+     "uv": [
+      0,
+      0,
+      4.0,
+      0.8000000000000007
+     ],
+     "texture": "#green"
+    },
+    "up": {
+     "uv": [
+      0,
+      0,
+      1.8,
+      4.0
+     ],
+     "texture": "#green"
+    },
+    "down": {
+     "uv": [
+      0,
+      0,
+      1.8,
+      4.0
+     ],
+     "texture": "#green"
+    }
+   },
+   "rotation": {
+    "origin": [
+     21.6,
+     8,
+     8
+    ],
+    "axis": "x",
+    "angle": 45,
+    "rescale": true
+   }
+  },
+  {
+   "from": [
+    14.1,
+    13.0,
+    0.0
+   ],
+   "to": [
+    15.5,
+    13.6,
+    10.4
+   ],
+   "faces": {
+    "north": {
+     "uv": [
+      0,
+      0,
+      1.4,
+      0.5999999999999996
+     ],
+     "texture": "#green"
+    },
+    "south": {
+     "uv": [
+      0,
+      0,
+      1.4,
+      0.5999999999999996
+     ],
+     "texture": "#green"
+    },
+    "east": {
+     "uv": [
+      0,
+      0,
+      10.4,
+      0.5999999999999996
+     ],
+     "texture": "#green"
+    },
+    "west": {
+     "uv": [
+      0,
+      0,
+      10.4,
+      0.5999999999999996
+     ],
+     "texture": "#green"
+    },
+    "up": {
+     "uv": [
+      0,
+      0,
+      1.4,
+      10.4
+     ],
+     "texture": "#green"
+    },
+    "down": {
+     "uv": [
+      0,
+      0,
+      1.4,
+      10.4
+     ],
+     "texture": "#green"
+    }
+   },
+   "rotation": {
+    "origin": [
+     21.6,
+     8,
+     8
+    ],
+    "axis": "x",
+    "angle": 45,
+    "rescale": true
+   }
+  }
+ ]
+}

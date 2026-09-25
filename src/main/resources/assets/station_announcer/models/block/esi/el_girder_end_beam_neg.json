@@ -1,0 +1,196 @@
+{
+ "textures": {
+  "green": "station_announcer:block/esi/esi_steel",
+  "steel": "station_announcer:block/esi/esi_struct_steel",
+  "concrete": "station_announcer:block/el2_concrete",
+  "lace": "station_announcer:block/esi/esi_lace",
+  "tie": "station_announcer:block/el2_tie",
+  "pan": "station_announcer:block/esi/esi_pan",
+  "plate": "station_announcer:block/el2_plate",
+  "particle": "#green"
+ },
+ "elements": [
+  {
+   "from": [
+    -4.0,
+    0.0,
+    4.0
+   ],
+   "to": [
+    0,
+    2.0,
+    12.0
+   ],
+   "faces": {
+    "north": {
+     "uv": [
+      4.0,
+      13.5,
+      0,
+      15.5
+     ],
+     "texture": "#steel"
+    },
+    "south": {
+     "uv": [
+      4.0,
+      13.5,
+      0,
+      15.5
+     ],
+     "texture": "#steel"
+    },
+    "up": {
+     "uv": [
+      4.0,
+      4,
+      0,
+      12
+     ],
+     "texture": "#steel"
+    },
+    "down": {
+     "uv": [
+      4.0,
+      4,
+      0,
+      12
+     ],
+     "texture": "#steel"
+    }
+   }
+  },
+  {
+   "from": [
+    -4.0,
+    14.0,
+    4.0
+   ],
+   "to": [
+    0,
+    16.0,
+    12.0
+   ],
+   "faces": {
+    "north": {
+     "uv": [
+      4.0,
+      0.5,
+      0,
+      2.5
+     ],
+     "texture": "#steel"
+    },
+    "south": {
+     "uv": [
+      4.0,
+      0.5,
+      0,
+      2.5
+     ],
+     "texture": "#steel"
+    },
+    "up": {
+     "uv": [
+      4.0,
+      4,
+      0,
+      12
+     ],
+     "texture": "#steel"
+    },
+    "down": {
+     "uv": [
+      4.0,
+      4,
+      0,
+      12
+     ],
+     "texture": "#steel"
+    }
+   }
+  },
+  {
+   "from": [
+    -7.0,
+    2.0,
+    7.0
+   ],
+   "to": [
+    0,
+    14.0,
+    9.0
+   ],
+   "faces": {
+    "north": {
+     "uv": [
+      12.0,
+      2,
+      5,
+      14
+     ],
+     "texture": "#steel"
+    },
+    "south": {
+     "uv": [
+      12.0,
+      2,
+      5,
+      14
+     ],
+     "texture": "#steel"
+    }
+   }
+  },
+  {
+   "from": [
+    -6.850000000000001,
+    2.0,
+    5.2
+   ],
+   "to": [
+    -5.650000000000002,
+    14.0,
+    10.8
+   ],
+   "faces": {
+    "north": {
+     "uv": [
+      1.7,
+      2,
+      0.5,
+      14
+     ],
+     "texture": "#steel"
+    },
+    "south": {
+     "uv": [
+      1.7,
+      2,
+      0.5,
+      14
+     ],
+     "texture": "#steel"
+    },
+    "west": {
+     "uv": [
+      4,
+      2,
+      9.600000000000001,
+      14
+     ],
+     "texture": "#steel"
+    },
+    "east": {
+     "uv": [
+      4,
+      2,
+      9.600000000000001,
+      14
+     ],
+     "texture": "#steel"
+    }
+   }
+  }
+ ]
+}

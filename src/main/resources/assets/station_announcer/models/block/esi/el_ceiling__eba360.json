@@ -1,0 +1,46 @@
+{
+ "textures": {
+  "green": "station_announcer:block/esi/esi_steel",
+  "concrete": "station_announcer:block/platform_concrete_floor_side",
+  "top": "station_announcer:block/esi/esi_floor_tile",
+  "pan": "station_announcer:block/esi/esi_corrugated",
+  "cream": "station_announcer:block/esi/esi_panel_steel",
+  "panel": "station_announcer:block/esi/esi_ceiling",
+  "light": "station_announcer:block/esi/esi_led",
+  "particle": "#green"
+ },
+ "elements": [
+  {
+   "from": [
+    0,
+    0,
+    0
+   ],
+   "to": [
+    16,
+    2,
+    16
+   ],
+   "faces": {
+    "down": {
+     "uv": [
+      0,
+      0,
+      16,
+      16
+     ],
+     "texture": "#panel"
+    },
+    "up": {
+     "uv": [
+      0,
+      0,
+      16,
+      16
+     ],
+     "texture": "#cream"
+    }
+   }
+  }
+ ]
+}

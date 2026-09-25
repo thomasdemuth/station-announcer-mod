@@ -140,30 +140,39 @@ train's platform while lit, like the real mezzanine signs.
 
 ### NYC elevated station kit
 
-The steel bones and platform furniture of a New York el, in classic
-Dual-Contracts green, galvanized silver, and **station-color tinted** paints:
+Everything to build an el station from the sidewalk to the platform, in two
+looks: **classic** (Dual-Contracts green steel, red standing-seam gables,
+cream board walls with wired glass, Warren lattice friezes) and **ESI**, the
+modern MTA Enhanced Station Initiative skin (charcoal steel, silver roof over a
+wood soffit with a linear LED, full-height clear glass and welded mesh, L-arm
+LED lamps, black-and-stainless mezzanines with art glass). ESI pieces are on
+their own creative tab and behave exactly like their classic counterparts
+(craft: classic piece + gray dye).
 
-- **El Columns** (solid riveted / see-through lattice) — slim 6 px columns
-  that stack to any height: the bottom block grows the street base plates,
-  the top flares the gusset cap. Named variants carry the station name on a
-  black board, live from MTR.
-- **Plate Girder & Lattice Truss** — axis-placed like logs; set one directly
-  over any column and it grows the curved knee braces down the column's
-  sides, so a bent assembles itself.
-- **Tie Deck & Plate Deck** — the track deck: open ties you can see daylight
-  through from the street, or solid riveted plate; walkable on top with
-  clearance beneath.
-- **Windscreens ×4** (panel + wired glazing, corrugated, modern glass, mesh)
-  and **Railings** (green pipe / galvanized picket) — merging runs sharing
-  one post per joint, any length.
-- **Canopy Posts + Canopies** (flat corrugated / red standing-seam gable) —
-  posts stack with brackets at the top; canopies tile to any platform
-  footprint, hanging riveted fascias on open edges and closing gable ends
-  automatically, with purlins underneath for hanging PIDS and signs.
-- **El Station Name Board** — the black Bay Parkway-style board, name live
-  from the MTR station, right-click for a custom name.
+Every piece is modular — runs, stacks and surfaces of any size connect
+themselves, whether placed by hand, with `/fill`, pastes or Axiom:
 
-The concrete and tile platform floors above are the intended walking surface.
+- **Structure** — street columns (solid / lattice) that stack to any height,
+  plate girders that grow knee braces over columns and frame into columns
+  and crossing girders, open tie decks and plate decks (straight or diagonal).
+- **Platform** — platform edge (opens MTR train doors) on the concrete floors,
+  gable roofs of any length and width up to 8 with hips and valleys, posts,
+  wall courses (board / wired glass / cream / green / sash windows / doorway /
+  name sign) and railings that stand just outside the platform edge (click the
+  far third of a floor block), lamp poles, roof lights, name boards.
+- **Mezzanine / station house** — mezzanine floor (a steel-framed slab for any
+  elevated floor), the same wall courses for its walls (stack two doorways for
+  a full-height door), and a pressed-tin ceiling with or without lights.
+- **Stairs** — subway stairs build a flight by clicking: the top of a step's
+  upper half continues it up, the lower half down. Side courses beside the
+  flight (railing / wall / glass / posts-only, stacked by clicking the tread's
+  outer third), or on the stair's own edge (sneak-click), upper wall cells to
+  carry the walls up through a slab, sloped stair roofs, flat landing roofs
+  and hoods, steel landings and the lit entrance sign.
+
+`tools/el_demo_station/` builds a complete example station with both looks;
+`EL_STATION_PLAN.md` has the recipes (e.g. a stair rising through the platform
+into the mezzanine).
 
 ### Subway stairs & handrails
 

@@ -1,0 +1,83 @@
+{
+ "multipart": [
+  {
+   "apply": {
+    "model": "station_announcer:block/esi/el_ceiling__eba360"
+   }
+  },
+  {
+   "when": {
+    "edge_north": "true"
+   },
+   "apply": {
+    "model": "station_announcer:block/esi/el_ceiling_fascia__eba360"
+   }
+  },
+  {
+   "when": {
+    "edge_east": "true"
+   },
+   "apply": {
+    "model": "station_announcer:block/esi/el_ceiling_fascia__eba360",
+    "y": 90
+   }
+  },
+  {
+   "when": {
+    "edge_south": "true"
+   },
+   "apply": {
+    "model": "station_announcer:block/esi/el_ceiling_fascia__eba360",
+    "y": 180
+   }
+  },
+  {
+   "when": {
+    "edge_west": "true"
+   },
+   "apply": {
+    "model": "station_announcer:block/esi/el_ceiling_fascia__eba360",
+    "y": 270
+   }
+  },
+  {
+   "when": {
+    "edge_north": "true",
+    "edge_east": "true"
+   },
+   "apply": {
+    "model": "station_announcer:block/esi/el_ceiling_corner__eba360"
+   }
+  },
+  {
+   "when": {
+    "edge_east": "true",
+    "edge_south": "true"
+   },
+   "apply": {
+    "model": "station_announcer:block/esi/el_ceiling_corner__eba360",
+    "y": 90
+   }
+  },
+  {
+   "when": {
+    "edge_south": "true",
+    "edge_west": "true"
+   },
+   "apply": {
+    "model": "station_announcer:block/esi/el_ceiling_corner__eba360",
+    "y": 180
+   }
+  },
+  {
+   "when": {
+    "edge_west": "true",
+    "edge_north": "true"
+   },
+   "apply": {
+    "model": "station_announcer:block/esi/el_ceiling_corner__eba360",
+    "y": 270
+   }
+  }
+ ]
+}

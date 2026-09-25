@@ -1,0 +1,95 @@
+{
+ "multipart": [
+  {
+   "when": {
+    "axis": "x"
+   },
+   "apply": {
+    "model": "station_announcer:block/esi/el_mezzanine_floor"
+   }
+  },
+  {
+   "when": {
+    "axis": "z"
+   },
+   "apply": {
+    "model": "station_announcer:block/esi/el_mezzanine_floor",
+    "y": 90
+   }
+  },
+  {
+   "when": {
+    "edge_north": "true"
+   },
+   "apply": {
+    "model": "station_announcer:block/esi/el_mezzanine_floor_fascia"
+   }
+  },
+  {
+   "when": {
+    "edge_east": "true"
+   },
+   "apply": {
+    "model": "station_announcer:block/esi/el_mezzanine_floor_fascia",
+    "y": 90
+   }
+  },
+  {
+   "when": {
+    "edge_south": "true"
+   },
+   "apply": {
+    "model": "station_announcer:block/esi/el_mezzanine_floor_fascia",
+    "y": 180
+   }
+  },
+  {
+   "when": {
+    "edge_west": "true"
+   },
+   "apply": {
+    "model": "station_announcer:block/esi/el_mezzanine_floor_fascia",
+    "y": 270
+   }
+  },
+  {
+   "when": {
+    "edge_north": "true",
+    "edge_east": "true"
+   },
+   "apply": {
+    "model": "station_announcer:block/esi/el_mezzanine_floor_corner"
+   }
+  },
+  {
+   "when": {
+    "edge_east": "true",
+    "edge_south": "true"
+   },
+   "apply": {
+    "model": "station_announcer:block/esi/el_mezzanine_floor_corner",
+    "y": 90
+   }
+  },
+  {
+   "when": {
+    "edge_south": "true",
+    "edge_west": "true"
+   },
+   "apply": {
+    "model": "station_announcer:block/esi/el_mezzanine_floor_corner",
+    "y": 180
+   }
+  },
+  {
+   "when": {
+    "edge_west": "true",
+    "edge_north": "true"
+   },
+   "apply": {
+    "model": "station_announcer:block/esi/el_mezzanine_floor_corner",
+    "y": 270
+   }
+  }
+ ]
+}

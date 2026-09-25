@@ -61,7 +61,9 @@ public class SubwayStairBlock extends Block {
 
     /** What stands on one edge of the stair, inside its own cell. */
     public enum InSide implements StringIdentifiable {
-        NONE("none"), STRINGER("stringer"), RAILING("railing"), WALL("wall"), WALL_FILL("wall_fill");
+        NONE("none"), STRINGER("stringer"), RAILING("railing"), WALL("wall"), WALL_FILL("wall_fill"),
+        /** The ESI theme's finish of the same four (charcoal / black panel), from the esi_stair_* items. */
+        ESI_STRINGER("esi_stringer"), ESI_RAILING("esi_railing"), ESI_WALL("esi_wall"), ESI_WALL_FILL("esi_wall_fill");
 
         private final String name;
 
@@ -71,7 +73,21 @@ public class SubwayStairBlock extends Block {
 
         /** Something a player cannot walk through. */
         public boolean panel() {
-            return this == RAILING || this == WALL || this == WALL_FILL;
+            return this != NONE && this != STRINGER && this != ESI_STRINGER;
+        }
+
+        /** A wall of either finish (becomes / stops being a triangle fill). */
+        public boolean wall() {
+            return this == WALL || this == WALL_FILL || this == ESI_WALL || this == ESI_WALL_FILL;
+        }
+
+        public boolean esi() {
+            return ordinal() >= ESI_STRINGER.ordinal();
+        }
+
+        /** The same side as a wall that fills its cell, or as a banded wall. */
+        public InSide asWall(boolean fill) {
+            return esi() ? (fill ? ESI_WALL_FILL : ESI_WALL) : (fill ? WALL_FILL : WALL);
         }
 
         @Override
@@ -183,19 +199,31 @@ public class SubwayStairBlock extends Block {
      * a banded wall would overlap that cell's boards.
      */
     private static InSide settled(InSide side, WorldAccess world, BlockPos pos, boolean left) {
-        if (side != InSide.WALL && side != InSide.WALL_FILL) {
+        if (!side.wall()) {
             return side;
         }
         BlockState above = world.getBlockState(pos.up());
         boolean upper = above.getBlock() instanceof ElStairUpperBlock
                 && above.get(left ? ElStairUpperBlock.LEFT : ElStairUpperBlock.RIGHT) != ElStairUpperBlock.Kind.NONE;
-        return upper || StairFamily.underCeiling(world, pos) ? InSide.WALL_FILL : InSide.WALL;
+        return side.asWall(upper || StairFamily.underCeiling(world, pos));
+    }
+
+    /**
+     * An upper wall course was put over this stair on one edge: carry the wall
+     * down onto the stair's own edge if that edge is still bare, so the
+     * enclosure has no slot between the treads and the wall above.
+     */
+    public void ensureWall(World world, BlockPos pos, BlockState state, boolean left, InSide wall) {
+        if (state.get(left ? LEFT : RIGHT) != InSide.NONE) {
+            return;
+        }
+        world.setBlockState(pos, computed(state.with(left ? LEFT : RIGHT, wall), world, pos), Block.NOTIFY_ALL);
     }
 
     /** Sets one in-cell side (the el stair course items call this); same value again clears it. */
     public void toggleSide(World world, BlockPos pos, BlockState state, boolean left, InSide side) {
         InSide current = state.get(left ? LEFT : RIGHT);
-        boolean same = current == side || (side == InSide.WALL && current == InSide.WALL_FILL);
+        boolean same = current == side || (side.wall() && current.wall() && side.esi() == current.esi());
         BlockState next = computed(state.with(left ? LEFT : RIGHT, same ? InSide.NONE : side), world, pos);
         world.setBlockState(pos, next, Block.NOTIFY_ALL);
     }
@@ -227,6 +255,22 @@ public class SubwayStairBlock extends Block {
             }
         }
         return computed(base, world, pos);
+    }
+
+    /** /fill, pastes and the stair creator skip getPlacementState: settle ends/posts/fills and the run's diagonals. */
+    @Override
+    public void onBlockAdded(BlockState state, World world, BlockPos pos, BlockState oldState, boolean notify) {
+        super.onBlockAdded(state, world, pos, oldState, notify);
+        if (world.isClient) {
+            return;
+        }
+        BlockState wanted = computed(state, world, pos);
+        if (wanted != state) {
+            world.setBlockState(pos, wanted, Block.NOTIFY_LISTENERS);
+        }
+        if (!oldState.isOf(this)) {
+            refreshDiagonals(world, pos, state.get(FACING));
+        }
     }
 
     @Override

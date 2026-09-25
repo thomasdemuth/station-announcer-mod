@@ -66,6 +66,11 @@ public final class MtrPidsClient {
     }
 
     public static void register() {
+        // ESI theme: several bays are cutout (clear glass, mesh, lattice); the rest render the same in cutout
+        for (net.minecraft.block.Block esi : com.stationannouncer.mtr.EsiKit.BLOCKS) {
+            net.fabricmc.fabric.api.blockrenderlayer.v1.BlockRenderLayerMap.INSTANCE.putBlock(esi,
+                    net.minecraft.client.render.RenderLayer.getCutoutMipped());
+        }
         // Fare array: perforated HEET cage + transparent-cornered lamp plates.
         net.fabricmc.fabric.api.blockrenderlayer.v1.BlockRenderLayerMap.INSTANCE.putBlocks(
                 net.minecraft.client.render.RenderLayer.getCutoutMipped(),

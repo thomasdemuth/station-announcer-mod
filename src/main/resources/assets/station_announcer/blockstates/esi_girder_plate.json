@@ -1,0 +1,228 @@
+{
+ "multipart": [
+  {
+   "when": {
+    "axis": "x"
+   },
+   "apply": {
+    "model": "station_announcer:block/esi/el_girder_plate_body"
+   }
+  },
+  {
+   "when": {
+    "axis": "x",
+    "braced": "true"
+   },
+   "apply": {
+    "model": "station_announcer:block/esi/el_girder_brace_here"
+   }
+  },
+  {
+   "when": {
+    "axis": "x",
+    "brace_neg": "true"
+   },
+   "apply": {
+    "model": "station_announcer:block/esi/el_girder_brace_neg"
+   }
+  },
+  {
+   "when": {
+    "axis": "x",
+    "brace_pos": "true"
+   },
+   "apply": {
+    "model": "station_announcer:block/esi/el_girder_brace_pos"
+   }
+  },
+  {
+   "when": {
+    "axis": "x",
+    "end_neg": "column"
+   },
+   "apply": {
+    "model": "station_announcer:block/esi/el_girder_end_column_neg"
+   }
+  },
+  {
+   "when": {
+    "axis": "x",
+    "end_pos": "column"
+   },
+   "apply": {
+    "model": "station_announcer:block/esi/el_girder_end_column_pos"
+   }
+  },
+  {
+   "when": {
+    "axis": "x",
+    "end_neg": "beam"
+   },
+   "apply": {
+    "model": "station_announcer:block/esi/el_girder_end_beam_neg"
+   }
+  },
+  {
+   "when": {
+    "axis": "x",
+    "end_pos": "beam"
+   },
+   "apply": {
+    "model": "station_announcer:block/esi/el_girder_end_beam_pos"
+   }
+  },
+  {
+   "when": {
+    "axis": "z"
+   },
+   "apply": {
+    "model": "station_announcer:block/esi/el_girder_plate_body",
+    "y": 90
+   }
+  },
+  {
+   "when": {
+    "axis": "z",
+    "braced": "true"
+   },
+   "apply": {
+    "model": "station_announcer:block/esi/el_girder_brace_here",
+    "y": 90
+   }
+  },
+  {
+   "when": {
+    "axis": "z",
+    "brace_neg": "true"
+   },
+   "apply": {
+    "model": "station_announcer:block/esi/el_girder_brace_neg",
+    "y": 90
+   }
+  },
+  {
+   "when": {
+    "axis": "z",
+    "brace_pos": "true"
+   },
+   "apply": {
+    "model": "station_announcer:block/esi/el_girder_brace_pos",
+    "y": 90
+   }
+  },
+  {
+   "when": {
+    "axis": "z",
+    "end_neg": "column"
+   },
+   "apply": {
+    "model": "station_announcer:block/esi/el_girder_end_column_neg",
+    "y": 90
+   }
+  },
+  {
+   "when": {
+    "axis": "z",
+    "end_pos": "column"
+   },
+   "apply": {
+    "model": "station_announcer:block/esi/el_girder_end_column_pos",
+    "y": 90
+   }
+  },
+  {
+   "when": {
+    "axis": "z",
+    "end_neg": "beam"
+   },
+   "apply": {
+    "model": "station_announcer:block/esi/el_girder_end_beam_neg",
+    "y": 90
+   }
+  },
+  {
+   "when": {
+    "axis": "z",
+    "end_pos": "beam"
+   },
+   "apply": {
+    "model": "station_announcer:block/esi/el_girder_end_beam_pos",
+    "y": 90
+   }
+  },
+  {
+   "when": {
+    "axis": "xz"
+   },
+   "apply": {
+    "model": "station_announcer:block/esi/el_girder_plate_body_diag"
+   }
+  },
+  {
+   "when": {
+    "axis": "xz",
+    "braced": "true"
+   },
+   "apply": {
+    "model": "station_announcer:block/esi/el_girder_brace_here_diag"
+   }
+  },
+  {
+   "when": {
+    "axis": "xz",
+    "brace_neg": "true"
+   },
+   "apply": {
+    "model": "station_announcer:block/esi/el_girder_brace_neg_diag"
+   }
+  },
+  {
+   "when": {
+    "axis": "xz",
+    "brace_pos": "true"
+   },
+   "apply": {
+    "model": "station_announcer:block/esi/el_girder_brace_pos_diag"
+   }
+  },
+  {
+   "when": {
+    "axis": "zx"
+   },
+   "apply": {
+    "model": "station_announcer:block/esi/el_girder_plate_body_diag",
+    "y": 90
+   }
+  },
+  {
+   "when": {
+    "axis": "zx",
+    "braced": "true"
+   },
+   "apply": {
+    "model": "station_announcer:block/esi/el_girder_brace_here_diag",
+    "y": 90
+   }
+  },
+  {
+   "when": {
+    "axis": "zx",
+    "brace_neg": "true"
+   },
+   "apply": {
+    "model": "station_announcer:block/esi/el_girder_brace_neg_diag",
+    "y": 90
+   }
+  },
+  {
+   "when": {
+    "axis": "zx",
+    "brace_pos": "true"
+   },
+   "apply": {
+    "model": "station_announcer:block/esi/el_girder_brace_pos_diag",
+    "y": 90
+   }
+  }
+ ]
+}

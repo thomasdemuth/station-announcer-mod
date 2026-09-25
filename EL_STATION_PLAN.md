@@ -297,6 +297,60 @@ into build/resources/main and reloaded with F3+T). Fixed from his live feedback:
 STILL OPEN: Thomas's "stairs cut through the platform" stair house needs an in-game pass
 with the rim placement; deploy 2.4.53 after his next restart.
 
+### KIT COMPLETION (2026-09-25) — a whole station, street to platform, built on the rig with only kit blocks
+
+Thomas: "go through the v3 el kit and actually get it done ... platform to staircase to mezzanine
+to everything in between ... modular (any size)". Method: a complete two-track, side-platform el
+station with a mezzanine under the tracks was built on the dev rig (`tools/el_demo_station/`),
+placing by-hand pieces through the REAL item code (`/rigplace`, dev-only) and bulk pieces with
+`/fill`, then photographed from every side; every defect found was fixed in the kit, not the scene.
+
+New blocks (mezzanine, `tools/gen_el2_mezz.py` + the window course in gen_el2_assets.walls_assets):
+- `el_mezzanine_floor` (`block/ElMezzanineFloorBlock` on the new `ElEdgePanelBlock`): 4 px concrete
+  slab on two joists (AXIS from look / an existing floor), corrugated pan underneath, green channel
+  fascia hung just OUTSIDE every open side so it lines up with a wall course in the next cell.
+  Shape y 8..16 (not a full side face, so walls beside it draw no slab bracket).
+- `el_ceiling` / `el_ceiling_light` (`block/ElCeilingBlock`): pressed-tin panel at the bottom of the
+  cell above the top wall course, fascia + cornice on open sides (continues the wall plane), flush
+  troffer on the lit one (luminance 15). Full-cube collision so stairs under it see a ceiling.
+  Frames into girders.
+- `el_wall_window` (ElWallBlock): double-hung sash pair per block, stacks between cream courses.
+- `el_wall_doorway` gained `HEADER`: stacked doorways make ONE tall opening (header only on top).
+
+Kit fixes found by building (all rig-verified):
+- `/fill`, pastes, Axiom and creators never call getPlacementState: EdgeRunBlock, ColumnBlock,
+  RailingBlock, ElRoofLightBlock, ElStairUpperBlock, StairDividerBlock, BenchBlock, GateWallBlock,
+  ZebraBoardBlock and SubwayStairBlock now settle in onBlockAdded (`block/SelfSettle`).
+- STAIRS BY CLICKING (`item/StairFlightItem`, both stair finishes): clicking the top of a stair's
+  UPPER step continues the flight up + forward, its LOWER step down + back (sneak = normal) — flights
+  used to need scaffolding under every step.
+- EdgeRunItem accepted only opaque-full-cube floors, so on the mezzanine floor the first course fell
+  INSIDE the room: now any block with a solid top face is a floor; and a far-edge click whose outside
+  cell is taken (a column) FAILS instead of dropping the course inside.
+- STAIR WELL RIM (Thomas: "the stair railing switches sides"): the rim rule only fired beside the top
+  step, so one rim was half in the rim cells and half in the well cells, 2.4 px apart and unjoined. A
+  cell with any stair piece up to 8 below it is now a well: the whole rim goes in the rim cells.
+- WALL GAP (Thomas: "a clear gap in the wall"): an upper course on a stair edge left a stepped slot
+  between the treads and the wall above. Placing an upper wall now also sets the stair's in-cell wall
+  on that edge (`SubwayStairBlock.ensureWall`; ESI upper -> ESI wall).
+- Wall brackets depend on the slab DIAGONALLY below: concrete floors / platform edges now refresh
+  the courses beside them when they appear or go (`EdgeRunBlock.refreshBrackets`) — digging a well
+  under finished walls left brackets bolted to nothing.
+
+RECIPE for a stair through the platform into a mezzanine (what the demo station does):
+1. Cut the well (ceiling, deck, platform slab) over the flight, the foot entered from the mezzanine.
+2. Place the flight by clicking upper steps; a second lane by clicking its side face.
+3. Sneak-click treads with a wall course item for the inner in-cell wall. Click treads with
+   `el_stair_upper` to stack wall cells up to the platform level (this sets the in-cell wall too).
+4. Stand `el_railing` on the rim (far-third clicks from the platform) on the open sides.
+5. Carry the building wall up through the band the well cut: stack wall courses on the mezzanine
+   wall at ceiling / deck / slab level, including the top end of the well.
+6. Give the top step's outer edge a wall.
+
+ESI theme: see `ESI_PLAN.md` (same classes, generated skin, 28 blocks). NOT done: the space under a
+flight inside the mezzanine stays open (real stairs often are; closing it needs an under-stair piece),
+a Stair Creator (the clickable flights + course items made it much less needed), ESI signature pieces.
+
 ### STAIR KIT v3 (2026-09-20) — QOL round: placement rule, bolts, restyled stair sides, triangle walls, in-cell sides; dev tree (mod_version was already 3.2.3 from another session), NOT built with Gradle, NOT in game
 
 Thomas's answers (do not re-ask): stair-family blocks were landing 90 degrees off -> NEIGHBOURS DECIDE the

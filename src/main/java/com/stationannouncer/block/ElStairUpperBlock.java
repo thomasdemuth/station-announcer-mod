@@ -52,6 +52,18 @@ public class ElStairUpperBlock extends Block {
     public static final BooleanProperty POST = BooleanProperty.of("post");
     public static final BooleanProperty HEAD = BooleanProperty.of("head");
 
+    /** The in-cell wall this upper course continues down onto the stair's own edge (classic or ESI finish). */
+    private SubwayStairBlock.InSide inCell = SubwayStairBlock.InSide.WALL;
+
+    public ElStairUpperBlock inCell(SubwayStairBlock.InSide side) {
+        this.inCell = side;
+        return this;
+    }
+
+    public SubwayStairBlock.InSide inCell() {
+        return inCell;
+    }
+
     /** [left][right] -> per-facing shapes. */
     private final VoxelShape[][][] shapes = new VoxelShape[2][2][];
 
@@ -122,5 +134,12 @@ public class ElStairUpperBlock extends Block {
     public BlockState getStateForNeighborUpdate(BlockState state, Direction direction, BlockState neighborState,
                                                 WorldAccess world, BlockPos pos, BlockPos neighborPos) {
         return direction == Direction.DOWN ? compute(state, world, pos) : state;
+    }
+
+    /** /fill, pastes and creator tools never call getPlacementState: settle from the neighbours. */
+    @Override
+    public void onBlockAdded(BlockState state, net.minecraft.world.World world, BlockPos pos, BlockState oldState, boolean notify) {
+        super.onBlockAdded(state, world, pos, oldState, notify);
+        com.stationannouncer.block.SelfSettle.settle(state, world, pos, Direction.DOWN);
     }
 }

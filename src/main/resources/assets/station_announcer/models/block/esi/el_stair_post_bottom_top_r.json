@@ -1,0 +1,69 @@
+{
+ "textures": {
+  "green": "station_announcer:block/esi/esi_steel",
+  "cream": "station_announcer:block/esi/esi_panel_black",
+  "glass": "station_announcer:block/esi/esi_glass_plain",
+  "particle": "#green"
+ },
+ "elements": [
+  {
+   "from": [
+    13.8,
+    0.7999999999999989,
+    13.8
+   ],
+   "to": [
+    15.8,
+    32.0,
+    15.8
+   ],
+   "faces": {
+    "north": {
+     "uv": [
+      2.0,
+      0,
+      0,
+      16
+     ],
+     "texture": "#green"
+    },
+    "south": {
+     "uv": [
+      2.0,
+      0,
+      0,
+      16
+     ],
+     "texture": "#green"
+    },
+    "west": {
+     "uv": [
+      0,
+      0,
+      2.0,
+      16
+     ],
+     "texture": "#green"
+    },
+    "east": {
+     "uv": [
+      0,
+      0,
+      2.0,
+      16
+     ],
+     "texture": "#green"
+    },
+    "up": {
+     "uv": [
+      2.0,
+      0,
+      0,
+      2.0
+     ],
+     "texture": "#green"
+    }
+   }
+  }
+ ]
+}

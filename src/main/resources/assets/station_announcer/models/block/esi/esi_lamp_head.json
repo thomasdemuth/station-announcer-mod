@@ -1,0 +1,201 @@
+{
+ "textures": {
+  "pole": "station_announcer:block/esi/esi_pole_grey",
+  "led": "station_announcer:block/esi/esi_led",
+  "particle": "#pole"
+ },
+ "elements": [
+  {
+   "from": [
+    7,
+    0,
+    13.8
+   ],
+   "to": [
+    9,
+    10.5,
+    15.8
+   ],
+   "faces": {
+    "north": {
+     "uv": [
+      0,
+      0,
+      2,
+      10.5
+     ],
+     "texture": "#pole"
+    },
+    "south": {
+     "uv": [
+      0,
+      0,
+      2,
+      10.5
+     ],
+     "texture": "#pole"
+    },
+    "east": {
+     "uv": [
+      0,
+      0,
+      2,
+      10.5
+     ],
+     "texture": "#pole"
+    },
+    "west": {
+     "uv": [
+      0,
+      0,
+      2,
+      10.5
+     ],
+     "texture": "#pole"
+    }
+   }
+  },
+  {
+   "from": [
+    7,
+    9,
+    4
+   ],
+   "to": [
+    9,
+    10.5,
+    15.8
+   ],
+   "faces": {
+    "up": {
+     "uv": [
+      7,
+      4,
+      9,
+      16
+     ],
+     "texture": "#pole"
+    },
+    "down": {
+     "uv": [
+      7,
+      4,
+      9,
+      16
+     ],
+     "texture": "#pole"
+    },
+    "east": {
+     "uv": [
+      4,
+      5.5,
+      15.8,
+      7
+     ],
+     "texture": "#pole"
+    },
+    "west": {
+     "uv": [
+      4,
+      5.5,
+      15.8,
+      7
+     ],
+     "texture": "#pole"
+    },
+    "south": {
+     "uv": [
+      0,
+      5.5,
+      2,
+      7
+     ],
+     "texture": "#pole"
+    }
+   }
+  },
+  {
+   "from": [
+    4.5,
+    8.2,
+    -1
+   ],
+   "to": [
+    11.5,
+    9.8,
+    7
+   ],
+   "faces": {
+    "up": {
+     "uv": [
+      4.5,
+      0,
+      11.5,
+      8
+     ],
+     "texture": "#pole"
+    },
+    "north": {
+     "uv": [
+      4.5,
+      6,
+      11.5,
+      7.6
+     ],
+     "texture": "#pole"
+    },
+    "south": {
+     "uv": [
+      4.5,
+      6,
+      11.5,
+      7.6
+     ],
+     "texture": "#pole"
+    },
+    "east": {
+     "uv": [
+      0,
+      6,
+      8,
+      7.6
+     ],
+     "texture": "#pole"
+    },
+    "west": {
+     "uv": [
+      0,
+      6,
+      8,
+      7.6
+     ],
+     "texture": "#pole"
+    }
+   }
+  },
+  {
+   "from": [
+    5,
+    7.9,
+    -0.5
+   ],
+   "to": [
+    11,
+    8.2,
+    6.5
+   ],
+   "faces": {
+    "down": {
+     "uv": [
+      0,
+      0,
+      16,
+      16
+     ],
+     "texture": "#led"
+    }
+   },
+   "shade": false
+  }
+ ]
+}

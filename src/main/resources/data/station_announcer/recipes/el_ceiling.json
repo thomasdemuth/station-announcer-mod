@@ -1,0 +1,20 @@
+{
+ "type": "minecraft:crafting_shaped",
+ "category": "building",
+ "key": {
+  "I": {
+   "item": "minecraft:iron_ingot"
+  },
+  "W": {
+   "item": "minecraft:white_dye"
+  }
+ },
+ "pattern": [
+  "III",
+  " W "
+ ],
+ "result": {
+  "item": "station_announcer:el_ceiling",
+  "count": 6
+ }
+}

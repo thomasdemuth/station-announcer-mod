@@ -18,7 +18,7 @@ import java.util.List;
  * {@link SubwayStairBlock#getPlacementState} — the handrail item's UX.
  * Placed stairs can still be toggled in place with a bare-hand right-click.
  */
-public class SubwayStairItem extends BlockItem {
+public class SubwayStairItem extends StairFlightItem {
     private static final String SOLID_KEY = "StairSolid";
 
     public SubwayStairItem(Block block, Settings settings) {

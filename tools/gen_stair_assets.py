@@ -805,8 +805,10 @@ PROPS = {
     "subway_stairs": {"facing": {"north", "south", "east", "west"},
                       "bottom": {"true", "false"}, "top": {"true", "false"},
                       "solid": {"true", "false"}, "post": {"true", "false"},
-                      "left": {"none", "stringer", "railing", "wall", "wall_fill"},
-                      "right": {"none", "stringer", "railing", "wall", "wall_fill"}},
+                      "left": {"none", "stringer", "railing", "wall", "wall_fill",
+                               "esi_stringer", "esi_railing", "esi_wall", "esi_wall_fill"},
+                      "right": {"none", "stringer", "railing", "wall", "wall_fill",
+                                "esi_stringer", "esi_railing", "esi_wall", "esi_wall_fill"}},
     "subway_stair_divider": {"facing": {"north", "south", "east", "west"},
                              "bottom": {"true", "false"}, "top": {"true", "false"},
                              "left": {"none", "modern", "old"},
@@ -898,6 +900,9 @@ def main():
         wj(os.path.join(DATA, MOD, "recipes", name + ".json"), recipe)
 
     verify()
+    # the ESI theme extends subway_stairs with esi_* in-cell sides: regenerate it after us
+    import gen_esi_theme
+    gen_esi_theme.build()
 
     if args.preview:
         os.makedirs(args.preview, exist_ok=True)

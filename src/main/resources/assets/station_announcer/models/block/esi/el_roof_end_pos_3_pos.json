@@ -1,0 +1,200 @@
+{
+ "textures": {
+  "green": "station_announcer:block/esi/esi_steel",
+  "red": "station_announcer:block/esi/esi_roof",
+  "soffit": "station_announcer:block/esi/esi_soffit",
+  "lattice": "station_announcer:block/esi/esi_lattice",
+  "particle": "#green"
+ },
+ "elements": [
+  {
+   "from": [
+    14.8,
+    1.6,
+    1
+   ],
+   "to": [
+    16,
+    25.682250993908564,
+    15
+   ],
+   "faces": {
+    "east": {
+     "uv": [
+      1,
+      0,
+      15,
+      14.4
+     ],
+     "texture": "#lattice"
+    },
+    "west": {
+     "uv": [
+      1,
+      0,
+      15,
+      14.4
+     ],
+     "texture": "#lattice"
+    }
+   }
+  },
+  {
+   "from": [
+    14.8,
+    24.482250993908565,
+    0
+   ],
+   "to": [
+    16,
+    25.882250993908563,
+    16
+   ],
+   "faces": {
+    "north": {
+     "uv": [
+      14.8,
+      4,
+      16,
+      5.4
+     ],
+     "texture": "#green"
+    },
+    "south": {
+     "uv": [
+      14.8,
+      4,
+      16,
+      5.4
+     ],
+     "texture": "#green"
+    },
+    "east": {
+     "uv": [
+      0,
+      4,
+      16,
+      5.4
+     ],
+     "texture": "#green"
+    },
+    "west": {
+     "uv": [
+      0,
+      4,
+      16,
+      5.4
+     ],
+     "texture": "#green"
+    },
+    "up": {
+     "uv": [
+      14.8,
+      0,
+      16,
+      16
+     ],
+     "texture": "#green"
+    },
+    "down": {
+     "uv": [
+      14.8,
+      0,
+      16,
+      16
+     ],
+     "texture": "#green"
+    }
+   },
+   "rotation": {
+    "origin": [
+     8,
+     24.482250993908565,
+     16
+    ],
+    "axis": "x",
+    "angle": 22.5,
+    "rescale": true
+   }
+  },
+  {
+   "from": [
+    16,
+    25.88225099390856,
+    0
+   ],
+   "to": [
+    18,
+    27.48225099390856,
+    16
+   ],
+   "faces": {
+    "north": {
+     "uv": [
+      0,
+      8,
+      16,
+      9.6
+     ],
+     "texture": "#green"
+    },
+    "south": {
+     "uv": [
+      0,
+      8,
+      16,
+      9.6
+     ],
+     "texture": "#green"
+    },
+    "east": {
+     "uv": [
+      0,
+      8,
+      16,
+      9.6
+     ],
+     "texture": "#green"
+    },
+    "west": {
+     "uv": [
+      0,
+      8,
+      16,
+      9.6
+     ],
+     "texture": "#green"
+    },
+    "up": {
+     "uv": [
+      0,
+      0,
+      16,
+      16
+     ],
+     "texture": "#red"
+    },
+    "down": {
+     "uv": [
+      0,
+      0,
+      16,
+      16
+     ],
+     "texture": "#soffit",
+     "rotation": 90
+    }
+   },
+   "rotation": {
+    "origin": [
+     8,
+     25.88225099390856,
+     16
+    ],
+    "axis": "x",
+    "angle": 22.5,
+    "rescale": true
+   }
+  }
+ ]
+}

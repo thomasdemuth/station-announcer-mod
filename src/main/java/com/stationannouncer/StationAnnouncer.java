@@ -32,6 +32,10 @@ public class StationAnnouncer implements ModInitializer {
         ModContent.register();
         AnnouncerNetworking.registerServerReceivers();
         AnnounceCommand.register();
+        if (FabricLoader.getInstance().isDevelopmentEnvironment()) {
+            com.stationannouncer.command.RigPlaceCommand.register();
+            com.stationannouncer.command.RigPlaceCommand.registerProbe();
+        }
 
         // NYC PIDS blocks need MTR's data and config screens; the module class
         // is only touched when MTR is actually present.
@@ -39,6 +43,7 @@ public class StationAnnouncer implements ModInitializer {
             com.stationannouncer.mtr.MtrPids.register();
             com.stationannouncer.mtr.MtrPillars.register();
             com.stationannouncer.mtr.MtrStationDecor.register();
+            com.stationannouncer.mtr.EsiKit.register();
             com.stationannouncer.mtraddon.AddonInit.register();
             LOGGER.info("MTR detected — NYC PIDS, Pillar Creators and station decor enabled");
         }

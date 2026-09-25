@@ -1,0 +1,117 @@
+{
+ "multipart": [
+  {
+   "when": {
+    "facing": "north"
+   },
+   "apply": {
+    "model": "station_announcer:block/esi/el_roof_light__73c6ff"
+   }
+  },
+  {
+   "when": {
+    "facing": "north",
+    "front": "false"
+   },
+   "apply": {
+    "model": "station_announcer:block/esi/el_roof_light_cap_front__73c6ff"
+   }
+  },
+  {
+   "when": {
+    "facing": "north",
+    "back": "false"
+   },
+   "apply": {
+    "model": "station_announcer:block/esi/el_roof_light_cap_back__73c6ff"
+   }
+  },
+  {
+   "when": {
+    "facing": "east"
+   },
+   "apply": {
+    "model": "station_announcer:block/esi/el_roof_light__73c6ff",
+    "y": 90
+   }
+  },
+  {
+   "when": {
+    "facing": "east",
+    "front": "false"
+   },
+   "apply": {
+    "model": "station_announcer:block/esi/el_roof_light_cap_front__73c6ff",
+    "y": 90
+   }
+  },
+  {
+   "when": {
+    "facing": "east",
+    "back": "false"
+   },
+   "apply": {
+    "model": "station_announcer:block/esi/el_roof_light_cap_back__73c6ff",
+    "y": 90
+   }
+  },
+  {
+   "when": {
+    "facing": "south"
+   },
+   "apply": {
+    "model": "station_announcer:block/esi/el_roof_light__73c6ff",
+    "y": 180
+   }
+  },
+  {
+   "when": {
+    "facing": "south",
+    "front": "false"
+   },
+   "apply": {
+    "model": "station_announcer:block/esi/el_roof_light_cap_front__73c6ff",
+    "y": 180
+   }
+  },
+  {
+   "when": {
+    "facing": "south",
+    "back": "false"
+   },
+   "apply": {
+    "model": "station_announcer:block/esi/el_roof_light_cap_back__73c6ff",
+    "y": 180
+   }
+  },
+  {
+   "when": {
+    "facing": "west"
+   },
+   "apply": {
+    "model": "station_announcer:block/esi/el_roof_light__73c6ff",
+    "y": 270
+   }
+  },
+  {
+   "when": {
+    "facing": "west",
+    "front": "false"
+   },
+   "apply": {
+    "model": "station_announcer:block/esi/el_roof_light_cap_front__73c6ff",
+    "y": 270
+   }
+  },
+  {
+   "when": {
+    "facing": "west",
+    "back": "false"
+   },
+   "apply": {
+    "model": "station_announcer:block/esi/el_roof_light_cap_back__73c6ff",
+    "y": 270
+   }
+  }
+ ]
+}
