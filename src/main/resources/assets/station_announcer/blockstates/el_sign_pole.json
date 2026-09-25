@@ -1,0 +1,254 @@
+{
+ "multipart": [
+  {
+   "when": {
+    "facing": "north",
+    "side": "left|both"
+   },
+   "apply": {
+    "model": "station_announcer:block/el_sign_pole_shaft_left"
+   }
+  },
+  {
+   "when": {
+    "facing": "north",
+    "side": "left|both",
+    "up": "false"
+   },
+   "apply": {
+    "model": "station_announcer:block/el_sign_pole_top_left"
+   }
+  },
+  {
+   "when": {
+    "facing": "north",
+    "side": "left|both",
+    "down": "false"
+   },
+   "apply": {
+    "model": "station_announcer:block/el_sign_pole_foot_left"
+   }
+  },
+  {
+   "when": {
+    "facing": "north",
+    "side": "right|both"
+   },
+   "apply": {
+    "model": "station_announcer:block/el_sign_pole_shaft_right"
+   }
+  },
+  {
+   "when": {
+    "facing": "north",
+    "side": "right|both",
+    "up": "false"
+   },
+   "apply": {
+    "model": "station_announcer:block/el_sign_pole_top_right"
+   }
+  },
+  {
+   "when": {
+    "facing": "north",
+    "side": "right|both",
+    "down": "false"
+   },
+   "apply": {
+    "model": "station_announcer:block/el_sign_pole_foot_right"
+   }
+  },
+  {
+   "when": {
+    "facing": "east",
+    "side": "left|both"
+   },
+   "apply": {
+    "model": "station_announcer:block/el_sign_pole_shaft_left",
+    "y": 90
+   }
+  },
+  {
+   "when": {
+    "facing": "east",
+    "side": "left|both",
+    "up": "false"
+   },
+   "apply": {
+    "model": "station_announcer:block/el_sign_pole_top_left",
+    "y": 90
+   }
+  },
+  {
+   "when": {
+    "facing": "east",
+    "side": "left|both",
+    "down": "false"
+   },
+   "apply": {
+    "model": "station_announcer:block/el_sign_pole_foot_left",
+    "y": 90
+   }
+  },
+  {
+   "when": {
+    "facing": "east",
+    "side": "right|both"
+   },
+   "apply": {
+    "model": "station_announcer:block/el_sign_pole_shaft_right",
+    "y": 90
+   }
+  },
+  {
+   "when": {
+    "facing": "east",
+    "side": "right|both",
+    "up": "false"
+   },
+   "apply": {
+    "model": "station_announcer:block/el_sign_pole_top_right",
+    "y": 90
+   }
+  },
+  {
+   "when": {
+    "facing": "east",
+    "side": "right|both",
+    "down": "false"
+   },
+   "apply": {
+    "model": "station_announcer:block/el_sign_pole_foot_right",
+    "y": 90
+   }
+  },
+  {
+   "when": {
+    "facing": "south",
+    "side": "left|both"
+   },
+   "apply": {
+    "model": "station_announcer:block/el_sign_pole_shaft_left",
+    "y": 180
+   }
+  },
+  {
+   "when": {
+    "facing": "south",
+    "side": "left|both",
+    "up": "false"
+   },
+   "apply": {
+    "model": "station_announcer:block/el_sign_pole_top_left",
+    "y": 180
+   }
+  },
+  {
+   "when": {
+    "facing": "south",
+    "side": "left|both",
+    "down": "false"
+   },
+   "apply": {
+    "model": "station_announcer:block/el_sign_pole_foot_left",
+    "y": 180
+   }
+  },
+  {
+   "when": {
+    "facing": "south",
+    "side": "right|both"
+   },
+   "apply": {
+    "model": "station_announcer:block/el_sign_pole_shaft_right",
+    "y": 180
+   }
+  },
+  {
+   "when": {
+    "facing": "south",
+    "side": "right|both",
+    "up": "false"
+   },
+   "apply": {
+    "model": "station_announcer:block/el_sign_pole_top_right",
+    "y": 180
+   }
+  },
+  {
+   "when": {
+    "facing": "south",
+    "side": "right|both",
+    "down": "false"
+   },
+   "apply": {
+    "model": "station_announcer:block/el_sign_pole_foot_right",
+    "y": 180
+   }
+  },
+  {
+   "when": {
+    "facing": "west",
+    "side": "left|both"
+   },
+   "apply": {
+    "model": "station_announcer:block/el_sign_pole_shaft_left",
+    "y": 270
+   }
+  },
+  {
+   "when": {
+    "facing": "west",
+    "side": "left|both",
+    "up": "false"
+   },
+   "apply": {
+    "model": "station_announcer:block/el_sign_pole_top_left",
+    "y": 270
+   }
+  },
+  {
+   "when": {
+    "facing": "west",
+    "side": "left|both",
+    "down": "false"
+   },
+   "apply": {
+    "model": "station_announcer:block/el_sign_pole_foot_left",
+    "y": 270
+   }
+  },
+  {
+   "when": {
+    "facing": "west",
+    "side": "right|both"
+   },
+   "apply": {
+    "model": "station_announcer:block/el_sign_pole_shaft_right",
+    "y": 270
+   }
+  },
+  {
+   "when": {
+    "facing": "west",
+    "side": "right|both",
+    "up": "false"
+   },
+   "apply": {
+    "model": "station_announcer:block/el_sign_pole_top_right",
+    "y": 270
+   }
+  },
+  {
+   "when": {
+    "facing": "west",
+    "side": "right|both",
+    "down": "false"
+   },
+   "apply": {
+    "model": "station_announcer:block/el_sign_pole_foot_right",
+    "y": 270
+   }
+  }
+ ]
+}

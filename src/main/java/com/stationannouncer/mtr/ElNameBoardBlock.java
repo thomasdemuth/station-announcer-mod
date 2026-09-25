@@ -90,9 +90,18 @@ public class ElNameBoardBlock extends FacingDecorBlock implements BlockEntityPro
             // A connected side's plate runs to the block edge.
             double x0 = (sides & 1) != 0 ? 0.0 : 1.0;
             double x1 = (sides & 2) != 0 ? 16.0 : 15.0;
-            // northShape is the standing board (plate + legs down to the floor).
-            VoxelShape stand = sides == 0 ? northShape
-                    : net.minecraft.util.shape.VoxelShapes.union(northShape, createCuboidShape(x0, 6.0, 7.2, x1, 13.6, 8.8));
+            // northShape is the standing board (plate + legs down to the floor). A merging
+            // board has legs only at the run's free ends (el_sign_pole carries them on down).
+            VoxelShape stand = northShape;
+            if (merges) {
+                stand = createCuboidShape(x0, 6.0, 7.2, x1, 13.6, 8.8);
+                if ((sides & 1) == 0) {
+                    stand = net.minecraft.util.shape.VoxelShapes.union(stand, createCuboidShape(1.4, 0.0, 7.2, 3.8, 6.0, 8.8));
+                }
+                if ((sides & 2) == 0) {
+                    stand = net.minecraft.util.shape.VoxelShapes.union(stand, createCuboidShape(12.2, 0.0, 7.2, 14.6, 6.0, 8.8));
+                }
+            }
             shapes[Mount.STANDING.ordinal()][sides] = FacingDecorBlock.rotations(stand);
             shapes[Mount.WALL.ordinal()][sides] = FacingDecorBlock.rotations(createCuboidShape(x0, 5.0, 13.6, x1, 12.0, 16.0));
             shapes[Mount.HANGING.ordinal()][sides] = FacingDecorBlock.rotations(net.minecraft.util.shape.VoxelShapes.union(

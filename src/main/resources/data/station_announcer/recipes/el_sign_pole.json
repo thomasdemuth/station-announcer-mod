@@ -1,0 +1,21 @@
+{
+ "type": "minecraft:crafting_shaped",
+ "category": "building",
+ "key": {
+  "I": {
+   "item": "minecraft:iron_ingot"
+  },
+  "G": {
+   "item": "minecraft:green_dye"
+  }
+ },
+ "pattern": [
+  "I",
+  "G",
+  "I"
+ ],
+ "result": {
+  "item": "station_announcer:el_sign_pole",
+  "count": 6
+ }
+}

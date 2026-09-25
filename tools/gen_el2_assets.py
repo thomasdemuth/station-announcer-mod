@@ -1416,6 +1416,66 @@ def roof_light_assets():
 #   wall      x 1..15  y 5..12  z 13.8..15  (front only)
 # =====================================================================
 
+SIGN_LEG_X = (2, 3.2)      # left leg, model px; the right one is mirror_x (12.8..14)
+SIGN_LEG_Z = (7.5, 8.5)
+
+
+def sign_leg(y0, y1, faces=None):
+    """One standing-sign leg / sign-pole shaft on the model -x side."""
+    return box(SIGN_LEG_X[0], y0, SIGN_LEG_Z[0], SIGN_LEG_X[1], y1, SIGN_LEG_Z[1], "#green",
+               uv=[0, 0, SIGN_LEG_X[1] - SIGN_LEG_X[0], y1 - y0], faces=faces)
+
+
+def sign_pole_assets():
+    """el_sign_pole: the standing sign's leg carried down to the ground, one
+    block per stack cell. SIDE left / right / both picks which leg(s) (a lone
+    sign block stands on both of its own). The shaft draws only its four
+    sides; the top closes when nothing continues above (UP), and a bolted foot
+    plate sits under the bottom of the stack (DOWN false)."""
+    tex = {"green": "el2_green"}
+    sides4 = ["north", "south", "east", "west"]
+    shaft = [sign_leg(0, 16, faces=sides4)]
+    top = [box(SIGN_LEG_X[0], 15.6, SIGN_LEG_Z[0], SIGN_LEG_X[1], 16, SIGN_LEG_Z[1], "#green",
+               uv=[0, 0, 1.2, 1], faces=["up"], cull=["up"])]
+    x0, x1 = SIGN_LEG_X
+    foot = [box(x0 - 1.4, 0, 6.1, x1 + 1.4, 0.8, 9.9, "#green", uv={"up": [0, 0, 4, 3.8], "down": [0, 0, 4, 3.8],
+                                                                   "north": [0, 0, 4, 0.8], "south": [0, 0, 4, 0.8],
+                                                                   "east": [0, 0, 3.8, 0.8], "west": [0, 0, 3.8, 0.8]},
+                cull=["down"]),
+            box(x0 - 0.5, 0.8, 7.0, x1 + 0.5, 1.6, 9.0, "#green", uv={"up": [0, 0, 2.2, 2], "north": [0, 0, 2.2, 0.8],
+                                                                     "south": [0, 0, 2.2, 0.8], "east": [0, 0, 2, 0.8],
+                                                                     "west": [0, 0, 2, 0.8]},
+                faces=["up", "north", "south", "east", "west"])]
+    for name, els in (("shaft", shaft), ("top", top), ("foot", foot)):
+        model(f"el_sign_pole_{name}_left", els, tex)
+        model(f"el_sign_pole_{name}_right", [mirror_x(e) for e in els], tex)
+    model("el_sign_pole_item", shaft + top + foot + [mirror_x(e) for e in shaft + top + foot], tex)
+    parts = []
+    for facing, rot in (("north", 0), ("east", 90), ("south", 180), ("west", 270)):
+        for side in ("left", "right"):
+            def ap(m):
+                a = {"model": f"{MOD}:block/el_sign_pole_{m}_{side}"}
+                if rot:
+                    a["y"] = rot
+                return a
+            when = {"facing": facing, "side": f"{side}|both"}
+            parts.append({"when": dict(when), "apply": ap("shaft")})
+            parts.append({"when": dict(when, up="false"), "apply": ap("top")})
+            parts.append({"when": dict(when, down="false"), "apply": ap("foot")})
+    write_json(os.path.join(BLOCKSTATES, "el_sign_pole.json"), {"multipart": parts})
+    write_json(os.path.join(ITEM_MODELS, "el_sign_pole.json"), {
+        "parent": f"{MOD}:block/el_sign_pole_item",
+        "display": {"gui": {"rotation": [30, 225, 0], "translation": [0, 0, 0], "scale": [0.7, 0.7, 0.7]}}})
+    write_json(os.path.join(DATA, "loot_tables/blocks/el_sign_pole.json"), {
+        "type": "minecraft:block",
+        "pools": [{"rolls": 1, "entries": [{"type": "minecraft:item", "name": f"{MOD}:el_sign_pole"}],
+                   "conditions": [{"condition": "minecraft:survives_explosion"}]}]})
+    write_json(os.path.join(DATA, "recipes/el_sign_pole.json"), {
+        "type": "minecraft:crafting_shaped", "category": "building",
+        "key": {"I": {"item": "minecraft:iron_ingot"}, "G": {"item": "minecraft:green_dye"}},
+        "pattern": ["I", "G", "I"], "result": {"item": f"{MOD}:el_sign_pole", "count": 6}})
+
+
 def sign_models():
     """Boards side by side (same facing + mount) merge into one sign:
     ElNameBoardBlock's LEFT (model -x) / RIGHT (model +x). A connected side
@@ -1444,10 +1504,14 @@ def sign_models():
     for left in (False, True):
         for right in (False, True):
             suffix = ("_l" if left else "") + ("_r" if right else "")
-            standing = [plate(left, right, 6, 13, 7.4, 8.6),
-                        box(2, 0, 7.5, 3.2, 6, 8.5, "#green", uv=[0, 0, 1.2, 6]),
-                        box(12.8, 0, 7.5, 14, 6, 8.5, "#green", uv=[0, 0, 1.2, 6]),
-                        cap(left, right, 13, 13.6)]
+            # Legs only at the run's free ends (Thomas 2026-09-25: a merged
+            # sign stands on two poles, one at each outer end). They line up
+            # with el_sign_pole (SIGN_LEG_X), which extends them to the ground.
+            standing = [plate(left, right, 6, 13, 7.4, 8.6), cap(left, right, 13, 13.6)]
+            if not left:
+                standing.append(sign_leg(0, 6))
+            if not right:
+                standing.append(mirror_x(sign_leg(0, 6)))
             hanging = [plate(left, right, 5, 12, 7.4, 8.6),
                        box(7, 12, 7, 9, 16, 9, "#green", uv=[0, 0, 2, 4], faces=["north", "south", "east", "west"]),
                        cap(left, right, 12, 12.6)]
@@ -1497,6 +1561,8 @@ SIGN_PROPS = {"facing": {"north", "east", "south", "west"}, "mount": {"standing"
               "left": {"true", "false"}, "right": {"true", "false"}}
 LIGHT_PROPS = {"facing": {"north", "east", "south", "west"}, "front": {"true", "false"},
                "back": {"true", "false"}}
+SIGN_POLE_PROPS = {"facing": {"north", "east", "south", "west"}, "side": {"left", "right", "both"},
+                   "up": {"true", "false"}, "down": {"true", "false"}}
 POST_PROPS = {"facing": {"north", "east", "south", "west"}, "up": {"true", "false"},
               "down": {"true", "false"}}
 ROOF_PROPS = {"axis": {"x", "z"}, "side": {"pos", "neg", "crown"}, "level": {str(i) for i in range(MAX_LEVEL + 1)},
@@ -1517,7 +1583,7 @@ def verify():
                          ("el_wall_doorway", dict(WALL_PROPS, header={"true", "false"})),
                          ("el_wall_window", WALL_PROPS),
                          ("el_platform_lamp", POST_PROPS), ("el_roof_light", LIGHT_PROPS),
-                         ("el_sign", SIGN_PROPS)] + gen_el2_stairs.VERIFY + gen_el2_structure.VERIFY + gen_el2_mezz.VERIFY:
+                         ("el_sign", SIGN_PROPS), ("el_sign_pole", SIGN_POLE_PROPS)] + gen_el2_stairs.VERIFY + gen_el2_structure.VERIFY + gen_el2_mezz.VERIFY:
         bs = json.load(open(os.path.join(BLOCKSTATES, block + ".json")))
         if "variants" in bs:
             for key, variant in bs["variants"].items():
@@ -1570,6 +1636,7 @@ def main():
     lamp_assets()
     roof_light_assets()
     sign_models()
+    sign_pole_assets()
     roof_models()
     join_models()
     roof_blockstate()

@@ -1,78 +1,105 @@
 {
  "textures": {
-  "black": "station_announcer:block/el2_black",
   "green": "station_announcer:block/el2_green",
-  "particle": "#black"
+  "particle": "#green"
  },
  "elements": [
   {
    "from": [
+    0.6000000000000001,
     0,
-    6,
-    7.4
+    6.1
    ],
    "to": [
-    16,
-    13,
-    8.6
+    4.6,
+    0.8,
+    9.9
    ],
    "faces": {
     "north": {
      "uv": [
       0,
       0,
-      16,
-      7
+      4,
+      0.8
      ],
-     "texture": "#black"
+     "texture": "#green"
     },
     "south": {
      "uv": [
       0,
       0,
-      16,
-      7
+      4,
+      0.8
      ],
-     "texture": "#black"
+     "texture": "#green"
+    },
+    "east": {
+     "uv": [
+      0,
+      0,
+      3.8,
+      0.8
+     ],
+     "texture": "#green"
+    },
+    "west": {
+     "uv": [
+      0,
+      0,
+      3.8,
+      0.8
+     ],
+     "texture": "#green"
     },
     "up": {
      "uv": [
       0,
       0,
-      16,
-      7
+      4,
+      3.8
      ],
-     "texture": "#black"
+     "texture": "#green"
     },
     "down": {
      "uv": [
       0,
       0,
-      16,
-      7
+      4,
+      3.8
      ],
-     "texture": "#black"
+     "texture": "#green",
+     "cullface": "down"
     }
    }
   },
   {
    "from": [
-    0,
-    13,
-    7.2
+    1.5,
+    0.8,
+    7.0
    ],
    "to": [
-    16,
-    13.6,
-    8.8
+    3.7,
+    1.6,
+    9.0
    ],
    "faces": {
+    "up": {
+     "uv": [
+      0,
+      0,
+      2.2,
+      2
+     ],
+     "texture": "#green"
+    },
     "north": {
      "uv": [
       0,
       0,
-      16,
-      0.6
+      2.2,
+      0.8
      ],
      "texture": "#green"
     },
@@ -80,26 +107,26 @@
      "uv": [
       0,
       0,
-      16,
-      0.6
+      2.2,
+      0.8
      ],
      "texture": "#green"
     },
-    "up": {
+    "east": {
      "uv": [
       0,
       0,
-      16,
-      0.6
+      2,
+      0.8
      ],
      "texture": "#green"
     },
-    "down": {
+    "west": {
      "uv": [
       0,
       0,
-      16,
-      0.6
+      2,
+      0.8
      ],
      "texture": "#green"
     }

@@ -127,6 +127,8 @@ public final class MtrStationDecor {
     public static final ElWallSignBlock EL_WALL_SIGN = new ElWallSignBlock(settings());
     public static final ElNameBoardBlock EL_SIGN = new ElNameBoardBlock(settings(),
             Block.createCuboidShape(1.0, 0.0, 7.2, 15.0, 13.6, 8.8), true);
+    /** The standing el_sign's end leg, stacked down to the ground (ElSignPoleBlock). */
+    public static final ElSignPoleBlock EL_SIGN_POLE = new ElSignPoleBlock(settings());
     /** Lit black entrance sign under the stair hood (tools/gen_el2_stairs.py). */
     public static final ElEntranceSignBlock EL_ENTRANCE_SIGN = new ElEntranceSignBlock(
             AbstractBlock.Settings.create().strength(1.0f).sounds(BlockSoundGroup.METAL).nonOpaque().luminance(state -> 12));
@@ -384,6 +386,8 @@ public final class MtrStationDecor {
         SubwayWalls.register();
         // Zebra board labels: the brush edits them (board blocks are common).
         ZebraLabels.register();
+        // Gap fillers register themselves (blocks, block entity, sounds, packet, store).
+        GapFillers.register();
 
         registerBlock("platform_edge", PLATFORM_EDGE, ModContent.DECORATION_ENTRIES);
         registerBlock("el_post", EL_POST, ModContent.DECORATION_ENTRIES);
@@ -391,6 +395,7 @@ public final class MtrStationDecor {
         registerEdgeRun("el_railing_sign", EL_RAILING_SIGN);
         registerEdgeRun("el_wall_sign", EL_WALL_SIGN);
         registerBlock("el_sign", EL_SIGN, ModContent.DECORATION_ENTRIES);
+        registerBlock("el_sign_pole", EL_SIGN_POLE, ModContent.DECORATION_ENTRIES);
         registerBlock("el_entrance_sign", EL_ENTRANCE_SIGN, ModContent.DECORATION_ENTRIES);
         registerBlock("mta_sign", MTA_SIGN, ModContent.DECORATION_ENTRIES);
         registerBlock("mta_sign_half", MTA_SIGN_HALF, ModContent.DECORATION_ENTRIES);

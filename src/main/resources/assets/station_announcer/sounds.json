@@ -265,5 +265,26 @@
         "stream": false
       }
     ]
+  },
+  "gap_filler_hydraulic": {
+    "category": "block",
+    "subtitle": "subtitles.station_announcer.gap_filler_move",
+    "sounds": [
+      "station_announcer:gap_filler_hydraulic"
+    ]
+  },
+  "gap_filler_roll": {
+    "category": "block",
+    "subtitle": "subtitles.station_announcer.gap_filler_move",
+    "sounds": [
+      "station_announcer:gap_filler_roll"
+    ]
+  },
+  "gap_filler_bang": {
+    "category": "block",
+    "subtitle": "subtitles.station_announcer.gap_filler_bang",
+    "sounds": [
+      "station_announcer:gap_filler_bang"
+    ]
   }
 }

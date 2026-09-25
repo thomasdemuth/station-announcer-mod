@@ -44,6 +44,26 @@ rig's Gradle wrappers (and sometimes the JVMs) get SIGKILLed — forbid agents f
 entirely and check rig health after each one finishes; an orphaned JVM keeps serving but
 loses the console fifo.
 
+### GAP FILLERS (2026-09-25) — READ `GAP_FILLER_PLAN.md` (curved platform blocks are PLANNED there)
+
+Thomas: gap fillers first (Union Square + old South Ferry loop as references), a minimum dwell for
+extend+retract, doors delayed until the fillers are out; curved platform blocks next. Built:
+`gap_filler` (Union Sq hydraulic grate) + `gap_filler_loop` (South Ferry, rolls out AND down) —
+PlatformHelper edge blocks, brush = FlatUi screen (platform relink, reach 2..24 px / Auto from the
+rail incl. chord bulge on outside curves, per-PLATFORM extend/retract/min dwell).
+`mtraddon/GapFillerEngine` sequences each stop on the simulator thread: EXTENDING (MTR's openDoors in
+simulateStopped REDIRECTED → doors shut) → EXTENDED (doors open) → our close at
+`D' − retract − 3.2 s` (D' = max(timetable, min dwell, sequence)) → RETRACTING (occupancy-guarded) →
+RETRACTED → departure. Holds re-extend before reopening; the obstruction roll happens at our close;
+MTR's private `doorCooldown` is held ≥ 1 ms until retracted (else the terminus reversal runs early).
+`GapFillerStore` = `<save>/station-announcer-addon/gap_fillers.json`. Assets: `tools/gen_gap_filler_assets.py`.
+VERIFIED on the rig (world_baker, Cherry Bridge platforms 1+2, dev `[gap filler]` log + analytics):
+doors open only after EXTENDED (3.55 s / 2.55 s instead of 1 s), close due exactly, retract after
+the door animation, departures one tick after RETRACTED, 10 s timetable stretched to the 20 s / 25 s
+minimum dwell; Thomas play-tested it ("PERFECT!"). Rig note: `run/server.properties` was switched to
+world_baker for this — the el-demo session's world_flat settings are in `server.properties` history
+(`level-name=world_flat`, flat generator) if that session needs them back.
+
 ### EL KIT COMPLETION + ESI THEME (2026-09-25) — READ `EL_STATION_PLAN.md` "KIT COMPLETION" + `ESI_PLAN.md`
 
 Thomas: "actually get it done ... platform to staircase to mezzanine ... modular; next: the same
@@ -58,6 +78,11 @@ the slab -> platforms) was built on the rig from kit blocks only, classic AND ES
 - ESI: `tools/gen_esi_theme.py` (runs last in gen_el2_assets / gen_stair_assets) derives 28 `esi_*`
   blocks from the classic ones (same Java classes, `mtr/EsiKit`, own creative tab); ESI in-cell stair
   sides on subway_stairs; `ElStackWallBlock` makes glass/mesh bays seamless when stacked.
+- 2026-09-25 follow-up: standing `el_sign` runs have legs ONLY at the free ends (was two per block);
+  new `el_sign_pole` (`mtr/ElSignPoleBlock`, FACING + SIDE left|right|both + UP/DOWN, foot plate at the
+  stack bottom) carries those legs to the ground — adopts facing/side from the sign or pole above on
+  every neighbour update; with nothing above, side = click thirds. Leg geometry `SIGN_LEG_X` in
+  gen_el2_assets.py. javac + offline render only; NOT built (rig was in use), not in game.
 - Thomas played on the rig server with his own client during this session — restarting the rig or
   running Gradle kills his connection; say so first.
 
@@ -461,6 +486,17 @@ destination first; FULL editor from day one; the old text signs migrate onto it.
   `num` 0..7 arrows, `SignSymbols.FIRST`(16)+i = wheelchair / ramp / elevator / escalator /
   stairs / do not enter / information / bus / train (`client/mtr/SignSymbols`, 100-unit
   glyphs on Surface primitives; no storage change). Rig-verified (screenshots 20:05–20:07).
+- **Edit-from-any-tile fix (2026-09-25)**: `MtaSignPainter.signOwner` only redirected el_sign /
+  el_wall_sign / el_railing_sign runs, so on `mta_sign(_half)`, `entrance_railing_sign` and
+  `el_entrance_sign` a click on a non-owner cell edited THAT cell's sign, which the run never draws
+  (it draws the first cell from the origin with a saved sign) — Thomas had to click the original
+  tile. Now every merging sign family is redirected, with the renderers' exact family + run
+  direction. javac only; not clicked in game.
+- **MTA arrow (2026-09-25)**: `PosterLayout.bigArrow` (every sign Symbol-tile arrow, poster big
+  arrow and inline `{<}{^}{v}{>}` token) now draws Thomas's real MTA arrow, traced in source pixels
+  from `tools/reference/mta_arrow.png` (copied from ~/Documents/Train/subway route bullets/arrow.png):
+  45° chevron, arms as thick as the stem, square-cut arm ends; two arm parallelograms + stem (Surface
+  polys must be convex). Same 40-unit tip-to-tail size. javac + offline raster only.
 - **Sign vocabulary pass (2026-09-20, Thomas approved after a gap analysis vs real MTA
   signs)**: FONT is now **TeX Gyre Heros Bold** (free Helvetica clone; Thomas reversed
   his "no TTF of ours" rule for it) — `assets/station_announcer/font/` holds the

@@ -1,0 +1,23 @@
+{
+  "type": "minecraft:crafting_shaped",
+  "category": "redstone",
+  "key": {
+    "E": {
+      "item": "station_announcer:platform_edge"
+    },
+    "P": {
+      "item": "minecraft:piston"
+    },
+    "I": {
+      "item": "minecraft:iron_ingot"
+    }
+  },
+  "pattern": [
+    "IEI",
+    " P "
+  ],
+  "result": {
+    "item": "station_announcer:gap_filler",
+    "count": 2
+  }
+}

@@ -262,6 +262,7 @@
     "station_announcer:el_platform_lamp",
     "station_announcer:el_platform_lamp_head",
     "station_announcer:el_sign",
+    "station_announcer:el_sign_pole",
     "station_announcer:el_street_column",
     "station_announcer:el_street_column_lattice",
     "station_announcer:el_girder_plate",
@@ -302,6 +303,8 @@
     "station_announcer:esi_plate_deck",
     "station_announcer:esi_mezzanine_floor",
     "station_announcer:esi_ceiling",
-    "station_announcer:esi_ceiling_light"
+    "station_announcer:esi_ceiling_light",
+    "station_announcer:gap_filler",
+    "station_announcer:gap_filler_loop"
   ]
 }

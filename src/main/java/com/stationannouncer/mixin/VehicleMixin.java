@@ -1,6 +1,7 @@
 package com.stationannouncer.mixin;
 
 import com.stationannouncer.mtraddon.DoorObstructionEngine;
+import com.stationannouncer.mtraddon.GapFillerEngine;
 import com.stationannouncer.mtraddon.HoldRuleEngine;
 import com.stationannouncer.mtraddon.analytics.AnalyticsRecorder;
 import org.mtr.core.data.Data;
@@ -19,6 +20,7 @@ import org.spongepowered.asm.mixin.Shadow;
 import org.spongepowered.asm.mixin.Unique;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
+import org.spongepowered.asm.mixin.injection.Redirect;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
 /**
@@ -84,6 +86,13 @@ public abstract class VehicleMixin extends VehicleSchema {
         AnalyticsRecorder.beforeStartUp(getId(), vehicleExtraData, railProgress, elapsedDwellTime, data);
 
         if (HoldRuleEngine.shouldHold(getId(), vehicleExtraData, railProgress, data)) {
+            // Gap fillers (toggle: a platform has filler blocks): never reopen onto a
+            // gap — if the fillers already started back, they re-extend first and a
+            // later held tick reopens. True for every stop without fillers.
+            if (!GapFillerEngine.holdMayReopen(getId(), data)) {
+                ci.cancel();
+                return;
+            }
             // Actively re-assert open doors for the held train. Cancelling alone is
             // not enough: stock flow already ran closeDoors() on the FIRST startUp
             // attempt (at doorCloseTime, ~4 s before real departure), so a hold that
@@ -97,6 +106,17 @@ public abstract class VehicleMixin extends VehicleSchema {
             // (writeVehiclePositions -> checkForUpdate -> client.update).
             ((VehicleExtraDataAccessor) (Object) vehicleExtraData).stationAnnouncer$openDoors();
             ci.cancel();
+            return;
+        }
+        // Gap fillers: the train may not move until its stop's fillers are home.
+        // PROCEED returns before the obstruction roll — at a filler stop that roll
+        // already happened at the door close, while the plates were still out.
+        GapFillerEngine.Gate gate = GapFillerEngine.departureGate(getId(), vehicleExtraData, data);
+        if (gate == GapFillerEngine.Gate.CANCEL) {
+            ci.cancel();
+            return;
+        }
+        if (gate == GapFillerEngine.Gate.PROCEED) {
             return;
         }
         // Random door obstructions (toggle: doorObstruction.enabled). Checked only
@@ -153,6 +173,56 @@ public abstract class VehicleMixin extends VehicleSchema {
             int currentIndex, CallbackInfo ci) {
         AnalyticsRecorder.onVehicleStopped(getId(), vehicleExtraData, railProgress, data,
                 ((VehicleDeviationAccessor) (Object) this).stationAnnouncer$getDeviation());
+    }
+
+    /**
+     * <b>Gap fillers — the per-tick sequencer.</b> {@code simulateStopped} runs
+     * every tick a vehicle stands still (javap 4.0.1: {@code private void
+     * simulateStopped(JLObjectArrayList;I)V}); HEAD lands before its own door and
+     * departure logic, so the phase the redirect and the startUp gate read below
+     * is this tick's. The engine returns on one volatile read when no platform
+     * has fillers, and ignores clientside vehicles.
+     *
+     * <p><b>Thread:</b> the vehicle's SIMULATOR thread.</p>
+     */
+    @Inject(method = "simulateStopped(JLorg/mtr/libraries/it/unimi/dsi/fastutil/objects/ObjectArrayList;I)V",
+            at = @At("HEAD"))
+    private void stationAnnouncer$gapFillerTick(
+            long millisElapsed,
+            ObjectArrayList<Object2ObjectAVLTreeMap<Position, Object2ObjectAVLTreeMap<Position, VehiclePosition>>> vehiclePositions,
+            int currentIndex, CallbackInfo ci) {
+        GapFillerEngine.tickStopped(getId(), vehicleExtraData, railProgress, data);
+        if (GapFillerEngine.blocksDeparture(getId())) {
+            // simulate() already ran this tick's decrement (javap: doorCooldown =
+            // doorsOpen ? 4200 : max(0, doorCooldown - elapsed)), so 1 ms here holds
+            // for exactly this tick and runs out on the first tick after retraction.
+            doorCooldown = Math.max(doorCooldown, 1);
+        }
+    }
+
+    /**
+     * MTR's private door cooldown (javap 4.0.1: {@code private long doorCooldown}
+     * on {@code Vehicle}): 4.2 s after the doors close before the train may move.
+     * Gap fillers keep it from reaching zero until they are home — see
+     * {@link GapFillerEngine#blocksDeparture}.
+     */
+    @Shadow
+    private long doorCooldown;
+
+    /**
+     * <b>Gap fillers — delayed door opening.</b> MTR opens a stopped train's
+     * doors from 1 s after it comes to rest through ONE {@code openDoors()} call
+     * inside {@code simulateStopped} (javap 4.0.1, offset 527; the other
+     * openDoors call is in {@code simulateMoving}, untouched). At a platform with
+     * gap fillers the call only goes through once they are fully extended.
+     * {@code openDoors} is protected, hence the invoker.
+     */
+    @Redirect(method = "simulateStopped(JLorg/mtr/libraries/it/unimi/dsi/fastutil/objects/ObjectArrayList;I)V",
+            at = @At(value = "INVOKE", target = "Lorg/mtr/core/data/VehicleExtraData;openDoors()V"))
+    private void stationAnnouncer$openDoorsBehindGapFillers(VehicleExtraData extra) {
+        if (GapFillerEngine.mayOpenDoors(getId())) {
+            ((VehicleExtraDataAccessor) (Object) extra).stationAnnouncer$openDoors();
+        }
     }
 
     /**

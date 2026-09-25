@@ -163,6 +163,8 @@ public final class MtrPidsClient {
 
         // Tile wall: the band's station tint and the name tablet's renderer.
         SubwayWallsClient.register();
+        // Gap fillers: the sliding plate's renderer and the brush screen.
+        GapFillersClient.register();
 
         // The brush's full PIDS settings screen (the bare-click mini toggle
         // stays on the shared GUI opener below).

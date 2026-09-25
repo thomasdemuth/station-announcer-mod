@@ -178,30 +178,41 @@ final class MtaSignPainter {
     }
 
     /**
-     * The segment of a merged legacy run that an edit must land on. The run
-     * draws the FIRST segment holding a saved sign ({@link #legacyFaces}), so
-     * saving onto any other segment would change nothing on screen: the editor
-     * opens on that segment instead, or on the run's origin when none is saved.
-     * Blocks that do not merge return {@code entity} itself.
+     * The segment of a merged run that an edit must land on. A run draws the
+     * FIRST segment (from its origin) holding a saved sign ({@link #run},
+     * {@link #legacyFaces}), so saving onto any other segment would change
+     * nothing on screen - you could only edit a sign by clicking its original
+     * tile. The editor opens on that segment instead, or on the run's origin
+     * when none is saved. Blocks that do not merge return {@code entity} itself.
+     * Families and run directions match the renderers exactly.
      */
     static StationDecorBlockEntity signOwner(StationDecorBlockEntity entity) {
         ClientWorld world = net.minecraft.client.MinecraftClient.getInstance().world;
         BlockState state = entity.getCachedState();
+        net.minecraft.block.Block block = state.getBlock();
         java.util.function.Predicate<BlockState> family;
-        if (state.getBlock() instanceof com.stationannouncer.mtr.ElNameBoardBlock board && board.merges()) {
+        Direction posDir;
+        if (block instanceof MtaSignBlock) {
+            family = st -> joins(st, state);
+            posDir = state.get(FacingDecorBlock.FACING).rotateYClockwise();
+        } else if (block instanceof com.stationannouncer.mtr.RailingSignBlock) {
+            family = st -> st.getBlock() instanceof com.stationannouncer.mtr.RailingSignBlock;
+            posDir = com.stationannouncer.mtr.RailingSignBlock.frontOf(state).rotateYClockwise();
+        } else if (block instanceof com.stationannouncer.mtr.ElNameBoardBlock board && board.merges()) {
             family = st -> com.stationannouncer.mtr.ElNameBoardBlock.sameSign(state, st);
-        } else if (state.getBlock() instanceof com.stationannouncer.mtr.ElWallSignBlock
-                || state.getBlock() instanceof com.stationannouncer.mtr.ElRailingSignBlock) {
-            family = st -> st.getBlock() == state.getBlock()
-                    && st.get(com.stationannouncer.block.FacingDecorBlock.FACING)
-                    == state.get(com.stationannouncer.block.FacingDecorBlock.FACING);
+            posDir = state.get(FacingDecorBlock.FACING).rotateYClockwise();
+        } else if (block instanceof com.stationannouncer.mtr.ElWallSignBlock
+                || block instanceof com.stationannouncer.mtr.ElRailingSignBlock
+                || block instanceof com.stationannouncer.mtr.ElEntranceSignBlock) {
+            family = st -> st.getBlock() == block
+                    && st.get(FacingDecorBlock.FACING) == state.get(FacingDecorBlock.FACING);
+            posDir = state.get(FacingDecorBlock.FACING).rotateYClockwise();
         } else {
             return entity;
         }
         if (world == null) {
             return entity;
         }
-        Direction posDir = state.get(com.stationannouncer.block.FacingDecorBlock.FACING).rotateYClockwise();
         BlockPos origin = entity.getPos();
         for (int i = 0; i < MAX_RUN && family.test(world.getBlockState(origin.offset(posDir.getOpposite()))); i++) {
             origin = origin.offset(posDir.getOpposite());

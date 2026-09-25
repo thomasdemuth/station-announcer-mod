@@ -26,4 +26,13 @@ import org.spongepowered.asm.mixin.gen.Invoker;
 public interface VehicleExtraDataAccessor {
     @Invoker("openDoors")
     void stationAnnouncer$openDoors();
+
+    /**
+     * {@code closeDoors()} is protected too (4.0.1 javap: it just clears
+     * {@code doorTarget}). Used by {@link com.stationannouncer.mtraddon.GapFillerEngine}
+     * to keep doors shut until the gap fillers are out, and to close them early
+     * enough that the fillers are home by the scheduled departure.
+     */
+    @Invoker("closeDoors")
+    void stationAnnouncer$closeDoors();
 }

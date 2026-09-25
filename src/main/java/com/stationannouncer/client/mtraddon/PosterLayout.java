@@ -473,26 +473,43 @@ public final class PosterLayout {
         return out;
     }
 
+    /*
+     * The MTA wayfinding arrow, traced from Thomas's artwork
+     * (tools/reference/mta_arrow.png: white on transparent, 301 px box,
+     * pointing UP, tip at y 0, stem to the bottom edge). Numbers are those
+     * pixels: a 45-degree chevron head whose arms are as thick as the stem
+     * (51 px), arm ends cut square to the arm. Concave, so it is drawn as
+     * convex pieces - two arm parallelograms meeting at the hidden inner
+     * vertex (150.5, 70), and the stem, which starts at that vertex so it
+     * fills the notch between the arms' inner edges.
+     */
+    private static final float ARROW_BOX = 301.0f;
+    private static final float ARROW_MID = 150.5f;
+    /** Left arm: tip, outer corner, inner end corner, inner vertex (x, y in source px). */
+    private static final float[][] ARROW_ARM = {{150.5f, 0}, {33.5f, 117}, {68, 152.5f}, {150.5f, 70}};
+    private static final float[][] ARROW_STEM = {{125, 70}, {176, 70}, {176, 301}, {125, 301}};
+
     /**
-     * A block arrow pointing in {@code dir} (0 = right, anticlockwise in 45°
-     * steps), centred on cx/cy, at {@code scale} x the 40-unit reference size.
+     * The MTA arrow pointing in {@code dir} (0 = right, anticlockwise in 45°
+     * steps), centred on cx/cy; tip to tail is 40 units x {@code scale}.
      */
     public static void bigArrow(Surface s, float cx, float cy, int dir, float scale, int argb, int layer) {
         float a = (float) Math.toRadians(dir * 45.0);
         float cos = MathHelper.cos(a);
         float sin = MathHelper.sin(a);
-        // Shaft (a quad) then head (a triangle), authored pointing right.
-        float[][] shaft = {{-20, -5}, {4, -5}, {4, 5}, {-20, 5}};
-        float[][] head = {{4, -13}, {20, 0}, {4, 13}};
-        for (float[][] part : new float[][][]{shaft, head}) {
-            float[] xs = new float[part.length];
-            float[] ys = new float[part.length];
-            for (int i = 0; i < part.length; i++) {
-                float px = part[i][0] * scale;
-                float py = part[i][1] * scale;
+        float k = 40.0f / ARROW_BOX * scale;
+        for (int part = 0; part < 3; part++) {
+            float[][] pts = part == 2 ? ARROW_STEM : ARROW_ARM;
+            float mirror = part == 1 ? -1 : 1;
+            float[] xs = new float[pts.length];
+            float[] ys = new float[pts.length];
+            for (int i = 0; i < pts.length; i++) {
+                // source (up, y down) -> authored pointing right: along = toward the tip, across = sideways
+                float along = (ARROW_MID - pts[i][1]) * k;
+                float across = (pts[i][0] - ARROW_MID) * k * mirror;
                 // y is down on the canvas, so an anticlockwise turn is x cos + y sin / -x sin + y cos.
-                xs[i] = cx + px * cos + py * sin;
-                ys[i] = cy - px * sin + py * cos;
+                xs[i] = cx + along * cos + across * sin;
+                ys[i] = cy - along * sin + across * cos;
             }
             s.poly(xs, ys, argb, layer);
         }
