@@ -3,11 +3,15 @@
   "id": "station_announcer",
   "version": "${version}",
   "name": "Station Announcer",
-  "description": "A public-address system for train stations: configurable announcer blocks with client-side text-to-speech, redstone and command triggering. Designed to sit alongside Minecraft Transit Railway (MTR).",
+  "description": "A station add-on for Minecraft Transit Railway: spoken PA announcements, NYC and railroad PIDS, MTA signs, working fare gates, station building blocks, gap fillers, builder tools, operations tools and a web dispatch map.",
   "authors": [
     "Thomas Demuth"
   ],
-  "contact": {},
+  "contact": {
+    "homepage": "https://modrinth.com/mod/station-announcer",
+    "sources": "https://github.com/thomasdemuth/station-announcer-mod",
+    "issues": "https://github.com/thomasdemuth/station-announcer-mod/issues"
+  },
   "license": "MIT",
   "icon": "assets/station_announcer/icon.png",
   "environment": "*",

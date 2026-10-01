@@ -409,18 +409,19 @@ previously the Redstone tab). The **PA Station Announcer** block (named "Station
 before 1.4) also drops itself and is
 fastest mined with a pickaxe).
 
-**Right-click** the block to open its settings screen:
+**Right-click** the block to open its editor (the same flat editor as the PA Control Box —
+see [The PA editor](#the-pa-editor) below; the announcer simply has one message card):
 
 | Setting | Meaning |
 |---|---|
-| Announcement | The text to display and speak (up to 512 characters). |
+| Announcement | The text to display and speak (up to 512 characters). Supports `{station}`, `{time}` and `{shown\|spoken}` — see [Announcement text](#announcement-text-tokens-and-pronunciation). |
 | Volume | 0–100 %. Scales chime and speech loudness; farther players hear it quieter. |
 | Delay | Seconds to wait after being triggered before the announcement plays (0–60 s). |
 | Radius | Only players within this many blocks (1–128) receive the announcement. |
 | Tag | Freeform identifier used by `/announce`. Many blocks may share one tag, so a single command can fire a whole station. |
 | Chat Text | ON/OFF — whether this block shows the `[PA]` message in chat/action bar. Turn OFF for audio-only announcers. |
 | Chime | ON/OFF — whether this block plays a chime before speaking. |
-| Chime Sound | Dropdown of built-in chimes (since 1.6): the classic Ding-Dong plus six Marimba and five Synth chimes. The voice always waits for the selected chime to finish before speaking. |
+| Chime Sound | Built-in chimes (since 1.6): the classic Ding-Dong plus six Marimba and five Synth chimes — click one in the picker to hear it. The voice always waits for the selected chime to finish before speaking. |
 
 > **Changed in 1.2:** the message pool (Random/In Order) and the random auto-trigger moved
 > from the Station Announcer to the **PA Control Box**. Old announcer blocks in existing
@@ -431,8 +432,7 @@ fastest mined with a pickaxe).
 > on one-message-per-line play as one combined announcement until you re-open the Control
 > Box and add `||` between them.
 
-Press **Done** to save (settings are stored in the block and survive world reloads),
-**Cancel**/Escape to discard.
+Press **Save** (or Ctrl+S) to store the settings in the block, **Cancel**/Escape to discard.
 
 ### Triggering
 
@@ -470,18 +470,19 @@ older audio is cut off immediately and the newest one plays. Chat lines still al
 For a whole station, use one **PA Control Box** driving many **PA Speakers** instead of separate
 announcer blocks.
 
-- **PA Control Box** — the brains. Same triggering as the Station Announcer (GUI, redstone
-  rising edge, tags/`/announce`, delay) **plus** the message pool and the random auto-trigger
-  (Auto min/max, up to 600 s). Separate announcements with a double pipe — e.g.
-  `Mind the gap || Train approaching || Stand clear` — and each firing plays one of them
-  (Random or In Order playback). It plays
-  no sound itself: when triggered it broadcasts through every linked speaker. With zero linked
-  speakers it does nothing (its GUI shows "No speakers linked"). The GUI lists linked speakers
-  (count + positions) and has an **Unlink All** button.
+- **PA Control Box** — the brains. Same triggering as the Station Announcer (redstone
+  rising edge, tags/`/announce`, delay) **plus** a list of messages (each firing plays one,
+  Random or In Order) and automatic playback every *n*–*m* minutes. It plays no sound
+  itself: when triggered it broadcasts through every linked speaker. Its editor is described
+  in [The PA editor](#the-pa-editor) below, including the **Network** tab that lists every
+  linked speaker and display.
 - **PA Speaker** — where the sound comes out. Right-click to set its **volume** and **sound
-  radius**; its GUI also shows the link status. A player in range of *any* linked speaker
-  hears the announcement exactly **once** (the loudest speaker for that player wins), so
-  overlapping speaker ranges are safe.
+  radius**. The speaker screen sits low on the screen so you can see a **cyan ring** in the
+  world showing exactly how far it carries at your height, updating as you drag the radius;
+  it says how loud *you* would hear it from where you stand, **▶ Test here** plays the chime
+  at that volume, and **Copy / Paste** carry volume + radius from one speaker to the next.
+  A player in range of *any* linked speaker hears the announcement exactly **once** (the
+  loudest speaker for that player wins), so overlapping speaker ranges are safe.
 - **Speaker Link** (item) — how you wire them up. Linking works in **both directions**;
   select either end first (the tool remembers it, and the tooltip shows the selection):
   - **Box first:** right-click a PA Control Box, then right-click each Speaker to link it.
@@ -489,11 +490,18 @@ announcer blocks.
   - **Speaker first:** right-click a Speaker, then right-click a PA Control Box — that
     speaker is linked and the selection clears.
   - Linking a speaker that already belongs to another box **moves** it (both boxes update).
+  - **Link a whole area:** with a box selected, **sneak-right-click two ordinary blocks** at
+    opposite corners (up to 128 blocks a side). Every speaker and PIDS display inside is
+    linked at once; the action bar sums it up ("Linked 12 speakers and 2 displays (3 moved
+    from another box)"). While the first corner is set, an amber box follows your crosshair
+    and marks every speaker and display that would be linked. Sneak-right-click air cancels.
   - **Sneak-right-click a Speaker** to unlink it. **Sneak-right-click air** to clear the
     selection. Clicking another box/speaker just reselects.
 
   While you hold the Speaker Link, **thin white lines are drawn between every control box
-  and its linked speakers** nearby, so you can see the whole network at a glance.
+  and its linked speakers** nearby, so you can see the whole network at a glance — and
+  **reach rings** show how far sound carries at your height: bright for the speaker or
+  announcer under your crosshair, dim for every speaker of the selected (or looked-at) box.
 
   Links are limited to the same dimension and `maxLinkDistance` blocks (server config,
   default 128). Every action gives action-bar feedback.
@@ -512,6 +520,44 @@ Details worth knowing:
 
 All four items are craftable (iron/redstone/note block-based recipes; the Speaker Link is
 redstone + iron ingot + stick in a column) and appear in the Redstone creative tab.
+
+### The PA editor
+
+Right-clicking a PA Control Box or a Station Announcer opens one flat editor:
+
+- **Messages** (left) — one card per announcement. Click a card to edit it; **Enter** starts
+  the next one. Each card has a **switch** (turn a message off without deleting it — off
+  messages are never played or shown on PIDS), **↑ ↓** to reorder, **×** to delete, and
+  **▶** to hear it right now **on your machine only** (chime + voice, nobody else hears it).
+  Under the card, **Reads:** and **Says:** show the finished text when it uses tokens.
+  The box holds up to 64 messages / 4096 characters; each message up to 512.
+- **Settings** (right) — Random / In order, show in chat, chime first + chime picker (click to
+  hear), delay, **Play by itself** every *n* to *m* minutes (box), volume and radius
+  (announcer), and the tag with the matching `/announce` command spelled out.
+- **Network** (box only) — every linked speaker and display with its live state from the
+  server (green OK, amber not loaded, red missing), distance, volume and radius. Click a
+  speaker to change its volume/radius, **×** to unlink it (click again to undo), **All
+  speakers → Apply to all**, and **Unlink all**. Nothing changes until **Save**.
+- **▶ Fire** (top bar) — broadcasts to every player in range right now, ignoring the delay:
+  the selected card (even unsaved), or the next saved message when no card is selected.
+- **Templates** (top bar) — built-in station lines ("Stand clear", "Mind the gap",
+  "Welcome to {station}", a whole "Station loop"…) plus your own. **Add** appends a
+  template's messages, **Replace** loads them (and the settings saved with them). Save the
+  whole box or just the selected message under a name. Templates are stored on your machine
+  in `config/station_announcer/pa_templates.json`, so they follow you to every world and
+  server; built-ins you delete can be restored.
+
+### Announcement text: tokens and pronunciation
+
+| Write | Becomes |
+|---|---|
+| `{station}` | The MTR station the box / announcer stands in (falls back to "this station"). |
+| `{time}` | Each listener's wall clock, e.g. `14:05` (the same clock the railroad PIDS show). |
+| `{Bklyn\|Brooklyn}` | Shown as "Bklyn" in chat and on PIDS, **spoken** as "Brooklyn". Either side may be empty: `{\|on the left}` is only spoken, `{Exit A\|}` only shown. |
+
+The editor's **+ {station}**, **+ {time}** and **Say as…** buttons insert these
+(select a word first and Say as… wraps it, ready for you to type the pronunciation).
+Anything else in braces is left as you wrote it.
 
 ## Configuration
 
