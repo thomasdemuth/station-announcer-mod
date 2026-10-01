@@ -74,7 +74,7 @@ the plan, awaiting his review — "be deliberate"); MTR-Games integration planne
   Map+ deep links `?from=/?to=`. Handoff for the MTR-Games agent:
   `../MTR-Games/docs/STATION_ANNOUNCER_INTEGRATION.md` (API requests land at its bottom).
 
-### INTERLINING (2026-09-29) — READ `INTERLINE_PLAN.md` ("BUILT") — uncommitted, not deployed
+### INTERLINING (2026-09-29/30) — READ `INTERLINE_PLAN.md` ("BUILT" + "ROUND 2") — SHIPPED in 3.4.0 (commit 4f3a779, deployed to both profiles 2026-09-30)
 
 Depot groups no longer stagger by themselves. Per-depot departure delays (`AddonStore.depotDelays`,
 applied by the old DepotMixin hook), automatic interline section detection, and a solver that
