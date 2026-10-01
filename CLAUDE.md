@@ -87,6 +87,12 @@ spoken text + tokens, plus saved templates. The three vanilla-widget screens
   mouse): every click/drag in the editors, the area link's real two clicks, ▶ preview / TTS
   audio, template save/apply round trip.
 
+### RELEASE 3.4.5 (2026-10-01) — PA on FlatUi + release metadata on top of 3.4.3, deployed to both profiles
+
+3.4.4 is the stripped Modrinth jar another session built from 85883b2 (`releases/` + `modrinth/`);
+the dev tree skipped to 3.4.5 so the names never collide. `promo/` (video renders, 268 MB) is NOT
+in git on purpose.
+
 ### WEB STATION PAGE + 3D SCHEMATIC (2026-10-01) — READ `STATION_PAGE_PLAN.md` — 3.4.3
 
 Thomas: click a station in the web dispatch screen for an in-depth view (his answers are in the
