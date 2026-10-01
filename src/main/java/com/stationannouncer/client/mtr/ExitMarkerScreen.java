@@ -615,10 +615,14 @@ public class ExitMarkerScreen extends Screen {
         }
     }
 
-    /** Dev rig only (WayfindingClient#devHook): open on the Layout tab. */
-    void devShowLayout() {
+    /** Dev rig only (WayfindingClient#devHook): open on the Layout tab, scrolled down {@code scroll} px. */
+    void devShowLayout(int scroll) {
         layoutTab = true;
+        devScroll = scroll;
     }
+
+    /** Dev rig only: a scroll to apply once the Layout tab has measured its content. */
+    private int devScroll;
 
     /** Dev rig only (WayfindingClient#devHook): add or reuse exit {@code name}, pin to it, save. */
     void devAddAndPin(String name, String destination) {
@@ -723,19 +727,28 @@ public class ExitMarkerScreen extends Screen {
                     FlatUi.TEXT_FAINT, false);
             return;
         }
+        if (devScroll > 0 && layoutContentHeight > 0) {
+            layoutScroll = devScroll;
+            devScroll = 0;
+        }
         layoutScroll = Math.max(0, Math.min(layoutScroll, Math.max(0, layoutContentHeight - layoutViewHeight)));
         c.enableScissor(left + 1, layoutViewTop, left + w - 1, layoutViewTop + layoutViewHeight);
         int cy = y - layoutScroll;
         int start = cy;
-        java.util.Map<String, String> names = new java.util.HashMap<>();
-        for (com.google.gson.JsonElement element : layout.getAsJsonArray("anchors")) {
-            com.google.gson.JsonObject anchor = element.getAsJsonObject();
-            String id = anchor.get("id").getAsString();
-            String kind = anchor.get("kind").getAsString();
-            String name = anchor.get("name").getAsString();
-            names.put(id, kind.equals("exit") ? "Exit " + name : kind.equals("platform")
-                    ? Text.translatable("gui.station_announcer.layout.platform", name.isEmpty() ? "?" : name).getString()
-                    : Text.translatable("gui.station_announcer.layout.opening").getString());
+        java.util.Map<String, String> names = anchorNames(layout);
+
+        // what the scan looked at
+        com.google.gson.JsonObject region = layout.getAsJsonObject("region");
+        if (region != null) {
+            FlatUi.heading(c, textRenderer, Text.translatable("gui.station_announcer.layout.scanned_area").getString(), x, cy);
+            cy += 11;
+            com.google.gson.JsonArray min = region.getAsJsonArray("min");
+            com.google.gson.JsonArray max = region.getAsJsonArray("max");
+            String text = Text.translatable("gui.station_announcer.layout.scanned_area_row",
+                    max.get(0).getAsInt() - min.get(0).getAsInt() + 1, max.get(2).getAsInt() - min.get(2).getAsInt() + 1,
+                    min.get(1).getAsInt(), max.get(1).getAsInt(), region.get("margin").getAsInt()).getString();
+            cy = wrapped(c, text, x, cy, right - x, FlatUi.TEXT_DIM);
+            cy += 5;
         }
 
         FlatUi.heading(c, textRenderer, Text.translatable("gui.station_announcer.layout.step_free").getString(), x, cy);
@@ -773,6 +786,91 @@ public class ExitMarkerScreen extends Screen {
             }
         }
 
+        // per exit / entrance: which platforms without steps, and whether by lift
+        List<com.google.gson.JsonObject> ways = new ArrayList<>();
+        List<com.google.gson.JsonObject> fares = new ArrayList<>();
+        for (com.google.gson.JsonElement element : layout.getAsJsonArray("anchors")) {
+            com.google.gson.JsonObject anchor = element.getAsJsonObject();
+            String kind = anchor.get("kind").getAsString();
+            if (kind.equals("exit") || kind.equals("opening")
+                    || (kind.equals("fare") && anchor.has("entrance") && anchor.get("entrance").getAsBoolean())) {
+                ways.add(anchor);
+            }
+            if (kind.equals("fare")) {
+                fares.add(anchor);
+            }
+        }
+        if (!ways.isEmpty()) {
+            cy += 5;
+            FlatUi.heading(c, textRenderer, Text.translatable("gui.station_announcer.layout.ways_in").getString(), x, cy);
+            cy += 11;
+            int nameW = 0;
+            for (com.google.gson.JsonObject anchor : ways) {
+                String id = anchor.get("id").getAsString();
+                nameW = Math.max(nameW, textRenderer.getWidth(names.getOrDefault(id, id)));
+            }
+            nameW = Math.min(nameW + 8, (right - x) / 2);
+            for (com.google.gson.JsonObject anchor : ways) {
+                String id = anchor.get("id").getAsString();
+                c.drawText(textRenderer, textRenderer.trimToWidth(names.getOrDefault(id, id), nameW - 4), x, cy, FlatUi.TEXT, false);
+                String access = anchor.has("stepFree") ? anchor.get("stepFree").getAsString() : null;
+                boolean lift = anchor.has("lift") && anchor.get("lift").getAsBoolean();
+                String verdict;
+                int verdictColor;
+                if (access == null) {
+                    verdict = Text.translatable("gui.station_announcer.layout.way_none_reached").getString();
+                    verdictColor = FlatUi.TEXT_FAINT;
+                } else if (access.equals("all")) {
+                    verdict = Text.translatable(lift ? "gui.station_announcer.layout.way_all_lift"
+                            : "gui.station_announcer.layout.way_all").getString();
+                    verdictColor = ClientLayouts.C_ALL;
+                } else if (access.equals("some")) {
+                    List<String> to = new ArrayList<>();
+                    for (com.google.gson.JsonElement p : anchor.getAsJsonArray("stepFreeTo")) {
+                        to.add(names.getOrDefault("platform:" + p.getAsString(), p.getAsString()));
+                    }
+                    verdict = Text.translatable(lift ? "gui.station_announcer.layout.way_some_lift"
+                            : "gui.station_announcer.layout.way_some", String.join(", ", to)).getString();
+                    verdictColor = ClientLayouts.C_SOME;
+                } else {
+                    verdict = Text.translatable("gui.station_announcer.layout.way_stairs").getString();
+                    verdictColor = ClientLayouts.C_NONE;
+                }
+                c.drawText(textRenderer, textRenderer.trimToWidth(verdict, right - x - nameW), x + nameW, cy, verdictColor, false);
+                cy += 11;
+            }
+        }
+        cy += 5;
+        FlatUi.heading(c, textRenderer, Text.translatable("gui.station_announcer.layout.fare_control").getString(), x, cy);
+        cy += 11;
+        if (fares.isEmpty()) {
+            cy = wrapped(c, Text.translatable("gui.station_announcer.layout.no_fare").getString(), x, cy, right - x,
+                    FlatUi.TEXT_FAINT);
+        }
+        for (com.google.gson.JsonObject fare : fares) {
+            String id = fare.get("id").getAsString();
+            com.google.gson.JsonArray pos = fare.getAsJsonArray("pos");
+            String head = Text.translatable("gui.station_announcer.layout.fare_row", names.getOrDefault(id, id),
+                    (int) Math.floor(pos.get(0).getAsDouble()), (int) Math.floor(pos.get(1).getAsDouble()),
+                    (int) Math.floor(pos.get(2).getAsDouble())).getString();
+            c.drawText(textRenderer, textRenderer.trimToWidth(head, right - x), x, cy, ClientLayouts.C_FARE, false);
+            cy += 10;
+            String detail;
+            if (fare.has("entrance") && fare.get("entrance").getAsBoolean()) {
+                detail = Text.translatable("gui.station_announcer.layout.fare_entrance").getString();
+            } else if (fare.has("usedBy")) {
+                List<String> by = new ArrayList<>();
+                for (com.google.gson.JsonElement u : fare.getAsJsonArray("usedBy")) {
+                    by.add(names.getOrDefault(u.getAsString(), u.getAsString()));
+                }
+                detail = Text.translatable("gui.station_announcer.layout.fare_used_by", String.join(", ", by)).getString();
+            } else {
+                detail = Text.translatable("gui.station_announcer.layout.fare_unused").getString();
+            }
+            c.drawText(textRenderer, textRenderer.trimToWidth(detail, right - x - 8), x + 8, cy, FlatUi.TEXT_DIM, false);
+            cy += 12;
+        }
+
         cy += 5;
         FlatUi.heading(c, textRenderer, Text.translatable("gui.station_announcer.layout.walks").getString(), x, cy);
         cy += 11;
@@ -789,13 +887,13 @@ public class ExitMarkerScreen extends Screen {
             String head = from + " → " + to + " · " + Math.round(link.get("meters").getAsDouble()) + " m";
             c.drawText(textRenderer, textRenderer.trimToWidth(head, right - x), x, cy, FlatUi.TEXT, false);
             cy += 10;
-            c.drawText(textRenderer, textRenderer.trimToWidth(legsText(link.getAsJsonArray("legs")), right - x - 8),
+            c.drawText(textRenderer, textRenderer.trimToWidth(legsText(link.getAsJsonArray("legs"), names), right - x - 8),
                     x + 8, cy, link.get("stepFree").getAsBoolean() ? 0xFF3DD68C : FlatUi.TEXT_DIM, false);
             cy += 10;
             if (link.has("stepFreeAlt")) {
                 com.google.gson.JsonObject alt = link.getAsJsonObject("stepFreeAlt");
                 String text = Text.translatable("gui.station_announcer.layout.alt",
-                        Math.round(alt.get("meters").getAsDouble()), legsText(alt.getAsJsonArray("legs"))).getString();
+                        Math.round(alt.get("meters").getAsDouble()), legsText(alt.getAsJsonArray("legs"), names)).getString();
                 c.drawText(textRenderer, textRenderer.trimToWidth(text, right - x - 8), x + 8, cy, 0xFF6FA8FF, false);
                 cy += 10;
             }
@@ -838,13 +936,68 @@ public class ExitMarkerScreen extends Screen {
                 }
             }
         }
+        cy += 5;
+        FlatUi.heading(c, textRenderer, Text.translatable("gui.station_announcer.layout.legend").getString(), x, cy);
+        cy += 11;
+        for (Object[] row : ClientLayouts.LEGEND) {
+            ClientLayouts.drawSwatch(c, x, cy, (int) row[0], (int) row[1]);
+            c.drawText(textRenderer, textRenderer.trimToWidth(Text.translatable((String) row[2]).getString(), right - x - 14),
+                    x + 14, cy, FlatUi.TEXT_DIM, false);
+            cy += 10;
+        }
         layoutContentHeight = cy - start;
         c.disableScissor();
         FlatUi.scrollThumb(c, right + 6, layoutViewTop, layoutViewHeight, layoutContentHeight, layoutScroll);
     }
 
-    /** "12 m · stairs ↓10 · fare control · 4 m" — what a scanned walk takes. */
+    /** Display names for a layout's anchors: "Exit A", "Platform 1", "Street entrance 2", "Fare control 1". */
+    static java.util.Map<String, String> anchorNames(com.google.gson.JsonObject layout) {
+        java.util.Map<String, String> names = new java.util.HashMap<>();
+        int openings = 0;
+        int fares = 0;
+        for (com.google.gson.JsonElement element : layout.getAsJsonArray("anchors")) {
+            com.google.gson.JsonObject anchor = element.getAsJsonObject();
+            String kind = anchor.get("kind").getAsString();
+            if (kind.equals("opening")) {
+                openings++;
+            } else if (kind.equals("fare")) {
+                fares++;
+            }
+        }
+        int opening = 0;
+        int fare = 0;
+        for (com.google.gson.JsonElement element : layout.getAsJsonArray("anchors")) {
+            com.google.gson.JsonObject anchor = element.getAsJsonObject();
+            String id = anchor.get("id").getAsString();
+            String kind = anchor.get("kind").getAsString();
+            String name = anchor.get("name").getAsString();
+            names.put(id, switch (kind) {
+                case "exit" -> "Exit " + name;
+                case "platform" -> Text.translatable("gui.station_announcer.layout.platform", name.isEmpty() ? "?" : name).getString();
+                case "fare" -> Text.translatable("gui.station_announcer.layout.fare_name").getString()
+                        + (fares > 1 ? " " + ++fare : "");
+                default -> Text.translatable("gui.station_announcer.layout.opening").getString()
+                        + (openings > 1 ? " " + ++opening : "");
+            });
+        }
+        return names;
+    }
+
+    /** Wrapped text; returns the y below it. */
+    private int wrapped(DrawContext c, String text, int x, int y, int width, int color) {
+        for (net.minecraft.text.OrderedText line : textRenderer.wrapLines(net.minecraft.text.StringVisitable.plain(text), width)) {
+            c.drawText(textRenderer, line, x, y, color, false);
+            y += 10;
+        }
+        return y;
+    }
+
     static String legsText(com.google.gson.JsonArray legs) {
+        return legsText(legs, java.util.Map.of());
+    }
+
+    /** "12 m · stairs ↓10 · fare control 2 · 4 m" — what a scanned walk takes. */
+    static String legsText(com.google.gson.JsonArray legs, java.util.Map<String, String> names) {
         List<String> parts = new ArrayList<>();
         for (com.google.gson.JsonElement element : legs) {
             com.google.gson.JsonObject leg = element.getAsJsonObject();
@@ -856,7 +1009,9 @@ public class ExitMarkerScreen extends Screen {
                 case "stairs" -> Text.translatable("gui.station_announcer.layout.leg_stairs", arrow).getString();
                 case "escalator" -> Text.translatable("gui.station_announcer.layout.leg_escalator", arrow).getString();
                 case "lift" -> Text.translatable("gui.station_announcer.layout.leg_lift", arrow).getString();
-                case "fare" -> Text.translatable("gui.station_announcer.layout.leg_fare").getString();
+                case "fare" -> leg.has("at") && names.containsKey(leg.get("at").getAsString())
+                        ? names.get(leg.get("at").getAsString()).toLowerCase(java.util.Locale.ROOT)
+                        : Text.translatable("gui.station_announcer.layout.leg_fare").getString();
                 case "emergency" -> Text.translatable("gui.station_announcer.layout.leg_emergency").getString();
                 default -> meters + " m";
             });

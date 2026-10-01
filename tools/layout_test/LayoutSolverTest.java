@@ -284,6 +284,131 @@ public class LayoutSolverTest {
         check("a low (level-boarding) platform beside a wall still has standing room",
                 link(rlo, "exit:E", "platform:12") != null && rlo.warnings.isEmpty(), rlo.warnings);
 
+        // ---- 7. fare control: the line of gates is one anchor, and the walk names it
+        List<LayoutResult.Anchor> fares = r.anchors.stream().filter(x -> x.kind().equals("fare")).toList();
+        check("the turnstile line is ONE fare-control anchor", fares.size() == 1 && fares.get(0).id().equals("fare:0")
+                && Math.abs(fares.get(0).x() - 22.5) < 1, fares.stream().map(x -> x.id() + "@" + x.x() + "," + x.z()).toList());
+        check("...the walk in from Exit A passes it by name", a != null && a.legs.stream()
+                .anyMatch(leg -> leg.kind().equals("fare") && "fare:0".equals(leg.at())), legs(a));
+        check("...and it knows Exit A walks through it", r.access.get("fare:0") != null
+                && r.access.get("fare:0").usedBy.contains("exit:A"), r.access.get("fare:0") == null ? "-" : r.access.get("fare:0").usedBy);
+        check("...a properly gated station has no warnings", r.warnings.isEmpty(), r.warnings);
+        check("exit A (stairs only) reads step-free: none", r.access.get("exit:A") != null
+                && "none".equals(r.access.get("exit:A").stepFree) && !r.access.get("exit:A").lift, r.access.get("exit:A"));
+
+        // ---- 8. two exits, only one with a lift: per-exit access
+        World two = subway(false);
+        two.fill(15, 70, 0, 15, 72, 19, SOLID);                   // a wall on the street between the two exits
+        two.fill(8, 66, 5, 9, 69, 6, AIR);                        // a lift shaft from the street into the UNPAID hall
+        two.in.lifts.add(new LayoutInput.Lift(901, List.of(new int[]{8, 60, 5}, new int[]{8, 70, 5}), 3.5));
+        two.computeSurface();
+        two.in.exits.add(new LayoutInput.Exit("A", 31, 70, 1));
+        two.in.exits.add(new LayoutInput.Exit("B", 11, 70, 5));
+        LayoutResult rt = two.solve();
+        LayoutResult.Access accA = rt.access.get("exit:A");
+        LayoutResult.Access accB = rt.access.get("exit:B");
+        System.out.println("   B -> platform: " + legs(link(rt, "exit:B", "platform:1")) + "  warnings " + rt.warnings);
+        check("Exit A (stairs) is not step-free, Exit B (lift) is — by lift",
+                accA != null && "none".equals(accA.stepFree) && accB != null && "all".equals(accB.stepFree) && accB.lift,
+                (accA == null ? "-" : accA.stepFree) + " / " + (accB == null ? "-" : accB.stepFree + " lift " + accB.lift));
+        check("...the JSON carries it on the exit anchors", rt.toJson(false).toString()
+                .contains("\"id\":\"exit:B\",\"kind\":\"exit\",\"name\":\"B\",\"pos\":[11.5,70.0,5.5],\"stepFree\":\"all\",\"lift\":true"),
+                rt.toJson(false).getAsJsonArray("anchors"));
+        check("...and a lift into the unpaid hall raises no fare warning", rt.warnings.isEmpty(), rt.warnings);
+
+        // ---- 9. no exit, no street opening (surface unknown): fare control is the way in
+        World indoor = subway(false);
+        java.util.Arrays.fill(indoor.in.surface, Integer.MIN_VALUE);
+        LayoutResult ri = indoor.solve();
+        LayoutResult.Access fi = ri.access.get("fare:0");
+        check("with nothing else, the fare line stands in as the entrance", fi != null && fi.entrance
+                && link(ri, "fare:0", "platform:1") != null && "all".equals(fi.stepFree), fi == null ? ri.anchors : fi.stepFree);
+        check("...and the platform counts as step-free from it", Boolean.TRUE.equals(ri.platformStepFree.get(1L)), ri.platformStepFree);
+
+        // ---- 10. a gap in the fare wall: riders skip the gates
+        World leak = subway(false);
+        leak.fill(22, 60, 7, 22, 62, 8, AIR);                     // the trench splits the hall: gap on the gates' side
+        leak.in.exits.add(new LayoutInput.Exit("A", 31, 70, 1));
+        LayoutResult rl = leak.solve();
+        check("a gap round the gates is reported", rl.warnings.stream()
+                .anyMatch(x -> x.startsWith("Platform 1: riders can also reach it from the street without passing fare control")), rl.warnings);
+        check("...the scanned box and margin are reported", rl.region != null && rl.region[0] == 0 && rl.region[3] == 44
+                && rl.toJson(false).has("region"), rl.region == null ? "-" : java.util.Arrays.toString(rl.region));
+
+        // ---- 11. an at-grade station: an open-sky PAID plaza fenced off from the street,
+        //          turnstiles in the fence (Atlantic / Morgan) — the plaza is not the street
+        World grade = new World(0, 56, 0, 35, 10, 12);
+        grade.fill(0, 56, 0, 34, 60, 11, SOLID);                   // ground, top 61
+        grade.fill(0, 59, 1, 34, 60, 3, AIR);                      // track trench, floor 59
+        grade.fill(0, 61, 0, 34, 63, 0, SOLID);                    // nothing to stand on beyond the track
+        grade.fill(21, 61, 4, 21, 62, 11, SOLID);                  // the fence between plaza and street
+        grade.fill(21, 59, 1, 21, 63, 3, SOLID);                   // ...across the trench too
+        grade.set(21, 61, 7, TURNSTILE);
+        grade.set(21, 62, 7, TURNSTILE);
+        grade.set(21, 61, 8, TURNSTILE);
+        grade.set(21, 62, 8, TURNSTILE);
+        grade.computeSurface();
+        grade.in.areaMinX = 0; grade.in.areaMaxX = 20; grade.in.areaMinZ = 0; grade.in.areaMaxZ = 11;
+        grade.in.track.addAll(line(0, 34, 59, 2.5));
+        grade.in.platforms.add(new LayoutInput.Platform(20, "G", line(1, 8, 59, 2.5)));
+        LayoutResult rgr = grade.solve();
+        List<LayoutResult.Anchor> gOpen = rgr.anchors.stream().filter(x -> x.kind().equals("opening")).toList();
+        System.out.println("   at-grade openings: " + gOpen.stream().map(o -> Math.round(o.x()) + "," + Math.round(o.z())).toList()
+                + "  warnings " + rgr.warnings);
+        check("the open-air paid plaza is not taken for the street: entrances are found past the gates",
+                !gOpen.isEmpty() && gOpen.stream().allMatch(o -> o.x() > 21), gOpen.stream().map(LayoutResult.Anchor::x).toList());
+        check("...their walks pass the fare control, which knows it", has(link(rgr, gOpen.isEmpty() ? "" : gOpen.get(0).id(), "platform:20"), "fare")
+                && rgr.access.get("fare:0") != null && !rgr.access.get("fare:0").usedBy.isEmpty(), rgr.access.get("fare:0"));
+        check("...and nothing is reported as skipping the gates", rgr.warnings.isEmpty(), rgr.warnings);
+        grade.set(21, 61, 10, AIR);                                // now a gap in the fence
+        grade.set(21, 62, 10, AIR);
+        LayoutResult rgap = grade.solve();
+        check("a gap in the fence is reported once for the station", rgap.warnings.stream()
+                .filter(x -> x.contains("without passing fare control")).count() == 1, rgap.warnings);
+
+        // ---- 13. gates ACROSS the platform: the track runs on past them, the street stairs
+        //          land on the unpaid end (Atlantic) — that end is not the platform
+        World across = new World(0, 56, 0, 35, 10, 12);
+        across.fill(0, 56, 0, 34, 60, 11, SOLID);                  // ground, top 61
+        across.fill(0, 59, 1, 34, 60, 3, AIR);                     // track trench, floor 59
+        across.fill(0, 61, 0, 34, 63, 0, SOLID);
+        across.fill(21, 61, 4, 21, 62, 11, SOLID);                 // the fence crosses the platform
+        across.fill(21, 59, 1, 21, 63, 3, SOLID);
+        across.set(21, 61, 7, TURNSTILE);
+        across.set(21, 62, 7, TURNSTILE);
+        across.computeSurface();
+        across.in.areaMinX = 0; across.in.areaMaxX = 34; across.in.areaMinZ = 0; across.in.areaMaxZ = 11;
+        across.in.track.addAll(line(0, 34, 59, 2.5));
+        across.in.platforms.add(new LayoutInput.Platform(40, "X", line(1, 30, 59, 2.5)));   // runs past the gates
+        across.in.exits.add(new LayoutInput.Exit("S", 31, 61, 9));                         // on the unpaid end
+        LayoutResult rac = across.solve();
+        LayoutResult.Link sx = link(rac, "exit:S", "platform:40");
+        check("gates across a platform: the unpaid end is not the platform (the walk passes the gates)",
+                has(sx, "fare") && rac.warnings.isEmpty(), legs(sx) + " " + rac.warnings);
+
+        // ---- 12. a lift against a wall: without landing doors it reaches both sides (the old
+        //          rule), with an MTR lift door it is entered only through that door (187 St)
+        for (boolean door : new boolean[]{false, true}) {
+            World lw = new World(0, 58, 0, 21, 9, 11);
+            lw.fill(0, 58, 0, 20, 60, 10, SOLID);                 // floor top 61
+            lw.fill(10, 61, 0, 10, 65, 10, SOLID);                // a wall the whole way across
+            if (door) {
+                lw.set(9, 61, 5, CellInfo.passable(CellInfo.TAG_LIFT_DOOR, false));
+                lw.set(9, 62, 5, CellInfo.passable(CellInfo.TAG_LIFT_DOOR, false));
+            }
+            lw.computeSurface();
+            lw.in.areaMinX = 0; lw.in.areaMaxX = 20; lw.in.areaMinZ = 0; lw.in.areaMaxZ = 10;
+            lw.in.track.addAll(line(12, 19, 61, 9.5));
+            lw.in.platforms.add(new LayoutInput.Platform(30, "E", line(12, 19, 61, 9.5)));
+            lw.in.lifts.add(new LayoutInput.Lift(902, List.of(new int[]{10, 61, 5}, new int[]{10, 71, 5}), 3.5));
+            lw.in.exits.add(new LayoutInput.Exit("W", 3, 61, 5));
+            LayoutResult rlw = lw.solve();
+            LayoutResult.Link lk = link(rlw, "exit:W", "platform:30");
+            check(door ? "...with a landing door the lift no longer reaches through the wall"
+                            : "a doorless lift landing reaches round its shaft (old rule kept)",
+                    door == (lk == null), legs(lk));
+        }
+
         // ---- 6. JSON round trip shape
         String json = r3.toJson(true).toString();
         check("the result serialises with anchors, links, paths and step-free flags",

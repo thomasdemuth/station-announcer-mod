@@ -502,9 +502,15 @@ public final class LayoutScanner {
             return Text.translatable("msg.station_announcer.layout.failed", name, error).formatted(Formatting.RED);
         }
         long openings = result.anchors.stream().filter(a -> a.kind().equals("opening")).count();
+        long fares = result.anchors.stream().filter(a -> a.kind().equals("fare")).count();
         long stepFreeCount = result.platformStepFree.values().stream().filter(Boolean::booleanValue).count();
+        long stepFreeExits = result.anchors.stream().filter(a -> a.kind().equals("exit")).filter(a -> {
+            LayoutResult.Access acc = result.access.get(a.id());
+            return acc != null && acc.stepFree != null && !acc.stepFree.equals("none");
+        }).count();
+        long exits = result.anchors.stream().filter(a -> a.kind().equals("exit")).count();
         return Text.translatable("msg.station_announcer.layout.done", name, result.links.size(),
-                stepFreeCount, result.platformStepFree.size(), openings, result.warnings.size());
+                stepFreeCount, result.platformStepFree.size(), stepFreeExits, exits, fares, openings, result.warnings.size());
     }
 
     // ============================================================ client I/O
@@ -667,6 +673,7 @@ public final class LayoutScanner {
             }
             input = readBlocks(srv, snapshot, columns);
             if (input != null) {
+                input.margin = margin;
                 break;
             }
         }
@@ -1078,9 +1085,40 @@ public final class LayoutScanner {
         }
     }
 
+    /** Block id / class-name words that mean "a fare gate lane" in other mods (MTR addons, MSD, …). */
+    private static final String[] FARE_WORDS = {"turnstile", "ticket_barrier", "ticketbarrier", "fare_gate", "faregate",
+            "ticket_gate", "ticketgate", "fare_barrier", "farebarrier", "fare_lane", "farelane", "ticket_lane"};
+    /** …unless the id says it is a part around the lane rather than the lane itself. */
+    private static final String[] FARE_NOT = {"cap", "pole", "post", "sign", "processor", "machine", "reader", "panel",
+            "end", "rail", "light", "lamp", "frame", "item"};
+
+    /**
+     * A fare-gate lane from another mod, recognised by its block id or class name.
+     * Thomas (2026-09-30): any mod's fare lane counts, and riders of every kind may pass it.
+     */
+    static boolean looksLikeFareGate(Block block, String className) {
+        net.minecraft.util.Identifier id = Registries.BLOCK.getId(block);
+        if (id.getNamespace().equals(StationAnnouncer.MOD_ID)) {
+            return false; // ours are FareLane.Host (and turnstile_cap is NOT a lane)
+        }
+        String path = id.getPath().toLowerCase(java.util.Locale.ROOT);
+        String simple = className.substring(className.lastIndexOf('.') + 1).toLowerCase(java.util.Locale.ROOT);
+        for (String not : FARE_NOT) {
+            if (path.contains(not)) {
+                return false;
+            }
+        }
+        for (String word : FARE_WORDS) {
+            if (path.contains(word) || (!word.contains("_") && simple.contains(word))) {
+                return true;
+            }
+        }
+        return false;
+    }
+
     /**
      * One block state → what it means to a rider. Walk-through by rule: turnstile /
-     * HEET / MTR ticket-barrier lanes (fare control), emergency exit doors (last
+     * HEET / MTR ticket-barrier lanes and other mods' fare gates (fare control), emergency exit doors (last
      * resort), openable doors and fence gates, MTR lift and platform doors, our
      * markers. Everything else by its collision shape, asked with an EMPTY view
      * (our blocks' shapes are state-only; anything that throws counts as solid).
@@ -1089,14 +1127,17 @@ public final class LayoutScanner {
         Block block = state.getBlock();
         boolean liquid = !state.getFluidState().isEmpty();
         String className = block.getClass().getName();
-        if (block instanceof FareLane.Host || className.endsWith("BlockTicketBarrier")) {
+        if (block instanceof FareLane.Host || className.endsWith("BlockTicketBarrier") || looksLikeFareGate(block, className)) {
             return CellInfo.passable(CellInfo.TAG_FARE, false);
         }
         if (block instanceof EmergencyExitDoorBlock) {
             return CellInfo.passable(CellInfo.TAG_EMERGENCY, false);
         }
+        if (className.contains("LiftDoor")) {
+            return CellInfo.passable(CellInfo.TAG_LIFT_DOOR, false);
+        }
         if ((block instanceof DoorBlock && block != Blocks.IRON_DOOR) || block instanceof FenceGateBlock
-                || block instanceof MarkerBlock || className.contains("LiftDoor") || className.endsWith("PSDDoor")
+                || block instanceof MarkerBlock || className.endsWith("PSDDoor")
                 || className.endsWith("APGDoor")) {
             return CellInfo.passable(CellInfo.TAG_NONE, false);
         }

@@ -1538,7 +1538,7 @@ const lay = run(`(() => {
   };
 })()`);
 check("a scanned layout is indexed and its exits are tied to their markers",
-	lay.anchors === 4 && lay.exitAnchors.includes("A=exit:A") && lay.exitAnchors.includes("B=exit:B"), J([lay.anchors, lay.exitAnchors]));
+	lay.anchors === 5 && lay.exitAnchors.includes("A=exit:A") && lay.exitAnchors.includes("B=exit:B"), J([lay.anchors, lay.exitAnchors]));
 check("the walk in through Exit A uses the SCANNED inside walk (street + 55 m)",
 	lay.fastMeters === lay.expectFast && lay.fastLegs.includes("stairs") && lay.fastStepFree === false,
 	J([lay.fastMeters, lay.expectFast, lay.fastLegs]));
@@ -1553,6 +1553,32 @@ check("the itinerary tells the rider the steps ('Stairs ↓8 m · … Fare contr
 check("the selected journey draws the scanned path inside the station", lay.noChip >= 1, lay.noChip);
 check("a step-free plan walks in by the lift", /lift/.test(lay.sfLeadLegs) && !/stairs/.test(lay.sfLeadLegs), lay.sfLeadLegs);
 check("steps read naturally", lay.steps === "Stairs ↓8 m · Fare control · Lift ↑6 m · 20 m", lay.steps);
+
+/* ---- X2. per-exit access + fare control (layout format 2) ---- */
+const xacc = run(`(() => {
+  const bc = state.stations.get("bc");
+  const pts = bc.exitPoints.map((e) => e.short + ":" + e.access + ":" + e.lift).join(",");
+  const rows = stationExits(bc).map((e) => e.name + "=" + e.access + (e.lift ? "+lift" : "")).join(",");
+  const html = exitAccessHtml({ access: "some", lift: true }) + "|" + exitAccessHtml({ access: "none" }) + "|" + exitAccessHtml({ access: null });
+  const fare = bc.layout.anchors.get("fare:0");
+  // a station scanned with no exit and no street opening: its fare control is the way in
+  const indoor = normalizeLayout({ anchors: [
+    { id: "platform:x", kind: "platform", name: "1", pos: [0, 50, 0] },
+    { id: "fare:0", kind: "fare", name: "", pos: [10, 50, 0], entrance: true, stepFree: "all" },
+    { id: "fare:1", kind: "fare", name: "", pos: [30, 50, 0] } ], links: [] });
+  const inPts = exitPointsOf([], indoor);
+  const note = exitNoteHtml({ exit: { ...inPts[0], role: "enter", legs: [{ kind: "fare" }, { kind: "walk", meters: 12 }] } });
+  return { pts, rows, html, fareUsed: fare ? fare.usedBy.join(",") : "", inPts: inPts.map((p) => p.anchor + ":" + p.fare + ":" + p.access).join(","), note };
+})()`);
+check("exit points carry the scan's access (A: some platforms, by lift; B: some)",
+	xacc.pts === "A:some:true,B:some:false,C:null:false" || xacc.pts === "A:some:true,B:some:false", xacc.pts);
+check("...the station panel rows say it", xacc.rows.includes("Exit A=some+lift") && xacc.rows.includes("Exit B=some"), xacc.rows);
+check("...as an outline badge + 'lift', or 'stairs only'", /badge-outline/.test(xacc.html) && /lift/.test(xacc.html)
+	&& /stairs only/.test(xacc.html) && xacc.html.endsWith("|"), xacc.html);
+check("fare control knows which exits walk through it", xacc.fareUsed === "exit:A,exit:B", xacc.fareUsed);
+check("with no exit and no opening, the fare control that stands in for the street is the way in (only that one)",
+	xacc.inPts === "fare:0:true:all", xacc.inPts);
+check("...and the itinerary says 'Enter through fare control'", /Enter through fare control/.test(xacc.note), xacc.note);
 
 /* ---- Y. deep links (feature 13) ---- */
 const deep = run(`(() => {

@@ -170,6 +170,47 @@ a per-station Scan button plus **Scan all stations** (for worlds that install th
 - NOT verified: real mouse clicks on the new buttons, the overlay's look in a busy station,
   in-game nav HUD (it does not use layouts yet — next candidate).
 
+## 2b. DETECTION ROUND 2 (2026-09-30)   *(unit tests + harness + rig-verified on all of Baker City; shipped in 3.4.1, deployed 2026-09-30)*
+
+Thomas asked: what the colours mean, what the scan covers, exits where only some are lift-usable,
+fare gates as entry points. His answers (do not re-ask): **every fare lane counts as step-free,
+including MTR's and other mods' gates**; fare gates become **named fare-control anchors**, stand
+in as **entrances when nothing else is found**, and get **warnings**.
+
+- **Fare control** (`LayoutSolver`): gate nodes (TAG_FARE / TAG_EMERGENCY) within 3 blocks on one
+  floor are one group (a lone emergency door is not a group); anchors `fare:N` (a group outside the
+  MTR area with no platform behind it is another station's and is skipped). **Paid area** = flood
+  from the platforms without passing a gate. Fare legs carry `at: "fare:N"`; the fare anchor lists
+  `usedBy`. No exit and no opening → fare groups with an unpaid side become `entrance: true` and
+  get their own walks (47 stations on Baker City). Other mods' gates: `LayoutScanner.looksLikeFareGate`
+  (block id / class name words, minus cap/pole/sign/processor/… parts; our own ids excluded).
+- **Per-exit access**: every exit / opening / fare entrance carries `stepFree` all|some|none (of the
+  boardable platforms), `stepFreeTo`, `reaches`, `lift` (some step-free walk rides a lift).
+- **Scan box** in the result: `region {min,max,margin}` + `area` (MTR area). LayoutResult FORMAT 2.
+- **Fixes the real network forced** (each has a unit test):
+  1. Open-air paid plazas (Atlantic/Morgan): inside the MTR area, open ground on the PAID side is
+     not the street — the opening search walks on through the gates.
+  2. Lifts against a wall (187 St): a landing with MTR lift doors (new TAG_LIFT_DOOR) joins only
+     the door nodes; doorless landings keep the radius rule.
+  3. Gates across a platform (Atlantic): `cutAtFareControl` drops zone parts that meet the main
+     part only through the same fare control and are end to end along the track OR a scrap ≤ 1/10.
+  4. Bypass warning is per platform: a platform whose nearest gate is ≤ 1.5 × street + 5 m away
+     (gate-free walking) but which the street reaches without a gate. A tram stop the street reaches
+     long before any gate (Morgan) is a free platform, not reported.
+- Result on Baker City: 179 fare groups, 50 fare entrances; warnings 33 → 17 network-wide; the 13
+  remaining fare warnings were not individually inspected except Albany (one gate line at one entrance,
+  every other entrance walks straight in — the warning is right).
+- **UI**: overlay posts by kind (white exit, grey opening, purple fare control) with an access cap
+  (green/yellow/red) and a blue band for "by lift"; white/grey floor outlines of the MTR area / scan
+  box (clamped to street level when flying above); a colour key on the left of the screen
+  (`ClientLayouts.LEGEND`, HUD) and the same key at the end of the Layout tab. Layout tab: Scanned
+  area, Exits and entrances (verdict per exit), Fare control (used by / the way in / unused),
+  numbered "Street entrance N" / "Fare control N". Map+: wheelchair badge beside exit pins
+  (outline = some platforms), "Exit A ♿ lift" / "stairs only" in the station panel, "Enter through
+  fare control" for fare entrances. Dev hook `#marker-layout x y z [scroll]`.
+- NOT verified: real mouse use, other mods' gates (none installed on the rig), the 13 remaining
+  warnings one by one.
+
 ## 3. MTR GAMES INTEGRATION — Station Announcer side BUILT (2026-09-30); MTR-Games side handed off
 
 **Built here:** `com.stationannouncer.api` (PURE JAVA — MTR-Games uses Mojang mappings, so no

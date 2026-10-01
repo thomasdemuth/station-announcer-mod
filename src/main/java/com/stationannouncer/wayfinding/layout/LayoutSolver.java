@@ -41,6 +41,17 @@ import java.util.Map;
  * stairwell's lower steps are open to the sky too, but they are not the
  * street) — suggested entrances that have no Exit Marker yet.
  *
+ * <h2>Fare control</h2>
+ * Fare lanes (ours, MTR's ticket barriers, other mods' gates — see
+ * {@code LayoutScanner.classify}) within {@value #FARE_GROUP_RADIUS} blocks of each
+ * other form one FARE CONTROL group (an emergency exit door beside them is its
+ * service gate). The PAID AREA is everything a rider reaches from the platforms
+ * without passing a gate. Each group is an anchor ("fare:0"); walks name the group
+ * they pass. A station with no exit and no street opening is entered through its
+ * fare control instead (inside a building, under a mall). Warnings: an exit or
+ * opening inside the paid area (riders skip the gates), a group with no platform
+ * behind it, a group with nothing unpaid in front of it.
+ *
  * <h2>Searches</h2>
  * Dijkstra over metres (plus effort: climbing costs more than walking, a gate
  * a few metres, a lift ride {@value #LIFT_METERS}), run twice per source:
@@ -79,6 +90,8 @@ public final class LayoutSolver {
     static final double STREET_BAND = 2.0;
     /** Inside the MTR area, a street opening is at least this much walking from the platforms (at-grade stations). */
     static final float OPENING_MIN_WALK = 15f;
+    /** Fare lanes this close together (blocks, same floor) are one line of gates. */
+    static final double FARE_GROUP_RADIUS = 3.0;
 
     static final byte K_WALK = 0;
     static final byte K_STAIRS = 1;
@@ -109,6 +122,27 @@ public final class LayoutSolver {
     private final List<double[]> liftPos = new ArrayList<>();   // {x, y, z}
     private final List<List<int[]>> liftLandings = new ArrayList<>(); // lift node -> {realNode, costMilli}
     private final Map<Integer, List<int[]>> liftsAtNode = new HashMap<>(); // real node -> {liftNode, costMilli}
+
+    // fare control: node -> index into fareGroups, -1 = not a gate
+    private int[] fareGroup;
+    private final List<FareGroup> fareGroups = new ArrayList<>();
+    /** Reached from the platforms without passing a gate (real + lift nodes). */
+    private BitSet paid;
+    /** The station has a working line of gates (platforms behind it, something unpaid in front). */
+    private boolean gated;
+
+    /** One line of fare gates. */
+    private static final class FareGroup {
+        final int[] members;
+        /** The anchor id, or null when the group is not part of this station (outside its area, no platform behind it). */
+        String anchorId;
+        boolean paidSide;
+        int[] freeSide = new int[0];
+
+        FareGroup(int[] members) {
+            this.members = members;
+        }
+    }
 
     // search state
     private float[] dist;
@@ -146,7 +180,13 @@ public final class LayoutSolver {
         parent = new int[total];
         stamp = new int[total];
 
-        // ---- anchors
+        result.region = new int[]{in.minX, in.minY, in.minZ,
+                in.minX + in.sizeX - 1, in.minY + in.sizeY - 1, in.minZ + in.sizeZ - 1};
+        result.margin = in.margin;
+        result.area = new long[]{in.areaMinX, in.areaMinZ, in.areaMaxX, in.areaMaxZ};
+
+        // ---- anchors (fare gates first: they cut platforms that run through fare control)
+        findFareGroups();
         List<BitSet> zones = new ArrayList<>();
         List<String> platformIds = new ArrayList<>();
         for (LayoutInput.Platform platform : in.platforms) {
@@ -162,6 +202,26 @@ public final class LayoutSolver {
                         "Platform %s: no standing area found beside its track", label(platform.name(), platform.id())));
             }
         }
+
+        // ---- fare control: lines of gates, and the paid area behind them
+        paid = paidArea(zones);
+        int fareAnchors = 0;
+        for (FareGroup group : fareGroups) {
+            sides(group);
+            boolean inside = false;
+            for (int node : group.members) {
+                inside |= (flags[node] & F_INSIDE) != 0;
+            }
+            if (!group.paidSide && !inside) {
+                continue; // another station's gates inside the scan margin
+            }
+            gated |= group.paidSide;
+            group.anchorId = "fare:" + fareAnchors++;
+            int at = centreNode(group.members);
+            result.anchors.add(new LayoutResult.Anchor(group.anchorId, "fare", "", nx(at), h[at], nz(at)));
+            result.access.put(group.anchorId, new LayoutResult.Access());
+        }
+
         List<int[]> exitSources = new ArrayList<>();
         List<float[]> exitSourceCosts = new ArrayList<>();
         List<String> exitIds = new ArrayList<>();
@@ -180,6 +240,8 @@ public final class LayoutSolver {
             exitSourceCosts.add(toFloatArray(costs));
             exitIds.add(id);
         }
+        // street openings the scan found (suggested entrances without a marker)
+        List<int[]> openings = findOpenings(zones);
 
         // ---- exit -> platform
         for (int e = 0; e < exitIds.size(); e++) {
@@ -194,14 +256,24 @@ public final class LayoutSolver {
             int[] sources = zone.stream().toArray();
             linksFrom(result, platformIds.get(p), sources, new float[sources.length], zones, platformIds, p + 1, false);
         }
-
-        // ---- street openings the scan found (suggested entrances without a marker)
-        List<int[]> openings = findOpenings(zones);
+        // ---- opening -> platform
         for (int i = 0; i < openings.size(); i++) {
             int node = openings.get(i)[0];
             String id = "opening:" + i;
             result.anchors.add(new LayoutResult.Anchor(id, "opening", "", nx(node), h[node], nz(node)));
             linksFrom(result, id, new int[]{node}, new float[1], zones, platformIds, 0, false);
+        }
+        // ---- no exit and no opening: the station is entered through its fare control
+        List<FareGroup> entrances = new ArrayList<>();
+        if (in.exits.isEmpty() && openings.isEmpty()) {
+            for (FareGroup group : fareGroups) {
+                if (group.anchorId != null && group.paidSide && group.freeSide.length > 0) {
+                    entrances.add(group);
+                    result.access.get(group.anchorId).entrance = true;
+                    linksFrom(result, group.anchorId, group.freeSide, new float[group.freeSide.length], zones,
+                            platformIds, 0, false);
+                }
+            }
         }
 
         // ---- which platforms can be reached from the street without steps
@@ -213,6 +285,11 @@ public final class LayoutSolver {
         }
         for (int[] opening : openings) {
             streetSources.add(opening[0]);
+        }
+        for (FareGroup group : entrances) {
+            for (int s : group.freeSide) {
+                streetSources.add(s);
+            }
         }
         if (!streetSources.isEmpty()) {
             int[] sources = toIntArray(streetSources);
@@ -226,6 +303,9 @@ public final class LayoutSolver {
                 result.platformStepFree.put(in.platforms.get(p).id(), reached);
             }
         }
+
+        fareWarnings(result, exitIds, exitSources, openings, zones);
+        summariseAccess(result, zones);
 
         result.millis = (System.nanoTime() - start) / 1_000_000L;
         return result;
@@ -318,6 +398,8 @@ public final class LayoutSolver {
                         nodeTag = CellInfo.TAG_EMERGENCY;
                     } else if (under.tag == CellInfo.TAG_ESCALATOR || feetCell.tag == CellInfo.TAG_ESCALATOR) {
                         nodeTag = CellInfo.TAG_ESCALATOR;
+                    } else if (feetCell.tag == CellInfo.TAG_LIFT_DOOR || headCell.tag == CellInfo.TAG_LIFT_DOOR) {
+                        nodeTag = CellInfo.TAG_LIFT_DOOR;
                     }
                     heights.add(top);
                     tags.add(nodeTag);
@@ -448,7 +530,9 @@ public final class LayoutSolver {
         BitSet zone = new BitSet(n);
         List<double[]> samples = platform.samples();
         List<double[]> foreign = foreignTrack(samples);
+        Map<Integer, Integer> sampleOf = new HashMap<>();
         for (int i = 0; i < samples.size(); i++) {
+            final int sampleIndex = i;
             double[] sample = samples.get(i);
             double[] a = samples.get(Math.max(0, i - 1));
             double[] b = samples.get(Math.min(samples.size() - 1, i + 1));
@@ -474,11 +558,91 @@ public final class LayoutSolver {
                         continue; // ballast between this track and another one
                     }
                     zone.set(node);
+                    sampleOf.putIfAbsent(node, sampleIndex);
                 }
             });
         }
         dropSmallPatches(zone);
+        cutAtFareControl(zone, sampleOf);
         return zone;
+    }
+
+    /**
+     * A platform whose track runs on past a line of gates (Atlantic: gates across the
+     * platform, the street stairs landing on its far end): only the side of fare control
+     * with most of the standing room is the platform. Zone parts that reach each other
+     * without passing a gate are one part; a smaller part that meets the main one only
+     * at the same fare control AND lies further along the track (end to end, not across
+     * the track from it) — or is a scrap a tenth its size — is the unpaid side, and is dropped.
+     */
+    private void cutAtFareControl(BitSet zone, Map<Integer, Integer> sampleOf) {
+        if (fareGroups.isEmpty() || zone.isEmpty()) {
+            return;
+        }
+        int[] regionOf = new int[n + liftCount];
+        java.util.Arrays.fill(regionOf, -1);
+        List<Integer> sizes = new ArrayList<>();
+        List<java.util.Set<Integer>> touched = new ArrayList<>();
+        IntList stack = new IntList();
+        for (int start = zone.nextSetBit(0); start >= 0; start = zone.nextSetBit(start + 1)) {
+            if (regionOf[start] >= 0) {
+                continue;
+            }
+            int region = sizes.size();
+            java.util.Set<Integer> gates = new java.util.HashSet<>();
+            final int[] size = {0};
+            stack.size = 0;
+            stack.add(start);
+            regionOf[start] = region;
+            while (stack.size > 0) {
+                int node = stack.data[--stack.size];
+                if (node < n && zone.get(node)) {
+                    size[0]++;
+                }
+                neighbours(node, false, (to, cost, kind) -> {
+                    if (isGate(to)) {
+                        if (fareGroup[to] >= 0) {
+                            gates.add(fareGroup[to]);
+                        }
+                    } else if (regionOf[to] < 0) {
+                        regionOf[to] = region;
+                        stack.add(to);
+                    }
+                });
+            }
+            sizes.add(size[0]);
+            touched.add(gates);
+        }
+        if (sizes.size() < 2) {
+            return;
+        }
+        int main = 0;
+        for (int r = 1; r < sizes.size(); r++) {
+            if (sizes.get(r) > sizes.get(main)) {
+                main = r;
+            }
+        }
+        // each part's stretch along the track (sample indices)
+        int[] lo = new int[sizes.size()];
+        int[] hi = new int[sizes.size()];
+        java.util.Arrays.fill(lo, Integer.MAX_VALUE);
+        java.util.Arrays.fill(hi, Integer.MIN_VALUE);
+        for (int node = zone.nextSetBit(0); node >= 0; node = zone.nextSetBit(node + 1)) {
+            int r = regionOf[node];
+            int i = sampleOf.getOrDefault(node, 0);
+            lo[r] = Math.min(lo[r], i);
+            hi[r] = Math.max(hi[r], i);
+        }
+        for (int node = zone.nextSetBit(0); node >= 0; node = zone.nextSetBit(node + 1)) {
+            int r = regionOf[node];
+            boolean endToEnd = hi[r] <= lo[main] + 2 || lo[r] >= hi[main] - 2;
+            // or a scrap in front of the gates (Atlantic: barriers between the stairwell pillars,
+            // the main platform running on past them along both track edges)
+            boolean scrap = sizes.get(r) * 10 <= sizes.get(main);
+            if (r != main && (endToEnd || scrap) && !java.util.Collections.disjoint(touched.get(r), touched.get(main))) {
+                zone.clear(node);
+            }
+        }
     }
 
     /** Rail samples near this platform that belong to OTHER tracks (more than a block from its rail). */
@@ -580,6 +744,21 @@ public final class LayoutSolver {
                 List<Float> costs = new ArrayList<>();
                 gatherNear(floor[0] + 0.5, floor[1], floor[2] + 0.5, lift.radius() > 0 ? lift.radius() : LIFT_RADIUS,
                         -1.2, 1.2, nodes, costs);
+                // a landing with MTR lift doors is entered THROUGH them — never from whatever
+                // stands within reach behind the shaft wall (187 St: a lift beside the gate line
+                // joined the street to the paid side)
+                boolean doors = false;
+                for (int node : nodes) {
+                    doors |= tag[node] == CellInfo.TAG_LIFT_DOOR;
+                }
+                if (doors) {
+                    for (int i = nodes.size() - 1; i >= 0; i--) {
+                        if (tag[nodes.get(i)] != CellInfo.TAG_LIFT_DOOR) {
+                            nodes.remove(i);
+                            costs.remove(i);
+                        }
+                    }
+                }
                 if (nodes.isEmpty()) {
                     continue;
                 }
@@ -829,6 +1008,286 @@ public final class LayoutSolver {
         heapNode[i] = node;
     }
 
+    // ========================================================== fare control
+
+    private boolean isGate(int node) {
+        return node < n && (tag[node] == CellInfo.TAG_FARE || tag[node] == CellInfo.TAG_EMERGENCY);
+    }
+
+    /**
+     * Groups the gate nodes into lines of fare control: gates within
+     * {@value #FARE_GROUP_RADIUS} blocks on the same floor. A group of emergency doors
+     * with no fare lane among them is not fare control (it stays a last-resort door).
+     */
+    private void findFareGroups() {
+        fareGroup = new int[n];
+        java.util.Arrays.fill(fareGroup, -1);
+        IntList queue = new IntList();
+        for (int start = 0; start < n; start++) {
+            if (fareGroup[start] != -1 || !isGate(start)) {
+                continue;
+            }
+            final int id = fareGroups.size();
+            queue.size = 0;
+            queue.add(start);
+            fareGroup[start] = id;
+            boolean anyFare = false;
+            for (int head = 0; head < queue.size; head++) {
+                int node = queue.data[head];
+                anyFare |= tag[node] == CellInfo.TAG_FARE;
+                float y = h[node];
+                columnsAround(nx(node), nz(node), FARE_GROUP_RADIUS, (col, d) -> {
+                    for (int other = colStart[col]; other < colStart[col + 1]; other++) {
+                        if (fareGroup[other] == -1 && isGate(other) && Math.abs(h[other] - y) <= 1.5f) {
+                            fareGroup[other] = id;
+                            queue.add(other);
+                        }
+                    }
+                });
+            }
+            int[] members = queue.toArray();
+            if (!anyFare) {
+                for (int m : members) {
+                    fareGroup[m] = -2; // a lone emergency door: seen, but no group
+                }
+                continue;
+            }
+            fareGroups.add(new FareGroup(members));
+        }
+        for (int node = 0; node < n; node++) {
+            if (fareGroup[node] == -2) {
+                fareGroup[node] = -1;
+            }
+        }
+    }
+
+    /** Everything a rider reaches from the platforms without passing a gate. */
+    private BitSet paidArea(List<BitSet> zones) {
+        BitSet out = new BitSet(n + liftCount);
+        IntList stack = new IntList();
+        for (BitSet zone : zones) {
+            for (int node = zone.nextSetBit(0); node >= 0; node = zone.nextSetBit(node + 1)) {
+                if (!out.get(node)) {
+                    out.set(node);
+                    stack.add(node);
+                }
+            }
+        }
+        while (stack.size > 0) {
+            int node = stack.data[--stack.size];
+            neighbours(node, false, (to, cost, kind) -> {
+                if (!out.get(to) && !isGate(to)) {
+                    out.set(to);
+                    stack.add(to);
+                }
+            });
+        }
+        return out;
+    }
+
+    /** The standing places right in front of / behind a group: paid side yes/no, and the unpaid ones. */
+    private void sides(FareGroup group) {
+        BitSet free = new BitSet(n);
+        final boolean[] paidSide = {false};
+        for (int node : group.members) {
+            neighbours(node, false, (to, cost, kind) -> {
+                if (isGate(to)) {
+                    return;
+                }
+                if (paid.get(to)) {
+                    paidSide[0] = true;
+                } else if (to < n) {
+                    free.set(to);
+                }
+            });
+        }
+        group.paidSide = paidSide[0];
+        group.freeSide = free.stream().toArray();
+    }
+
+    /** The member nearest the group's centroid (where its anchor stands). */
+    private int centreNode(int[] members) {
+        double cx = 0, cz = 0;
+        for (int node : members) {
+            cx += nx(node);
+            cz += nz(node);
+        }
+        cx /= members.length;
+        cz /= members.length;
+        int best = members[0];
+        double bestD = Double.MAX_VALUE;
+        for (int node : members) {
+            double d = Math.hypot(nx(node) - cx, nz(node) - cz);
+            if (d < bestD) {
+                bestD = d;
+                best = node;
+            }
+        }
+        return best;
+    }
+
+    private void fareWarnings(LayoutResult result, List<String> exitIds, List<int[]> exitSources, List<int[]> openings,
+                              List<BitSet> zones) {
+        // platforms BEHIND fare control (their nearest gate is about as close as the nearest
+        // way in from the street, or closer) that riders can still reach from the street
+        // without passing a gate. A platform the street reaches long before any gate is
+        // simply a free platform (a tram stop beside a gated subway: Morgan) — not reported.
+        boolean leaks = false;
+        if (gated) {
+            List<String> from = new ArrayList<>();
+            IntList seeds = new IntList();
+            for (int e = 0; e < exitIds.size(); e++) {
+                boolean leaking = false;
+                for (int node : exitSources.get(e)) {
+                    seeds.add(node);
+                    leaking |= paid.get(node);
+                }
+                if (leaking) {
+                    from.add(exitIds.get(e).replace("exit:", "Exit "));
+                }
+            }
+            for (int[] opening : openings) {
+                int node = opening[0];
+                seeds.add(node);
+                if (paid.get(node)) {
+                    from.add(String.format(Locale.ROOT, "%d, %d, %d",
+                            (int) Math.floor(nx(node)), (int) Math.floor(h[node]), (int) Math.floor(nz(node))));
+                }
+            }
+            BitSet street = new BitSet(n);
+            for (int i = 0; i < seeds.size; i++) {
+                street.set(seeds.data[i]);
+            }
+            List<String> bypassed = new ArrayList<>();
+            for (int p = 0; p < zones.size(); p++) {
+                float[] d = gateVersusStreet(zones.get(p), street);
+                if (d[1] < MAX_COST && d[0] <= d[1] * 1.5f + 5f) {
+                    bypassed.add(label(in.platforms.get(p).name(), in.platforms.get(p).id()));
+                }
+            }
+            if (!bypassed.isEmpty()) {
+                leaks = true;
+                String which = bypassed.size() <= 4 ? String.join(", ", bypassed)
+                        : String.join(", ", bypassed.subList(0, 3)) + " and " + (bypassed.size() - 3) + " more";
+                result.warnings.add((bypassed.size() == 1 ? "Platform " : "Platforms ") + which
+                        + ": riders can also reach " + (bypassed.size() == 1 ? "it" : "them")
+                        + " from the street without passing fare control"
+                        + (from.isEmpty() ? "" : " (from " + String.join("; ", from.subList(0, Math.min(3, from.size())))
+                        + (from.size() > 3 ? "; …" : "") + ")"));
+            }
+        }
+        for (FareGroup group : fareGroups) {
+            if (group.anchorId == null) {
+                continue;
+            }
+            int at = centreNode(group.members);
+            String where = String.format(Locale.ROOT, "Fare control at %d, %d, %d",
+                    (int) Math.floor(nx(at)), (int) Math.floor(h[at]), (int) Math.floor(nz(at)));
+            if (!group.paidSide) {
+                result.warnings.add(where + ": no platform behind it");
+            } else if (group.freeSide.length == 0 && !leaks) {
+                result.warnings.add(where + ": nothing in front of it to walk in from (walled off?)");
+            }
+        }
+    }
+
+    /**
+     * Gate-free walking metres from a platform to its nearest fare gate and to the nearest
+     * street source ({@code MAX_COST} when there is none): {gate, street}.
+     */
+    private float[] gateVersusStreet(BitSet zone, BitSet street) {
+        final float[] best = {MAX_COST, MAX_COST};
+        if (zone.isEmpty()) {
+            return best;
+        }
+        generation++;
+        heapSize = 0;
+        for (int node = zone.nextSetBit(0); node >= 0; node = zone.nextSetBit(node + 1)) {
+            relax(node, 0f, -1);
+        }
+        while (heapSize > 0) {
+            float cost = heapKey[0];
+            int node = heapNode[0];
+            pop();
+            if (cost > dist[node]) {
+                continue;
+            }
+            if (cost > MAX_COST || cost > Math.max(best[0], best[1]) && best[0] < MAX_COST && best[1] < MAX_COST) {
+                break;
+            }
+            if (node < n && street.get(node)) {
+                best[1] = Math.min(best[1], cost);
+            }
+            neighbours(node, false, (to, edgeCost, kind) -> {
+                if (isGate(to)) {
+                    best[0] = Math.min(best[0], cost + edgeCost);
+                } else {
+                    relax(to, cost + edgeCost, node);
+                }
+            });
+        }
+        return best;
+    }
+
+    /**
+     * Per street-side anchor: which platforms it reaches, which without steps, and
+     * whether that takes a lift — so a station can say "Exit B has a lift, Exit A is
+     * stairs only". Per fare-control anchor: the anchors whose walks pass it.
+     */
+    private void summariseAccess(LayoutResult result, List<BitSet> zones) {
+        int boardable = 0;
+        for (BitSet zone : zones) {
+            boardable += zone.isEmpty() ? 0 : 1;
+        }
+        for (LayoutResult.Anchor anchor : result.anchors) {
+            String kind = anchor.kind();
+            LayoutResult.Access acc = result.access.get(anchor.id());
+            if (kind.equals("fare") && (acc == null || !acc.entrance)) {
+                continue;
+            }
+            if (!kind.equals("exit") && !kind.equals("opening") && !kind.equals("fare")) {
+                continue;
+            }
+            if (acc == null) {
+                acc = new LayoutResult.Access();
+                result.access.put(anchor.id(), acc);
+            }
+            for (LayoutResult.Link link : result.links) {
+                if (!link.from.equals(anchor.id()) || !link.to.startsWith("platform:")) {
+                    continue;
+                }
+                long platform = Long.parseLong(link.to.substring("platform:".length()));
+                acc.reaches.add(platform);
+                LayoutResult.Link way = link.stepFree ? link : link.stepFreeAlt;
+                if (way != null) {
+                    acc.stepFreeTo.add(platform);
+                    acc.lift |= way.legs.stream().anyMatch(g -> g.kind().equals("lift"));
+                }
+            }
+            if (!acc.reaches.isEmpty()) {
+                acc.stepFree = acc.stepFreeTo.size() >= boardable ? "all" : acc.stepFreeTo.isEmpty() ? "none" : "some";
+            }
+        }
+        for (LayoutResult.Link link : result.links) {
+            noteGates(result, link.from, link);
+            if (link.stepFreeAlt != null) {
+                noteGates(result, link.from, link.stepFreeAlt);
+            }
+        }
+    }
+
+    private static void noteGates(LayoutResult result, String from, LayoutResult.Link link) {
+        for (LayoutResult.Leg leg : link.legs) {
+            if (leg.at() == null || leg.at().equals(from)) {
+                continue;
+            }
+            LayoutResult.Access acc = result.access.get(leg.at());
+            if (acc != null && !acc.usedBy.contains(from)) {
+                acc.usedBy.add(from);
+            }
+        }
+    }
+
     // ============================================================== openings
 
     /**
@@ -864,7 +1323,10 @@ public final class LayoutSolver {
             if (cost > MAX_COST) {
                 break;
             }
-            if (node < n && isStreet(node) && ((flags[node] & F_INSIDE) == 0 || cost >= OPENING_MIN_WALK)) {
+            // inside the station area, open ground BEHIND the gates is a paid plaza, not the street:
+            // walk on through the gates (Atlantic, Morgan: at-grade stations with open-air fare control)
+            boolean inside = node < n && (flags[node] & F_INSIDE) != 0;
+            if (node < n && isStreet(node) && (!inside || (cost >= OPENING_MIN_WALK && !(gated && paid.get(node))))) {
                 candidates.add(new int[]{node, Math.round(cost * 1000)});
                 continue; // the street is where this way out ends
             }
@@ -985,9 +1447,9 @@ public final class LayoutSolver {
             }
             addLeg(legs, kind, meters, dy);
             if (b < n && tag[b] == CellInfo.TAG_FARE && (a >= n || tag[a] != CellInfo.TAG_FARE)) {
-                addLeg(legs, "fare", 0, 0);
+                addLeg(legs, "fare", 0, 0, gateAnchor(b));
             } else if (b < n && tag[b] == CellInfo.TAG_EMERGENCY && (a >= n || tag[a] != CellInfo.TAG_EMERGENCY)) {
-                addLeg(legs, "emergency", 0, 0);
+                addLeg(legs, "emergency", 0, 0, gateAnchor(b));
             }
         }
         // a short landing between two flights is part of the stairs
@@ -1022,7 +1484,7 @@ public final class LayoutSolver {
             }
             meters += m;
             extra += seconds;
-            link.legs.add(new LayoutResult.Leg(kind, m, dy, seconds));
+            link.legs.add(new LayoutResult.Leg(kind, m, dy, seconds, (String) leg[3]));
         }
         link.meters = meters;
         link.extraSeconds = extra;
@@ -1099,7 +1561,17 @@ public final class LayoutSolver {
         }
     }
 
+    /** The fare-control anchor a gate node belongs to, or null. */
+    private String gateAnchor(int node) {
+        int group = fareGroup == null || node >= n ? -1 : fareGroup[node];
+        return group < 0 ? null : fareGroups.get(group).anchorId;
+    }
+
     private static void addLeg(List<Object[]> legs, String kind, double meters, double dy) {
+        addLeg(legs, kind, meters, dy, null);
+    }
+
+    private static void addLeg(List<Object[]> legs, String kind, double meters, double dy, String at) {
         if (!legs.isEmpty()) {
             Object[] last = legs.get(legs.size() - 1);
             if (last[0].equals(kind) && !"fare".equals(kind) && !"emergency".equals(kind)
@@ -1110,7 +1582,7 @@ public final class LayoutSolver {
                 return;
             }
         }
-        legs.add(new Object[]{kind, meters, dy});
+        legs.add(new Object[]{kind, meters, dy, at});
     }
 
     /** Ramer–Douglas–Peucker in 3D, then thinned to {@value #MAX_PATH_POINTS}. */

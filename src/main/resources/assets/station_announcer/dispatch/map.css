@@ -777,6 +777,9 @@ body {
 }
 .exit-note { display: flex; align-items: center; gap: 0; }
 .st-exit.pinned { cursor: pointer; }
+/* the layout scan's verdict on an exit: wheelchair badge (+ "lift"), or "stairs only" */
+.st-exitacc { color: var(--ink-3); font-size: 11px; white-space: nowrap; }
+.st-exitacc .badge-14 { display: inline-block; vertical-align: -3px; margin-right: 2px; }
 .st-exit.pinned:hover b { text-decoration: underline; }
 .exit-dot {
 	display: inline-block; width: 7px; height: 7px; margin-right: 6px; border-radius: 2px;

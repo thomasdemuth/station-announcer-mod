@@ -27,6 +27,8 @@ public final class CellInfo {
     public static final byte TAG_EMERGENCY = 2;
     /** An MTR escalator step: walkable, never step-free. */
     public static final byte TAG_ESCALATOR = 3;
+    /** An MTR lift landing door: walk-through, and where a lift's landing really is. */
+    public static final byte TAG_LIFT_DOOR = 4;
 
     public static final CellInfo AIR = passable(TAG_NONE, false);
     public static final CellInfo FULL = full(TAG_NONE);

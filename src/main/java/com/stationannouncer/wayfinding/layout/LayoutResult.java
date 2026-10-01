@@ -20,7 +20,8 @@ import java.util.Map;
  * backwards, which every consumer derives.</p>
  */
 public final class LayoutResult {
-    public static final int FORMAT = 1;
+    /** 2 = anchors carry access ({@link Access}), fare-control anchors, legs carry {@code at}, region/area. */
+    public static final int FORMAT = 2;
 
     public long stationId;
     public String stationName = "";
@@ -33,13 +34,46 @@ public final class LayoutResult {
     /** Platform id → reachable without stairs/escalators from the street (an exit or an opening). */
     public final Map<Long, Boolean> platformStepFree = new LinkedHashMap<>();
     public final List<String> warnings = new ArrayList<>();
+    /** Anchor id → what riders can do from there (exits, openings, fare control). */
+    public final Map<String, Access> access = new LinkedHashMap<>();
+    /** The scanned box, absolute block coordinates inclusive: {minX, minY, minZ, maxX, maxY, maxZ}; null in tests. */
+    public int[] region;
+    /** How far the scan reached past the MTR station area, in blocks. */
+    public int margin;
+    /** The MTR station area (x/z, inclusive): {minX, minZ, maxX, maxZ}. */
+    public long[] area;
 
-    /** kind: exit | platform | opening. */
+    /** kind: exit | platform | opening | fare (a group of fare gates). */
     public record Anchor(String id, String kind, String name, double x, double y, double z) {
     }
 
-    /** kind: walk | stairs | escalator | lift | fare. {@code seconds} is time on top of walking (lift, gate). */
-    public record Leg(String kind, double meters, double dy, double seconds) {
+    /**
+     * kind: walk | stairs | escalator | lift | fare | emergency. {@code seconds} is time on top of
+     * walking (lift, gate); {@code at} names the anchor a fare/emergency leg passes ("fare:0"), else null.
+     */
+    public record Leg(String kind, double meters, double dy, double seconds, String at) {
+        public Leg(String kind, double meters, double dy, double seconds) {
+            this(kind, meters, dy, seconds, null);
+        }
+    }
+
+    /**
+     * What a rider can do from one street-side anchor (an exit, an opening, a fare-control
+     * entrance), or — for fare control — who walks through it.
+     */
+    public static final class Access {
+        /** all | some | none: platforms reachable without stairs/escalators, of every boardable one; null = reaches none. */
+        public String stepFree;
+        /** Some step-free walk from here rides a lift (the exit is "step-free by lift"). */
+        public boolean lift;
+        /** Platform ids reachable step-free from here. */
+        public final List<Long> stepFreeTo = new ArrayList<>();
+        /** Platform ids reachable at all from here. */
+        public final List<Long> reaches = new ArrayList<>();
+        /** Fare control only: it stands in for the street (the station has no exit and no opening). */
+        public boolean entrance;
+        /** Fare control only: the anchors whose walks pass through it. */
+        public final List<String> usedBy = new ArrayList<>();
     }
 
     public static final class Link {
@@ -70,6 +104,29 @@ public final class LayoutResult {
             a.addProperty("kind", anchor.kind());
             a.addProperty("name", anchor.name());
             a.add("pos", vec(anchor.x(), anchor.y(), anchor.z()));
+            Access info = access.get(anchor.id());
+            if (info != null) {
+                if (info.stepFree != null) {
+                    a.addProperty("stepFree", info.stepFree);
+                }
+                if (info.lift) {
+                    a.addProperty("lift", true);
+                }
+                if (info.entrance) {
+                    a.addProperty("entrance", true);
+                }
+                if (!info.stepFreeTo.isEmpty()) {
+                    a.add("stepFreeTo", ids(info.stepFreeTo));
+                }
+                if (!info.reaches.isEmpty()) {
+                    a.add("reaches", ids(info.reaches));
+                }
+                if (!info.usedBy.isEmpty()) {
+                    JsonArray used = new JsonArray();
+                    info.usedBy.forEach(used::add);
+                    a.add("usedBy", used);
+                }
+            }
             anchorsJson.add(a);
         }
         json.add("anchors", anchorsJson);
@@ -84,7 +141,27 @@ public final class LayoutResult {
         JsonArray warningsJson = new JsonArray();
         warnings.forEach(warningsJson::add);
         json.add("warnings", warningsJson);
+        if (region != null) {
+            JsonObject r = new JsonObject();
+            r.add("min", vec(region[0], region[1], region[2]));
+            r.add("max", vec(region[3], region[4], region[5]));
+            r.addProperty("margin", margin);
+            json.add("region", r);
+        }
+        if (area != null) {
+            JsonArray a = new JsonArray(4);
+            for (long v : area) {
+                a.add(v);
+            }
+            json.add("area", a);
+        }
         return json;
+    }
+
+    private static JsonArray ids(List<Long> ids) {
+        JsonArray out = new JsonArray(ids.size());
+        ids.forEach(id -> out.add(Long.toString(id)));
+        return out;
     }
 
     private static JsonObject linkJson(Link link, boolean withPaths) {
@@ -102,6 +179,9 @@ public final class LayoutResult {
             g.addProperty("dy", round(leg.dy()));
             if (leg.seconds() > 0) {
                 g.addProperty("seconds", round(leg.seconds()));
+            }
+            if (leg.at() != null) {
+                g.addProperty("at", leg.at());
             }
             legs.add(g);
         }

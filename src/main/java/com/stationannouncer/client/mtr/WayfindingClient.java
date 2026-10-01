@@ -67,7 +67,7 @@ public final class WayfindingClient {
                 if (be instanceof ExitMarkerBlockEntity exit) {
                     ExitMarkerScreen screen = new ExitMarkerScreen(exit);
                     client.setScreen(screen);
-                    screen.devShowLayout();
+                    screen.devShowLayout(a.length > 4 ? Integer.parseInt(a[4]) : 0);
                 }
             }
             case "#marker-exit" -> {

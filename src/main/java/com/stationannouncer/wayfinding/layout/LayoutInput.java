@@ -30,6 +30,8 @@ public final class LayoutInput {
     public long areaMaxX;
     public long areaMinZ;
     public long areaMaxZ;
+    /** How far the scanned box reaches past the MTR area (reported with the result only). */
+    public int margin;
     /** Rail centreline samples ({x, y, z}, world units) every ~0.5 blocks of every rail through the region. */
     public final List<double[]> track = new ArrayList<>();
     public final List<Platform> platforms = new ArrayList<>();

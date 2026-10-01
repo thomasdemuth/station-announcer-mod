@@ -227,6 +227,7 @@ const PLACE_CATEGORY_LABELS = {
 	culture: "Culture", sports: "Sports", civic: "Civic", district: "District", other: "Place",
 };
 const EXIT_GREEN = "#1e8e3e";
+const ACCESS_BLUE = "#157ac0";
 
 /* ---- live player GPS (feature 3) ---- */
 /** Player samples kept for interpolation (the feed runs at 4 Hz). */
@@ -3351,7 +3352,8 @@ function exitPointsOf(exits, layout) {
 		const destinations = (e.destinations || []).map((d) => firstLang(String(d == null ? "" : d)).trim()).filter(Boolean);
 		for (const p of e.pins) {
 			if (!Array.isArray(p) || p.length < 3 || !p.every(Number.isFinite)) continue;
-			const point = { name, short: short.replace(/^exit\s*/i, ""), destinations, xz: [p[0], p[2]], y: p[1], anchor: null };
+			const point = { name, short: short.replace(/^exit\s*/i, ""), destinations, xz: [p[0], p[2]], y: p[1], anchor: null,
+				access: null, lift: false };
 			// the layout anchor for THIS marker: same exit name, same spot
 			if (layout) {
 				let best = null, bestD = 3;
@@ -3360,17 +3362,22 @@ function exitPointsOf(exits, layout) {
 					const d = Math.hypot(a.pos[0] - p[0], a.pos[2] - p[2]);
 					if (d < bestD) { bestD = d; best = a; }
 				}
-				if (best) point.anchor = best.id;
+				if (best) { point.anchor = best.id; point.access = best.stepFree; point.lift = best.lift; }
 			}
 			out.push(point);
 		}
 	}
 	if (!out.length && layout) {
-		// no Exit Marker at all: the street openings the scan found stand in for exits
-		for (const a of layout.anchors.values()) {
-			if (a.kind !== "opening") continue;
-			out.push({ name: "Street entrance", short: "", destinations: [], xz: [a.pos[0], a.pos[2]], y: a.pos[1],
-				anchor: a.id, opening: true });
+		// no Exit Marker at all: the street openings the scan found stand in for exits —
+		// or, with none of those either (a station inside a building), its fare control
+		for (const kind of ["opening", "fare"]) {
+			for (const a of layout.anchors.values()) {
+				if (a.kind !== kind || (kind === "fare" && !a.entrance)) continue;
+				out.push({ name: kind === "fare" ? "Fare control" : "Street entrance", short: "", destinations: [],
+					xz: [a.pos[0], a.pos[2]], y: a.pos[1], anchor: a.id, opening: true, fare: kind === "fare",
+					access: a.stepFree, lift: a.lift });
+			}
+			if (out.length) break;
 		}
 	}
 	return out;
@@ -3383,7 +3390,12 @@ function normalizeLayout(raw) {
 	if (!raw || !Array.isArray(raw.anchors) || !Array.isArray(raw.links)) return null;
 	const anchors = new Map();
 	for (const a of raw.anchors) {
-		if (a && a.id && Array.isArray(a.pos)) anchors.set(String(a.id), { id: String(a.id), kind: a.kind, name: String(a.name || ""), pos: a.pos });
+		if (!a || !a.id || !Array.isArray(a.pos)) continue;
+		// stepFree: all | some | none (what an exit / entrance reaches without steps), lift: by lift;
+		// entrance: fare control standing in for the street; usedBy: the anchors walking through it
+		anchors.set(String(a.id), { id: String(a.id), kind: a.kind, name: String(a.name || ""), pos: a.pos,
+			stepFree: a.stepFree || null, lift: !!a.lift, entrance: !!a.entrance,
+			usedBy: Array.isArray(a.usedBy) ? a.usedBy.map(String) : [] });
 	}
 	const links = new Map();
 	for (const l of raw.links) {
@@ -3511,8 +3523,48 @@ function drawExitPins(g, vp, sel, onlyUsed) {
 			g.fill();
 			g.fillStyle = "#fff";
 			g.fillText(e.short, sx, sy + 0.5);
-			pushWorldHit(state.exitHits, sx - w / 2, sy - h / 2, sx + w / 2, sy + h / 2, { stationId: st.id, exit: e });
+			// step-free from this exit (scanned): the wheelchair badge beside it, outline = some platforms only
+			let right = sx + w / 2;
+			if (e.access === "all" || e.access === "some") {
+				drawAccessBadge(g, right + 1.5 * s, sy - h / 2, h, e.access === "some");
+				right += 1.5 * s + h;
+			}
+			pushWorldHit(state.exitHits, sx - w / 2, sy - h / 2, right, sy + h / 2, { stationId: st.id, exit: e });
 		}
+	}
+	g.restore();
+}
+
+/** The wheelchair badge (dispatch/access_badge.svg) on the canvas; `outline` = step-free at some platforms only. */
+let ACCESS_GLYPH = null;
+function drawAccessBadge(g, x, y, size, outline) {
+	const u = size / 150;
+	g.save();
+	g.fillStyle = PALETTE.paper;
+	roundRect(g, x - 1, y - 1, size + 2, size + 2, 31 * u + 1);
+	g.fill();
+	g.fillStyle = outline ? "#fff" : ACCESS_BLUE;
+	roundRect(g, x, y, size, size, 30 * u);
+	g.fill();
+	if (outline) {
+		g.strokeStyle = ACCESS_BLUE;
+		g.lineWidth = Math.max(1, 10 * u);
+		roundRect(g, x + 5 * u, y + 5 * u, size - 10 * u, size - 10 * u, 26 * u);
+		g.stroke();
+	}
+	if (typeof Path2D === "function") {
+		if (!ACCESS_GLYPH) {
+			ACCESS_GLYPH = [
+				"M102.482,65.992h-26.943c-11.211,0-20.332-9.116-20.332-20.322h15c0,2.935,2.393,5.322,5.332,5.322h26.943v15Z",
+				"M119.543,117.349l-18.115-18.11c-5.762-5.767-13.74-9.072-21.895-9.072h-24.326v-42.334h15v27.334h9.326c12.1,0,23.945,4.907,32.5,13.467l18.115,18.11-10.605,10.605Z",
+				"M71.681,128.409c-20.557,0-37.285-16.724-37.285-37.285,0-17.397,11.807-32.319,28.711-36.299l1.719,7.305c-13.506,3.174-22.93,15.098-22.93,28.994,0,16.426,13.359,29.785,29.785,29.785s29.785-13.359,29.785-29.785h7.5c0,20.562-16.729,37.285-37.285,37.285Z",
+			].map((d) => new Path2D(d));
+		}
+		g.translate(x, y);
+		g.scale(u, u);
+		g.fillStyle = outline ? ACCESS_BLUE : "#fff";
+		g.beginPath(); g.arc(62.71, 27.036, 10.659, 0, Math.PI * 2); g.fill();
+		for (const path of ACCESS_GLYPH) g.fill(path);
 	}
 	g.restore();
 }
@@ -6350,8 +6402,16 @@ function stationExits(station) {
 		// add — but never twice, for a server that already spells it out
 		const label = !name ? "Exit" : /exit/i.test(name) ? name : "Exit " + name;
 		const pins = (Array.isArray(e.pins) ? e.pins : []).filter((p) => Array.isArray(p) && p.length >= 3);
+		// what the layout scan says about this exit's markers (best of them): all > some > none
+		let access = null, lift = false;
+		const rank = { none: 0, some: 1, all: 2 };
+		for (const pt of (station && station.exitPoints) || []) {
+			if (pt.opening || pt.name !== label || !pt.access) continue;
+			if (access === null || rank[pt.access] > rank[access]) { access = pt.access; lift = pt.lift; }
+			else if (pt.access === access) lift = lift || pt.lift;
+		}
 		out.push({ name: label, destinations, pinned: pins.length > 0, pin: pins.length ? [pins[0][0], pins[0][2]] : null,
-			text: destinations.length ? label + " · " + destinations.join(", ") : label });
+			text: destinations.length ? label + " · " + destinations.join(", ") : label, access, lift });
 	}
 	return out;
 }
@@ -6452,7 +6512,7 @@ function stationPanelHtml(data) {
 		<div class="st-sec">
 			<div class="st-sectitle">Exits</div>
 			${data.exits.map((e, i) => `<div class="st-exit${e.pinned ? " pinned" : ""}"${e.pinned ? ` role="button" tabindex="0" data-exit="${i}" title="Show on the map"` : ""}>${
-				e.pinned ? '<span class="exit-dot"></span>' : ""}<b>${esc(e.name)}</b>${
+				e.pinned ? '<span class="exit-dot"></span>' : ""}<b>${esc(e.name)}</b>${exitAccessHtml(e)}${
 				e.destinations.length ? ' <span class="st-exitdest">· ' + esc(e.destinations.join(", ")) + "</span>" : ""}</div>`).join("")}
 		</div>` : ""}
 		<div class="st-sec">
@@ -7074,13 +7134,25 @@ function legEndLabel(leg, which) {
 	return which === "to" ? stationLabel(leg.toStation, leg.toPart) : stationLabel(leg.fromStation, leg.fromPart);
 }
 
+/** The scan's verdict on one exit, after its name in the station panel: badge + "lift" / "stairs only". */
+function exitAccessHtml(e) {
+	if (!e || !e.access) return "";
+	if (e.access === "none") return ' <span class="st-exitacc">stairs only</span>';
+	const badge = e.access === "all" ? ACCESS_IMG : ACCESS_IMG_OUTLINE;
+	const title = e.access === "all" ? "Step-free to every platform" : "Step-free to some platforms";
+	return ` <span class="st-exitacc" title="${title}${e.lift ? ", by lift" : ""}">${badge}${e.lift ? "lift" : ""}</span>`;
+}
+
 /** "Leave by Exit A1 · Main St" under a street walk that passes an Exit Marker (feature 11). */
 function exitNoteHtml(leg) {
 	if (!leg || !leg.exit) return "";
 	const steps = leg.exit.legs ? stepsText(leg.exit.legs) : "";
 	const stepsRow = steps ? `<div class="stop-sub steps">${esc(steps)}</div>` : "";
 	if (leg.exit.opening) {
-		return `<div class="stop-sub exit-note">${esc(leg.exit.role === "enter" ? "Enter from the street" : "Out to the street")}</div>${stepsRow}`;
+		const text = leg.exit.fare
+			? (leg.exit.role === "enter" ? "Enter through fare control" : "Out through fare control")
+			: (leg.exit.role === "enter" ? "Enter from the street" : "Out to the street");
+		return `<div class="stop-sub exit-note">${esc(text)}</div>${stepsRow}`;
 	}
 	const verb = leg.exit.role === "enter" ? "Enter by" : "Leave by";
 	const dest = leg.exit.destinations.length ? " · " + leg.exit.destinations.join(", ") : "";
@@ -8558,7 +8630,8 @@ function assembleJourney(label) {
 				// left toward one
 				exit: exit ? { name: exit.name, short: exit.short, destinations: exit.destinations.slice(),
 					xz: exit.xz.slice(), stationId: exit.stationId, role: a.point ? "enter" : "leave",
-					opening: !!exit.opening, legs: exit.legs || null, path: exit.path || null } : null,
+					opening: !!exit.opening, fare: !!exit.fare, access: exit.access || null, lift: !!exit.lift,
+					legs: exit.legs || null, path: exit.path || null } : null,
 				// the scanned steps of a transfer inside one station (feature 12)
 				steps: inside.length ? inside : null,
 				depMs: Math.round(first.startMs), arrMs: Math.round(first.startMs + seconds * 1000),
@@ -9289,26 +9362,28 @@ function buildDemoCity() {
 		bc: {
 			scannedAt: 0,
 			anchors: [
-				{ id: "exit:A", kind: "exit", name: "A", pos: [602.5, 64, 440.5] },
-				{ id: "exit:B", kind: "exit", name: "B", pos: [672.5, 64, 497.5] },
+				{ id: "exit:A", kind: "exit", name: "A", pos: [602.5, 64, 440.5], stepFree: "some", lift: true,
+					stepFreeTo: ["bc_g"], reaches: ["bc_g", "bc_b"] },
+				{ id: "exit:B", kind: "exit", name: "B", pos: [672.5, 64, 497.5], stepFree: "some", stepFreeTo: ["bc_g"], reaches: ["bc_g"] },
+				{ id: "fare:0", kind: "fare", name: "", pos: [626, 56, 458], usedBy: ["exit:A", "exit:B"] },
 				{ id: "platform:bc_g", kind: "platform", name: "1", pos: [636, 56, 468] },
 				{ id: "platform:bc_b", kind: "platform", name: "3", pos: [634, 56, 468] },
 			],
 			links: [
 				{ from: "exit:A", to: "platform:bc_g", meters: 55, extraSeconds: 3, stepFree: false,
 					legs: [{ kind: "walk", meters: 8, dy: 0 }, { kind: "stairs", meters: 12, dy: -8 }, { kind: "walk", meters: 15, dy: 0 },
-						{ kind: "fare", meters: 0, dy: 0, seconds: 3 }, { kind: "walk", meters: 20, dy: 0 }],
+						{ kind: "fare", meters: 0, dy: 0, seconds: 3, at: "fare:0" }, { kind: "walk", meters: 20, dy: 0 }],
 					path: [[602.5, 64, 440.5], [610, 64, 446], [618, 56, 452], [628, 56, 462], [636, 56, 466]],
 					stepFreeAlt: { meters: 80, extraSeconds: 19, stepFree: true,
 						legs: [{ kind: "walk", meters: 30, dy: 0 }, { kind: "lift", meters: 0, dy: -8, seconds: 16 },
-							{ kind: "walk", meters: 30, dy: 0 }, { kind: "fare", meters: 0, dy: 0, seconds: 3 }, { kind: "walk", meters: 20, dy: 0 }],
+							{ kind: "walk", meters: 30, dy: 0 }, { kind: "fare", meters: 0, dy: 0, seconds: 3, at: "fare:0" }, { kind: "walk", meters: 20, dy: 0 }],
 						path: [[602.5, 64, 440.5], [625, 64, 440], [625, 56, 440], [636, 56, 466]] } },
 				{ from: "exit:A", to: "platform:bc_b", meters: 57, extraSeconds: 3, stepFree: false,
 					legs: [{ kind: "walk", meters: 8, dy: 0 }, { kind: "stairs", meters: 12, dy: -8 }, { kind: "walk", meters: 17, dy: 0 },
-						{ kind: "fare", meters: 0, dy: 0, seconds: 3 }, { kind: "walk", meters: 20, dy: 0 }],
+						{ kind: "fare", meters: 0, dy: 0, seconds: 3, at: "fare:0" }, { kind: "walk", meters: 20, dy: 0 }],
 					path: [[602.5, 64, 440.5], [618, 56, 452], [634, 56, 466]] },
 				{ from: "exit:B", to: "platform:bc_g", meters: 60, extraSeconds: 3, stepFree: true,
-					legs: [{ kind: "walk", meters: 25, dy: -8 }, { kind: "fare", meters: 0, dy: 0, seconds: 3 }, { kind: "walk", meters: 35, dy: 0 }],
+					legs: [{ kind: "walk", meters: 25, dy: -8 }, { kind: "fare", meters: 0, dy: 0, seconds: 3, at: "fare:0" }, { kind: "walk", meters: 35, dy: 0 }],
 					path: [[672.5, 64, 497.5], [650, 56, 480], [636, 56, 470]] },
 				{ from: "platform:bc_g", to: "platform:bc_b", meters: 14, extraSeconds: 0, stepFree: false,
 					legs: [{ kind: "stairs", meters: 5, dy: 5 }, { kind: "walk", meters: 4, dy: 0 }, { kind: "stairs", meters: 5, dy: -5 }],

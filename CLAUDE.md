@@ -44,7 +44,7 @@ rig's Gradle wrappers (and sometimes the JVMs) get SIGKILLed — forbid agents f
 entirely and check rig health after each one finishes; an orphaned JVM keeps serving but
 loses the console fifo.
 
-### WAYFINDING: EXIT MARKERS + PLACES + MAP+ (2026-09-29) — READ `WAYFINDING_PLAN.md` — uncommitted, not deployed
+### WAYFINDING: EXIT MARKERS + PLACES + MAP+ (2026-09-29) — READ `WAYFINDING_PLAN.md` — shipped in 3.4.0 (4f3a779); detection round 2 (plan §2b) shipped in 3.4.1
 
 Thomas: custom locations/POIs, real positions for MTR exits (an exit block that feeds a FlatUi
 exit editor: create/edit/remove MTR's exits), both blocks invisible unless holding the brush /
@@ -68,6 +68,11 @@ the plan, awaiting his review — "be deliberate"); MTR-Games integration planne
   layouts/`; Map+ walks through scanned exits/transfers, computed step-free where no manual flag
   (manual wins). Whole Baker City network scanned on the rig in 3.4 s. MTR edit permission =
   creative/survival game mode (spectator rig = read-only editor).
+- DETECTION ROUND 2 (2026-09-30, plan §2b, 3.4.1, deployed to both profiles 2026-09-30): fare-control anchors + paid
+  area, any mod's fare lane counts (step-free too — Thomas), fare gates as fallback entrances,
+  per-exit `stepFree`/`lift`, scan box in the result, overlay colour key + outlines, Layout tab
+  sections, Map+ exit badges. Real-network fixes: paid plazas aren't the street, lift doors bound
+  landings, gates across a platform cut its zone, per-platform bypass warning. 41 layout unit tests.
 - MTR-GAMES API BUILT 2026-09-30 (plan §3): `com.stationannouncer.api` is PURE JAVA on purpose
   (MTR-Games = Mojang mappings) — never put a Minecraft/Fabric/MTR type in it; VERSION only
   grows, additively. Backend `wayfinding/WayfindingApiBackend`; jar via `tools/build_api_jar.sh`;
