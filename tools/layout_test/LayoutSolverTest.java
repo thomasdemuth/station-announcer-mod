@@ -409,6 +409,20 @@ public class LayoutSolverTest {
                     door == (lk == null), legs(lk));
         }
 
+        // ---- 14. the station-page geometry (subway with the lift): floors by kind, the lift, the track
+        com.google.gson.JsonObject geo = r3.geometry;
+        java.util.Set<String> kinds = new java.util.TreeSet<>();
+        r.geometry.getAsJsonArray("floors").forEach(fl -> kinds.add(fl.getAsJsonArray().get(0).getAsString()));
+        System.out.println("   geometry: " + r.geometry.get("rects") + " rects, kinds " + kinds + ", lifts " + geo.getAsJsonArray("lifts")
+                + ", track lines " + geo.getAsJsonArray("track").size() + ", street " + geo.get("street"));
+        check("geometry: platform, paid, free, stairs and fare-gate floors, merged into few rectangles",
+                kinds.containsAll(java.util.List.of("platform:1", "paid", "free", "stairs", "fare:0"))
+                        && r.geometry.get("rects").getAsInt() < 200, kinds + " " + r.geometry.get("rects"));
+        check("geometry: the lift shaft with both landings, the track, street level 70",
+                geo.getAsJsonArray("lifts").size() == 1 && geo.getAsJsonArray("lifts").get(0).getAsJsonObject()
+                        .getAsJsonArray("floors").size() == 2 && geo.getAsJsonArray("track").size() >= 1
+                        && Math.abs(geo.get("street").getAsDouble() - 70) < 0.01, geo);
+
         // ---- 6. JSON round trip shape
         String json = r3.toJson(true).toString();
         check("the result serialises with anchors, links, paths and step-free flags",

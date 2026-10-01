@@ -128,6 +128,8 @@ public final class LayoutScanner {
     private static final LinkedHashSet<Long> QUEUE = new LinkedHashSet<>();
     private static final Map<Long, Set<UUID>> WATCHERS = new HashMap<>();
     private static final Map<Long, String> RESULTS = new ConcurrentHashMap<>();
+    /** Station-page geometry (layouts/geometry/<id>.json), read from disk on first ask. */
+    private static final Map<Long, String> GEOMETRY = new ConcurrentHashMap<>();
     private static final Map<Long, String> FAILURES = new ConcurrentHashMap<>();
     private static volatile Map<Long, Map<Long, Boolean>> stepFree = Map.of();
     private static volatile List<KnownStation> known = List.of();
@@ -166,6 +168,7 @@ public final class LayoutScanner {
         server = minecraftServer;
         dir = minecraftServer.getSavePath(WorldSavePath.ROOT).resolve("station-announcer-addon").resolve("layouts").normalize();
         RESULTS.clear();
+        GEOMETRY.clear();
         FAILURES.clear();
         Map<Long, Map<Long, Boolean>> flags = new HashMap<>();
         try {
@@ -223,6 +226,44 @@ public final class LayoutScanner {
     @Nullable
     public static String layoutJson(long stationId) {
         return RESULTS.get(stationId);
+    }
+
+    /**
+     * Any thread: the station-page geometry JSON (floors / lifts / track / street level, see
+     * {@code LayoutSolver#geometry}) for a scanned station, or null — scanned before 3.4.2 means
+     * no geometry until it is scanned again.
+     */
+    @Nullable
+    public static String geometryJson(long stationId) {
+        String cached = GEOMETRY.get(stationId);
+        if (cached != null || dir == null) {
+            return cached;
+        }
+        Path file = dir.resolve("geometry").resolve(stationId + ".json");
+        try {
+            if (Files.isRegularFile(file)) {
+                String geo = Files.readString(file);
+                GEOMETRY.put(stationId, geo);
+                return geo;
+            }
+        } catch (Exception e) {
+            StationAnnouncer.LOGGER.warn("Could not read station geometry {}", file, e);
+        }
+        return null;
+    }
+
+    /** Any thread: "scanning" / "queued" / "failed: …" / "" for one station (the web station page). */
+    public static String scanState(long stationId) {
+        synchronized (LOCK) {
+            if (stationId == current && running) {
+                return "scanning";
+            }
+            if (QUEUE.contains(stationId)) {
+                return "queued";
+            }
+        }
+        String failure = FAILURES.get(stationId);
+        return failure == null ? "" : "failed: " + failure;
     }
 
     /** Any thread: platform id → step-free from the street, for scanned stations. */
@@ -592,6 +633,18 @@ public final class LayoutScanner {
             Files.move(temp, file, StandardCopyOption.REPLACE_EXISTING, StandardCopyOption.ATOMIC_MOVE);
         }
         RESULTS.put(result.stationId, json);
+        if (result.geometry != null) {
+            String geo = result.geometry.toString();
+            if (dir != null) {
+                Path geoDir = dir.resolve("geometry");
+                Files.createDirectories(geoDir);
+                Path file = geoDir.resolve(result.stationId + ".json");
+                Path temp = geoDir.resolve(result.stationId + ".json.tmp");
+                Files.writeString(temp, geo);
+                Files.move(temp, file, StandardCopyOption.REPLACE_EXISTING, StandardCopyOption.ATOMIC_MOVE);
+            }
+            GEOMETRY.put(result.stationId, geo);
+        }
         Map<Long, Map<Long, Boolean>> next = new HashMap<>(stepFree);
         next.put(result.stationId, Map.copyOf(result.platformStepFree));
         stepFree = Map.copyOf(next);

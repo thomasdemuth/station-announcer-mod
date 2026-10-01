@@ -42,6 +42,12 @@ public final class LayoutResult {
     public int margin;
     /** The MTR station area (x/z, inclusive): {minX, minZ, maxX, maxZ}. */
     public long[] area;
+    /**
+     * The station as simple shapes for the web station page (floors by kind and height, lifts,
+     * track, street level) — stored and served SEPARATELY from {@link #toJson} (Map+ embeds that
+     * for every station; this is only fetched for one station at a time).
+     */
+    public JsonObject geometry;
 
     /** kind: exit | platform | opening | fare (a group of fare gates). */
     public record Anchor(String id, String kind, String name, double x, double y, double z) {

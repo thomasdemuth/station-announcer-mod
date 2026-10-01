@@ -120,6 +120,7 @@ public final class LayoutSolver {
     // lift nodes: index n + k
     private int liftCount;
     private final List<double[]> liftPos = new ArrayList<>();   // {x, y, z}
+    private final List<Long> liftIdOf = new ArrayList<>();        // lift node -> MTR lift id
     private final List<List<int[]>> liftLandings = new ArrayList<>(); // lift node -> {realNode, costMilli}
     private final Map<Integer, List<int[]>> liftsAtNode = new HashMap<>(); // real node -> {liftNode, costMilli}
 
@@ -306,6 +307,7 @@ public final class LayoutSolver {
 
         fareWarnings(result, exitIds, exitSources, openings, zones);
         summariseAccess(result, zones);
+        result.geometry = geometry(result, zones, platformIds);
 
         result.millis = (System.nanoTime() - start) / 1_000_000L;
         return result;
@@ -764,6 +766,7 @@ public final class LayoutSolver {
                 }
                 liftCount++;
                 liftPos.add(new double[]{floor[0] + 0.5, floor[1], floor[2] + 0.5});
+                liftIdOf.add(lift.id());
                 List<int[]> landings = new ArrayList<>();
                 for (int i = 0; i < nodes.size(); i++) {
                     int real = nodes.get(i);
@@ -1286,6 +1289,232 @@ public final class LayoutSolver {
                 acc.usedBy.add(from);
             }
         }
+    }
+
+    // ============================================================= geometry
+
+    /** Within this many blocks of a scanned walk, ground outside the MTR area still counts as the station. */
+    static final double GEOMETRY_NEAR_WALK = 6;
+
+    /**
+     * The station drawn as simple shapes for the web dispatch station page (a clean schematic,
+     * Thomas 2026-10-01): every standing place that belongs to the station, merged into flat
+     * rectangles per kind and height — platform (per platform), paid, free, stairs, escalator,
+     * fare (gate lanes) — plus lift shafts, the track and street level. Absolute world
+     * coordinates. "Belongs to the station": reachable from a platform, and not the street
+     * (open to the sky at street level), and either inside the MTR area or near a scanned walk.
+     * Kept OUT of the main layout JSON (Map+ embeds that for every station).
+     */
+    private com.google.gson.JsonObject geometry(LayoutResult result, List<BitSet> zones, List<String> platformIds) {
+        // reachable from the platforms (any way, gates included)
+        List<Integer> sources = new ArrayList<>();
+        for (BitSet zone : zones) {
+            zone.stream().forEach(sources::add);
+        }
+        BitSet reach = new BitSet(n);
+        if (!sources.isEmpty()) {
+            int[] src = toIntArray(sources);
+            search(src, new float[src.length], false, null);
+            for (int node = 0; node < n; node++) {
+                if (stamp[node] == generation && dist[node] < MAX_COST) {
+                    reach.set(node);
+                }
+            }
+        }
+        // near a scanned walk (exits and walkways outside the MTR area)
+        BitSet nearWalk = new BitSet(qxN * qzN);
+        for (LayoutResult.Link link : result.links) {
+            markNear(nearWalk, link.path);
+            if (link.stepFreeAlt != null) {
+                markNear(nearWalk, link.stepFreeAlt.path);
+            }
+        }
+        // kind per node
+        int[] platformOf = new int[n];
+        java.util.Arrays.fill(platformOf, -1);
+        for (int p = 0; p < zones.size(); p++) {
+            final int index = p;
+            zones.get(p).stream().forEach(node -> platformOf[node] = index);
+        }
+        Map<String, Map<Float, BitSet>> layers = new java.util.LinkedHashMap<>();
+        for (int node = 0; node < n; node++) {
+            if (!reach.get(node) || (flags[node] & F_TRACK) != 0) {
+                continue;
+            }
+            byte f = flags[node];
+            boolean inside = (f & F_INSIDE) != 0;
+            boolean near = nearWalk.get(colOf[node]);
+            boolean streetLike = (f & F_OUTDOOR) != 0 && !Double.isNaN(streetLevel)
+                    && Math.abs(h[node] - streetLevel) <= STREET_BAND;
+            String kind;
+            if (platformOf[node] >= 0) {
+                kind = platformIds.get(platformOf[node]);
+            } else if (isGate(node)) {
+                String anchor = gateAnchor(node);
+                kind = anchor != null ? anchor : "gate";
+            } else if (streetLike || !(inside || near)) {
+                continue;
+            } else if (tag[node] == CellInfo.TAG_ESCALATOR) {
+                kind = "escalator";
+            } else if (isStairNode(node)) {
+                kind = "stairs";
+            } else {
+                kind = paid != null && paid.get(node) ? "paid" : "free";
+            }
+            layers.computeIfAbsent(kind, k -> new java.util.TreeMap<>())
+                    .computeIfAbsent(h[node], k -> new BitSet(qxN * qzN)).set(colOf[node]);
+        }
+        com.google.gson.JsonObject geo = new com.google.gson.JsonObject();
+        if (!Double.isNaN(streetLevel)) {
+            geo.addProperty("street", round2(streetLevel));
+        }
+        com.google.gson.JsonArray floors = new com.google.gson.JsonArray();
+        int rects = 0;
+        for (Map.Entry<String, Map<Float, BitSet>> layer : layers.entrySet()) {
+            for (Map.Entry<Float, BitSet> level : layer.getValue().entrySet()) {
+                for (int[] r : mergeRects(level.getValue())) {
+                    com.google.gson.JsonArray a = new com.google.gson.JsonArray(6);
+                    a.add(layer.getKey());
+                    a.add(round2(in.minX + r[0] * 0.5));
+                    a.add(round2(in.minZ + r[1] * 0.5));
+                    a.add(round2(in.minX + r[2] * 0.5));
+                    a.add(round2(in.minZ + r[3] * 0.5));
+                    a.add(round2(level.getKey()));
+                    floors.add(a);
+                    rects++;
+                }
+            }
+        }
+        geo.add("floors", floors);
+        // lift shafts: one per MTR lift, with the landing heights it serves here
+        Map<Long, com.google.gson.JsonObject> lifts = new java.util.LinkedHashMap<>();
+        for (int k = 0; k < liftCount; k++) {
+            double[] pos = liftPos.get(k);
+            com.google.gson.JsonObject lift = lifts.computeIfAbsent(liftIdOf.get(k), id -> {
+                com.google.gson.JsonObject o = new com.google.gson.JsonObject();
+                o.addProperty("id", Long.toString(id));
+                o.addProperty("x", round2(pos[0]));
+                o.addProperty("z", round2(pos[2]));
+                o.add("floors", new com.google.gson.JsonArray());
+                return o;
+            });
+            lift.getAsJsonArray("floors").add(round2(pos[1]));
+        }
+        com.google.gson.JsonArray liftsJson = new com.google.gson.JsonArray();
+        lifts.values().forEach(liftsJson::add);
+        geo.add("lifts", liftsJson);
+        // the track: rail samples near the station's platforms, as polylines
+        com.google.gson.JsonArray track = new com.google.gson.JsonArray();
+        List<double[]> line = new ArrayList<>();
+        double[] prev = null;
+        for (double[] t : in.track) {
+            if (!nearAnyPlatform(t)) {
+                prev = null;
+                flushLine(track, line);
+                continue;
+            }
+            if (prev != null && Math.hypot(t[0] - prev[0], t[2] - prev[2]) > 1.0) {
+                flushLine(track, line);
+            }
+            line.add(t);
+            prev = t;
+        }
+        flushLine(track, line);
+        geo.add("track", track);
+        geo.addProperty("rects", rects);
+        return geo;
+    }
+
+    /** A stair node: one of its 4 neighbours is a step (rise above a ramp) away. */
+    private boolean isStairNode(int node) {
+        int col = colOf[node];
+        int qx = col % qxN;
+        int qz = col / qxN;
+        for (int d = 0; d < 4; d++) {
+            int other = floorNear(qx + DIRS[d][0], qz + DIRS[d][1], h[node]);
+            if (other >= 0 && Math.abs(h[other] - h[node]) > RAMP) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private void markNear(BitSet near, List<double[]> path) {
+        if (path == null) {
+            return;
+        }
+        for (double[] p : path) {
+            columnsAround(p[0], p[2], GEOMETRY_NEAR_WALK, (col, d) -> near.set(col));
+        }
+        for (int i = 1; i < path.size(); i++) {
+            double[] a = path.get(i - 1);
+            double[] b = path.get(i);
+            double len = Math.hypot(b[0] - a[0], b[2] - a[2]);
+            for (double t = 2; t < len; t += 2) {
+                double x = a[0] + (b[0] - a[0]) * t / len;
+                double z = a[2] + (b[2] - a[2]) * t / len;
+                columnsAround(x, z, GEOMETRY_NEAR_WALK, (col, d) -> near.set(col));
+            }
+        }
+    }
+
+    private boolean nearAnyPlatform(double[] t) {
+        for (LayoutInput.Platform platform : in.platforms) {
+            for (double[] s : platform.samples()) {
+                if (Math.abs(s[0] - t[0]) < 40 && Math.abs(s[2] - t[2]) < 40 && Math.abs(s[1] - t[1]) < 12) {
+                    return true;
+                }
+            }
+        }
+        return false;
+    }
+
+    private static void flushLine(com.google.gson.JsonArray track, List<double[]> line) {
+        if (line.size() >= 2) {
+            com.google.gson.JsonArray pts = new com.google.gson.JsonArray();
+            for (double[] p : simplify(line, 0.2)) {
+                com.google.gson.JsonArray v = new com.google.gson.JsonArray(3);
+                v.add(round2(p[0]));
+                v.add(round2(p[1]));
+                v.add(round2(p[2]));
+                pts.add(v);
+            }
+            track.add(pts);
+        }
+        line.clear();
+    }
+
+    private static double round2(double v) {
+        return Math.round(v * 100.0) / 100.0;
+    }
+
+    /** Greedy rectangles over the quadrant grid: {qx0, qz0, qx1, qz1} with x1/z1 exclusive edges. */
+    private List<int[]> mergeRects(BitSet cells) {
+        List<int[]> out = new ArrayList<>();
+        BitSet left = (BitSet) cells.clone();
+        for (int i = left.nextSetBit(0); i >= 0; i = left.nextSetBit(i + 1)) {
+            int qz = i / qxN;
+            int qx = i % qxN;
+            int x1 = qx;
+            while (x1 + 1 < qxN && left.get(qz * qxN + x1 + 1)) {
+                x1++;
+            }
+            int z1 = qz;
+            grow:
+            while (z1 + 1 < qzN) {
+                for (int x = qx; x <= x1; x++) {
+                    if (!left.get((z1 + 1) * qxN + x)) {
+                        break grow;
+                    }
+                }
+                z1++;
+            }
+            for (int z = qz; z <= z1; z++) {
+                left.clear(z * qxN + qx, z * qxN + x1 + 1);
+            }
+            out.add(new int[]{qx, qz, x1 + 1, z1 + 1});
+        }
+        return out;
     }
 
     // ============================================================== openings

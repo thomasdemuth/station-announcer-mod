@@ -44,6 +44,18 @@ rig's Gradle wrappers (and sometimes the JVMs) get SIGKILLed — forbid agents f
 entirely and check rig health after each one finishes; an orphaned JVM keeps serving but
 loses the console fifo.
 
+### WEB STATION PAGE + 3D SCHEMATIC (2026-10-01) — READ `STATION_PAGE_PLAN.md` — 3.4.3
+
+Thomas: click a station in the web dispatch screen for an in-depth view (his answers are in the
+plan: full page AND richer side panel, clean 3D schematic from the layout scan, headway / delays /
+timetable-vs-reality, boards, exits & access, ops, equipment; web editing of hold rules, dwell
+overrides and service posters; a toggleable line depth profile). Phases 1+2 BUILT: `GET
+/dispatch/api/station` (DispatchStation — MTR timetable departures, analytics headways/delays,
+layout + geometry), `POST stationscan` (paired operator), `station.js` / `station3d.js` /
+`station.css`, three.js r160 VENDORED under `dispatch/vendor/three` (MIT, Thomas approved). Scan
+geometry lives in `layouts/geometry/<id>.json` (kept out of Map+'s payload) — old scans need a
+rescan. NEXT: line depth profile, then equipment + ops editing.
+
 ### WAYFINDING: EXIT MARKERS + PLACES + MAP+ (2026-09-29) — READ `WAYFINDING_PLAN.md` — shipped in 3.4.0 (4f3a779); detection round 2 (plan §2b) shipped in 3.4.1
 
 Thomas: custom locations/POIs, real positions for MTR exits (an exit block that feeds a FlatUi

@@ -121,7 +121,7 @@ public final class DispatchMapData {
     }
 
     /** Exit marker positions in this world: station id -> exit name -> [[x,y,z]…]. */
-    private static Map<Long, Map<String, JsonArray>> exitPins(Simulator simulator) {
+    static Map<Long, Map<String, JsonArray>> exitPins(Simulator simulator) {
         Map<Long, Map<String, JsonArray>> out = new java.util.HashMap<>();
         for (com.stationannouncer.wayfinding.ExitPin pin : com.stationannouncer.wayfinding.WayfindingStore.pins()) {
             if (!pin.pinned() || !simulator.dimension.equals(pin.mtrDim())) {

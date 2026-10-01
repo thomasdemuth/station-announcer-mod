@@ -1440,7 +1440,8 @@ function renderStationPanel(el) {
 	$("detailChip").style.background = colorHex(st.color);
 	$("detailTitle").innerHTML = (st.accessible ? ACCESS_IMG + " " : "") + escapeHtml(firstLang(st.name) || "Station");
 
-	let html = "";
+	// the station page's quick look (station.js): Open button, next departures, exits
+	let html = typeof StationPage !== "undefined" ? StationPage.panelHtml(st) : "";
 	if (st.accessible) {
 		html += `<div class="sta-inbound" style="color:var(--green)">${ACCESS_IMG} Step-free accessible station</div>`;
 	}

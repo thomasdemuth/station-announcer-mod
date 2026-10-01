@@ -92,7 +92,8 @@ public final class DispatchApiServlet extends ServletBase {
     protected void doGet(HttpServletRequest request, HttpServletResponse response) {
         if (unavailable(response) || handleAnalytics(request, response) || handleAlerts(request, response)
                 || handleSatTile(request, response) || handleNav(request, response)
-                || handleInterlineSuggest(request, response) || handleInterlineApply(request, response)) {
+                || handleInterlineSuggest(request, response) || handleInterlineApply(request, response)
+                || handleStationScan(request, response)) {
             return;
         }
         super.doGet(request, response);
@@ -106,7 +107,8 @@ public final class DispatchApiServlet extends ServletBase {
     protected void doPost(HttpServletRequest request, HttpServletResponse response) {
         if (unavailable(response) || handleAnalytics(request, response) || handleAlerts(request, response)
                 || handleSatTile(request, response) || handleNav(request, response)
-                || handleInterlineSuggest(request, response) || handleInterlineApply(request, response)) {
+                || handleInterlineSuggest(request, response) || handleInterlineApply(request, response)
+                || handleStationScan(request, response)) {
             return;
         }
         super.doPost(request, response);
@@ -923,6 +925,76 @@ public final class DispatchApiServlet extends ServletBase {
         return true;
     }
 
+    /**
+     * {@code POST stationscan} {@code {"token", "station"}} — the station page's "Scan this
+     * station" button. A browser paired with {@code /navpair} whose player is an operator
+     * ({@link com.stationannouncer.wayfinding.layout.LayoutScanner#SCAN_PERMISSION}, checked
+     * against the op list so it works while they are offline) queues the scan; the player hears
+     * the result in chat like an in-game scan. Scans still only ever start on a click (Thomas).
+     */
+    private static boolean handleStationScan(HttpServletRequest request, HttpServletResponse response) {
+        if (!"stationscan".equals(firstSegment(request))) {
+            return false;
+        }
+        try {
+            JsonObject body = readJsonBody(request);
+            if (body == null) {
+                sendNavError(response, "malformed request body");
+                return true;
+            }
+            NavStore.Token token = NavStore.use(string(body, "token", 64));
+            if (token == null) {
+                sendNavError(response, "not paired — run /navpair in game and enter the code");
+                return true;
+            }
+            long stationId;
+            try {
+                stationId = Long.parseLong(string(body, "station", 32));
+            } catch (RuntimeException e) {
+                sendNavError(response, "bad station id");
+                return true;
+            }
+            MinecraftServer server = NavStore.server();
+            if (server == null) {
+                sendNavError(response, "server unavailable");
+                return true;
+            }
+            int level = com.stationannouncer.wayfinding.layout.LayoutScanner.SCAN_PERMISSION;
+            Boolean queued = awaitOnServer(server, () -> {
+                ServerPlayerEntity online = server.getPlayerManager().getPlayer(token.playerId());
+                boolean permitted;
+                if (online != null) {
+                    permitted = online.hasPermissionLevel(level);
+                } else {
+                    com.mojang.authlib.GameProfile profile = server.getUserCache() == null ? null
+                            : server.getUserCache().getByUuid(token.playerId()).orElse(null);
+                    permitted = profile != null && server.getPermissionLevel(profile) >= level;
+                }
+                if (!permitted) {
+                    return false;
+                }
+                com.stationannouncer.wayfinding.layout.LayoutScanner.request(java.util.List.of(stationId), token.playerId(), false);
+                return true;
+            }, null);
+            if (queued == null) {
+                sendNavError(response, "server busy, try again");
+                return true;
+            }
+            if (!queued) {
+                sendNavError(response, token.playerName() + " is not an operator — only operators can scan stations");
+                return true;
+            }
+            JsonObject reply = new JsonObject();
+            reply.addProperty("ok", true);
+            reply.addProperty("player", token.playerName());
+            sendNavJson(response, reply);
+        } catch (Throwable throwable) {
+            StationAnnouncer.LOGGER.warn("Station scan endpoint failed ({})", throwable.toString());
+            sendNavError(response, "internal error");
+        }
+        return true;
+    }
+
     /** The interline tooling builds vanilla-Gson JSON; MTR's envelope wants its shaded Gson. */
     private static JsonObject toMtrJson(com.google.gson.JsonObject json) {
         return JsonParser.parseString(json.toString()).getAsJsonObject();
@@ -1008,6 +1080,10 @@ public final class DispatchApiServlet extends ServletBase {
                 analysis.addProperty("webApply", AddonServerConfig.get().depotGroups.webApply);
                 sendResponse.accept(toMtrJson(analysis));
             }
+        } else if ("station".equals(endpoint)) {
+            // The web station page (STATION_PAGE_PLAN.md): built fresh per request on this
+            // simulator thread — the live departures come from the sidings' timetables.
+            sendResponse.accept(DispatchStation.build(simulator, parameters.get("id")));
         } else if ("satmeta".equals(endpoint)) {
             // Where the basemap's tiles are and how they map onto the world. The
             // scanner's snapshot is volatile-immutable, so reading it here is thread-safe
