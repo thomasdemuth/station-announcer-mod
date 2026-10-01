@@ -1,6 +1,7 @@
 package com.stationannouncer.block;
 
 import com.stationannouncer.ModContent;
+import com.stationannouncer.pa.PaText;
 import net.minecraft.block.BlockState;
 import net.minecraft.nbt.NbtCompound;
 import net.minecraft.server.world.ServerWorld;
@@ -24,6 +25,8 @@ import java.util.Set;
 public class ControlBoxBlockEntity extends AbstractPaBlockEntity {
     public static final int MAX_AUTO_SECONDS = 600;
     public static final int MAX_SPEAKERS = 256;
+    /** The whole pool (every message plus separators); one message stays at {@link #MAX_TEXT_LENGTH}. */
+    public static final int MAX_POOL_LENGTH = 4096;
 
     /** With several messages: pick randomly (true) or cycle in order (false). */
     private boolean randomOrder = true;
@@ -118,8 +121,19 @@ public class ControlBoxBlockEntity extends AbstractPaBlockEntity {
     /** Compiled once: String.split would rebuild this pattern on every call. */
     private static final java.util.regex.Pattern SEPARATOR_PATTERN = java.util.regex.Pattern.compile("\\|\\|");
 
-    /** Splits a pool text on "||" into trimmed, non-blank announcements. */
+    /**
+     * Splits a pool text on "||" into the trimmed, non-blank announcements that
+     * can play — entries switched off in the editor ({@code {off}} prefix) are
+     * left out, so picking, displays and "Happening now" all skip them.
+     */
     public static String[] splitMessages(String text) {
+        return Arrays.stream(splitAll(text))
+                .filter(message -> !PaText.isDisabled(message))
+                .toArray(String[]::new);
+    }
+
+    /** Every entry of a pool, switched-off ones included (the editor's view). */
+    public static String[] splitAll(String text) {
         return Arrays.stream(SEPARATOR_PATTERN.split(text))
                 .map(String::trim)
                 .filter(message -> !message.isEmpty())
@@ -273,6 +287,90 @@ public class ControlBoxBlockEntity extends AbstractPaBlockEntity {
 
     public int getSpeakerCount() {
         return speakers.size();
+    }
+
+    @Override
+    protected int maxTextLength() {
+        return MAX_POOL_LENGTH;
+    }
+
+    // -------------------------------------------------------- network editor
+
+    /** Link health of one network member, as the box screen's Network tab shows it. */
+    public static final byte MEMBER_OK = 0;
+    public static final byte MEMBER_NOT_LOADED = 1;
+    public static final byte MEMBER_GONE = 2;
+
+    /** One row of the Network tab: a speaker or display with its live settings. */
+    public record Member(BlockPos pos, boolean display, byte state, int volume, int radius, String name) {
+    }
+
+    /** Server side: every linked speaker and display with what the server knows about it. */
+    public List<Member> describeNetwork() {
+        List<Member> out = new ArrayList<>();
+        if (!(world instanceof ServerWorld serverWorld)) {
+            return out;
+        }
+        for (BlockPos speakerPos : speakers) {
+            if (!serverWorld.isChunkLoaded(speakerPos)) {
+                out.add(new Member(speakerPos, false, MEMBER_NOT_LOADED, 0, 0, ""));
+            } else if (serverWorld.getBlockEntity(speakerPos) instanceof SpeakerBlockEntity speaker) {
+                out.add(new Member(speakerPos, false, MEMBER_OK, speaker.getVolume(), speaker.getRadius(), ""));
+            } else {
+                out.add(new Member(speakerPos, false, MEMBER_GONE, 0, 0, ""));
+            }
+        }
+        for (BlockPos displayPos : displays) {
+            if (!serverWorld.isChunkLoaded(displayPos)) {
+                out.add(new Member(displayPos, true, MEMBER_NOT_LOADED, 0, 0, ""));
+            } else if (serverWorld.getBlockEntity(displayPos) instanceof PaDisplay) {
+                String name = serverWorld.getBlockState(displayPos).getBlock().getTranslationKey();
+                out.add(new Member(displayPos, true, MEMBER_OK, 0, 0, name));
+            } else {
+                out.add(new Member(displayPos, true, MEMBER_GONE, 0, 0, ""));
+            }
+        }
+        return out;
+    }
+
+    /** A speaker's new playback settings from the Network tab. */
+    public record SpeakerSettings(BlockPos pos, int volume, int radius) {
+    }
+
+    /**
+     * Applies the Network tab's Save: unlinks the listed members (clearing the
+     * loaded ones' back-references, exactly like {@link #unlinkAllSpeakers}) and
+     * writes new volume/radius to loaded speakers that really belong to this box.
+     */
+    public void applyNetworkEdit(List<BlockPos> unlink, List<SpeakerSettings> settings) {
+        if (!(world instanceof ServerWorld serverWorld)) {
+            return;
+        }
+        for (BlockPos target : unlink) {
+            if (speakers.remove(target)) {
+                if (serverWorld.isChunkLoaded(target)
+                        && serverWorld.getBlockEntity(target) instanceof SpeakerBlockEntity speaker
+                        && pos.equals(speaker.getControlBoxPos())) {
+                    speaker.clearControlBox();
+                }
+            } else if (displays.remove(target)) {
+                if (serverWorld.isChunkLoaded(target)
+                        && serverWorld.getBlockEntity(target) instanceof PaDisplay display
+                        && pos.equals(display.getPaControlBoxPos())) {
+                    display.setPaControlBoxPos(null);
+                    serverWorld.getChunkManager().markForUpdate(target);
+                }
+            }
+        }
+        for (SpeakerSettings edit : settings) {
+            if (speakers.contains(edit.pos()) && serverWorld.isChunkLoaded(edit.pos())
+                    && serverWorld.getBlockEntity(edit.pos()) instanceof SpeakerBlockEntity speaker
+                    && pos.equals(speaker.getControlBoxPos())
+                    && (speaker.getVolume() != edit.volume() || speaker.getRadius() != edit.radius())) {
+                speaker.applySettings(edit.volume(), edit.radius());
+            }
+        }
+        sync();
     }
 
     // ------------------------------------------------------------ accessors

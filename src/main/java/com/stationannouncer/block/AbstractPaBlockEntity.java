@@ -2,6 +2,7 @@ package com.stationannouncer.block;
 
 import com.stationannouncer.AnnouncerRegistry;
 import com.stationannouncer.net.AnnouncerNetworking;
+import com.stationannouncer.pa.PaText;
 import net.minecraft.block.BlockState;
 import net.minecraft.block.entity.BlockEntity;
 import net.minecraft.block.entity.BlockEntityType;
@@ -139,6 +140,12 @@ public abstract class AbstractPaBlockEntity extends BlockEntity {
         }
     }
 
+    /** An editor's "Fire" with nothing selected: the next announcement, now, ignoring the delay. */
+    public void fireNow() {
+        pendingTicks = 0;
+        fire();
+    }
+
     /** Server-side per-tick countdown for the delayed firing. */
     protected static void tickPending(AbstractPaBlockEntity be) {
         if (be.pendingTicks > 0 && --be.pendingTicks == 0) {
@@ -153,6 +160,21 @@ public abstract class AbstractPaBlockEntity extends BlockEntity {
 
     /** Where the announcement is heard from; empty list = announce nothing. */
     protected abstract List<SoundSource> collectSources(ServerWorld world);
+
+    /**
+     * Server half of {@link PaText}: {@code {station}} becomes the station this
+     * source stands in; {@code {time}} and {@code {shown|spoken}} travel on to
+     * each client. Capped to what the announce packet carries.
+     */
+    protected final String prepare(ServerWorld world, String message) {
+        String filled = PaText.fillServer(world, pos, message.trim());
+        return filled.length() > MAX_TEXT_LENGTH ? filled.substring(0, MAX_TEXT_LENGTH) : filled;
+    }
+
+    /** Longest stored text: one announcement here, a whole pool on the control box. */
+    protected int maxTextLength() {
+        return MAX_TEXT_LENGTH;
+    }
 
     /** Hook: a message was picked and is about to be broadcast (control box pushes it to displays). */
     protected void onFired(ServerWorld world, String message) {
@@ -173,6 +195,7 @@ public abstract class AbstractPaBlockEntity extends BlockEntity {
         if (message == null || message.isBlank()) {
             return;
         }
+        message = prepare(serverWorld, message);
         // Displays are updated even when no speaker ends up in range: the
         // screens should show what the PA is saying regardless of audio reach.
         onFired(serverWorld, message);
@@ -230,10 +253,7 @@ public abstract class AbstractPaBlockEntity extends BlockEntity {
         if (!(world instanceof ServerWorld serverWorld) || message == null || message.isBlank()) {
             return;
         }
-        String announcement = message.trim();
-        if (announcement.length() > MAX_TEXT_LENGTH) {
-            announcement = announcement.substring(0, MAX_TEXT_LENGTH);
-        }
+        String announcement = prepare(serverWorld, PaText.stripDisabled(message.trim()));
         // Displays first, exactly like fire(): screens show what the PA is saying
         // even when no speaker ends up in range.
         onFired(serverWorld, announcement);
@@ -287,7 +307,7 @@ public abstract class AbstractPaBlockEntity extends BlockEntity {
 
     public void setText(String text) {
         String value = text == null ? "" : text;
-        this.text = value.length() > MAX_TEXT_LENGTH ? value.substring(0, MAX_TEXT_LENGTH) : value;
+        this.text = value.length() > maxTextLength() ? value.substring(0, maxTextLength()) : value;
     }
 
     public int getDelaySeconds() {

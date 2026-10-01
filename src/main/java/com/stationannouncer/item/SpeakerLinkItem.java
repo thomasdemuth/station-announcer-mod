@@ -16,6 +16,7 @@ import net.minecraft.util.ActionResult;
 import net.minecraft.util.Formatting;
 import net.minecraft.util.Hand;
 import net.minecraft.util.TypedActionResult;
+import net.minecraft.util.math.BlockBox;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.util.math.Vec3d;
 import net.minecraft.world.World;
@@ -33,7 +34,10 @@ import java.util.List;
  *   <li>With a Speaker selected, right-click a Control Box to link that
  *       speaker to it (the selection is then cleared).</li>
  *   <li>Sneak-right-click a Speaker — unlink it.</li>
- *   <li>Sneak-right-click air — clear the selection.</li>
+ *   <li>With a Control Box selected, sneak-right-click two ordinary blocks —
+ *       the opposite corners of an area: every speaker and PIDS display inside
+ *       it is linked at once (at most {@link #MAX_AREA_SIDE} blocks a side).</li>
+ *   <li>Sneak-right-click air — cancel a half-picked area, else clear the selection.</li>
  * </ul>
  * Linking a speaker that already belongs to another box moves it (both boxes
  * update). All logic runs on the server; distance limit comes from the server
@@ -48,6 +52,10 @@ public class SpeakerLinkItem extends Item {
     private static final String TYPE_DISPLAY = "display";
     /** Pre-1.2.1 selections stored the box position under this key. */
     private static final String NBT_LEGACY_BOX = "SelectedBox";
+    /** First corner of an area link (packed pos); read by the client to preview the box. */
+    public static final String NBT_AREA_CORNER = "AreaCorner";
+    private static final String NBT_AREA_DIM = "AreaDim";
+    public static final int MAX_AREA_SIDE = 128;
 
     private record Selection(BlockPos pos, String dimension, String type) {
     }
@@ -73,6 +81,15 @@ public class SpeakerLinkItem extends Item {
         boolean isSpeaker = world.getBlockEntity(pos) instanceof SpeakerBlockEntity;
         boolean isDisplay = world.getBlockEntity(pos) instanceof PaDisplay;
         if (!isBox && !isSpeaker && !isDisplay) {
+            Selection selection = getSelection(context.getStack());
+            if (player.isSneaking() && selection != null && TYPE_BOX.equals(selection.type())
+                    && sameDimension(selection, world)) {
+                // Area link: an ordinary block is a corner of the area.
+                if (!world.isClient) {
+                    areaCorner(context.getStack(), world, context.getBlockPos(), player, selection.pos());
+                }
+                return ActionResult.success(world.isClient);
+            }
             return ActionResult.PASS;
         }
         if (!world.isClient) {
@@ -113,7 +130,10 @@ public class SpeakerLinkItem extends Item {
             return TypedActionResult.pass(stack);
         }
         if (!world.isClient) {
-            if (getSelection(stack) != null) {
+            if (stack.getNbt() != null && stack.getNbt().contains(NBT_AREA_CORNER)) {
+                clearAreaCorner(stack);
+                feedback(player, Text.translatable("msg.station_announcer.link.area_cancelled"));
+            } else if (getSelection(stack) != null) {
                 clearSelection(stack);
                 feedback(player, Text.translatable("msg.station_announcer.link.cleared"));
             } else {
@@ -283,6 +303,152 @@ public class SpeakerLinkItem extends Item {
         feedback(player, Text.translatable("msg.station_announcer.link.unlinked"));
     }
 
+    // ------------------------------------------------------------ area link
+
+    private static void areaCorner(ItemStack stack, World world, BlockPos pos, PlayerEntity player, BlockPos boxPos) {
+        NbtCompound nbt = stack.getOrCreateNbt();
+        String dimension = world.getRegistryKey().getValue().toString();
+        if (!nbt.contains(NBT_AREA_CORNER) || !dimension.equals(nbt.getString(NBT_AREA_DIM))) {
+            nbt.putLong(NBT_AREA_CORNER, pos.asLong());
+            nbt.putString(NBT_AREA_DIM, dimension);
+            feedback(player, Text.translatable("msg.station_announcer.link.area_first", pos.toShortString(), MAX_AREA_SIDE));
+            return;
+        }
+        BlockPos first = BlockPos.fromLong(nbt.getLong(NBT_AREA_CORNER));
+        BlockBox area = BlockBox.create(first, pos);
+        if (area.getBlockCountX() > MAX_AREA_SIDE || area.getBlockCountY() > MAX_AREA_SIDE
+                || area.getBlockCountZ() > MAX_AREA_SIDE) {
+            feedback(player, Text.translatable("msg.station_announcer.link.area_too_big", MAX_AREA_SIDE));
+            return; // keep the first corner: the player only has to re-pick the second
+        }
+        clearAreaCorner(stack);
+        linkArea(world, player, boxPos, area);
+    }
+
+    /**
+     * Links every loaded speaker and display inside {@code area} to the box,
+     * moving ones that belong to another box (as a single click does), then
+     * reports what happened in one action-bar line.
+     */
+    private static void linkArea(World world, PlayerEntity player, BlockPos boxPos, BlockBox area) {
+        if (!world.isChunkLoaded(boxPos)) {
+            feedback(player, Text.translatable("msg.station_announcer.link.box_not_loaded", boxPos.toShortString()));
+            return;
+        }
+        if (!(world.getBlockEntity(boxPos) instanceof ControlBoxBlockEntity box)) {
+            feedback(player, Text.translatable("msg.station_announcer.link.box_missing"));
+            return;
+        }
+        int maxDistance = ServerConfig.get().maxLinkDistance;
+        double maxDistanceSq = (double) maxDistance * maxDistance;
+        int speakers = 0;
+        int displays = 0;
+        int moved = 0;
+        int already = 0;
+        int tooFar = 0;
+        int full = 0;
+        java.util.Set<BlockPos> otherBoxes = new java.util.HashSet<>();
+        for (int cx = area.getMinX() >> 4; cx <= area.getMaxX() >> 4; cx++) {
+            for (int cz = area.getMinZ() >> 4; cz <= area.getMaxZ() >> 4; cz++) {
+                if (!world.getChunkManager().isChunkLoaded(cx, cz)) {
+                    continue;
+                }
+                for (var be : List.copyOf(world.getChunk(cx, cz).getBlockEntities().values())) {
+                    BlockPos target = be.getPos();
+                    boolean speaker = be instanceof SpeakerBlockEntity;
+                    boolean display = !speaker && be instanceof PaDisplay;
+                    if ((!speaker && !display) || !area.contains(target)) {
+                        continue;
+                    }
+                    if (target.getSquaredDistance(Vec3d.ofCenter(boxPos)) > maxDistanceSq) {
+                        tooFar++;
+                        continue;
+                    }
+                    BlockPos oldBoxPos = speaker ? ((SpeakerBlockEntity) be).getControlBoxPos()
+                            : ((PaDisplay) be).getPaControlBoxPos();
+                    boolean linkedHere = speaker ? box.hasSpeaker(target) : box.hasDisplay(target);
+                    if (boxPos.equals(oldBoxPos) && linkedHere) {
+                        already++;
+                        continue;
+                    }
+                    if (speaker ? !box.addSpeaker(target) && !box.hasSpeaker(target)
+                            : !box.addDisplay(target) && !box.hasDisplay(target)) {
+                        full++;
+                        continue;
+                    }
+                    if (oldBoxPos != null && !oldBoxPos.equals(boxPos)) {
+                        moved++;
+                        if (world.isChunkLoaded(oldBoxPos)
+                                && world.getBlockEntity(oldBoxPos) instanceof ControlBoxBlockEntity oldBox
+                                && (speaker ? oldBox.removeSpeaker(target) : oldBox.removeDisplay(target))) {
+                            otherBoxes.add(oldBoxPos);
+                        }
+                    }
+                    if (speaker) {
+                        ((SpeakerBlockEntity) be).setControlBoxPos(boxPos);
+                        speakers++;
+                    } else {
+                        ((PaDisplay) be).setPaControlBoxPos(boxPos);
+                        syncDisplay(world, target);
+                        displays++;
+                    }
+                }
+            }
+        }
+        for (BlockPos other : otherBoxes) {
+            if (world.getBlockEntity(other) instanceof ControlBoxBlockEntity oldBox) {
+                oldBox.sync();
+            }
+        }
+        box.sync();
+
+        net.minecraft.text.MutableText line = Text.translatable("msg.station_announcer.link.area_done",
+                speakers, displays, boxPos.toShortString());
+        List<Text> notes = new java.util.ArrayList<>();
+        if (moved > 0) {
+            notes.add(Text.translatable("msg.station_announcer.link.area_moved", moved));
+        }
+        if (already > 0) {
+            notes.add(Text.translatable("msg.station_announcer.link.area_already", already));
+        }
+        if (tooFar > 0) {
+            notes.add(Text.translatable("msg.station_announcer.link.area_far", tooFar));
+        }
+        if (full > 0) {
+            notes.add(Text.translatable("msg.station_announcer.link.area_full", full));
+        }
+        if (!notes.isEmpty()) {
+            line.append(" (");
+            for (int i = 0; i < notes.size(); i++) {
+                if (i > 0) {
+                    line.append(", ");
+                }
+                line.append(notes.get(i));
+            }
+            line.append(")");
+        }
+        feedback(player, line);
+    }
+
+    private static void clearAreaCorner(ItemStack stack) {
+        stack.removeSubNbt(NBT_AREA_CORNER);
+        stack.removeSubNbt(NBT_AREA_DIM);
+    }
+
+    /** Client: the half-picked area's first corner, or null. */
+    @Nullable
+    public static BlockPos areaCorner(ItemStack stack) {
+        NbtCompound nbt = stack.getNbt();
+        return nbt != null && nbt.contains(NBT_AREA_CORNER) ? BlockPos.fromLong(nbt.getLong(NBT_AREA_CORNER)) : null;
+    }
+
+    /** Client: the selected control box, or null (renderers show its speakers' reach). */
+    @Nullable
+    public static BlockPos selectedBox(ItemStack stack) {
+        Selection selection = getSelection(stack);
+        return selection != null && TYPE_BOX.equals(selection.type()) ? selection.pos() : null;
+    }
+
     // -------------------------------------------------------------- helpers
 
     @Nullable
@@ -307,6 +473,7 @@ public class SpeakerLinkItem extends Item {
     }
 
     private static void clearSelection(ItemStack stack) {
+        clearAreaCorner(stack);
         stack.removeSubNbt(NBT_SELECTED_POS);
         stack.removeSubNbt(NBT_SELECTED_DIM);
         stack.removeSubNbt(NBT_SELECTED_TYPE);
@@ -327,6 +494,14 @@ public class SpeakerLinkItem extends Item {
                 default -> "tooltip.station_announcer.speaker_link.selected";
             };
             tooltip.add(Text.translatable(key, selection.pos().toShortString()).formatted(Formatting.AQUA));
+            BlockPos corner = areaCorner(stack);
+            if (corner != null) {
+                tooltip.add(Text.translatable("tooltip.station_announcer.speaker_link.area_corner", corner.toShortString())
+                        .formatted(Formatting.GOLD));
+            } else if (TYPE_BOX.equals(selection.type())) {
+                tooltip.add(Text.translatable("tooltip.station_announcer.speaker_link.area_hint")
+                        .formatted(Formatting.GRAY));
+            }
         } else {
             tooltip.add(Text.translatable("tooltip.station_announcer.speaker_link.hint")
                     .formatted(Formatting.GRAY));

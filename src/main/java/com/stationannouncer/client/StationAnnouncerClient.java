@@ -8,13 +8,14 @@ import com.stationannouncer.block.AnnouncerBlockEntity;
 import com.stationannouncer.block.ControlBoxBlockEntity;
 import com.stationannouncer.block.SpeakerBlockEntity;
 import com.stationannouncer.client.gui.AmbienceScreen;
-import com.stationannouncer.client.gui.AnnouncerScreen;
-import com.stationannouncer.client.gui.ControlBoxScreen;
+import com.stationannouncer.client.gui.PaSourceScreen;
 import com.stationannouncer.client.gui.SpeakerScreen;
 import com.stationannouncer.client.render.LinkLineRenderer;
+import com.stationannouncer.client.render.PaRangeRenderer;
 import com.stationannouncer.client.sound.AmbienceSoundManager;
 import com.stationannouncer.client.tts.TtsManager;
 import com.stationannouncer.net.AnnouncerNetworking;
+import com.stationannouncer.pa.PaText;
 import net.fabricmc.api.ClientModInitializer;
 import net.fabricmc.fabric.api.blockrenderlayer.v1.BlockRenderLayerMap;
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
@@ -77,10 +78,8 @@ public class StationAnnouncerClient implements ClientModInitializer {
         // Lets the (common) block classes open the matching client-only screen safely.
         StationAnnouncer.GUI_OPENER = be -> {
             MinecraftClient client = MinecraftClient.getInstance();
-            if (be instanceof ControlBoxBlockEntity box) {
-                client.setScreen(new ControlBoxScreen(box));
-            } else if (be instanceof AnnouncerBlockEntity announcer) {
-                client.setScreen(new AnnouncerScreen(announcer));
+            if (be instanceof ControlBoxBlockEntity || be instanceof AnnouncerBlockEntity) {
+                client.setScreen(new PaSourceScreen((AbstractPaBlockEntity) be));
             } else if (be instanceof SpeakerBlockEntity speaker) {
                 client.setScreen(new SpeakerScreen(speaker));
             } else if (be instanceof AmbienceBlockEntity ambience) {
@@ -190,6 +189,44 @@ public class StationAnnouncerClient implements ClientModInitializer {
                                     // (#poster-list <disruptionId> / #poster-editor <posterId> /
                                     // #poster-picker <x> <y> <z>) so the rig can screenshot them.
                                     com.stationannouncer.client.mtraddon.PosterDevHooks.open(client, cmd);
+                                } else if (cmd.startsWith("#pa-fire ") || cmd.startsWith("#pa-net ")) {
+                                    // Dev-only: send the editor's packets without clicking —
+                                    // #pa-fire x y z [message…] / #pa-net bx by bz sx sy sz unlink|vol radius.
+                                    String[] a = cmd.split("\\s+", cmd.startsWith("#pa-fire ") ? 5 : 9);
+                                    net.minecraft.network.PacketByteBuf buf = net.fabricmc.fabric.api.networking.v1.PacketByteBufs.create();
+                                    buf.writeBlockPos(new BlockPos(Integer.parseInt(a[1]), Integer.parseInt(a[2]), Integer.parseInt(a[3])));
+                                    if (cmd.startsWith("#pa-fire ")) {
+                                        buf.writeString(a.length > 4 ? a[4] : "", AbstractPaBlockEntity.MAX_TEXT_LENGTH);
+                                        ClientPlayNetworking.send(AnnouncerNetworking.FIRE_NOW_C2S, buf);
+                                    } else {
+                                        BlockPos target = new BlockPos(Integer.parseInt(a[4]), Integer.parseInt(a[5]), Integer.parseInt(a[6]));
+                                        boolean unlink = a[7].equals("unlink");
+                                        buf.writeVarInt(unlink ? 1 : 0);
+                                        if (unlink) {
+                                            buf.writeBlockPos(target);
+                                        }
+                                        buf.writeVarInt(unlink ? 0 : 1);
+                                        if (!unlink) {
+                                            buf.writeBlockPos(target);
+                                            buf.writeVarInt(Integer.parseInt(a[7]));
+                                            buf.writeVarInt(Integer.parseInt(a[8]));
+                                        }
+                                        ClientPlayNetworking.send(AnnouncerNetworking.NETWORK_EDIT_C2S, buf);
+                                    }
+                                } else if (cmd.equals("#pa-close")) {
+                                    client.setScreen(null);
+                                } else if (cmd.startsWith("#pa-gui ")) {
+                                    // Dev-only: open a PA block's screen (control box, announcer,
+                                    // speaker) without a mouse: #pa-gui x y z [card N | network | templates | chime].
+                                    String[] a = cmd.split("\\s+");
+                                    net.minecraft.block.entity.BlockEntity be = client.world.getBlockEntity(new BlockPos(
+                                            Integer.parseInt(a[1]), Integer.parseInt(a[2]), Integer.parseInt(a[3])));
+                                    if (be != null) {
+                                        StationAnnouncer.GUI_OPENER.accept(be);
+                                        if (a.length > 4 && client.currentScreen instanceof PaSourceScreen pa) {
+                                            pa.devShow(a[4], a.length > 5 ? a[5] : ""); // card N | network | templates | chime
+                                        }
+                                    }
                                 } else {
                                     client.player.networkHandler.sendChatCommand(
                                             cmd.startsWith("/") ? cmd.substring(1) : cmd);
@@ -212,6 +249,8 @@ public class StationAnnouncerClient implements ClientModInitializer {
 
         // White link lines between control boxes and speakers while the tool is held.
         LinkLineRenderer.register();
+        // Speaker reach rings and the area-link box (Speaker Link held / speaker screen open).
+        PaRangeRenderer.register();
 
         // The bench seat entity is invisible — nothing to draw.
         net.fabricmc.fabric.api.client.rendering.v1.EntityRendererRegistry.register(
@@ -232,6 +271,19 @@ public class StationAnnouncerClient implements ClientModInitializer {
                     boolean playChime = buf.readBoolean();
                     String chimeSound = buf.readString(AbstractPaBlockEntity.MAX_CHIME_SOUND_LENGTH);
                     client.execute(() -> handleAnnouncement(client, text, volume, pos, showChat, playChime, chimeSound));
+                });
+
+        // The control box screen's Network tab: every member's health and settings.
+        ClientPlayNetworking.registerGlobalReceiver(AnnouncerNetworking.NETWORK_INFO_S2C,
+                (client, handler, buf, responseSender) -> {
+                    BlockPos boxPos = buf.readBlockPos();
+                    int count = Math.min(buf.readVarInt(), AnnouncerNetworking.MAX_NETWORK_ROWS);
+                    List<ControlBoxBlockEntity.Member> members = new ArrayList<>();
+                    for (int i = 0; i < count; i++) {
+                        members.add(new ControlBoxBlockEntity.Member(buf.readBlockPos(), buf.readBoolean(),
+                                buf.readByte(), buf.readVarInt(), buf.readVarInt(), buf.readString(128)));
+                    }
+                    client.execute(() -> PaSourceScreen.receiveNetworkInfo(boxPos, members));
                 });
 
         ClientTickEvents.END_CLIENT_TICK.register(client -> {
@@ -262,6 +314,7 @@ public class StationAnnouncerClient implements ClientModInitializer {
             TtsManager.stop();
             currentChime = null; // the sound engine stops world sounds itself
             LinkLineRenderer.invalidate();
+            PaRangeRenderer.clearPreview();
         });
     }
 
@@ -272,12 +325,47 @@ public class StationAnnouncerClient implements ClientModInitializer {
         }
         interruptPlayback(client);
         ClientConfig config = ClientConfig.get();
+        // The client half of PaText: the clock, then "{shown|spoken}" split into
+        // what chat shows and what the voice says.
+        String filled = text.contains(PaText.TIME) ? PaText.fill(text, null, PaText.clock()) : text;
+        String shown = PaText.shown(filled);
+        String spoken = PaText.spoken(filled);
 
-        if (showChat) {
+        if (showChat && !shown.isBlank()) {
             Text message = Text.literal("[PA] ").formatted(Formatting.GOLD, Formatting.BOLD)
-                    .append(Text.literal(text).formatted(Formatting.YELLOW));
+                    .append(Text.literal(shown).formatted(Formatting.YELLOW));
             client.player.sendMessage(message, config.useActionBar());
         }
+        play(client, spoken, volume, playChime, chimeSound);
+    }
+
+    /**
+     * An editor's ▶: plays one message on THIS client only — chime and voice,
+     * no chat — exactly as a listener at {@code volume} would hear it.
+     * {@code {station}} is looked up client-side at {@code stationPos}.
+     */
+    public static void previewLocally(String raw, @org.jetbrains.annotations.Nullable BlockPos stationPos,
+                                      float volume, boolean playChime, String chimeSound) {
+        MinecraftClient client = MinecraftClient.getInstance();
+        if (client.player == null) {
+            return;
+        }
+        String text = PaText.stripDisabled(raw);
+        if (text.contains(PaText.STATION)) {
+            text = PaText.fill(text, PaText.clientStationAt(stationPos), null);
+        }
+        text = PaText.fill(text, null, PaText.clock());
+        interruptPlayback(client);
+        play(client, PaText.spoken(text), Math.max(volume, TtsManager.AUDIBLE_THRESHOLD), playChime, chimeSound);
+    }
+
+    /** Stops whatever PA audio is playing on this client (an editor's ■). */
+    public static void stopPreview() {
+        interruptPlayback(MinecraftClient.getInstance());
+    }
+
+    private static void play(MinecraftClient client, String spoken, float volume, boolean playChime, String chimeSound) {
+        ClientConfig config = ClientConfig.get();
 
         boolean audible = volume >= TtsManager.AUDIBLE_THRESHOLD;
         boolean chime = audible && playChime && config.enableChime;
@@ -298,8 +386,8 @@ public class StationAnnouncerClient implements ClientModInitializer {
                     SoundInstance.AttenuationType.NONE, 0.0, 0.0, 0.0, true);
             client.getSoundManager().play(currentChime);
         }
-        if (audible && config.enableTts) {
-            schedule(chime ? ModContent.chimeLeadTicks(chimeSound) : 1, () -> TtsManager.speak(text, volume));
+        if (audible && config.enableTts && !spoken.isBlank()) {
+            schedule(chime ? ModContent.chimeLeadTicks(chimeSound) : 1, () -> TtsManager.speak(spoken, volume));
         }
     }
 

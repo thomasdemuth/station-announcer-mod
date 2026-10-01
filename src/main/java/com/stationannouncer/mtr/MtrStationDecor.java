@@ -261,6 +261,9 @@ public final class MtrStationDecor {
     }
 
     public static void register() {
+        // {station} in PA announcements: a snapshot of MTR's station areas.
+        PaStationNames.register();
+
         // The turnstile keeps a per-player fare cooldown map; drop it when the
         // server stops (mainly for singleplayer, where the JVM outlives worlds).
         net.fabricmc.fabric.api.event.lifecycle.v1.ServerLifecycleEvents.SERVER_STOPPED.register(

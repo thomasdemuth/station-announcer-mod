@@ -331,6 +331,32 @@ public final class FlatUi {
             changed();
         }
 
+        /** The selected text, or "" (the PA editor's "Say as…" wraps it). */
+        public String getSelectedText() {
+            return hasSelection() ? text.substring(selStart(), selEnd()) : "";
+        }
+
+        /** Selects [from, to) — or just places the caret when they are equal. */
+        public void select(int from, int to) {
+            int a = MathHelper.clamp(from, 0, text.length());
+            int b = MathHelper.clamp(to, 0, text.length());
+            anchor = a == b ? -1 : a;
+            cursor = b;
+            blinkStart = System.currentTimeMillis();
+        }
+
+        /** Caret index into the text. */
+        public int getCursor() {
+            clampState();
+            return cursor;
+        }
+
+        /** Wrapped line count at the current width (the PA editor grows a card to fit). */
+        public int lineCount() {
+            ensureWrapped();
+            return lines.size();
+        }
+
         /** Inserts a token, padding it with spaces so it reads as a word. */
         public void insertToken(String token) {
             String before = text.substring(0, hasSelection() ? selStart() : cursor);

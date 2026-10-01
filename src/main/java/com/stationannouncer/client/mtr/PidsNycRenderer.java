@@ -319,6 +319,9 @@ public class PidsNycRenderer implements BlockEntityRenderer<PidsBlockEntity> {
             if (world != null && world.getBlockEntity(boxPos) instanceof ControlBoxBlockEntity box) {
                 String[] messages = ControlBoxBlockEntity.splitMessages(box.getText());
                 if (messages.length > 0) {
+                    for (int i = 0; i < messages.length; i++) {
+                        messages[i] = com.stationannouncer.pa.PaText.forDisplay(messages[i], boxPos);
+                    }
                     return messages;
                 }
             }
@@ -557,7 +560,7 @@ public class PidsNycRenderer implements BlockEntityRenderer<PidsBlockEntity> {
      */
     private void paintHanging(CanvasPainter painter, PidsBlockEntity entity, List<ArrivalResponse> arrivals,
                               boolean noPlatforms, int canvasHeight) {
-        String live = entity.getLiveMessage();
+        String live = com.stationannouncer.pa.PaText.forDisplay(entity.getLiveMessage(), null);
         long liveElapsed = Math.max(0, System.currentTimeMillis() - entity.getLiveStart());
         boolean announcing = !live.isEmpty()
                 && liveElapsed * CanvasPainter.SCROLL_ONCE_SPEED * 9 / 1000.0f < 116 + painter.width(live, 9);

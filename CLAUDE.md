@@ -44,6 +44,49 @@ rig's Gradle wrappers (and sometimes the JVMs) get SIGKILLed — forbid agents f
 entirely and check rig health after each one finishes; an orphaned JVM keeps serving but
 loses the console fifo.
 
+### PA / SPEAKER SYSTEM ON FLATUI (2026-10-01) — built + rig-verified, shipped in 3.4.5
+
+Thomas picked all of: FlatUi Control Box, speaker screen + range preview, area linking,
+spoken text + tokens, plus saved templates. The three vanilla-widget screens
+(ControlBoxScreen / AnnouncerScreen / ChimeDropdown) are DELETED.
+- `pa/PaText` (common): `{station}` filled SERVER-side at fire time from the source's pos
+  (`mtr/PaStationNames` = 10 s snapshot of MTR station rects per dimension, lookup on the
+  server thread); `{time}` filled on each CLIENT (LocalTime, matches railroad PIDS);
+  `{shown|spoken}` split client-side (chat/PIDS = shown, TTS = spoken); `{off}` prefix on a
+  pool entry = switched off (`ControlBoxBlockEntity.splitMessages` skips it, `splitAll` keeps
+  it). Storage and the announce packet are UNCHANGED — old pools load as-is. Client station
+  hook installed in MtrPidsClient (`PaText.clientStation`, separate field from the server one:
+  integrated server shares the JVM). PIDS live message + "Happening now" go through
+  `PaText.forDisplay`.
+- Pool cap: `ControlBoxBlockEntity.MAX_POOL_LENGTH` 4096 (`maxTextLength()` hook on the base);
+  `ServerConfig.maxTextLength` now caps EACH message (`capPool`).
+- New packets (AnnouncerNetworking): `fire_now` (pos + message; "" = next pool message,
+  ignores delay; 1 s per-player cooldown; goes through `announceExternal`), `network_query` /
+  `network_info` (ControlBoxBlockEntity.Member rows: OK / not loaded / gone + volume/radius),
+  `network_edit` (unlink list + speaker settings, validated against the box's own lists).
+- Client: `client/gui/FlatPaScreen` (shared hit-list/slider/switch/toast/modal base),
+  `PaSourceScreen` (box AND announcer: message cards with switch/↑↓×/▶ local preview via
+  `StationAnnouncerClient.previewLocally`, token buttons + "Say as…", Reads:/Says: lines;
+  Settings tab; Network tab; Templates + chime popups), `SpeakerScreen` (low compact panel,
+  live ring, "you would hear it at N%", Test here, Copy/Paste), `PaTemplates`
+  (`config/station_announcer/pa_templates.json` + `_hidden.json`, built-ins deletable),
+  `client/render/PaRangeRenderer` (sphere ∩ player-height ring; area-link box + member marks).
+  FlatUi.TextBox gained getSelectedText/select/getCursor/lineCount.
+- Speaker Link area link: with a BOX selected, sneak-click two non-PA blocks (NBT
+  `AreaCorner`/`AreaDim`, ≤128 a side) → links every speaker/display inside, moves ones from
+  other boxes, one summary action-bar line. Sneak-click air cancels the corner first.
+- Dev hooks (StationAnnouncerClient, run/commands.txt): `#pa-gui x y z [card N|network|
+  templates|chime]`, `#pa-close`, `#pa-fire x y z [msg]`, `#pa-net bx by bz sx sy sz
+  unlink|vol radius`. (The `#gui`/`#hud` hooks seen uncommitted at session start vanished
+  mid-session — another session's, not restored.)
+- RIG-VERIFIED (world_baker, sky test scene x -4..14 z -64..-50 y 149..152 over Albany,
+  screenshots 2026-10-01 12:58–13:06): every screen/popup renders at 427x240; `/announce`
+  gave "[PA] Welcome to Albany." / "Change here for Bklyn trains." (off entry skipped) /
+  "The time is 13:03."; fire_now on the announcer with tokens; network_edit set 40%/30 m and
+  unlinked a speaker (its own link cleared); rings + area box draw. NOT verified (needs a
+  mouse): every click/drag in the editors, the area link's real two clicks, ▶ preview / TTS
+  audio, template save/apply round trip.
+
 ### WEB STATION PAGE + 3D SCHEMATIC (2026-10-01) — READ `STATION_PAGE_PLAN.md` — 3.4.3
 
 Thomas: click a station in the web dispatch screen for an in-depth view (his answers are in the

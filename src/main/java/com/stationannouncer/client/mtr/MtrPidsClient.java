@@ -66,6 +66,12 @@ public final class MtrPidsClient {
     }
 
     public static void register() {
+        // {station} in PA previews and on PIDS: the client's cached station lookup.
+        com.stationannouncer.pa.PaText.clientStation = pos -> {
+            org.mtr.core.data.Station station = MtrDataCache.station(pos);
+            return station == null ? null : RailroadRouteData.firstLang(station.getName());
+        };
+
         // ESI theme: several bays are cutout (clear glass, mesh, lattice); the rest render the same in cutout
         for (net.minecraft.block.Block esi : com.stationannouncer.mtr.EsiKit.BLOCKS) {
             net.fabricmc.fabric.api.blockrenderlayer.v1.BlockRenderLayerMap.INSTANCE.putBlock(esi,

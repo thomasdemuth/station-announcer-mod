@@ -52,7 +52,10 @@ public class StationAnnouncer implements ModInitializer {
 
         // Drop all tracked announcers when a server stops (mainly relevant for
         // singleplayer, where the JVM outlives the integrated server).
-        ServerLifecycleEvents.SERVER_STOPPED.register(server -> AnnouncerRegistry.clear());
+        ServerLifecycleEvents.SERVER_STOPPED.register(server -> {
+            AnnouncerRegistry.clear();
+            AnnouncerNetworking.clearCooldowns();
+        });
 
         LOGGER.info("Station Announcer initialized");
     }
