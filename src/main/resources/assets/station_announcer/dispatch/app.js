@@ -315,7 +315,18 @@ function openStream() {
 		if (ev.data) showBanner(JSON.parse(ev.data).error || "stream error");
 	});
 	es.onopen = () => hideBanner();
-	es.onerror = () => setStatus("offline"); // EventSource retries on its own
+	es.onerror = () => {
+		setStatus("offline");
+		// A network drop is retried by the browser, but an HTTP error (503 while the
+		// world is still starting or already stopping) CLOSES the EventSource for good —
+		// a tab left open across a game restart then sat on OFFLINE until reloaded.
+		if (es.readyState !== EventSource.CLOSED) return;
+		setTimeout(() => {
+			if (state.es !== es) return;   // a dimension switch already replaced it
+			refetchNetwork();              // the world may have changed while we were away
+			openStream();
+		}, 3000);
+	};
 }
 
 function handleFrame(f, isFull) {

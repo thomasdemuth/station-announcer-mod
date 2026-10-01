@@ -2,6 +2,7 @@ package com.stationannouncer.client.mtr;
 
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
+import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
@@ -15,14 +16,19 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 /**
  * The player's own sign templates, kept client-side in
  * {@code config/station_announcer/sign_templates.json} (name → one sign face
  * in the sign's own JSON) so they follow the player across worlds and servers
- * — the Bridge Creator's user presets, for signs.
+ * — the Bridge Creator's user presets, for signs. Built-in templates the player
+ * deleted are remembered by name in {@code sign_templates_hidden.json} beside it,
+ * so they stay gone until restored (a separate file: the template file maps names
+ * to signs and older builds read every object in it as one).
  */
 @Environment(EnvType.CLIENT)
 public final class SignUserTemplates {
@@ -31,6 +37,7 @@ public final class SignUserTemplates {
 
     private static final Gson GSON = new GsonBuilder().setPrettyPrinting().create();
     private static Map<String, SignSpec> templates;
+    private static Set<String> hiddenPresets;
 
     private SignUserTemplates() {
     }
@@ -61,8 +68,71 @@ public final class SignUserTemplates {
         save();
     }
 
+    public static synchronized boolean isPresetHidden(String name) {
+        return hidden().contains(name);
+    }
+
+    public static synchronized void hidePreset(String name) {
+        if (hidden().add(name)) {
+            saveHidden();
+        }
+    }
+
+    /** Brings every deleted built-in template back. */
+    public static synchronized void restorePresets() {
+        hidden().clear();
+        saveHidden();
+    }
+
+    private static Set<String> hidden() {
+        if (hiddenPresets == null) {
+            hiddenPresets = loadHidden();
+        }
+        return hiddenPresets;
+    }
+
     private static Path path() {
         return FabricLoader.getInstance().getConfigDir().resolve("station_announcer").resolve("sign_templates.json");
+    }
+
+    private static Path hiddenPath() {
+        return path().resolveSibling("sign_templates_hidden.json");
+    }
+
+    private static Set<String> loadHidden() {
+        Set<String> loaded = new LinkedHashSet<>();
+        Path path = hiddenPath();
+        try {
+            if (Files.exists(path)) {
+                JsonElement root = JsonParser.parseString(Files.readString(path));
+                if (root.isJsonArray()) {
+                    root.getAsJsonArray().forEach(element -> {
+                        if (element.isJsonPrimitive()) {
+                            loaded.add(element.getAsString());
+                        }
+                    });
+                }
+            }
+        } catch (Exception e) {
+            StationAnnouncer.LOGGER.warn("Could not read deleted sign templates from {}", path, e);
+        }
+        return loaded;
+    }
+
+    private static void saveHidden() {
+        Path path = hiddenPath();
+        try {
+            if (hiddenPresets.isEmpty()) {
+                Files.deleteIfExists(path);
+                return;
+            }
+            JsonArray root = new JsonArray();
+            hiddenPresets.forEach(root::add);
+            Files.createDirectories(path.getParent());
+            Files.writeString(path, GSON.toJson(root));
+        } catch (Exception e) {
+            StationAnnouncer.LOGGER.warn("Could not write deleted sign templates to {}", path, e);
+        }
     }
 
     private static Map<String, SignSpec> load() {

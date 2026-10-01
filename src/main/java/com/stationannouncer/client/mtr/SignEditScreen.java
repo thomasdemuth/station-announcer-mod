@@ -127,6 +127,8 @@ public class SignEditScreen extends Screen {
     private int structureContent;
     private boolean addMenuOpen;
     private boolean templateMenuOpen;
+    /** Your template whose × was clicked once — the second click deletes it (it cannot be restored). */
+    private String armedTemplateDelete;
 
     /** {x, y, w, h, id, arg, arg2}. */
     private final List<int[]> hits = new ArrayList<>();
@@ -165,6 +167,8 @@ public class SignEditScreen extends Screen {
     private static final int HIT_USER_TEMPLATE = 33;
     private static final int HIT_USER_TEMPLATE_DELETE = 34;
     private static final int HIT_TEMPLATE_SAVE = 35;
+    private static final int HIT_PRESET_DELETE = 36;
+    private static final int HIT_PRESETS_RESTORE = 37;
 
     /** The copied face: survives closing the editor, so a sign can be pasted onto another block. */
     private static SignSpec clipboard;
@@ -686,9 +690,11 @@ public class SignEditScreen extends Screen {
             focus(templateBox);
             return;
         }
+        boolean replacing = SignUserTemplates.all().containsKey(name);
         if (SignUserTemplates.put(name, draft().build())) {
             templateBox.load("");
             focus(null);
+            toast((replacing ? "Replaced template \"" : "Saved template \"") + name + "\"");
         } else {
             toast("Template list is full — delete one first");
         }
@@ -798,6 +804,8 @@ public class SignEditScreen extends Screen {
     }
 
     private void handle(int id, int arg, int arg2, double mx, double my) {
+        String armed = armedTemplateDelete;
+        armedTemplateDelete = null;   // any other click disarms a pending delete
         switch (id) {
             case HIT_CARD -> select(arg, arg2);
             case HIT_MOVE_UP -> moveSelection(-1);
@@ -826,9 +834,21 @@ public class SignEditScreen extends Screen {
             case HIT_USER_TEMPLATE_DELETE -> {
                 List<String> names = SignUserTemplates.names();
                 if (arg >= 0 && arg < names.size()) {
-                    SignUserTemplates.remove(names.get(arg));
+                    String name = names.get(arg);
+                    if (name.equals(armed)) {
+                        SignUserTemplates.remove(name);
+                        toast("Deleted template \"" + name + "\"");
+                    } else {
+                        armedTemplateDelete = name;
+                    }
                 }
             }
+            case HIT_PRESET_DELETE -> {
+                if (arg >= 0 && arg < SignTemplates.NAMES.length) {
+                    SignUserTemplates.hidePreset(SignTemplates.NAMES[arg]);
+                }
+            }
+            case HIT_PRESETS_RESTORE -> SignUserTemplates.restorePresets();
             case HIT_TEMPLATE_SAVE -> saveTemplate();
             case HIT_COPY -> copyFace();
             case HIT_PASTE -> pasteFace();
@@ -1385,12 +1405,21 @@ public class SignEditScreen extends Screen {
             FlatUi.heading(c, textRenderer, "Your templates", bx, y);
             y += 12;
             List<String> mine = SignUserTemplates.names();
+            if (mine.isEmpty()) {
+                c.drawText(textRenderer, textRenderer.trimToWidth("Name this face and Save", bw), bx, y + 1,
+                        FlatUi.TEXT_FAINT, false);
+                y += 12;
+            }
             for (int i = 0; i < mine.size(); i++) {
-                FlatUi.button(c, textRenderer, textRenderer.trimToWidth(mine.get(i), bw - FIELD - 10), bx, y, bw - FIELD - 2,
+                // Your own templates cannot be restored, so × asks once: it widens to "Delete?".
+                boolean armed = mine.get(i).equals(armedTemplateDelete);
+                int delW = armed ? Math.min(44, bw / 2) : FIELD;
+                FlatUi.button(c, textRenderer, textRenderer.trimToWidth(mine.get(i), bw - delW - 10), bx, y, bw - delW - 2,
                         FIELD, mx, my, ButtonStyle.FLAT);
-                hit(bx, y, bw - FIELD - 2, FIELD, HIT_USER_TEMPLATE, i, 0);
-                FlatUi.button(c, textRenderer, "×", bx + bw - FIELD, y, FIELD, FIELD, mx, my, ButtonStyle.DANGER);
-                hit(bx + bw - FIELD, y, FIELD, FIELD, HIT_USER_TEMPLATE_DELETE, i, 0);
+                hit(bx, y, bw - delW - 2, FIELD, HIT_USER_TEMPLATE, i, 0);
+                FlatUi.button(c, textRenderer, armed ? "Delete?" : "×", bx + bw - delW, y, delW, FIELD, mx, my,
+                        ButtonStyle.DANGER);
+                hit(bx + bw - delW, y, delW, FIELD, HIT_USER_TEMPLATE_DELETE, i, 0);
                 y += FIELD + 2;
             }
             int saveW = 34;
@@ -1403,9 +1432,23 @@ public class SignEditScreen extends Screen {
             FlatUi.heading(c, textRenderer, "Built in", bx, y);
             y += 12;
             String[] names = SignTemplates.NAMES;
+            int hiddenCount = 0;
             for (int i = 0; i < names.length; i++) {
-                FlatUi.button(c, textRenderer, textRenderer.trimToWidth(names[i], bw - 8), bx, y, bw, FIELD, mx, my, ButtonStyle.FLAT);
-                hit(bx, y, bw, FIELD, HIT_TEMPLATE, i, 0);
+                if (SignUserTemplates.isPresetHidden(names[i])) {
+                    hiddenCount++;
+                    continue;
+                }
+                FlatUi.button(c, textRenderer, textRenderer.trimToWidth(names[i], bw - FIELD - 10), bx, y, bw - FIELD - 2,
+                        FIELD, mx, my, ButtonStyle.FLAT);
+                hit(bx, y, bw - FIELD - 2, FIELD, HIT_TEMPLATE, i, 0);
+                FlatUi.button(c, textRenderer, "×", bx + bw - FIELD, y, FIELD, FIELD, mx, my, ButtonStyle.GHOST);
+                hit(bx + bw - FIELD, y, FIELD, FIELD, HIT_PRESET_DELETE, i, 0);
+                y += FIELD + 2;
+            }
+            if (hiddenCount > 0) {
+                FlatUi.button(c, textRenderer, textRenderer.trimToWidth("Restore " + hiddenCount + " deleted", bw - 8),
+                        bx, y, bw, FIELD, mx, my, ButtonStyle.GHOST);
+                hit(bx, y, bw, FIELD, HIT_PRESETS_RESTORE, 0, 0);
                 y += FIELD + 2;
             }
             c.drawText(textRenderer, textRenderer.trimToWidth("Replaces this face's rows", bw), bx, y + 1, FlatUi.TEXT_FAINT, false);

@@ -605,7 +605,11 @@ destination first; FULL editor from day one; the old text signs migrate onto it.
   the built-ins with a name box + Save), 7 more built-in templates. Rig-verified in world
   and in the editor at the small 427×240 window. NOT done from that analysis: more
   pictograms (airplane, ferry, restrooms, police, help point…), live tiles (auto-arrow,
-  next train, service-alert strip), lit signs.
+  next train, service-alert strip), lit signs. 2026-10-01 (3.4.2): built-in presets get an × too —
+  hidden BY NAME in `config/station_announcer/sign_templates_hidden.json` (a separate file: older
+  builds read every object in sign_templates.json as a template); "Restore N deleted" brings them
+  back; your own templates' × asks once ("Delete?") since they can't be restored; Save toasts
+  Saved/Replaced. javac only, not clicked in game.
 - **Migration**: `mtr/sign/LegacySigns` derives a sign from the old fields
   (CustomName / SignFront|Back / RoutesFront|Back) for entrance_railing_sign
   (name row + bullet row), el_entrance_sign (bullets + name), el_sign / el_name_board
