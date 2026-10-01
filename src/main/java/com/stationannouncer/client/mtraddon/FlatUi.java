@@ -275,7 +275,20 @@ public final class FlatUi {
         // -- editing
 
         private boolean hasSelection() {
+            clampState();
             return anchor >= 0 && anchor != cursor;
+        }
+
+        /**
+         * Keeps the caret and anchor inside the text. Every edit below clears the anchor
+         * itself; this is the backstop, because a stale anchor past the end turned the next
+         * keystroke into a substring crash (exit editor, 2026-10-01).
+         */
+        private void clampState() {
+            cursor = MathHelper.clamp(cursor, 0, text.length());
+            if (anchor > text.length()) {
+                anchor = text.length();
+            }
         }
 
         private int selStart() {
@@ -304,6 +317,7 @@ public final class FlatUi {
                 return;
             }
             deleteSelection();
+            anchor = -1;   // a zero-width anchor (click + tiny drag) must not outlive the edit
             String clean = multiline ? insertion : insertion.replace('\n', ' ');
             int room = maxLength - text.length();
             if (room <= 0) {
@@ -352,6 +366,28 @@ public final class FlatUi {
             blinkStart = System.currentTimeMillis();
         }
 
+        private void backspace(boolean word) {
+            if (hasSelection()) {
+                deleteSelection();
+            } else if (cursor > 0) {
+                int from = word ? wordStart(cursor) : cursor - 1;
+                text = text.substring(0, from) + text.substring(cursor);
+                cursor = from;
+                anchor = -1;
+                changed();
+            }
+        }
+
+        private void deleteForward() {
+            if (hasSelection()) {
+                deleteSelection();
+            } else if (cursor < text.length()) {
+                text = text.substring(0, cursor) + text.substring(cursor + 1);
+                anchor = -1;
+                changed();
+            }
+        }
+
         public boolean charTyped(char chr) {
             if (!focused || chr < ' ') {
                 return false;
@@ -368,23 +404,11 @@ public final class FlatUi {
             boolean ctrl = Screen.hasControlDown();
             switch (key) {
                 case 259 -> { // backspace
-                    if (hasSelection()) {
-                        deleteSelection();
-                    } else if (cursor > 0) {
-                        int from = ctrl ? wordStart(cursor) : cursor - 1;
-                        text = text.substring(0, from) + text.substring(cursor);
-                        cursor = from;
-                        changed();
-                    }
+                    backspace(ctrl);
                     return true;
                 }
                 case 261 -> { // delete
-                    if (hasSelection()) {
-                        deleteSelection();
-                    } else if (cursor < text.length()) {
-                        text = text.substring(0, cursor) + text.substring(cursor + 1);
-                        changed();
-                    }
+                    deleteForward();
                     return true;
                 }
                 case 263 -> { // left

@@ -15,7 +15,9 @@ import java.util.concurrent.Executors;
  * Fallback backend that shells out to the operating system's voice:
  * {@code say} on macOS, PowerShell's System.Speech on Windows, {@code espeak}
  * on Linux. Commands are built as argument arrays (no shell interpolation) and
- * the text is stripped of control characters first.
+ * the text is stripped of control characters first. PowerShell parses its
+ * {@code -Command} string as code, so on Windows the text and voice travel in
+ * environment variables and never become part of the script.
  */
 @Environment(EnvType.CLIENT)
 class SystemTtsBackend {
@@ -47,10 +49,12 @@ class SystemTtsBackend {
                 if (startedGeneration != generation.get()) {
                     return; // stop() arrived before we could start speaking
                 }
-                Process process = new ProcessBuilder(command)
+                ProcessBuilder builder = new ProcessBuilder(command)
                         .redirectErrorStream(true)
-                        .redirectOutput(ProcessBuilder.Redirect.DISCARD)
-                        .start();
+                        .redirectOutput(ProcessBuilder.Redirect.DISCARD);
+                builder.environment().put(ENV_TEXT, sanitized);
+                builder.environment().put(ENV_VOICE, voiceName(ClientConfig.get().voice));
+                Process process = builder.start();
                 current = process;
                 if (startedGeneration != generation.get()) {
                     stopCurrent(); // stop() raced our launch: kill the fresh process too
@@ -82,9 +86,16 @@ class SystemTtsBackend {
         current = null;
     }
 
+    private static final String ENV_TEXT = "STATION_ANNOUNCER_TTS_TEXT";
+    private static final String ENV_VOICE = "STATION_ANNOUNCER_TTS_VOICE";
+
+    private static String voiceName(String voice) {
+        return voice == null ? "" : voice.replaceAll("\\p{Cntrl}", "").trim();
+    }
+
     private static List<String> buildCommand(String text, float volume, String voice) {
         String os = System.getProperty("os.name", "").toLowerCase(Locale.ROOT);
-        String voiceName = voice == null ? "" : voice.replaceAll("\\p{Cntrl}", "").trim();
+        String voiceName = voiceName(voice);
         List<String> command = new ArrayList<>();
         if (os.contains("mac")) {
             command.add("say");
@@ -96,10 +107,9 @@ class SystemTtsBackend {
             command.add(String.format(Locale.ROOT, "[[volm %.2f]] %s", volume, text));
         } else if (os.contains("win")) {
             int percent = Math.round(volume * 100);
-            String escaped = text.replace("'", "''");
             String selectVoice = voiceName.isEmpty()
                     ? ""
-                    : "try { $s.SelectVoice('" + voiceName.replace("'", "''") + "'); } catch {} ";
+                    : "try { $s.SelectVoice($env:" + ENV_VOICE + "); } catch {} ";
             command.add("powershell");
             command.add("-NoProfile");
             command.add("-NonInteractive");
@@ -108,7 +118,7 @@ class SystemTtsBackend {
                     + "$s = New-Object System.Speech.Synthesis.SpeechSynthesizer; "
                     + selectVoice
                     + "$s.Volume = " + percent + "; "
-                    + "$s.Speak('" + escaped + "');");
+                    + "$s.Speak($env:" + ENV_TEXT + ");");
         } else if (os.contains("linux") || os.contains("nix")) {
             command.add("espeak");
             if (!voiceName.isEmpty()) {
