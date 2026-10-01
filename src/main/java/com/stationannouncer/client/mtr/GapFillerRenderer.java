@@ -1,7 +1,9 @@
 package com.stationannouncer.client.mtr;
 
 import com.stationannouncer.StationAnnouncer;
+import com.stationannouncer.mtr.CurvedPlatformEdgeBlock;
 import com.stationannouncer.mtr.GapFillerBlock;
+import com.stationannouncer.mtr.GapFillerHost;
 import com.stationannouncer.mtr.GapFillerBlockEntity;
 import com.stationannouncer.mtr.GapFillerPhase;
 import net.minecraft.block.BlockState;
@@ -61,12 +63,19 @@ public class GapFillerRenderer implements BlockEntityRenderer<GapFillerBlockEnti
                        VertexConsumerProvider vertexConsumers, int light, int overlay) {
         World world = be.getWorld();
         BlockState state = be.getCachedState();
-        if (world == null || !(state.getBlock() instanceof GapFillerBlock block)) {
+        if (world == null || !(state.getBlock() instanceof GapFillerHost block)) {
             return;
         }
-        Direction side = state.get(GapFillerBlock.TRACK_SIDE);
+        Direction side = block.trackSide(state);
         GapFillerPhase phase = state.get(GapFillerBlock.PHASE);
-        float reach = state.get(GapFillerBlock.REACH) * 2f;
+        float reach = be.reachUnits(state) * 2f;
+        // Where the plate's tip sits at rest, at the block's left (x = 0) and right (x = 16)
+        // ends: on the track face for a straight filler, along the cut for a curved one.
+        float cutA = 0f, cutB = 0f;
+        if (state.contains(CurvedPlatformEdgeBlock.CUT_A)) {
+            cutA = Math.max(0f, CurvedPlatformEdgeBlock.depthPx(state.get(CurvedPlatformEdgeBlock.CUT_A)));
+            cutB = Math.max(0f, CurvedPlatformEdgeBlock.depthPx(state.get(CurvedPlatformEdgeBlock.CUT_B)));
+        }
 
         // Advance the plate toward where the phase wants it.
         long nanos = System.nanoTime();
@@ -83,7 +92,7 @@ public class GapFillerRenderer implements BlockEntityRenderer<GapFillerBlockEnti
         }
         be.clientLastNanos = nanos;
 
-        boolean loop = block.style == GapFillerBlock.Style.LOOP;
+        boolean loop = block.style() == GapFillerBlock.Style.LOOP;
         // Union: a hydraulic ram at constant speed that stops dead. Loop: gravity —
         // gathering speed on the way out, slowing into the latch on the way home.
         float shaped = loop ? (float) Math.pow(be.clientTravel, 1.6) : be.clientTravel;
@@ -92,8 +101,10 @@ public class GapFillerRenderer implements BlockEntityRenderer<GapFillerBlockEnti
         // 0.02 below the deck's underside: no plane shared with the block model.
         float top = GapFillerBlock.PLATE_TOP - drop - 0.02f;
         float bottom = top - GapFillerBlock.PLATE_THICKNESS;
-        float tipZ = -travel;
-        float backZ = tipZ + reach + GapFillerBlock.PLATE_OVERLAP;
+        // Tip and back of the plate at its two ends (it slides straight out, model -z).
+        float tip0 = cutA + (cutB - cutA) * X0 / 16f - travel;
+        float tip1 = cutA + (cutB - cutA) * X1 / 16f - travel;
+        float length = reach + GapFillerBlock.PLATE_OVERLAP;
 
         var atlas = MinecraftClient.getInstance().getSpriteAtlas(SpriteAtlasTexture.BLOCK_ATLAS_TEXTURE);
         Sprite sprite = atlas.apply(loop ? PLATE_LOOP : PLATE_UNION);
@@ -111,40 +122,46 @@ public class GapFillerRenderer implements BlockEntityRenderer<GapFillerBlockEnti
         Matrix3f n = matrices.peek().getNormalMatrix();
 
         // Top: rubber nosing, painted edge, then the deck tile repeated along the plate.
-        float z = tipZ;
-        z = topStrip(m, n, vc, sprite, plateLight, z, Math.min(backZ, z + 1f), top, 0, 2);
-        z = topStrip(m, n, vc, sprite, plateLight, z, Math.min(backZ, z + 3f), top, 2, 8);
-        while (z < backZ - 0.001f) {
-            float end = Math.min(backZ, z + 8f);
-            z = topStrip(m, n, vc, sprite, plateLight, z, end, top, 8, 8 + (end - z) * 2);
+        // Distances are measured back from the tip, so a slanted (curved) tip keeps its bands.
+        float d = 0f;
+        d = topStrip(m, n, vc, sprite, plateLight, tip0, tip1, d, Math.min(length, d + 1f), top, 0, 2);
+        d = topStrip(m, n, vc, sprite, plateLight, tip0, tip1, d, Math.min(length, d + 3f), top, 2, 8);
+        while (d < length - 0.001f) {
+            float end = Math.min(length, d + 8f);
+            d = topStrip(m, n, vc, sprite, plateLight, tip0, tip1, d, end, top, 8, 8 + (end - d) * 2);
         }
+        float back0 = tip0 + length, back1 = tip1 + length;
         // Bumper face toward the track.
         quad(m, n, vc, sprite, plateLight, 0, 0, -1,
-                X1, bottom, tipZ, X0, bottom, tipZ, X0, top, tipZ, X1, top, tipZ,
+                X1, bottom, tip1, X0, bottom, tip0, X0, top, tip0, X1, top, tip1,
                 0, 28, 32, 32);
         // Underside and the two sides (steel band of the sprite).
         quad(m, n, vc, sprite, plateLight, 0, -1, 0,
-                X0, bottom, tipZ, X1, bottom, tipZ, X1, bottom, backZ, X0, bottom, backZ,
+                X0, bottom, tip0, X1, bottom, tip1, X1, bottom, back1, X0, bottom, back0,
                 0, 24, 32, 28);
         quad(m, n, vc, sprite, plateLight, -1, 0, 0,
-                X0, bottom, tipZ, X0, bottom, backZ, X0, top, backZ, X0, top, tipZ,
+                X0, bottom, tip0, X0, bottom, back0, X0, top, back0, X0, top, tip0,
                 0, 24, 32, 28);
         quad(m, n, vc, sprite, plateLight, 1, 0, 0,
-                X1, bottom, backZ, X1, bottom, tipZ, X1, top, tipZ, X1, top, backZ,
+                X1, bottom, back1, X1, bottom, tip1, X1, top, tip1, X1, top, back1,
                 0, 24, 32, 28);
         matrices.pop();
     }
 
-    /** One stretch of the plate's top from z0 to z1, sampling sprite rows v0..v1. Returns z1. */
+    /**
+     * One band of the plate's top, {@code d0..d1} px back from its tip (the tip at
+     * z = tip0 on the left end, tip1 on the right), sampling sprite rows v0..v1.
+     * Returns d1.
+     */
     private static float topStrip(Matrix4f m, Matrix3f n, VertexConsumer vc, Sprite sprite, int light,
-                                  float z0, float z1, float y, float v0, float v1) {
-        if (z1 - z0 <= 0.001f) {
-            return z0;
+                                  float tip0, float tip1, float d0, float d1, float y, float v0, float v1) {
+        if (d1 - d0 <= 0.001f) {
+            return d0;
         }
         quad(m, n, vc, sprite, light, 0, 1, 0,
-                X0, y, z1, X1, y, z1, X1, y, z0, X0, y, z0,
+                X0, y, tip0 + d1, X1, y, tip1 + d1, X1, y, tip1 + d0, X0, y, tip0 + d0,
                 0.6f, v0, 31.4f, v1);
-        return z1;
+        return d1;
     }
 
     /**

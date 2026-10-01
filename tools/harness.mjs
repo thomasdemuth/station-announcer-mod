@@ -1169,7 +1169,8 @@ check("a dropped pin reaches at most 3 stations, nearest first",
 check("...all of them inside the 300-block walking radius",
 	point.reachMeters.every((m) => m <= 300), J(point.reachMeters));
 check("it links to EVERY platform of each station it reaches",
-	J(point.edgeTargets) === J(["bc_b", "bc_g", "gf_g", "mu_g"]), J(point.edgeTargets));
+	// (a platform may have two edges since feature 12: the fastest walk and a step-free one)
+	J([...new Set(point.edgeTargets)]) === J(["bc_b", "bc_g", "gf_g", "mu_g"]), J(point.edgeTargets));
 check("walk edges use the 3D distance at walkSpeed() + a 30 s buffer",
 	Math.abs(point.muEdge.meters - point.expectM) < 1e-6
 	&& Math.abs(point.muEdge.seconds - point.expectS) < 1e-6,
@@ -1424,12 +1425,151 @@ const hit = run(`({
   bare: pickHit({}),
   nothing: pickHit(null),
 })`);
-check("hit priority is train > glyph > label > chip > ribbon > pin",
-	J(hit.order) === J(["train", "glyph", "label", "chip", "ribbon", "pick"]), J(hit.order));
+check("hit priority is train > glyph > label > exit > place > chip > ribbon > pin",
+	J(hit.order) === J(["train", "glyph", "label", "exit", "place", "chip", "ribbon", "pick"]), J(hit.order));
 check("...and each tier wins over everything under it",
 	hit.train === "train" && hit.glyph === "glyph" && hit.label === "label"
 	&& hit.chip === "chip" && hit.ribbon === "ribbon" && hit.pick === "pick", J(hit));
 check("bare paper clears", hit.bare === "clear" && hit.nothing === "clear");
+check("an exit pin and a place beat the line under them, a station beats both",
+	run(`pickHit({ exit: 1, place: 1, chip: 1, ribbon: 1 })`) === "exit"
+	&& run(`pickHit({ place: 1, ribbon: 1, pick: 1 })`) === "place"
+	&& run(`pickHit({ glyph: 1, exit: 1, place: 1 })`) === "glyph");
+
+/* ---- W. wayfinding: places + exit pins (feature 11) ---- */
+const way = run(`(() => {
+  const bc = state.stations.get("bc");
+  const g = state.plan.graph || (state.plan.graph = buildGraph());
+  // the walk from the museum to Baker City Central goes THROUGH Exit A, not the wall
+  const museum = state.places.find((p) => p.id === "p_museum");
+  const pt = { xz: [museum.x, museum.z], y: museum.y };
+  const node = g.nodes.get("bc_g");
+  const viaExit = streetToPlatform(pt, "bc", node);
+  const straight = walkDistance3(pt, node);
+  const near = stationsNearPoint(g, pt);
+  // a station without pins keeps the straight line
+  const plainWalk = streetToPlatform(pt, "mu", g.nodes.get("mu_g"));
+  // plan museum -> airport: the first leg walks in through Exit A
+  const res = planEndpoints(g, { point: [museum.x, museum.z], y: museum.y, label: museum.name, placeId: museum.id },
+    { stationId: "ap", partId: "ap:1" }, { mode: "fastest" }, Date.now());
+  const j = res.journeys[0];
+  const lead = j && j.legs[0];
+  // select it now: the next plan rebuilds the map points
+  selectJourney(j);
+  const selExits = [...state.selection.exitsUsed];
+  const selWalks = state.selection.walks.length;
+  clearSelection();
+  // and the other way: Northgate -> museum; the last leg leaves by an exit
+  const back = planEndpoints(g, { stationId: "ng" },
+    { point: [museum.x, museum.z], y: museum.y, label: museum.name, placeId: museum.id }, { mode: "fastest" }, Date.now());
+  // the option that arrives at Baker City Central (the fastest may use another station)
+  const bj = back.journeys.find((q) => q.legs[q.legs.length - 1].fromStation === "bc");
+  const tail = bj && bj.legs[bj.legs.length - 1];
+  const search = searchEntries("museum").map((e) => ({ label: e.label, placeId: e.placeId || null }));
+  const panel = placePanelData("p_museum");
+  const exitsPanel = stationExits(bc);
+  return {
+    places: state.places.length,
+    categories: state.places.map((p) => p.category).join(","),
+    exitPoints: (bc.exitPoints || []).map((e) => e.short).join(","),
+    viaExit: viaExit.exit && viaExit.exit.short, viaMeters: Math.round(viaExit.meters), straight: Math.round(straight),
+    nearBcExit: (near.find((x) => x.stationId === "bc") || {}).exit ? near.find((x) => x.stationId === "bc").exit.short : null,
+    plainExit: plainWalk.exit,
+    n: res.journeys.length, leadKind: lead && lead.kind, leadExit: lead && lead.exit,
+    note: lead ? exitNoteHtml(lead) : "",
+    backErr: back.journeys.map((q) => q.legs.map((l) => l.kind + ":" + (l.fromStation || l.fromPoint) + ">" + (l.toStation || l.toPoint)).join(" ")).join(" / "), backN: back.journeys.length, tailKind: tail && tail.kind, tailExit: tail && tail.exit && tail.exit.short, tailRole: tail && tail.exit && tail.exit.role,
+    search, panelNear: panel && panel.near.map((n) => n.stationId + (n.exit ? "@" + n.exit.short : "")),
+    pinnedFlags: exitsPanel.map((e) => e.name + ":" + e.pinned).join(","),
+    selExits, selWalks,
+  };
+})()`);
+check("mapdata places are indexed (landmark, park, district, sports)",
+	way.places === 4 && way.categories === "landmark,park,district,sports", J([way.places, way.categories]));
+check("pinned exits become exit points (A and B; the unpinned C is not one)", way.exitPoints === "A,B", way.exitPoints);
+check("a street walk into a station with pins goes through the best exit",
+	way.viaExit === "A" && way.viaMeters >= way.straight, J([way.viaExit, way.viaMeters, way.straight]));
+check("...and a station with no pins keeps the straight line", way.plainExit === null, J(way.plainExit));
+check("Baker City Central is reached from the museum via Exit A", way.nearBcExit === "A", J(way.nearBcExit));
+check("a place origin plans, and its first walk enters by Exit A",
+	way.n >= 1 && way.leadKind === "walk" && way.leadExit && way.leadExit.short === "A" && way.leadExit.role === "enter",
+	J([way.n, way.leadKind, way.leadExit]));
+check("the itinerary says 'Enter by Exit A · Main St, …'", /Enter by Exit A · Main St/.test(way.note), way.note);
+check("a place destination's last walk LEAVES by an exit",
+	way.tailKind === "walk" && !!way.tailExit && way.tailRole === "leave", J([way.backErr, way.backN, way.tailKind, way.tailExit, way.tailRole]));
+check("places are searchable and carry their id", way.search.some((e) => e.label === "Transit Museum" && e.placeId === "p_museum"),
+	J(way.search));
+check("the place panel lists nearby stations with the exit used", (way.panelNear || []).includes("bc@A"), J(way.panelNear));
+check("the station panel marks which exits are pinned",
+	way.pinnedFlags === "Exit A:true,Exit B:true,Exit C:false", way.pinnedFlags);
+check("selecting the journey highlights its exit and bends the walk through it",
+	way.selExits.length === 1 && /^bc\|A\|/.test(way.selExits[0]) && way.selWalks >= 2, J([way.selExits, way.selWalks]));
+
+/* ---- X. station layouts (feature 12) ---- */
+const lay = run(`(() => {
+  const bc = state.stations.get("bc");
+  const g = state.plan.graph = buildGraph();
+  const museum = state.places.find((p) => p.id === "p_museum");
+  const pt = { xz: [museum.x, museum.z], y: museum.y };
+  const fast = streetToPlatform(pt, "bc", g.nodes.get("bc_g"), false);
+  const sf = streetToPlatform(pt, "bc", g.nodes.get("bc_g"), true);
+  const straightA = walkDistance3(pt, bc.exitPoints.find((e) => e.short === "A"));
+  const transfer = g.transferEdges.filter((e) => e.from === "bc_g" && e.to === "bc_b");
+  const back = g.transferEdges.filter((e) => e.from === "bc_b" && e.to === "bc_g");
+  const res = planEndpoints(g, { point: [museum.x, museum.z], y: museum.y, label: museum.name, placeId: museum.id },
+    { stationId: "ap", partId: "ap:1" }, { mode: "fastest" }, Date.now());
+  const j = res.journeys.find((q) => q.legs[0].exit && q.legs[0].exit.short === "A");
+  const note = j ? exitNoteHtml(j.legs[0]) : "";
+  selectJourney(j);
+  const noChip = state.selection.walks.filter((w) => w.noChip).length;
+  clearSelection();
+  const sfRes = planEndpoints(g, { point: [museum.x, museum.z], y: museum.y, label: museum.name, placeId: museum.id },
+    { stationId: "ap", partId: "ap:1" }, { mode: "fastest", stepFree: true }, Date.now());
+  const sfLead = sfRes.journeys[0] && sfRes.journeys[0].legs[0];
+  return {
+    anchors: bc.layout ? bc.layout.anchors.size : 0,
+    exitAnchors: bc.exitPoints.map((e) => e.short + "=" + e.anchor).join(","),
+    fastMeters: Math.round(fast.meters), expectFast: Math.round(straightA + 55), fastLegs: (fast.legs || []).map((x) => x.kind).join(","),
+    fastStepFree: fast.stepFree, sfLegs: (sf.legs || []).map((x) => x.kind).join(","), sfStepFree: sf.stepFree,
+    transfer: transfer.map((e) => [e.meters, e.accessible, (e.legs || []).length]),
+    backDy: back.length && back[0].legs ? back[0].legs.map((x) => x.dy).join(",") : "",
+    note, noChip,
+    sfLeadLegs: sfLead && sfLead.exit && sfLead.exit.legs ? sfLead.exit.legs.map((x) => x.kind).join(",") : "",
+    steps: stepsText([{ kind: "stairs", dy: -8, meters: 12 }, { kind: "fare" }, { kind: "lift", dy: 6 }, { kind: "walk", meters: 20 }]),
+  };
+})()`);
+check("a scanned layout is indexed and its exits are tied to their markers",
+	lay.anchors === 4 && lay.exitAnchors.includes("A=exit:A") && lay.exitAnchors.includes("B=exit:B"), J([lay.anchors, lay.exitAnchors]));
+check("the walk in through Exit A uses the SCANNED inside walk (street + 55 m)",
+	lay.fastMeters === lay.expectFast && lay.fastLegs.includes("stairs") && lay.fastStepFree === false,
+	J([lay.fastMeters, lay.expectFast, lay.fastLegs]));
+check("...and a step-free walk takes the lift alternative", lay.sfStepFree === true && lay.sfLegs.includes("lift")
+	&& !lay.sfLegs.includes("stairs"), J([lay.sfLegs, lay.sfStepFree]));
+check("transfers between scanned platforms use the layout (14 m of stairs, plus the lift way round)",
+	lay.transfer.length === 2 && lay.transfer[0][0] === 14 && lay.transfer[0][1] === false && lay.transfer[0][2] === 3
+	&& lay.transfer[1][0] === 40 && lay.transfer[1][1] === true, J(lay.transfer));
+check("...and the walk back is the same stairs the other way round", lay.backDy === "5,0,-5", lay.backDy);
+check("the itinerary tells the rider the steps ('Stairs ↓8 m · … Fare control')",
+	/Enter by Exit A/.test(lay.note) && /Stairs ↓8 m/.test(lay.note) && /Fare control/.test(lay.note), lay.note);
+check("the selected journey draws the scanned path inside the station", lay.noChip >= 1, lay.noChip);
+check("a step-free plan walks in by the lift", /lift/.test(lay.sfLeadLegs) && !/stairs/.test(lay.sfLeadLegs), lay.sfLeadLegs);
+check("steps read naturally", lay.steps === "Stairs ↓8 m · Fare control · Lift ↑6 m · 20 m", lay.steps);
+
+/* ---- Y. deep links (feature 13) ---- */
+const deep = run(`(() => {
+  const a = applyDeepLink("station:Northgate", "place:p_museum");
+  const from = state.plan.from, to = state.plan.to;
+  const byName = resolveDeepTarget("place:transit museum");
+  const pt = resolveDeepTarget("point:700,380,70");
+  const bad = resolveDeepTarget("place:nope");
+  const url = "";
+  return { a, fromStation: from && from.stationId, toPlace: to && to.placeId, byName: byName && byName.place.id,
+    pt: pt && [pt.x, pt.z, pt.y], bad, journeys: state.plan.journeys.length };
+})()`);
+check("a deep link fills both ends (station by name, place by id)",
+	J(deep.a) === J(["from:station", "to:place"]) && deep.fromStation === "ng" && deep.toPlace === "p_museum", J(deep));
+check("...places resolve by name too, points parse, unknown targets are refused",
+	deep.byName === "p_museum" && J(deep.pt) === J([700, 380, 70]) && deep.bad === null, J(deep));
+check("...and the planner answers at once", deep.journeys >= 1, deep.journeys);
 
 const pickFlow = run(`(() => {
   const before = { from: state.plan.from, to: state.plan.to };

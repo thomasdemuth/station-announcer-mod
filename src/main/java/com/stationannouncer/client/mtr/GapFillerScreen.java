@@ -49,7 +49,7 @@ public class GapFillerScreen extends Screen {
     public GapFillerScreen(GapFillerBlockEntity filler) {
         super(Text.translatable("gui.station_announcer.gap_filler.title"));
         this.filler = filler;
-        this.reach = filler.getCachedState().get(GapFillerBlock.REACH);
+        this.reach = filler.reachUnits(filler.getCachedState());
         this.extendMs = filler.getExtendMs();
         this.retractMs = filler.getRetractMs();
         this.minDwellMs = filler.getMinDwellMs();
@@ -70,8 +70,8 @@ public class GapFillerScreen extends Screen {
 
         BlockState state = filler.getWorld() == null ? filler.getCachedState()
                 : filler.getWorld().getBlockState(filler.getPos());
-        if (!reachTouched && state.getBlock() instanceof GapFillerBlock) {
-            reach = state.get(GapFillerBlock.REACH); // follow Auto / relink results until edited
+        if (!reachTouched && state.getBlock() instanceof com.stationannouncer.mtr.GapFillerHost) {
+            reach = filler.reachUnits(state); // follow Auto / relink results until edited
         }
         boolean loop = filler.getStyle() == GapFillerBlock.Style.LOOP;
 

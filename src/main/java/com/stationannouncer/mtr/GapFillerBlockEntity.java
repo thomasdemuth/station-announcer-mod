@@ -44,6 +44,8 @@ public class GapFillerBlockEntity extends BlockEntity {
     private String platformLabel = "";
     /** Reach follows the rail until the player sets it by hand. */
     private boolean reachAuto = true;
+    /** Reach for curved fillers (units of 2 px); straight fillers keep theirs in the blockstate. */
+    private int reachUnits = 4;
     private int extendMs;
     private int retractMs;
     private int minDwellMs;
@@ -69,7 +71,21 @@ public class GapFillerBlockEntity extends BlockEntity {
     }
 
     static GapFillerBlock.Style style(BlockState state) {
-        return state.getBlock() instanceof GapFillerBlock filler ? filler.style : GapFillerBlock.Style.UNION;
+        return state.getBlock() instanceof GapFillerHost filler ? filler.style() : GapFillerBlock.Style.UNION;
+    }
+
+    /** Plate reach in units of 2 px: the blockstate's for a straight filler, this entity's for a curved one. */
+    public int reachUnits(BlockState state) {
+        return state.contains(GapFillerBlock.REACH) ? state.get(GapFillerBlock.REACH) : reachUnits;
+    }
+
+    /** Curved fillers keep their reach here (their blockstate carries the cut instead). */
+    void setReachUnits(int units) {
+        int clamped = Math.max(1, Math.min(12, units));
+        if (clamped != reachUnits) {
+            reachUnits = clamped;
+            sync();
+        }
     }
 
     // ------------------------------------------------------------ server tick
@@ -143,7 +159,7 @@ public class GapFillerBlockEntity extends BlockEntity {
     /** Anybody standing on the plate? (It stays out while there is.) */
     private boolean plateOccupied(ServerWorld world, BlockState state) {
         Direction side = state.get(GapFillerBlock.TRACK_SIDE);
-        float travel = state.get(GapFillerBlock.REACH) * 2f;
+        float travel = reachUnits(state) * 2f;
         float drop = style(state) == GapFillerBlock.Style.LOOP ? travel * GapFillerBlock.LOOP_SLOPE : 0f;
         float[] a = GapFillerBlock.rotateXZ(side, 0, -travel);
         float[] b = GapFillerBlock.rotateXZ(side, 16, 0);
@@ -244,6 +260,7 @@ public class GapFillerBlockEntity extends BlockEntity {
         nbt.putInt("ExtendMs", extendMs);
         nbt.putInt("RetractMs", retractMs);
         nbt.putInt("MinDwellMs", minDwellMs);
+        nbt.putInt("Reach", reachUnits);
     }
 
     @Override
@@ -256,6 +273,9 @@ public class GapFillerBlockEntity extends BlockEntity {
             extendMs = nbt.getInt("ExtendMs");
             retractMs = nbt.getInt("RetractMs");
             minDwellMs = nbt.getInt("MinDwellMs");
+        }
+        if (nbt.contains("Reach")) {
+            reachUnits = Math.max(1, Math.min(12, nbt.getInt("Reach")));
         }
     }
 

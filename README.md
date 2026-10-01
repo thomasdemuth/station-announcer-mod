@@ -287,6 +287,42 @@ left / right edge (flush against the end plate on a run's last block). A label n
 past the run's end plates — one longer than the whole run is squeezed to fit. Hanging boards
 show the label on both faces. Clear the text to remove it.
 
+### Interlining: depot delays and shared-section headways (requires MTR)
+
+Where two or more lines share track, their trains should arrive evenly spaced, not in
+pairs. Open MTR's dashboard, press **Tools…**, then **Interlining…**:
+
+- **Sections**: every stretch where lines stop at the same platforms in the same order is
+  found for you, one entry per direction, drawn as a little line map. A strip of ticks, one per
+  train reaching the section, shows at a glance whether trains arrive evenly or in pairs.
+- **Suggest**: *Even spacing* (keep today's frequencies) or *Target headway* (e.g. `2:00`;
+  frequencies are suggested in the steps MTR's depot sliders can hold). Choose *Balance both*
+  directions, *This way*, *Other way* or *Options*, and what it may **adjust**:
+  - *Depot delays* slide a depot's whole timetable.
+  - *Platform holds* add dwell at one platform, such as the stop before the section or the
+    terminal where a line turns back. That moves one line in one direction, which is what
+    fixes a depot whose trains pass the same section twice (out and back).
+  - *Both*.
+
+  Lines with different frequencies can't be spaced perfectly: the suggestion then gives the
+  shortest longest wait and offers one-click "match frequencies" alternatives.
+  **Apply** writes the delays, the frequencies (all 24 hours, through MTR's own depot update)
+  and the holds, then rewrites the departures straight away.
+- **Depots**: delay any depot's departures by a fixed amount (`45`, `1:30`, `1m30s`).
+- **Groups**: name depots that belong together and pick a group in the suggestion form to let
+  it move only those depots.
+
+The **dispatch web UI** has the same tools in its **Interlining** panel (key `I`). The selected
+section lights up on the live map (real track, stations, and pulsing markers where holds would
+go), and a timetable stringline underneath shows every train through the section now (dashed)
+and suggested (solid). To apply from the browser, pair it once: run `/navpair` in game and type
+the code into the panel. Only players with the addon's edit permission can apply;
+`depotGroups.webApply` turns it off.
+
+Depots on a real-time timetable or with continuous movement (cable cars) can't be delayed.
+Suggestions use scheduled times, so holds, door obstructions and gap-filler dwells still show up
+in the measured headway.
+
 ### Bridge Creator (requires MTR, new in 3.2)
 
 One configurable tool that replaces juggling the pillar, railing and viaduct creators: it

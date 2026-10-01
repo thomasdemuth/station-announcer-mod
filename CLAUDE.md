@@ -44,7 +44,78 @@ rig's Gradle wrappers (and sometimes the JVMs) get SIGKILLed — forbid agents f
 entirely and check rig health after each one finishes; an orphaned JVM keeps serving but
 loses the console fifo.
 
-### GAP FILLERS (2026-09-25) — READ `GAP_FILLER_PLAN.md` (curved platform blocks are PLANNED there)
+### WAYFINDING: EXIT MARKERS + PLACES + MAP+ (2026-09-29) — READ `WAYFINDING_PLAN.md` — uncommitted, not deployed
+
+Thomas: custom locations/POIs, real positions for MTR exits (an exit block that feeds a FlatUi
+exit editor: create/edit/remove MTR's exits), both blocks invisible unless holding the brush /
+marker / rail tools, `/place` + block, all on Map+; station layout auto-pathfinding (DESIGNED in
+the plan, awaiting his review — "be deliberate"); MTR-Games integration planned, built LAST.
+- `wayfinding/` (store = source of truth, blocks adopt it on first tick; Place/ExitPin/
+  PlaceCategory/PlaceCommand), `mtr/MarkerBlock|ExitMarkerBlock|PlaceMarkerBlock|Wayfinding`,
+  `client/mtr/MarkerRenderer|ExitMarkerScreen|PlaceMarkerScreen|WayfindingClient`,
+  `tools/gen_wayfinding_assets.py`. Exit edits go to MTR via `PacketUpdateData(...addStation)`
+  (what MTR's EditStationScreen sends); renames/deletes carry every pin along.
+- Map+: mapdata `places` + `exits[].pins`; exit badges, place icons/labels, district labels,
+  place panel, places in search, walks go THROUGH the best pinned exit ("Leave by Exit A").
+  Harness section W; 542/542 + planner green. Dev hooks `#marker-editor|exit|place x y z …`.
+- Rig-verified: markers draw only while revealed, store written. Editors' clicks, MTR exit round
+  trip, `/place` NOT verified — Thomas took over the rig client mid-test (2026-09-29 20:12).
+- javac-only compile check (no Gradle while the rig runs): whole tree via a scratch javac script
+  over the saved loom classpath — see the plan.
+- STATION LAYOUTS BUILT same day (plan §2): `wayfinding/layout/` pure-Java solver (unit test
+  `tools/layout_test/LayoutSolverTest.java`) + `LayoutScanner` (scans ONLY on user input: Exit
+  editor Layout tab Scan / Scan all, `/stationlayout`); results `<save>/station-announcer-addon/
+  layouts/`; Map+ walks through scanned exits/transfers, computed step-free where no manual flag
+  (manual wins). Whole Baker City network scanned on the rig in 3.4 s. MTR edit permission =
+  creative/survival game mode (spectator rig = read-only editor).
+- MTR-GAMES API BUILT 2026-09-30 (plan §3): `com.stationannouncer.api` is PURE JAVA on purpose
+  (MTR-Games = Mojang mappings) — never put a Minecraft/Fabric/MTR type in it; VERSION only
+  grows, additively. Backend `wayfinding/WayfindingApiBackend`; jar via `tools/build_api_jar.sh`;
+  Map+ deep links `?from=/?to=`. Handoff for the MTR-Games agent:
+  `../MTR-Games/docs/STATION_ANNOUNCER_INTEGRATION.md` (API requests land at its bottom).
+
+### INTERLINING (2026-09-29) — READ `INTERLINE_PLAN.md` ("BUILT") — uncommitted, not deployed
+
+Depot groups no longer stagger by themselves. Per-depot departure delays (`AddonStore.depotDelays`,
+applied by the old DepotMixin hook), automatic interline section detection, and a solver that
+suggests delays / dwell pads at the stop before / all-day frequencies for a target trunk headway
+(`mtraddon/interline/`). In game: Dashboard → Tools… → Interlining… (`InterlineScreen`, FlatUi);
+web: `/dispatch/interline.html` (read-only). Thomas's answers are in the plan (all direction
+modes + dwell pads, both UIs, Apply writes 24 h frequencies, groups suggest-only). 2026-09-30 round 2 (see
+the plan's "ROUND 2"): section map + arrival strips in game, platform holds (levers
+delays/holds/both, merged route-boundary stops), mixed-frequency handling + match options, the web
+view moved INTO the dispatch screen (panel + live-map overlay + timetable stringline sheet) with
+Apply via /navpair pairing. Rig-verified end to end, including web Apply of a hold on a loop section.
+**MtrSimulators is null at our SERVER_STARTED** — anything that needs the simulators at boot
+must retry (`InterlineService.schedule`).
+
+### MATERIAL RAMPS / STAIRS + CURVED PLATFORM EDGES + LINE BULLET SHAPES (2026-09-25) — uncommitted, rig-verified
+
+- **Material system** (`material/` common, `client/material/`): `material_ramp` (ADA 1:12: `seg` 0..11 =
+  which twelfth of a one-block rise, 12 = level landing; auto-continues from side/downhill/lower-level/
+  uphill neighbours; `hasSidedTransparency` like stairs) and `material_stairs` (extends vanilla
+  StairsBlock) wear ANY full block. Sodium-without-Indium rules out BE-driven meshes, so the material is a
+  per-world PALETTE slot in the blockstate (`mat_hi`×`mat_lo` = 64 slots, `<save>/station_announcer/
+  materials.json`, synced S2C) and `client/material/ShapeModel` (plain BakedModel; quads computed per
+  state from the material's own sprites/tints, world-aligned uv, winding from Newell's normal) is set
+  for every state by a Fabric BlockStateResolver; items resolve per-material via ModelOverrideList.
+  Ramp model has AO OFF (non-flush slopes sample their own cell → dark band beside a full-cube landing).
+  Item: right-click air = FlatUi picker (`MaterialPickerScreen`: search, category chips, grid, live 3D
+  preview, recents, whole-run retexture); sneak-click a block = copy it; sneak-click a placed ramp/stair
+  = retexture it (C2S `set_block_material`, BFS incl. diagonals). Drops/pick keep the material.
+  Dev: `/rigplace` accepts `item{nbt}`; client hook `#material-picker`.
+- **Curved platform edges + curved gap fillers** — see GAP_FILLER_PLAN.md "BUILT": `curved_platform_edge`,
+  `curved_gap_filler(_loop)`, Curved Platform Creator with filler modes (+ dev `/rigcurve ... <mode>`). Same ShapeModel.
+- **Palette bug fixed**: a new material used to `worldRenderer.reload()` the whole world on its first placement;
+  a palette sync now only invalidates quads (reload only if a slot changes meaning — never within a world).
+- **Line bullet shapes**: `mtraddon/LineStyles` (+ `client/mtraddon/ClientLineStyles`): per-LINE
+  circle/diamond/square set on MTR's Edit Route screen, drawn on NYC PIDS, entrance/MTA signs, posters,
+  pickers and Map+ (`bulletShape` in mapdata; `#` suffix = square). javac + Map+ harness only, not seen.
+- Rig left on `world_baker` (world_flat's properties: git history of run/server.properties is not
+  tracked — the flat settings are `level-name=world_flat`, flat generator); test scenes in the sky near
+  Sea Cliff (x 462..530, z 544..638, y 88..96 — terrain there was overwritten in the rig copy).
+
+### GAP FILLERS (2026-09-25) — READ `GAP_FILLER_PLAN.md` (curved platform blocks are BUILT there)
 
 Thomas: gap fillers first (Union Square + old South Ferry loop as references), a minimum dwell for
 extend+retract, doors delayed until the fillers are out; curved platform blocks next. Built:
@@ -135,6 +206,14 @@ structure, railing toggle, block per part, clean UI), multi-track selection (2-t
   popup / preset menu / slider clicks, user-preset file round trip, grades (the graded
   candidate line runs in a tunnel). Elevated-rail probe trick: `/execute if block x y-1 z
   air if block x y-5 z air run say ELEV…` through commands.txt, grep the client log.
+
+- **2026-09-26 fixes (built + DEPLOYED as 3.3.1 on 2026-09-29, not play-tested):** (1) the 3D preview (drawn at z≈300) punched
+  through the material popup / dim backdrop — `CreatorPreview.render` now clears the depth buffer after
+  drawing (fixes CreatorSettingsScreen too). (2) Clicking rail nodes opened the settings screen: MTR's
+  node-click base returns PASS on the CLIENT, so vanilla fell through to item use-in-air.
+  `MtrPillars.claimNodeClick` returns SUCCESS client-side on a `BlockNode`; wired into the bridge, pillar,
+  el structure and curved platform creators (the curved one's air action is UNDO — it was undoing on
+  every node click).
 
 ### v2.4.1 — addon release (2026-08-07)
 

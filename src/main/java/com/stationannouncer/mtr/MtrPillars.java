@@ -46,6 +46,23 @@ public final class MtrPillars {
     public static java.util.function.Consumer<Hand> SETTINGS_OPENER = hand -> {
     };
 
+    /**
+     * Client side of a creator's block click. MTR's node-clicking base does
+     * its work on the server and returns PASS on the client, so vanilla then
+     * treats the same right-click as a use in the air, i.e. the settings
+     * screen (or the curved creator's undo) fired on every rail node click.
+     * Claiming node clicks on the client stops that fall-through; the block
+     * packet has already gone to the server, which still runs the node logic.
+     */
+    public static org.mtr.mapping.holder.ActionResult claimNodeClick(org.mtr.mapping.holder.ItemUsageContext context,
+                                                                     org.mtr.mapping.holder.ActionResult result) {
+        if (context.getWorld().isClient() && !result.data.isAccepted()
+                && context.getWorld().getBlockState(context.getBlockPos()).getBlock().data instanceof org.mtr.mod.block.BlockNode) {
+            return org.mtr.mapping.holder.ActionResult.SUCCESS;
+        }
+        return result;
+    }
+
     public static ItemPillarCreator PILLAR_CREATOR;
     public static ItemElStructureCreator EL_STRUCTURE_CREATOR;
     public static ItemBridgeCreator BRIDGE_CREATOR;

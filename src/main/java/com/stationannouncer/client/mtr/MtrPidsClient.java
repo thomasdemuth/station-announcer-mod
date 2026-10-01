@@ -165,6 +165,10 @@ public final class MtrPidsClient {
         SubwayWallsClient.register();
         // Gap fillers: the sliding plate's renderer and the brush screen.
         GapFillersClient.register();
+        // Curved platform edges: shape model per state.
+        CurvedPlatformsClient.register();
+        // Wayfinding: exit/place marker pins + their editors.
+        WayfindingClient.register();
 
         // The brush's full PIDS settings screen (the bare-click mini toggle
         // stays on the shared GUI opener below).

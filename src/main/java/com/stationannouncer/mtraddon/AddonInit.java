@@ -63,7 +63,10 @@ public final class AddonInit {
     public static void register() {
         AddonNetworking.registerServerReceivers();
         DisruptionNetworking.registerServerReceivers();
-        DepotGroupNetworking.registerServerReceivers();
+        // Interline tooling: depot delays, groups, section analysis, suggestions, Apply.
+        com.stationannouncer.mtraddon.interline.InterlineService.register();
+        // Per-line bullet shape (circle / diamond / square): store, packet, join sync.
+        LineStyles.register();
         AnalyticsCommand.register();
         // Journey directions: /nav and /navpair. Registered AFTER AnalyticsCommand on
         // purpose — see NavCommand's javadoc for why pairing gets its own ungated root
@@ -92,11 +95,11 @@ public final class AddonInit {
             // constructed Main by now; explain in the log when the dispatch UI is absent.
             DispatchWebSetup.logAvailability();
             // …which also means MTR's depots already wrote today's departures BEFORE the
-            // store above was read, so the depot-group stagger would be missing until
-            // something regenerated them. Re-write the grouped depots' timetables once,
-            // on their own simulator threads. No-op when the feature is off or nothing is
-            // grouped.
-            DepotGroupEngine.refreshOffsets(server, true);
+            // store above was read, so the depot delays would be missing until something
+            // regenerated them. Re-write the delayed depots' timetables once, on their own
+            // simulator threads (and, once per world, turn the old automatic group stagger
+            // into stored delays first). No-op when the feature is off or nothing is delayed.
+            DepotGroupEngine.startup(server);
         });
         ServerLifecycleEvents.SERVER_STOPPING.register(server -> {
             AddonStore.flush();
@@ -201,7 +204,6 @@ public final class AddonInit {
             DisruptionNetworking.syncStopChangesTo(sender);
             DisruptionNetworking.syncDisruptionsTo(sender);
             DisruptionNetworking.syncPostersTo(sender);
-            DepotGroupNetworking.syncDepotGroupsTo(sender);
         });
 
         StationAnnouncer.LOGGER.info("MTR dispatch addon initialized");

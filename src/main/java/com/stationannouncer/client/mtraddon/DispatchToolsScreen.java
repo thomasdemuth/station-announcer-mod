@@ -16,8 +16,8 @@ import net.minecraft.text.Text;
  * <ul>
  *   <li><b>Duplicate line…</b> — clone a route so the copy can be pointed at another
  *       platform ({@link DuplicateLineScreen});</li>
- *   <li><b>Depot groups…</b> — group depots so they stagger their departures instead of
- *       dispatching together ({@link DepotGroupsScreen});</li>
+ *   <li><b>Interlining…</b> — per-depot departure delays, depot groups, detected
+ *       interline sections and headway suggestions ({@link InterlineScreen});</li>
  *   <li><b>Journey directions…</b> — the per-player settings for the in-game navigation
  *       card, world marker and alerts ({@link NavSettingsScreen}).</li>
  * </ul>
@@ -59,10 +59,10 @@ public class DispatchToolsScreen extends Screen {
         y += WIDGET_HEIGHT + GAP;
 
         addDrawableChild(ButtonWidget.builder(
-                        Text.translatable("gui.station_announcer.depot_groups.button"),
+                        Text.translatable("gui.station_announcer.interline.button"),
                         button -> {
                             if (client != null) {
-                                client.setScreen(new DepotGroupsScreen(this));
+                                client.setScreen(new InterlineScreen(this));
                             }
                         })
                 .dimensions(left, y, PANEL_WIDTH, WIDGET_HEIGHT).build());
@@ -97,7 +97,7 @@ public class DispatchToolsScreen extends Screen {
         context.drawCenteredTextWithShadow(textRenderer, title, width / 2, titleY, 0xFFFFFF);
         int left = (width - PANEL_WIDTH) / 2;
         context.drawTextWithShadow(textRenderer,
-                Text.translatable("gui.station_announcer.depot_groups.count", ClientDepotGroups.count()),
+                Text.translatable("gui.station_announcer.interline.tools_hint"),
                 left, hintY + 4, DisruptionsScreen.TEXT_DIM);
     }
 

@@ -82,7 +82,59 @@ public final class DispatchMapData {
         root.add("routes", buildRoutes(simulator));
         root.add("stations", buildStations(simulator));
         root.add("throughRuns", buildThroughRuns(simulator));
+        root.add("places", buildPlaces(simulator));
         return root;
+    }
+
+    /**
+     * Wayfinding places in this simulator's world ({@code [{id, name, category,
+     * description, pos:[x,y,z], radius}]}), hidden ones left out. Read from the
+     * store's immutable snapshot, so safe on the simulator thread.
+     */
+    private static JsonArray buildPlaces(Simulator simulator) {
+        JsonArray places = new JsonArray();
+        try {
+            for (com.stationannouncer.wayfinding.Place place : com.stationannouncer.wayfinding.WayfindingStore.places()) {
+                if (place.hidden() || !simulator.dimension.equals(place.mtrDim())) {
+                    continue;
+                }
+                JsonObject json = new JsonObject();
+                json.addProperty("id", place.id());
+                json.addProperty("name", place.name());
+                json.addProperty("category", place.category().id());
+                json.addProperty("color", place.category().color());
+                if (!place.description().isEmpty()) {
+                    json.addProperty("description", place.description());
+                }
+                JsonArray pos = new JsonArray(3);
+                pos.add(place.x() + 0.5);
+                pos.add(place.y());
+                pos.add(place.z() + 0.5);
+                json.add("pos", pos);
+                json.addProperty("radius", place.radius());
+                places.add(json);
+            }
+        } catch (Throwable throwable) {
+            StationAnnouncer.LOGGER.warn("Dispatch map data: places failed ({})", throwable.toString());
+        }
+        return places;
+    }
+
+    /** Exit marker positions in this world: station id -> exit name -> [[x,y,z]…]. */
+    private static Map<Long, Map<String, JsonArray>> exitPins(Simulator simulator) {
+        Map<Long, Map<String, JsonArray>> out = new java.util.HashMap<>();
+        for (com.stationannouncer.wayfinding.ExitPin pin : com.stationannouncer.wayfinding.WayfindingStore.pins()) {
+            if (!pin.pinned() || !simulator.dimension.equals(pin.mtrDim())) {
+                continue;
+            }
+            JsonArray pos = new JsonArray(3);
+            pos.add(pin.x() + 0.5);
+            pos.add(pin.y());
+            pos.add(pin.z() + 0.5);
+            out.computeIfAbsent(pin.stationId(), id -> new java.util.HashMap<>())
+                    .computeIfAbsent(pin.exitName(), name -> new JsonArray()).add(pos);
+        }
+        return out;
     }
 
     // ------------------------------------------------------------- through runs
@@ -179,6 +231,12 @@ public final class DispatchMapData {
             routeJson.addProperty("number", route.getRouteNumber());
             routeJson.addProperty("color", route.getColor());
             routeJson.addProperty("hidden", route.getHidden());
+            // The line's bullet shape from MTR's Edit Route screen (LineStyles); circle = absent.
+            com.stationannouncer.mtraddon.LineStyles.Shape bulletShape =
+                    com.stationannouncer.mtraddon.LineStyles.shapeFor(route.getName());
+            if (bulletShape != com.stationannouncer.mtraddon.LineStyles.Shape.CIRCLE) {
+                routeJson.addProperty("bulletShape", bulletShape.id);
+            }
             routeJson.addProperty("mode", route.getTransportMode().toString().toLowerCase(Locale.ROOT));
             try {
                 fillRoute(simulator, route, routeJson, depotLegCache);
@@ -404,6 +462,7 @@ public final class DispatchMapData {
 
     private static JsonArray buildStations(Simulator simulator) {
         Map<Long, long[]> accessibility = AddonStore.accessibilityView();
+        Map<Long, Map<String, JsonArray>> pins = exitPins(simulator);
         JsonArray stations = new JsonArray();
         for (Station station : simulator.stations) {
             if (station == null) {
@@ -413,7 +472,19 @@ public final class DispatchMapData {
             stationJson.addProperty("id", String.valueOf(station.getId()));
             stationJson.addProperty("name", station.getName());
             stationJson.addProperty("color", station.getColor());
+            // Step-free: the manual flag (MTR's station screen) wins; a station without one
+            // takes the platforms its scanned layout reaches from the street without steps.
             long[] accessiblePlatforms = accessibility.get(station.getId());
+            if (accessiblePlatforms != null) {
+                stationJson.addProperty("accessibleSource", "manual");
+            } else {
+                long[] computed = com.stationannouncer.wayfinding.layout.LayoutScanner.stepFree(station.getId())
+                        .entrySet().stream().filter(Map.Entry::getValue).mapToLong(Map.Entry::getKey).toArray();
+                if (computed.length > 0) {
+                    accessiblePlatforms = computed;
+                    stationJson.addProperty("accessibleSource", "layout");
+                }
+            }
             stationJson.addProperty("accessible", accessiblePlatforms != null);
             // Exits with their signed destinations (MTR's own station-exit editor data),
             // for the station detail panel. Absent list = no exits configured.
@@ -430,6 +501,12 @@ public final class DispatchMapData {
                         destinations.add(destination);
                     }
                     exitJson.add("destinations", destinations);
+                    // Where the exit really is: every Exit Marker pinned to it (wayfinding).
+                    Map<String, JsonArray> stationPins = pins.get(station.getId());
+                    JsonArray exitPins = stationPins == null ? null : stationPins.get(exit.getName());
+                    if (exitPins != null) {
+                        exitJson.add("pins", exitPins);
+                    }
                     exitsJson.add(exitJson);
                 }
                 if (!exitsJson.isEmpty()) {
@@ -444,6 +521,16 @@ public final class DispatchMapData {
                     accessibleJson.add(String.valueOf(platformId));
                 }
                 stationJson.add("accessiblePlatforms", accessibleJson);
+            }
+            // The scanned walking layout (exits / openings / platforms, walks with legs and
+            // paths) when the station has been scanned — Map+ walks through it.
+            String layout = com.stationannouncer.wayfinding.layout.LayoutScanner.layoutJson(station.getId());
+            if (layout != null) {
+                try {
+                    stationJson.add("layout", org.mtr.libraries.com.google.gson.JsonParser.parseString(layout));
+                } catch (Throwable ignored) {
+                    // a damaged layout file only costs the station its layout
+                }
             }
             try {
                 fillStation(station, accessiblePlatforms, stationJson);

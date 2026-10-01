@@ -154,7 +154,8 @@ const WALK = run("walkSpeed()");
 check("the walk-speed pref defaults to Minecraft walking (4.3 m/s)", WALK === 4.3, WALK);
 check("transfer edges keep the meters/walkSpeed() + 30 s rule", run(`(() => {
 	const g = buildGraph();
-	return g.transferEdges.every(e => Math.abs(e.seconds - (e.meters / walkSpeed() + 30)) < 1e-9);
+	// + a scanned walk's lift/gate time (feature 12)
+	return g.transferEdges.every(e => Math.abs(e.seconds - (e.meters / walkSpeed() + 30 + (e.extraSeconds || 0))) < 1e-9);
 })()`));
 const walkLeg = fast.legs[3];
 check("walk legs carry that same timing (90 m -> 90/walkSpeed() + 30 s)",

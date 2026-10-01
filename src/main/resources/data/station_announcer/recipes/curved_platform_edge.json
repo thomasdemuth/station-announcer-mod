@@ -1,0 +1,16 @@
+{
+  "type": "minecraft:crafting_shaped",
+  "category": "building",
+  "key": {
+    "E": {
+      "item": "station_announcer:platform_edge"
+    }
+  },
+  "pattern": [
+    "EE"
+  ],
+  "result": {
+    "item": "station_announcer:curved_platform_edge",
+    "count": 2
+  }
+}

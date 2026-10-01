@@ -76,7 +76,15 @@ public final class RigPlaceCommand {
             src.sendError(Text.literal("no such player"));
             return 0;
         }
-        Identifier id = Identifier.tryParse(StringArgumentType.getString(c, "item"));
+        // "item" or "item{nbt}" (the nbt lets tests place items carrying data, e.g. a ramp's material).
+        String itemArg = StringArgumentType.getString(c, "item");
+        String nbtArg = null;
+        int brace = itemArg.indexOf('{');
+        if (brace > 0) {
+            nbtArg = itemArg.substring(brace);
+            itemArg = itemArg.substring(0, brace);
+        }
+        Identifier id = Identifier.tryParse(itemArg);
         Item item = id == null ? null : Registries.ITEM.get(id);
         Direction face = Direction.byName(StringArgumentType.getString(c, "face"));
         if (item == null || face == null) {
@@ -98,6 +106,14 @@ public final class RigPlaceCommand {
         player.setPitch(pitch);
         player.setSneaking(sneak);
         ItemStack stack = new ItemStack(item);
+        if (nbtArg != null) {
+            try {
+                stack.setNbt(net.minecraft.nbt.StringNbtReader.parse(nbtArg));
+            } catch (Exception e) {
+                src.sendError(Text.literal("bad nbt: " + e.getMessage()));
+                return 0;
+            }
+        }
         player.setStackInHand(Hand.MAIN_HAND, stack);
         ActionResult r = player.interactionManager.interactBlock(player, player.getServerWorld(), stack,
                 Hand.MAIN_HAND, new BlockHitResult(hit, face, pos, false));

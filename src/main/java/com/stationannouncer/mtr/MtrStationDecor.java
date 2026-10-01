@@ -388,6 +388,10 @@ public final class MtrStationDecor {
         ZebraLabels.register();
         // Gap fillers register themselves (blocks, block entity, sounds, packet, store).
         GapFillers.register();
+        // Curved platform edges + the Curved Platform Creator.
+        CurvedPlatforms.register();
+        // Wayfinding: exit + place markers, /place, their store.
+        Wayfinding.register();
 
         registerBlock("platform_edge", PLATFORM_EDGE, ModContent.DECORATION_ENTRIES);
         registerBlock("el_post", EL_POST, ModContent.DECORATION_ENTRIES);

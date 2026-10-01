@@ -51,19 +51,50 @@ public class AddonServerConfig {
     /** Feature 6b — service disruptions with automatic PA and sign broadcasting. */
     public Disruptions disruptions = new Disruptions();
 
-    /** Depot groups — grouped depots stagger their departures instead of dispatching together. */
+    /** Interline tooling — depot delays, depot groups, interline sections and headway suggestions (kept under the old "depotGroups" key so existing config files carry over). */
     public DepotGroups depotGroups = new DepotGroups();
 
     public static class DepotGroups {
         /**
-         * Master switch. When false the departure-stagger hook returns 0 on a single
-         * field read (MTR's timetable is written untouched), group edits are refused
-         * and the S2C sync sends an empty list. Turning it off leaves the offsets
+         * Master switch for the interline tooling: per-depot departure delays, depot
+         * groups, interline section detection and the headway suggestions. When false
+         * the departure hook returns 0 on a single field read (MTR's timetable is
+         * written untouched) and every edit is refused. Turning it off leaves delays
          * already written into the sidings' departure lists in place until the next
          * depot regeneration — the timetable is baked, the same rule as dwell
          * overrides and platform groups.
          */
         public boolean enabled = true;
+
+        /**
+         * Consecutive platforms two lines must share, in the same order, before the
+         * stretch counts as an interline section. Clamped 1–16; 1 also reports single
+         * shared platforms.
+         */
+        public int minSharedStops = 2;
+
+        /**
+         * Highest depot frequency a headway target may write, in MTR's slider units
+         * (4 = one train per nominal hour). 20 is the top of MTR's own depot slider, so a
+         * suggested value can still be edited there. Clamped 1–80.
+         */
+        public int maxFrequency = 20;
+
+        /**
+         * Longest extra dwell (platform hold) a suggestion may add at one stop. 200 s is one
+         * headway at MTR's slowest frequency on the default day, which is the most a
+         * turnaround hold ever needs to re-phase a line. Clamped 0–600 s.
+         */
+        public int maxDwellPadSeconds = 200;
+
+        /**
+         * Allow the dispatch web page to APPLY suggestions and delays. Only a browser paired
+         * with /navpair whose player has {@code editPermissionLevel} can; off = preview only.
+         */
+        public boolean webApply = true;
+
+        /** Cap on reported sections per dimension (largest first). Clamped 1–500. */
+        public int maxSections = 200;
 
         /** Maximum number of stored depot groups. Clamped 1–64. */
         public int maxGroups = 16;
@@ -352,6 +383,10 @@ public class AddonServerConfig {
         depotGroups.maxGroups = Math.max(1, Math.min(64, depotGroups.maxGroups));
         depotGroups.maxDepotsPerGroup = Math.max(2, Math.min(32, depotGroups.maxDepotsPerGroup));
         depotGroups.maxNameLength = Math.max(1, Math.min(64, depotGroups.maxNameLength));
+        depotGroups.minSharedStops = Math.max(1, Math.min(16, depotGroups.minSharedStops));
+        depotGroups.maxFrequency = Math.max(1, Math.min(80, depotGroups.maxFrequency));
+        depotGroups.maxDwellPadSeconds = Math.max(0, Math.min(600, depotGroups.maxDwellPadSeconds));
+        depotGroups.maxSections = Math.max(1, Math.min(500, depotGroups.maxSections));
         stopChanges.maxPerRoute = Math.max(1, Math.min(64, stopChanges.maxPerRoute));
         stopChanges.maxDurationMinutes = Math.max(1, Math.min(525_600, stopChanges.maxDurationMinutes));
         disruptions.announceIntervalMinutes = Math.max(1, Math.min(120, disruptions.announceIntervalMinutes));

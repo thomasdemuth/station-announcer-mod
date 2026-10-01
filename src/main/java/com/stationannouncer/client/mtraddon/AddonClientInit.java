@@ -3,7 +3,6 @@ package com.stationannouncer.client.mtraddon;
 import com.stationannouncer.StationAnnouncer;
 import com.stationannouncer.client.mtraddon.nav.ClientNav;
 import com.stationannouncer.mtraddon.AddonNetworking;
-import com.stationannouncer.mtraddon.DepotGroupNetworking;
 import com.stationannouncer.mtraddon.LiftDoorSides;
 import com.stationannouncer.mtraddon.disruption.DisruptionNetworking;
 import net.fabricmc.api.EnvType;
@@ -126,7 +125,6 @@ public final class AddonClientInit {
             ClientDisruptions.clear();
             ClientPosters.clear();
             ClientStopChanges.clear();
-            ClientDepotGroups.clear();
             ClientNav.stop();
         });
 
@@ -141,6 +139,7 @@ public final class AddonClientInit {
         registerRouteDwellButton();
         registerAnnouncementTemplateSync();
         registerRouteAnnouncementButton();
+        ClientLineStyles.register();
         registerAccessibilitySync();
         registerStationAccessibilityButton();
         registerLiftDoorSync();
@@ -150,7 +149,7 @@ public final class AddonClientInit {
         registerDispatchDashboardButton();
         registerDisruptionSync();
         registerDisruptionsDashboardButton();
-        registerDepotGroupSync();
+        registerInterlineReplies();
         registerToolsDashboardButton();
         DrivingHud.register(); // Feature 4 — driving HUD (registers its own disconnect cleanup)
         // Journey directions: the addon_navigate receiver, the 4 Hz progress
@@ -360,31 +359,17 @@ public final class AddonClientInit {
 
     // ------------------------------- Depot groups + line tools (dashboard button)
 
-    /** Server → client depot-group sync (join + after every edit and offset refresh). */
-    private static void registerDepotGroupSync() {
-        ClientPlayNetworking.registerGlobalReceiver(DepotGroupNetworking.DEPOT_GROUPS_S2C,
+    /** Server → client interline replies, handed to the open Interlining screen. */
+    private static void registerInterlineReplies() {
+        ClientPlayNetworking.registerGlobalReceiver(com.stationannouncer.mtraddon.interline.InterlineService.REPLY_S2C,
                 (client, handler, buf, responseSender) -> {
-                    int groupCount = buf.readVarInt();
-                    if (groupCount < 0 || groupCount > DepotGroupNetworking.MAX_GROUPS) {
-                        return;
-                    }
-                    List<ClientDepotGroups.Group> groups = new ArrayList<>(groupCount);
-                    for (int i = 0; i < groupCount; i++) {
-                        long id = buf.readLong();
-                        String name = buf.readString(DepotGroupNetworking.MAX_NAME_LENGTH);
-                        int memberCount = buf.readVarInt();
-                        if (memberCount < 0 || memberCount > DepotGroupNetworking.MAX_DEPOTS) {
-                            return;
+                    int requestId = buf.readVarInt();
+                    String json = buf.readString(com.stationannouncer.mtraddon.interline.InterlineService.MAX_REPLY_BYTES);
+                    client.execute(() -> {
+                        if (client.currentScreen instanceof InterlineScreen screen) {
+                            screen.accept(requestId, json);
                         }
-                        List<ClientDepotGroups.Member> members = new ArrayList<>(memberCount);
-                        for (int j = 0; j < memberCount; j++) {
-                            long depotId = buf.readLong();
-                            int offsetMillis = buf.readVarInt(); // -1 = not computed yet
-                            members.add(new ClientDepotGroups.Member(depotId, offsetMillis));
-                        }
-                        groups.add(new ClientDepotGroups.Group(id, name, List.copyOf(members)));
-                    }
-                    client.execute(() -> ClientDepotGroups.replace(groups));
+                    });
                 });
     }
 

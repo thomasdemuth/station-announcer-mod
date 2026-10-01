@@ -56,7 +56,7 @@ import org.mtr.mod.block.PlatformHelper;
  * a half) — set automatically from the platform's rail when the block links,
  * adjustable with the brush.</p>
  */
-public class GapFillerBlock extends Block implements BlockEntityProvider, PlatformHelper {
+public class GapFillerBlock extends Block implements BlockEntityProvider, PlatformHelper, GapFillerHost {
     public enum Style {
         UNION(GapFillerStore.Settings.UNION),
         LOOP(GapFillerStore.Settings.LOOP);
@@ -107,6 +107,22 @@ public class GapFillerBlock extends Block implements BlockEntityProvider, Platfo
     @Override
     protected void appendProperties(StateManager.Builder<Block, BlockState> builder) {
         builder.add(TRACK_SIDE, REACH, PHASE);
+    }
+
+    @Override
+    public Style style() {
+        return style;
+    }
+
+    @Override
+    public double[] edgeCentre(BlockState state, BlockPos pos) {
+        Direction side = state.get(TRACK_SIDE);
+        return new double[]{pos.getX() + 0.5 + side.getOffsetX() * 0.5, pos.getZ() + 0.5 + side.getOffsetZ() * 0.5};
+    }
+
+    @Override
+    public boolean reachInState() {
+        return true;
     }
 
     /** Like the platform edge: you stand on the platform looking at the track. */

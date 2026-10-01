@@ -67,8 +67,15 @@ public final class GapFillers {
     public static final GapFillerBlock GAP_FILLER = new GapFillerBlock(settings(), GapFillerBlock.Style.UNION);
     public static final GapFillerBlock GAP_FILLER_LOOP = new GapFillerBlock(settings(), GapFillerBlock.Style.LOOP);
 
+    /** The same fillers in a curved platform edge (cut + strip + slot; reach in the block entity). */
+    public static final CurvedGapFillerBlock CURVED_GAP_FILLER =
+            new CurvedGapFillerBlock(settings().dynamicBounds(), GapFillerBlock.Style.UNION);
+    public static final CurvedGapFillerBlock CURVED_GAP_FILLER_LOOP =
+            new CurvedGapFillerBlock(settings().dynamicBounds(), GapFillerBlock.Style.LOOP);
+
     public static final BlockEntityType<GapFillerBlockEntity> GAP_FILLER_BLOCK_ENTITY =
-            BlockEntityType.Builder.create(GapFillerBlockEntity::new, GAP_FILLER, GAP_FILLER_LOOP).build(null);
+            BlockEntityType.Builder.create(GapFillerBlockEntity::new, GAP_FILLER, GAP_FILLER_LOOP,
+                    CURVED_GAP_FILLER, CURVED_GAP_FILLER_LOOP).build(null);
 
     public static final SoundEvent SOUND_HYDRAULIC = SoundEvent.of(StationAnnouncer.id("gap_filler_hydraulic"));
     public static final SoundEvent SOUND_ROLL = SoundEvent.of(StationAnnouncer.id("gap_filler_roll"));
@@ -92,6 +99,8 @@ public final class GapFillers {
     public static void register() {
         registerBlock("gap_filler", GAP_FILLER);
         registerBlock("gap_filler_loop", GAP_FILLER_LOOP);
+        registerBlock("curved_gap_filler", CURVED_GAP_FILLER);
+        registerBlock("curved_gap_filler_loop", CURVED_GAP_FILLER_LOOP);
         Registry.register(Registries.BLOCK_ENTITY_TYPE, StationAnnouncer.id("gap_filler"), GAP_FILLER_BLOCK_ENTITY);
         for (SoundEvent sound : new SoundEvent[]{SOUND_HYDRAULIC, SOUND_ROLL, SOUND_BANG}) {
             Registry.register(Registries.SOUND_EVENT, sound.getId(), sound);
@@ -137,8 +146,12 @@ public final class GapFillers {
         switch (action) {
             case ACTION_SAVE -> {
                 int clamped = Math.max(1, Math.min(12, reach));
-                if (state.get(GapFillerBlock.REACH) != clamped) {
-                    world.setBlockState(pos, state.with(GapFillerBlock.REACH, clamped), Block.NOTIFY_ALL);
+                if (filler.reachUnits(state) != clamped) {
+                    if (state.contains(GapFillerBlock.REACH)) {
+                        world.setBlockState(pos, state.with(GapFillerBlock.REACH, clamped), Block.NOTIFY_ALL);
+                    } else {
+                        filler.setReachUnits(clamped);
+                    }
                     filler.setReachAuto(false);
                 }
                 if (filler.getPlatformId() != 0) {
@@ -175,25 +188,27 @@ public final class GapFillers {
     public static void link(ServerWorld world, BlockPos pos, boolean autoReach, @Nullable ServerPlayerEntity feedback) {
         Simulator simulator = simulatorFor(world);
         BlockState state = world.getBlockState(pos);
-        if (simulator == null || !(state.getBlock() instanceof GapFillerBlock)) {
+        if (simulator == null || !(state.getBlock() instanceof GapFillerHost host)) {
             return;
         }
-        Direction side = state.get(GapFillerBlock.TRACK_SIDE);
-        double faceX = pos.getX() + 0.5 + side.getOffsetX() * 0.5;
-        double faceZ = pos.getZ() + 0.5 + side.getOffsetZ() * 0.5;
+        Direction side = host.trackSide(state);
+        double[] centre = host.edgeCentre(state, pos);
+        double faceX = centre[0];
+        double faceZ = centre[1];
+        double travelPerGap = host.travelPerGap(state);
         int y = pos.getY();
         MinecraftServer server = world.getServer();
         simulator.run(() -> {
             Found found = null;
             try {
-                found = nearestPlatform(simulator, faceX, y, faceZ, side);
+                found = nearestPlatform(simulator, faceX, y, faceZ, side, travelPerGap);
             } catch (Throwable t) {
                 StationAnnouncer.LOGGER.warn("Gap filler: platform lookup failed", t);
             }
             Found result = found;
             server.execute(() -> {
                 BlockState now = world.getBlockState(pos);
-                if (!(world.getBlockEntity(pos) instanceof GapFillerBlockEntity filler) || !(now.getBlock() instanceof GapFillerBlock)) {
+                if (!(world.getBlockEntity(pos) instanceof GapFillerBlockEntity filler) || !(now.getBlock() instanceof GapFillerHost)) {
                     return;
                 }
                 if (result == null) {
@@ -203,8 +218,12 @@ public final class GapFillers {
                     return;
                 }
                 filler.applyLink(result.platformId(), result.label());
-                if (autoReach && now.get(GapFillerBlock.REACH) != result.reach()) {
-                    world.setBlockState(pos, now.with(GapFillerBlock.REACH, result.reach()), Block.NOTIFY_ALL);
+                if (autoReach && filler.reachUnits(now) != result.reach()) {
+                    if (now.contains(GapFillerBlock.REACH)) {
+                        world.setBlockState(pos, now.with(GapFillerBlock.REACH, result.reach()), Block.NOTIFY_ALL);
+                    } else {
+                        filler.setReachUnits(result.reach());
+                    }
                 }
                 if (feedback != null) {
                     feedback.sendMessage(Text.translatable("msg.station_announcer.gap_filler.linked",
@@ -216,7 +235,8 @@ public final class GapFillers {
 
     /** TSC thread. */
     @Nullable
-    private static Found nearestPlatform(Simulator simulator, double faceX, int y, double faceZ, Direction side) {
+    private static Found nearestPlatform(Simulator simulator, double faceX, int y, double faceZ, Direction side,
+                                         double travelPerGap) {
         Platform best = null;
         Clearance bestClearance = null;
         for (Platform platform : simulator.platforms) {
@@ -238,7 +258,7 @@ public final class GapFillers {
         if (best == null || bestClearance.distance() > MAX_LINK_DISTANCE) {
             return null;
         }
-        double gapPx = (bestClearance.distance() - CAR_HALF_WIDTH + bestClearance.chordBulge()) * 16 + PRESS_PX;
+        double gapPx = (bestClearance.distance() - CAR_HALF_WIDTH + bestClearance.chordBulge()) * 16 * travelPerGap + PRESS_PX;
         int reach = (int) Math.ceil(Math.max(2, Math.min(24, gapPx)) / 2);
         return new Found(best.getId(), label(best), Math.max(1, Math.min(12, reach)));
     }

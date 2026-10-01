@@ -84,6 +84,16 @@ public final class AddonStore {
     private static final Map<Long, ServicePoster> posters = new LinkedHashMap<>();
     /** Depot groups: group id → the group (name + member depot ids in offset order). */
     private static final Map<Long, DepotGroup> depotGroups = new LinkedHashMap<>();
+    /**
+     * Interline tooling: depot id → departure delay in millis (the whole timetable slides
+     * by it; see {@link DepotGroupEngine}). Replaces the old automatic i/N group stagger.
+     */
+    private static final Map<Long, Long> depotDelays = new LinkedHashMap<>();
+    /**
+     * False until the old automatic group stagger has been converted into manual delays
+     * (once per world, so upgrading moves no train). Persisted as {@code depotDelaysMigrated}.
+     */
+    private static boolean depotDelaysMigrated;
 
     /**
      * Lock-free "is there anything to do" state for the once-a-second server
@@ -118,6 +128,8 @@ public final class AddonStore {
             disruptions.clear();
             posters.clear();
             depotGroups.clear();
+            depotDelays.clear();
+            depotDelaysMigrated = false;
             DepotGroupEngine.clearRuntimeState();
             // A world without a data file must not inherit a previous world's
             // rotation/choice state (SERVER_STOPPED normally clears it, but not
@@ -141,6 +153,9 @@ public final class AddonStore {
                     readDisruptions(root.getAsJsonObject("disruptions"));
                     readPosters(root.getAsJsonObject("posters"));
                     readDepotGroups(root.getAsJsonObject("depotGroups"));
+                    readDepotDelays(root.getAsJsonObject("depotDelays"));
+                    depotDelaysMigrated = root.has("depotDelaysMigrated")
+                            && root.get("depotDelaysMigrated").getAsBoolean();
                 }
             } catch (Exception e) {
                 StationAnnouncer.LOGGER.warn("Could not read {}, starting with empty addon data", path, e);
@@ -150,7 +165,7 @@ public final class AddonStore {
         publishDwell();
         publishGroups();
         publishStopChanges();
-        publishDepotGroups();
+        publishDepotDelays();
         StationAnnouncer.LOGGER.info("Addon store loaded ({} hold rules, {} platforms with dwell overrides, {} lift door configs, {} platform groups, {} temporary stop changes, {} disruptions, {} depot groups)",
                 holdRuleCount(), dwellOverridePlatformCount(), liftDoorCount(), platformGroupCount(),
                 stopChangeCount(), disruptionCount, depotGroupCount());
@@ -419,7 +434,6 @@ public final class AddonStore {
             stored = new DepotGroup(id, group.name(), group.depotIds().clone());
             depotGroups.put(id, stored);
         }
-        publishDepotGroups();
         markDirty();
         return stored;
     }
@@ -431,8 +445,82 @@ public final class AddonStore {
                 return;
             }
         }
-        publishDepotGroups();
         markDirty();
+    }
+
+    // ------------------------------------------------------- depot delays
+
+    /** Server thread: a copy of every configured delay (depot id → millis). */
+    public static Map<Long, Long> depotDelaysView() {
+        synchronized (LOCK) {
+            return new LinkedHashMap<>(depotDelays);
+        }
+    }
+
+    /**
+     * Server thread: set (millis &gt; 0) or clear (millis &lt;= 0) several depots' delays in
+     * one go, then republish + save. Returns true when anything changed.
+     */
+    public static boolean setDepotDelays(Map<Long, Long> changes) {
+        boolean changed = false;
+        synchronized (LOCK) {
+            for (Map.Entry<Long, Long> entry : changes.entrySet()) {
+                long depotId = entry.getKey();
+                long millis = entry.getValue() == null ? 0 : entry.getValue();
+                if (depotId == 0) {
+                    continue;
+                }
+                if (millis <= 0) {
+                    changed |= depotDelays.remove(depotId) != null;
+                } else {
+                    Long previous = depotDelays.put(depotId, millis);
+                    changed |= previous == null || previous != millis;
+                }
+            }
+        }
+        if (changed) {
+            publishDepotDelays();
+            markDirty();
+        }
+        return changed;
+    }
+
+    public static boolean depotDelaysMigrated() {
+        synchronized (LOCK) {
+            return depotDelaysMigrated;
+        }
+    }
+
+    /** Server thread: record that the legacy group stagger has been converted. */
+    public static void markDepotDelaysMigrated() {
+        synchronized (LOCK) {
+            if (depotDelaysMigrated) {
+                return;
+            }
+            depotDelaysMigrated = true;
+        }
+        markDirty();
+    }
+
+    private static void publishDepotDelays() {
+        AddonSnapshots.publishDepotDelays(depotDelaysView());
+    }
+
+    private static void readDepotDelays(JsonObject json) {
+        if (json == null) {
+            return;
+        }
+        for (Map.Entry<String, JsonElement> entry : json.entrySet()) {
+            try {
+                long depotId = Long.parseLong(entry.getKey());
+                long millis = entry.getValue().getAsLong();
+                if (depotId != 0 && millis > 0) {
+                    depotDelays.put(depotId, millis);
+                }
+            } catch (Exception e) {
+                StationAnnouncer.LOGGER.warn("Skipping malformed depot delay '{}'", entry.getKey(), e);
+            }
+        }
     }
 
     // -------------------------------- Feature 6a: temporary stop changes
@@ -771,10 +859,6 @@ public final class AddonStore {
 
     private static void publishGroups() {
         AddonSnapshots.publishPlatformGroups(platformGroupsView());
-    }
-
-    private static void publishDepotGroups() {
-        AddonSnapshots.publishDepotGroups(depotGroupsView());
     }
 
     private static void readDepotGroups(JsonObject json) {
@@ -1203,6 +1287,11 @@ public final class AddonStore {
                 depotGroupsJson.add(Long.toString(id), entry);
             });
             root.add("depotGroups", depotGroupsJson);
+            // Interline tooling: per-depot departure delays (millis).
+            JsonObject depotDelaysJson = new JsonObject();
+            depotDelays.forEach((depotId, millis) -> depotDelaysJson.addProperty(Long.toString(depotId), millis));
+            root.add("depotDelays", depotDelaysJson);
+            root.addProperty("depotDelaysMigrated", depotDelaysMigrated);
             json = GSON.toJson(root);
         }
         try {

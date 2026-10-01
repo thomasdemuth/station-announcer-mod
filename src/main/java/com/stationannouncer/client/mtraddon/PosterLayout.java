@@ -153,8 +153,8 @@ public final class PosterLayout {
             float cx = RIGHT - radius;
             for (int i = lines.size() - 1; i >= 0; i--) {
                 RouteBullets.Bullet bullet = lineBullet(lines.get(i));
-                s.disc(cx, cy, radius, bullet.color(), 2);
-                float labelSize = radius * 1.15f;
+                bulletShape(s, bullet, cx, cy, radius, 2);
+                float labelSize = radius * (bullet.shape() == com.stationannouncer.mtraddon.LineStyles.Shape.DIAMOND ? 1.0f : 1.15f);
                 int ink = RouteBullets.needsDarkText(bullet.color()) ? INK : WHITE;
                 s.text(bullet.label(), cx - s.width(bullet.label(), labelSize, true) / 2, cy - labelSize / 2,
                         labelSize, ink, true);
@@ -358,8 +358,8 @@ public final class PosterLayout {
             case "b" -> {
                 RouteBullets.Bullet bullet = lineBullet(arg);
                 float radius = size * 0.575f;
-                s.disc(x + radius, cy, radius, bullet.color(), 2);
-                float labelSize = radius * 1.15f;
+                bulletShape(s, bullet, x + radius, cy, radius, 2);
+                float labelSize = radius * (bullet.shape() == com.stationannouncer.mtraddon.LineStyles.Shape.DIAMOND ? 1.0f : 1.15f);
                 s.text(bullet.label(), x + radius - s.width(bullet.label(), labelSize, true) / 2,
                         cy - labelSize / 2, labelSize, RouteBullets.needsDarkText(bullet.color()) ? INK : WHITE, true);
             }
@@ -379,6 +379,27 @@ public final class PosterLayout {
             case "^" -> bigArrow(s, x + size * 0.45f, cy, 2, size / 40.0f, ink, 2);
             case "v" -> bigArrow(s, x + size * 0.45f, cy, 6, size / 40.0f, ink, 2);
             default -> s.text("{" + token + "}", x, y, size, ink, false);
+        }
+    }
+
+    /**
+     * A route bullet's body in its line's shape (circle, express diamond or
+     * square — {@link com.stationannouncer.mtraddon.LineStyles}), centred on
+     * cx/cy. {@code radius} is the circle's; the diamond's points reach a little
+     * further and the square sits a little inside, so the three read as the same
+     * size, as on MTA signage.
+     */
+    public static void bulletShape(Surface s, RouteBullets.Bullet bullet, float cx, float cy, float radius, int layer) {
+        switch (bullet.shape()) {
+            case DIAMOND -> {
+                float d = radius * 1.12f;
+                s.poly(new float[]{cx, cx + d, cx, cx - d}, new float[]{cy - d, cy, cy + d, cy}, bullet.color(), layer);
+            }
+            case SQUARE -> {
+                float h = radius * 0.9f;
+                s.rect(cx - h, cy - h, cx + h, cy + h, bullet.color(), layer);
+            }
+            default -> s.disc(cx, cy, radius, bullet.color(), layer);
         }
     }
 
@@ -535,6 +556,7 @@ public final class PosterLayout {
 
     private static final Map<String, RouteBullets.Bullet> LINE_BULLETS = new LinkedHashMap<>();
     private static long lineExpiry;
+    private static int lineStyleVersion = -1;
     private static final long LINE_TTL_MS = 3_000;
     private static final RouteBullets.Bullet UNKNOWN = new RouteBullets.Bullet("?", 0xFF7A7A80);
 
@@ -551,7 +573,7 @@ public final class PosterLayout {
         if (bullet != null) {
             return bullet;
         }
-        return new RouteBullets.Bullet(RouteBullets.label(lineName), UNKNOWN.color());
+        return new RouteBullets.Bullet(RouteBullets.label(lineName), UNKNOWN.color(), ClientLineStyles.shape(lineName));
     }
 
     /** Every line in the world, in MTR's order, for the editor's picker. */
@@ -563,10 +585,11 @@ public final class PosterLayout {
 
     private static Map<String, RouteBullets.Bullet> lineMap() {
         long now = System.currentTimeMillis();
-        if (now < lineExpiry) {
+        if (now < lineExpiry && lineStyleVersion == ClientLineStyles.version()) {
             return LINE_BULLETS;
         }
         lineExpiry = now + LINE_TTL_MS;
+        lineStyleVersion = ClientLineStyles.version();
         LINE_BULLETS.clear();
         try {
             for (SimplifiedRoute route : org.mtr.mod.client.MinecraftClientData.getInstance().simplifiedRoutes) {
@@ -577,7 +600,7 @@ public final class PosterLayout {
                 String line = AddonUi.splitLineAndDirection(raw)[0];
                 if (!line.isEmpty()) {
                     LINE_BULLETS.putIfAbsent(line, new RouteBullets.Bullet(RouteBullets.label(raw),
-                            0xFF000000 | route.getColor()));
+                            0xFF000000 | route.getColor(), ClientLineStyles.shape(line)));
                 }
             }
         } catch (Exception ignored) {
@@ -595,7 +618,7 @@ public final class PosterLayout {
                 String line = AddonUi.splitLineAndDirection(raw)[0];
                 if (!line.isEmpty()) {
                     LINE_BULLETS.putIfAbsent(line, new RouteBullets.Bullet(RouteBullets.label(raw),
-                            0xFF000000 | route.getColor()));
+                            0xFF000000 | route.getColor(), ClientLineStyles.shape(line)));
                 }
             }
         } catch (Exception ignored) {

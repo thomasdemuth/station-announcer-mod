@@ -720,6 +720,10 @@ function frame() {
 	}
 	ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
 
+	// Interlining panel (interline.js): dims the network and draws the selected section's
+	// track, stations and suggested platform holds on top, under the signals and trains.
+	if (window.ilDrawOverlay) window.ilDrawOverlay(ctx);
+
 	// interpolation delay from the measured stream cadence (fallback: configured rate)
 	const delay = state.emaInterval
 		? Math.max(250, Math.min(2000, state.emaInterval * 1.25 + 120))
@@ -772,7 +776,8 @@ function frame() {
 	for (const [id, rec] of state.vehicles) {
 		if (!modeEnabled(vehicleMode(rec))) { rec.screen = null; continue; }
 		// the board's line filter dims (never hides) non-matching trains on the map
-		const filteredOut = state.boardFilter.size > 0 && (!rec.route || !state.boardFilter.has(lineKey(rec.route.name)));
+		const filteredOut = (state.boardFilter.size > 0 && (!rec.route || !state.boardFilter.has(lineKey(rec.route.name))))
+			|| (window.ilFocusRoutes && (!rec.route || !window.ilFocusRoutes.has(rec.route.id)));
 		const p = vehiclePos(rec, renderTime);
 		if (!p) { rec.screen = null; continue; }
 		const targetAngle = Math.atan2(p.hz || 0, p.hx || 1);

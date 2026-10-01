@@ -53,7 +53,7 @@ public class ItemBridgeCreator extends ItemNodeModifierSelectableBlockBase {
                 return ActionResult.SUCCESS;
             }
         }
-        return super.useOnBlock2(context);
+        return MtrPillars.claimNodeClick(context, super.useOnBlock2(context));
     }
 
     @Override

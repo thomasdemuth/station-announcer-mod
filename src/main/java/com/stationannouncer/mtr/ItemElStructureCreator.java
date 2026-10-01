@@ -133,6 +133,11 @@ public class ItemElStructureCreator extends ItemNodeModifierSelectableBlockBase 
     }
 
     @Override
+    public org.mtr.mapping.holder.ActionResult useOnBlock2(org.mtr.mapping.holder.ItemUsageContext context) {
+        return MtrPillars.claimNodeClick(context, super.useOnBlock2(context));
+    }
+
+    @Override
     public void useWithoutResult(World world, PlayerEntity player, Hand hand) {
         if (world.isClient()) {
             MtrPillars.SETTINGS_OPENER.accept(hand.data);

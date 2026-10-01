@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Dispatch — Station Announcer</title>
 <link rel="stylesheet" href="style.css">
+<link rel="stylesheet" href="interline.css">
 </head>
 <body>
 <div id="banner" class="hidden"></div>
@@ -21,6 +22,7 @@
 	</div>
 	<div class="spacer"></div>
 	<a class="btn" href="map.html" title="System Map+ — geographic map and journey planner">Map+</a>
+	<button id="interlineBtn" class="btn" title="Interlining — shared sections, depot delays, platform holds and headway suggestions [I]">Interlining</button>
 	<div id="layersWrap">
 		<button id="layersBtn" class="btn" title="Map layers, transport modes and station heat">Layers ▾</button>
 		<div id="layersPanel" class="hidden">
@@ -148,6 +150,37 @@
 		</div>
 	</section>
 
+	<aside id="ilPanel" class="hidden" aria-label="Interlining">
+		<div id="ilHead">
+			<span class="an-title">INTERLINING</span>
+			<span class="il-tabs">
+				<button class="btn small active" id="ilTabSections">Sections</button>
+				<button class="btn small" id="ilTabDepots">Depots</button>
+			</span>
+			<span class="spacer"></span>
+			<span id="ilBuilt" class="an-meta"></span>
+			<button id="ilRefresh" class="btn small" title="Rebuild the analysis from the live railway">&#x21bb;</button>
+			<button id="ilClose" class="btn small">&times;</button>
+		</div>
+		<div id="ilPick"></div>
+		<div id="ilDetail"><div class="il-empty">Loading…</div></div>
+	</aside>
+
+	<section id="ilSheet" class="hidden" aria-label="Section timetable">
+		<div id="ilSheetHead">
+			<span class="an-title">TIMETABLE THROUGH THE SECTION</span>
+			<span id="ilSheetMeta" class="an-meta"></span>
+			<span class="spacer"></span>
+			<span class="il-seg" id="ilSheetShow">
+				<button data-v="now">Now</button><button data-v="both" class="on">Now + suggested</button><button data-v="sug">Suggested</button>
+			</span>
+			<button id="ilSheetZoomOut" class="btn small" title="Show a longer stretch of time">&minus;</button>
+			<button id="ilSheetZoomIn" class="btn small" title="Show a shorter stretch of time">+</button>
+		</div>
+		<canvas id="ilSheetCanvas"></canvas>
+		<div id="ilSheetTip" class="hidden"></div>
+	</section>
+
 	<section id="analytics" class="hidden">
 		<div id="analyticsHead">
 			<span class="an-title">TIMETABLE &amp; HEADWAY ANALYTICS</span>
@@ -189,5 +222,6 @@
 </div>
 
 <script src="app.js"></script>
+<script src="interline.js"></script>
 </body>
 </html>

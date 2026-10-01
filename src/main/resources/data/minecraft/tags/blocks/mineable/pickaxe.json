@@ -305,6 +305,11 @@
     "station_announcer:esi_ceiling",
     "station_announcer:esi_ceiling_light",
     "station_announcer:gap_filler",
-    "station_announcer:gap_filler_loop"
+    "station_announcer:gap_filler_loop",
+    "station_announcer:material_ramp",
+    "station_announcer:material_stairs",
+    "station_announcer:curved_platform_edge",
+    "station_announcer:curved_gap_filler",
+    "station_announcer:curved_gap_filler_loop"
   ]
 }

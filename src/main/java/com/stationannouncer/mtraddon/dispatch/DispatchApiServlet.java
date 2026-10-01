@@ -91,7 +91,8 @@ public final class DispatchApiServlet extends ServletBase {
     @Override
     protected void doGet(HttpServletRequest request, HttpServletResponse response) {
         if (unavailable(response) || handleAnalytics(request, response) || handleAlerts(request, response)
-                || handleSatTile(request, response) || handleNav(request, response)) {
+                || handleSatTile(request, response) || handleNav(request, response)
+                || handleInterlineSuggest(request, response) || handleInterlineApply(request, response)) {
             return;
         }
         super.doGet(request, response);
@@ -104,7 +105,8 @@ public final class DispatchApiServlet extends ServletBase {
     @Override
     protected void doPost(HttpServletRequest request, HttpServletResponse response) {
         if (unavailable(response) || handleAnalytics(request, response) || handleAlerts(request, response)
-                || handleSatTile(request, response) || handleNav(request, response)) {
+                || handleSatTile(request, response) || handleNav(request, response)
+                || handleInterlineSuggest(request, response) || handleInterlineApply(request, response)) {
             return;
         }
         super.doPost(request, response);
@@ -744,6 +746,188 @@ public final class DispatchApiServlet extends ServletBase {
         return true;
     }
 
+    /**
+     * {@code interlinesuggest} — a headway suggestion for one interline section, answered
+     * SYNCHRONOUSLY on the Jetty worker from the analysis the {@code interline} endpoint
+     * last built for that dimension (the solver can take a few hundred milliseconds and
+     * must never run on a simulator thread). Read-only: the web page shows suggestions,
+     * applying them stays in game where the player's permission level is known.
+     *
+     * <p>Query: {@code dimension}, {@code section}, {@code mode} (even|target),
+     * {@code targetMs}, {@code direction} (balance|forward|reverse|options), {@code pads}
+     * (true|false), {@code depots} (comma-separated ids), {@code weights}
+     * ({@code id:w,id:w}).</p>
+     */
+    private static boolean handleInterlineSuggest(HttpServletRequest request, HttpServletResponse response) {
+        if (!"interlinesuggest".equals(firstSegment(request))) {
+            return false;
+        }
+        int dimensionIndex = 0;
+        try {
+            String parameter = request.getParameter("dimension");
+            if (parameter != null && !parameter.isEmpty()) {
+                dimensionIndex = Integer.parseInt(parameter);
+            }
+        } catch (NumberFormatException ignored) {
+            // dimension 0, like ServletBase
+        }
+        Simulator simulator = DispatchRegistry.simulator(dimensionIndex);
+        com.google.gson.JsonObject data;
+        if (simulator == null) {
+            data = com.stationannouncer.mtraddon.interline.InterlineJson.error("invalid dimension");
+        } else if (!AddonServerConfig.get().depotGroups.enabled) {
+            data = com.stationannouncer.mtraddon.interline.InterlineJson.error("Interline tooling is turned off (depotGroups.enabled).");
+        } else {
+            com.stationannouncer.mtraddon.interline.InterlineModel.Analysis analysis =
+                    com.stationannouncer.mtraddon.interline.InterlineService.cached(simulator.dimension,
+                            com.stationannouncer.mtraddon.interline.InterlineService.WEB_CACHE_MILLIS);
+            if (analysis == null) {
+                data = com.stationannouncer.mtraddon.interline.InterlineJson.error("The analysis is out of date — reload the page.");
+            } else {
+                com.google.gson.JsonObject params = new com.google.gson.JsonObject();
+                for (String key : new String[]{"section", "mode", "direction", "group", "levers"}) {
+                    String value = request.getParameter(key);
+                    if (value != null) {
+                        params.addProperty(key, value.length() > 64 ? value.substring(0, 64) : value);
+                    }
+                }
+                try {
+                    params.addProperty("targetMs", Long.parseLong(request.getParameter("targetMs")));
+                } catch (RuntimeException ignored) {
+                    params.addProperty("targetMs", 0);
+                }
+                params.addProperty("pads", !"false".equals(request.getParameter("pads")));
+                com.google.gson.JsonArray depots = new com.google.gson.JsonArray();
+                String depotList = request.getParameter("depots");
+                if (depotList != null && depotList.length() < 4096) {
+                    for (String id : depotList.split(",")) {
+                        if (!id.isBlank()) {
+                            depots.add(id.trim());
+                        }
+                    }
+                }
+                params.add("depots", depots);
+                com.google.gson.JsonObject weights = new com.google.gson.JsonObject();
+                String weightList = request.getParameter("weights");
+                if (weightList != null && weightList.length() < 4096) {
+                    for (String pair : weightList.split(",")) {
+                        String[] parts = pair.split(":");
+                        try {
+                            if (parts.length == 2) {
+                                weights.addProperty(parts[0].trim(), Double.parseDouble(parts[1]));
+                            }
+                        } catch (NumberFormatException ignored) {
+                            // skip a malformed weight
+                        }
+                    }
+                }
+                params.add("weights", weights);
+                try {
+                    data = com.stationannouncer.mtraddon.interline.InterlineSolver.solve(analysis,
+                            com.stationannouncer.mtraddon.interline.InterlineSolver.Request.fromJson(params));
+                } catch (RuntimeException e) {
+                    StationAnnouncer.LOGGER.warn("Interline suggestion failed", e);
+                    data = com.stationannouncer.mtraddon.interline.InterlineJson.error("Suggestion failed: " + e);
+                }
+            }
+        }
+        DispatchStaticServlet.sendText(response, 200, "application/json;charset=utf-8",
+                new Response(200, "Success", toMtrJson(data)).getJson().toString());
+        return true;
+    }
+
+    /**
+     * {@code interlineauth?token=…} and {@code POST interlineapply}
+     * {@code {"token", "dimension", "delays", "frequencies", "dwell"}} — the dispatch page's
+     * Apply. Only a browser paired with {@code /navpair} (the journey-directions pairing,
+     * {@link NavStore}) may apply, and only while its player has the addon's
+     * {@code editPermissionLevel} (checked against the op list, so it works while the player
+     * is offline); {@code depotGroups.webApply = false} turns it off.
+     */
+    private static boolean handleInterlineApply(HttpServletRequest request, HttpServletResponse response) {
+        String segment = firstSegment(request);
+        boolean auth = "interlineauth".equals(segment);
+        if (!auth && !"interlineapply".equals(segment)) {
+            return false;
+        }
+        try {
+            JsonObject body = auth ? null : readJsonBody(request);
+            String rawToken = auth ? request.getParameter("token") : body == null ? null : string(body, "token", 64);
+            if (!auth && body == null) {
+                sendNavError(response, "malformed request body");
+                return true;
+            }
+            if (!AddonServerConfig.get().depotGroups.enabled || !AddonServerConfig.get().depotGroups.webApply) {
+                sendNavError(response, "applying from the web is turned off on this server");
+                return true;
+            }
+            NavStore.Token token = auth ? NavStore.peek(rawToken) : NavStore.use(rawToken);
+            if (token == null) {
+                sendNavError(response, "not paired — run /navpair in game and enter the code");
+                return true;
+            }
+            MinecraftServer server = NavStore.server();
+            if (server == null) {
+                sendNavError(response, "server unavailable");
+                return true;
+            }
+            int level = AddonServerConfig.get().editPermissionLevel;
+            Boolean permitted = awaitOnServer(server, () -> {
+                ServerPlayerEntity online = server.getPlayerManager().getPlayer(token.playerId());
+                if (online != null) {
+                    return online.hasPermissionLevel(level);
+                }
+                com.mojang.authlib.GameProfile profile = server.getUserCache() == null ? null
+                        : server.getUserCache().getByUuid(token.playerId()).orElse(null);
+                return profile != null && server.getPermissionLevel(profile) >= level;
+            }, null);
+            if (permitted == null) {
+                sendNavError(response, "server busy, try again");
+                return true;
+            }
+            if (!permitted) {
+                sendNavError(response, token.playerName() + " does not have permission to change the railway");
+                return true;
+            }
+            JsonObject reply = new JsonObject();
+            reply.addProperty("ok", true);
+            reply.addProperty("player", token.playerName());
+            if (!auth) {
+                int dimensionIndex;
+                try {
+                    dimensionIndex = body.has("dimension") ? body.get("dimension").getAsInt() : 0;
+                } catch (RuntimeException e) {
+                    dimensionIndex = 0;
+                }
+                Simulator simulator = DispatchRegistry.simulator(dimensionIndex);
+                if (simulator == null) {
+                    sendNavError(response, "invalid dimension");
+                    return true;
+                }
+                com.google.gson.JsonObject changes = com.google.gson.JsonParser.parseString(body.toString()).getAsJsonObject();
+                String dimension = simulator.dimension;
+                String result = awaitOnServer(server, () ->
+                        com.stationannouncer.mtraddon.interline.InterlineService.applyFromWeb(server, dimension, changes), null);
+                if (result == null) {
+                    sendNavError(response, "server busy, try again");
+                    return true;
+                }
+                StationAnnouncer.LOGGER.info("Interlining applied from the dispatch web page by {}: {}", token.playerName(), result);
+                reply.addProperty("message", result);
+            }
+            sendNavJson(response, reply);
+        } catch (Throwable throwable) {
+            StationAnnouncer.LOGGER.warn("Interline apply endpoint failed ({})", throwable.toString());
+            sendNavError(response, "internal error");
+        }
+        return true;
+    }
+
+    /** The interline tooling builds vanilla-Gson JSON; MTR's envelope wants its shaded Gson. */
+    private static JsonObject toMtrJson(com.google.gson.JsonObject json) {
+        return JsonParser.parseString(json.toString()).getAsJsonObject();
+    }
+
     /** First path segment after the servlet mapping, e.g. {@code /analytics} → {@code analytics}. */
     private static String firstSegment(HttpServletRequest request) {
         String path = request.getPathInfo();
@@ -811,6 +995,19 @@ public final class DispatchApiServlet extends ServletBase {
             sendResponse.accept(mapDataResponses
                     .computeIfAbsent(simulator.dimension, key -> new CachedResponse(DispatchMapData::build, 30_000))
                     .get(simulator));
+        } else if ("interline".equals(endpoint)) {
+            // Interline sections, depots, delays and headways. Built fresh each time on
+            // this simulator thread (it reads the sidings' stop times) and cached for the
+            // synchronous interlinesuggest endpoint.
+            if (!AddonServerConfig.get().depotGroups.enabled) {
+                sendResponse.accept(toMtrJson(com.stationannouncer.mtraddon.interline.InterlineJson.error(
+                        "Interline tooling is turned off (depotGroups.enabled).")));
+            } else {
+                com.google.gson.JsonObject analysis = com.stationannouncer.mtraddon.interline.InterlineJson.analysis(
+                        com.stationannouncer.mtraddon.interline.InterlineService.analyzeAndCache(simulator));
+                analysis.addProperty("webApply", AddonServerConfig.get().depotGroups.webApply);
+                sendResponse.accept(toMtrJson(analysis));
+            }
         } else if ("satmeta".equals(endpoint)) {
             // Where the basemap's tiles are and how they map onto the world. The
             // scanner's snapshot is volatile-immutable, so reading it here is thread-safe

@@ -1,20 +1,18 @@
 package com.stationannouncer.mtraddon;
 
 /**
- * One named <em>depot group</em>: a set of depots that must NOT dispatch together.
+ * One named <em>depot group</em>: depots that belong together on a shared corridor.
  *
- * <p>Depots in a group have their departures phase-offset instead of leaving at the
- * same moment — member {@code i} of a group of {@code N} shifts its whole timetable
- * by {@code (i / N) × headway}, where the headway is that depot's own mean scheduled
- * departure interval (see {@link DepotGroupEngine}). Membership order IS the offset
- * order: the first stored depot is the reference (+0), the second departs a third of
- * a headway later in a group of three, and so on.</p>
+ * <p>Since 2026-09-29 a group shifts nothing by itself (it used to stagger member
+ * {@code i} of {@code N} by {@code i/N} of a headway at the depot). It now only tells
+ * the interline tooling which depots a suggestion may move; the delays themselves are
+ * per-depot values ({@code AddonStore.depotDelaysView}).</p>
  *
- * @param id      creation-time millis, nudged forward on collision (same scheme as
- *                {@code Disruption}); the stable key in storage and on the wire
- * @param name    the label Thomas typed; free text, capped by
- *                {@code depotGroups.maxNameLength}
- * @param depotIds member depot ids IN OFFSET ORDER (index 0 = no offset)
+ * @param id       creation-time millis, nudged forward on collision (same scheme as
+ *                 {@code Disruption}); the stable key in storage and on the wire
+ * @param name     the label Thomas typed; free text, capped by
+ *                 {@code depotGroups.maxNameLength}
+ * @param depotIds member depot ids (order no longer matters)
  */
 public record DepotGroup(long id, String name, long[] depotIds) {
 

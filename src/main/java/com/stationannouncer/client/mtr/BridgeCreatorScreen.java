@@ -744,7 +744,7 @@ public class BridgeCreatorScreen extends Screen {
         }
         c.disableScissor();
         FlatUi.scrollThumb(c, x + w - 2, gridY, rowsVisible * cell, totalRows * cell, popupScroll * cell);
-        String foot = filtered.size() + " blocks · type to search · sneak-click a block in the world for its exact state";
+        String foot = filtered.size() + " blocks · or sneak-click one in the world";
         c.drawText(textRenderer, textRenderer.trimToWidth(foot, w - 16), x + 8, y + h - 11, FlatUi.TEXT_FAINT, false);
     }
 

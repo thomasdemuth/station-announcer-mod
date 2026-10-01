@@ -1,6 +1,7 @@
 package com.stationannouncer.mtraddon;
 
 import org.mtr.libraries.it.unimi.dsi.fastutil.longs.Long2LongAVLTreeMap;
+import it.unimi.dsi.fastutil.longs.Long2LongOpenHashMap;
 import org.mtr.libraries.it.unimi.dsi.fastutil.longs.Long2ObjectOpenHashMap;
 import java.util.Map;
 
@@ -118,38 +119,29 @@ public final class AddonSnapshots {
         PlatformGroupEngine.pruneRuntime(java.util.Set.copyOf(groups.keySet()));
     }
 
-    // ------------------------------------------------------- depot groups
+    // ------------------------------------------------------- depot delays
 
     /**
-     * Depot-group membership flattened for the simulator threads: depot id →
-     * {@code {offsetSlot, groupSize}}. A depot that is in no group is simply absent, so
-     * the departure hook's whole cost for an ungrouped depot is one {@code get(long)}
-     * that returns null. The array is never mutated after publish.
+     * Per-depot departure delays for the simulator threads: depot id → millis. A depot
+     * without a delay is absent, so the departure hook's cost for it is one
+     * {@code get(long)} returning the default 0. Never mutated after publish.
      */
-    private static volatile Long2ObjectOpenHashMap<int[]> depotGroups = new Long2ObjectOpenHashMap<>();
+    private static volatile Long2LongOpenHashMap depotDelays = new Long2LongOpenHashMap();
 
-    /** Current depot-group membership keyed by depot id. Read-only. */
-    public static Long2ObjectOpenHashMap<int[]> depotGroups() {
-        return depotGroups;
+    /** Current per-depot delays. Read-only. */
+    public static Long2LongOpenHashMap depotDelays() {
+        return depotDelays;
     }
 
-    /**
-     * Server thread only: rebuild the published membership map from the store's groups.
-     * A depot listed in two groups keeps its FIRST membership (iteration order of the
-     * store's LinkedHashMap, i.e. creation order) — the C2S handler already refuses to
-     * create the second one, so this is only a defensive rule for hand-edited files.
-     */
-    static void publishDepotGroups(Map<Long, DepotGroup> groups) {
-        Long2ObjectOpenHashMap<int[]> snapshot = new Long2ObjectOpenHashMap<>(Math.max(1, groups.size() * 2));
-        groups.forEach((id, group) -> {
-            long[] members = group.depotIds();
-            for (int i = 0; i < members.length; i++) {
-                if (members[i] != 0 && !snapshot.containsKey(members[i])) {
-                    snapshot.put(members[i], new int[]{i, members.length});
-                }
+    /** Server thread only: rebuild the published delay map from the store. */
+    static void publishDepotDelays(Map<Long, Long> delays) {
+        Long2LongOpenHashMap snapshot = new Long2LongOpenHashMap(Math.max(1, delays.size() * 2));
+        delays.forEach((depotId, millis) -> {
+            if (depotId != 0 && millis != null && millis > 0) {
+                snapshot.put(depotId.longValue(), millis.longValue());
             }
         });
-        depotGroups = snapshot;
+        depotDelays = snapshot;
     }
 
     // ------------------------------------- Feature 6a: temporary stop changes

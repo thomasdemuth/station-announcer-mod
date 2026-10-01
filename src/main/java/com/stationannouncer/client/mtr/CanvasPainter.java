@@ -124,6 +124,33 @@ public class CanvasPainter {
         quad(cx - halfWidth, cy - halfHeight, cx + halfWidth, cy + halfHeight, -0.8f, 0xFFFFFFFF);
     }
 
+    /**
+     * A route bullet in its line's shape (MTR Edit Route → Bullet): the circle,
+     * the express diamond, or a square. Same footprint rules as
+     * PosterLayout.bulletShape, so a PIDS and a sign of the same line agree.
+     */
+    public void routeBullet(float cx, float cy, float radius, int color, String label, boolean inverted,
+                            com.stationannouncer.mtraddon.LineStyles.Shape shape) {
+        switch (shape) {
+            case DIAMOND -> {
+                float d = radius * 1.12f;
+                VertexConsumer buffer = consumers.getBuffer(layer());
+                Matrix4f matrix = matrices.peek().getPositionMatrix();
+                // Same corner order as quad(): top, right, bottom, left.
+                quad3d(buffer, matrix, cx, cy - d, -0.6f, cx + d, cy, -0.6f, cx, cy + d, -0.6f, cx - d, cy, -0.6f, color);
+                float size = radius * 0.95f;
+                textCentered(label, cx, cy - size / 2.0f, size, inverted ? TEXT_BLACK : 0xFFFFFFFF);
+            }
+            case SQUARE -> {
+                float h = radius * 0.9f;
+                quad(cx - h, cy - h, cx + h, cy + h, -0.6f, color);
+                float size = radius * 1.1f;
+                textCentered(label, cx, cy - size / 2.0f, size, inverted ? TEXT_BLACK : 0xFFFFFFFF);
+            }
+            default -> circleBullet(cx, cy, radius, color, label, inverted);
+        }
+    }
+
     /** Proper circular route bullet with a centered label. */
     public void circleBullet(float cx, float cy, float radius, int color, String label, boolean inverted) {
         VertexConsumer buffer = consumers.getBuffer(layer());

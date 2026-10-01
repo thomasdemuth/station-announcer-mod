@@ -85,28 +85,37 @@ where the IRT's middle doors are. `GapFillers.clearance(...)` is public for the 
   close timing, retraction, departure), holds + obstructions at a filler stop, manual driving, the
   brush screen clicks, sounds in game, plate lighting, reach auto on a real curve.
 
-## PLANNED: curved platform blocks
+## BUILT (2026-09-25): curved platform edges + Curved Platform Creator
 
-Goal: platform edges that follow a curved MTR track instead of stair-stepping, with fillers where the
-chord gap needs them — the Union Square / South Ferry picture end to end.
-
-1. **`platform_edge_curved`** — the platform edge with its nosing cut along a line inside the block:
-   `facing` (4) × `a` × `b` (edge offset at the block's left / right end, 0..16 px in 2 px steps, 9 × 9)
-   = 324 states. Generated models: the top stepped at 1–2 px resolution (JSON can only rotate 22.5°,
-   and Thomas's Sodium ignores the Fabric renderer API — no emitBlockQuads tricks), the tactile strip
-   following the cut, collision to match. `PlatformHelper` so doors open. No SLAB/CLEAN adoption (it
-   would multiply the state count; measure on the dedicated server if added).
-2. **Curved Platform Creator** (bridge-creator pattern: two node clicks on the platform rail, rails read
-   on the TSC thread, preview = the build, per-player undo). For every cell along the rail it computes
-   the edge line at `CAR_HALF_WIDTH + clearance` with `GapFillers.clearance` and places a curved edge
-   block with the right `a`/`b`; optionally it places **gap fillers** instead where the chord gap at a
-   door would exceed a threshold (outside of the curve, near mid-car), each filler with its reach
-   precomputed — so a curved platform comes out "Union Square" in one go.
-3. **Curved filler plates**: a filler in a curved row keeps its straight plate (the plate lands against
-   the car side, which is straight); only its body's nosing uses the curved edge's cut. Needs a
-   `gap_filler` variant carrying `a`/`b` or a companion cut block — decide when building (state count:
-   324 × 12 reach × 4 phase is too many for one block; likely the filler keeps a straight nosing and the
-   creator only puts fillers where the cut is shallow).
-4. Open questions for Thomas when we get there: platform height/clearance defaults per rolling stock
-   (IRT 8'9" vs B-division 10' → half-width 1.33 vs 1.52), whether South Ferry's "first five cars only"
-   (a platform shorter than the train, doors past the end stay shut) should be modelled.
+- **`curved_platform_edge`** (`mtr/CurvedPlatformEdgeBlock`, PlatformHelper): the concrete edge cut
+  along a line through the block + the raised tactile strip (8 px, platform_edge_strip texture sampled
+  ALONG the cut). `facing` (track side) × `cut_a`/`cut_b` 0..20 = depth −16..24 px in 2 px steps at the
+  block's left/right end (values outside 0..16 still set the cut's slope; negative = strip-spill cell
+  behind the cut) = 1,764 states. Drawn by the shared `client/material/ShapeModel` (Java quads per
+  state via a Fabric BlockStateResolver — Sodium meshes plain getQuads) with
+  `client/mtr/CurvedEdgeGeometry` (Sutherland–Hodgman clip of the cell; slanted cut face; strip band).
+  Collision: 2 px strips.
+- **Curved Platform Creator** (`mtr/ItemCurvedPlatformCreator` + `CurvedPlatforms.build`): stand on
+  the platform, click the platform track's two nodes. Samples the rail every 0.25 block; edge =
+  rail + normal × (1.5 + min(1.5, 25/R)) on the player's side (a 20-block car's middle bulges in and
+  its ends swing out by ≈ 25/R, so no car clips the edge); every cell near the line gets a cut from ray
+  intersections at its two face corners (shared corners → identical depths → a continuous edge);
+  floor sticking into the gap is trimmed (never MTR blocks / block entities); right-click air = undo
+  (in memory, per player). Dev: `/rigcurve build <player> x1 y z1 A1 x2 z2 A2` runs it on a synthetic
+  MTR RailMath, `/rigcurve undo <player>`.
+- Verified on the rig (screenshots 2026-09-25 19:55–19:56): radius-35 synthetic curve, 104 edge cells,
+  every cut corner within 0.08 block of the true edge circle, strip + cut face continuous. Also ran on
+  Sea Cliff's real 66° platform (worked, then restored from the original save — Thomas's rig setup).
+  Two fixes found there: quad winding now from Newell's normal (clipped polygons with collinear first
+  vertices were culled → saw-tooth holes) and the wider cut encoding (clamping bent the cut).
+- **Curved gap fillers** (`mtr/CurvedGapFillerBlock`, `curved_gap_filler` / `_loop`): the curved edge's cut +
+  strip with the filler slot (geometry `CurvedEdgeGeometry(slotFloor)`: base + deck nosing, slot floor/ceiling,
+  inner cheeks, back wall) and the same engine / block entity / link / brush screen as the straight ones
+  (`GapFillerHost` interface). The plate slides straight out of the track face (model −z) with its tip along
+  the cut, so neighbouring plates stay side by side; reach lives in the BLOCK ENTITY (cut × reach × phase
+  would be 85k states) and collision reads it (`dynamicBounds`); auto reach measures from the cut's middle
+  × 1/cos of the cut angle. Creator modes (sneak-right-click air cycles; item NBT `FillerMode`): edges only /
+  + Union Sq fillers / + South Ferry fillers — full-width cuts (depth 0..16 at both ends) become fillers.
+  Verified at Sea Cliff with a real train (21 fillers linked "Sea Cliff · L", reach 4..24 px, plates out
+  under the open doors along the curve; screenshots 20:29), then restored from a snapshot.
+- Not done: rolling-stock-specific half widths, South Ferry's "first five cars only".

@@ -214,11 +214,24 @@ public class RoutePicker {
 
     /** A rounded {@value #BULLET}-pixel disc with its label, drawn in GUI space. */
     public static void drawBullet(DrawContext context, TextRenderer font, RouteBullets.Bullet bullet, int x, int y) {
-        // Four fills approximate a circle at this size better than one square:
-        // a full-height core column, a full-width core row, and the corners left out.
-        context.fill(x + 2, y, x + BULLET - 2, y + BULLET, bullet.color());
-        context.fill(x, y + 2, x + BULLET, y + BULLET - 2, bullet.color());
-        context.fill(x + 1, y + 1, x + BULLET - 1, y + BULLET - 1, bullet.color());
+        switch (bullet.shape()) {
+            case SQUARE -> context.fill(x + 1, y + 1, x + BULLET - 1, y + BULLET - 1, bullet.color());
+            case DIAMOND -> {
+                // One row per pixel, widest across the middle.
+                float half = BULLET / 2.0f;
+                for (int row = 0; row < BULLET; row++) {
+                    int span = Math.round(half - Math.abs(row + 0.5f - half) + 0.5f);
+                    context.fill(x + (int) half - span, y + row, x + (int) half + span, y + row + 1, bullet.color());
+                }
+            }
+            default -> {
+                // Four fills approximate a circle at this size better than one square:
+                // a full-height core column, a full-width core row, and the corners left out.
+                context.fill(x + 2, y, x + BULLET - 2, y + BULLET, bullet.color());
+                context.fill(x, y + 2, x + BULLET, y + BULLET - 2, bullet.color());
+                context.fill(x + 1, y + 1, x + BULLET - 1, y + BULLET - 1, bullet.color());
+            }
+        }
         if (bullet.label().isEmpty() && bullet.color() == RouteBullets.NO_ENTRY_COLOR) {
             // The no-entry roundel: the white bar is the symbol, so the row
             // shows the bar rather than a blank red disc.

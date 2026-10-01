@@ -117,7 +117,7 @@ public abstract class DepotMixin extends DepotSchema {
         StopOverlayEngine.onWriteRouteCache((Depot) (Object) this, data, platformsInRoute);
     }
 
-    // ------------------------------------------------ depot groups: stagger departures
+    // ---------------------------------------- depot delays: slide the whole timetable
 
     /**
      * The phase offset (millis) added to every departure of the generation pass currently
@@ -138,7 +138,9 @@ public abstract class DepotMixin extends DepotSchema {
      * <b>Thread:</b> simulator (or the server thread with {@code useThreadedSimulation}
      * off) — this method runs from {@code Depot.init}, {@code Depot.finishGeneratingPath}
      * and {@code Simulator.setGameTime}, never per tick. <b>Toggle:</b>
-     * {@code depotGroups.enabled}; off, ungrouped, or a group of one → 0.
+     * {@code depotGroups.enabled}; off, or no delay stored for this depot → 0. (Until
+     * 2026-09-29 this was an automatic group stagger; it is now the per-depot delay the
+     * interline tooling suggests or the player types in.)
      */
     @Inject(method = "generatePlatformDirectionsAndWriteDeparturesToSidings()V", at = @At("HEAD"))
     private void stationAnnouncer$computeDepartureOffset(CallbackInfo ci) {
@@ -166,7 +168,7 @@ public abstract class DepotMixin extends DepotSchema {
      * departures of the same pass).</p>
      *
      * <p><b>Thread:</b> as above. <b>Toggle:</b> {@code depotGroups.enabled} — when off,
-     * or for any depot that is not staggered, the offset is 0 and the original value is
+     * or for any depot without a delay, the offset is 0 and the original value is
      * handed on untouched.</p>
      */
     @Redirect(

@@ -267,8 +267,9 @@ public class PidsNycRenderer implements BlockEntityRenderer<PidsBlockEntity> {
         float centerY = y + height / 2.0f;
 
         float leftX = 8;
-        painter.circleBullet(leftX + bulletRadius, centerY, bulletRadius,
-                0xFF000000 | arrival.getRouteColor(), bulletLabel(arrival), inverted);
+        painter.routeBullet(leftX + bulletRadius, centerY, bulletRadius,
+                0xFF000000 | arrival.getRouteColor(), bulletLabel(arrival), inverted,
+                com.stationannouncer.client.mtraddon.ClientLineStyles.shape(arrival.getRouteName()));
 
         Eta eta = eta(arrival);
         String number = arriving ? "0" : eta.number();
@@ -389,7 +390,7 @@ public class PidsNycRenderer implements BlockEntityRenderer<PidsBlockEntity> {
     }
 
     /** A connecting route at a station: bullet color + short label. */
-    private record Connection(int color, String label) {
+    private record Connection(int color, String label, com.stationannouncer.mtraddon.LineStyles.Shape shape) {
     }
 
     /** "6" from "Line 6", "19" from "Route 19/BakerLink", else the first letter. */
@@ -443,7 +444,8 @@ public class PidsNycRenderer implements BlockEntityRenderer<PidsBlockEntity> {
                     firstName.append(name);
                 }
             });
-            connections.add(new Connection(0xFF000000 | color, routeLabel(firstName.toString())));
+            connections.add(new Connection(0xFF000000 | color, routeLabel(firstName.toString()),
+                    com.stationannouncer.client.mtraddon.ClientLineStyles.shape(firstName.toString())));
         });
         return connections;
     }
@@ -541,7 +543,7 @@ public class PidsNycRenderer implements BlockEntityRenderer<PidsBlockEntity> {
                 if (x + radius > 124) {
                     break; // keep the right margin
                 }
-                painter.circleBullet(x, rowY, radius, connection.color(), connection.label(), false);
+                painter.routeBullet(x, rowY, radius, connection.color(), connection.label(), false, connection.shape());
                 x += radius * 2 + 2.5f;
             }
         }

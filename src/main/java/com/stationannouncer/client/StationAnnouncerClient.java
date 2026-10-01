@@ -51,6 +51,8 @@ public class StationAnnouncerClient implements ClientModInitializer {
     public void onInitializeClient() {
         // Key binds (both unbound by default) show up in vanilla's Controls screen.
         StationAnnouncerKeys.register();
+        // Ramps and stairs in any full block's texture: palette, models, picker.
+        com.stationannouncer.client.material.MaterialClient.register();
 
         // The barrier's wire mesh is a cutout texture (alpha holes).
         BlockRenderLayerMap.INSTANCE.putBlock(ModContent.EL_ROOF, net.minecraft.client.render.RenderLayer.getCutoutMipped());
@@ -169,6 +171,20 @@ public class StationAnnouncerClient implements ClientModInitializer {
                                     // Dev-only: the Bridge Creator screen for the held item.
                                     client.setScreen(new com.stationannouncer.client.mtr.BridgeCreatorScreen(
                                             net.minecraft.util.Hand.MAIN_HAND, client.player.getMainHandStack()));
+                                } else if (cmd.equals("#material-picker")) {
+                                    // Dev-only: the ramp/stairs texture picker for the held item.
+                                    client.setScreen(com.stationannouncer.client.material.MaterialPickerScreen.forHand(
+                                            net.minecraft.util.Hand.MAIN_HAND, client.player.getMainHandStack()));
+                                } else if (cmd.startsWith("#marker-")) {
+                                    // Dev-only: exit/place marker editors without a mouse
+                                    // (#marker-editor x y z / #marker-exit x y z NAME dest… /
+                                    // #marker-place x y z category name…) — see WayfindingClient.
+                                    com.stationannouncer.client.mtr.WayfindingClient.devHook(client, cmd);
+                                } else if (cmd.startsWith("#interline")) {
+                                    // Dev-only: drive the Interlining screen without a mouse
+                                    // (#interline [sections N | depots N | groups | suggest DIR [target]
+                                    // | apply | delay N DURATION]) — see InterlineScreen.devHook.
+                                    com.stationannouncer.client.mtraddon.InterlineScreen.devHook(client, cmd);
                                 } else if (cmd.startsWith("#poster-")) {
                                     // Dev-only: open the poster screens without a mouse
                                     // (#poster-list <disruptionId> / #poster-editor <posterId> /

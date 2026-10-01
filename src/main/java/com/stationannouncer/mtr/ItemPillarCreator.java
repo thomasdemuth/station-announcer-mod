@@ -88,6 +88,11 @@ public class ItemPillarCreator extends ItemNodeModifierSelectableBlockBase {
         return saved == null ? null : saved.data;
     }
 
+    @Override
+    public org.mtr.mapping.holder.ActionResult useOnBlock2(org.mtr.mapping.holder.ItemUsageContext context) {
+        return MtrPillars.claimNodeClick(context, super.useOnBlock2(context));
+    }
+
     /** Right-click in the air: the settings screen (width, spacing, preview). */
     @Override
     public void useWithoutResult(World world, PlayerEntity player, Hand hand) {

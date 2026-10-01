@@ -5,6 +5,8 @@ import com.stationannouncer.block.ElDeckBlock;
 import com.stationannouncer.block.ElGirderBlock;
 import com.stationannouncer.block.ElRun;
 import com.stationannouncer.mtr.ColumnBlock;
+import com.mojang.blaze3d.platform.GlConst;
+import com.mojang.blaze3d.systems.RenderSystem;
 import net.fabricmc.api.EnvType;
 import net.fabricmc.api.Environment;
 import net.minecraft.block.BlockState;
@@ -135,5 +137,10 @@ public final class CreatorPreview {
         DiffuseLighting.disableGuiDepthLighting();
         matrices.pop();
         context.disableScissor();
+        // The miniature sits at z 300 +- its own depth, far in front of the
+        // flat GUI layer: without this, anything drawn after it (the dimming
+        // backdrop and every popup) fails the depth test and the preview
+        // punches straight through them.
+        RenderSystem.clear(GlConst.GL_DEPTH_BUFFER_BIT, MinecraftClient.IS_SYSTEM_MAC);
     }
 }

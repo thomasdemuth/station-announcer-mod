@@ -53,8 +53,15 @@ public final class RouteBullets {
     /** Route colours change about as often as anybody rebuilds a line. */
     private static final long COLORS_TTL_MS = 3000;
 
-    /** One drawable bullet: the short label on the disc and the disc's colour. */
-    public record Bullet(String label, int color) {
+    /**
+     * One drawable bullet: the short label, the colour, and the shape its LINE
+     * is set to on MTR's Edit Route screen (circle / express diamond / square,
+     * {@link com.stationannouncer.mtraddon.LineStyles}).
+     */
+    public record Bullet(String label, int color, com.stationannouncer.mtraddon.LineStyles.Shape shape) {
+        public Bullet(String label, int color) {
+            this(label, color, com.stationannouncer.mtraddon.LineStyles.Shape.CIRCLE);
+        }
     }
 
     /** A route that could be put on a sign: its stored name plus how it will look. */
@@ -72,6 +79,8 @@ public final class RouteBullets {
      * memoized alongside the colours and dropped with them.
      */
     private static final Map<String, Bullet> BULLETS = new HashMap<>();
+    /** The line-style version the memo was built against; a shape edit drops it at once. */
+    private static int bulletsStyleVersion = -1;
 
     private RouteBullets() {
     }
@@ -91,12 +100,18 @@ public final class RouteBullets {
             return new Bullet("", NO_ENTRY_COLOR);
         }
         Map<String, Integer> colors = colors();   // may drop BULLETS as it expires
+        int styleVersion = com.stationannouncer.client.mtraddon.ClientLineStyles.version();
+        if (styleVersion != bulletsStyleVersion) {
+            BULLETS.clear();
+            bulletsStyleVersion = styleVersion;
+        }
         Bullet cached = BULLETS.get(routeName);
         if (cached != null) {
             return cached;
         }
         Integer color = colors.get(routeName);
-        Bullet bullet = new Bullet(label(routeName), color != null ? color : UNKNOWN_COLOR);
+        Bullet bullet = new Bullet(label(routeName), color != null ? color : UNKNOWN_COLOR,
+                com.stationannouncer.client.mtraddon.ClientLineStyles.shape(routeName));
         BULLETS.put(routeName, bullet);
         return bullet;
     }
@@ -124,7 +139,8 @@ public final class RouteBullets {
                     continue;
                 }
                 options.put(routeName, new Option(routeName, RailroadRouteData.firstLang(routeName),
-                        new Bullet(label(routeName), 0xFF000000 | route.getColor())));
+                        new Bullet(label(routeName), 0xFF000000 | route.getColor(),
+                                com.stationannouncer.client.mtraddon.ClientLineStyles.shape(routeName))));
             }
         } catch (Exception ignored) {
             // MTR data mid-sync — the list just comes back short

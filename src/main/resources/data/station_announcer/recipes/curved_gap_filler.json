@@ -1,0 +1,16 @@
+{
+  "type": "minecraft:crafting_shaped",
+  "category": "building",
+  "key": {
+    "F": {
+      "item": "station_announcer:gap_filler"
+    }
+  },
+  "pattern": [
+    "F"
+  ],
+  "result": {
+    "item": "station_announcer:curved_gap_filler",
+    "count": 1
+  }
+}

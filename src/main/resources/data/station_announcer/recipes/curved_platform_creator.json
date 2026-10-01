@@ -1,0 +1,24 @@
+{
+  "type": "minecraft:crafting_shaped",
+  "category": "building",
+  "key": {
+    "Y": {
+      "item": "minecraft:yellow_dye"
+    },
+    "S": {
+      "item": "station_announcer:platform_edge"
+    },
+    "R": {
+      "item": "minecraft:rail"
+    }
+  },
+  "pattern": [
+    " Y ",
+    "YSY",
+    " R "
+  ],
+  "result": {
+    "item": "station_announcer:curved_platform_creator",
+    "count": 1
+  }
+}

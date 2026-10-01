@@ -28,6 +28,10 @@ const API = "api";
 const DEMO = new URLSearchParams(location.search).get("demo") === "1";
 /** ?player=<username> — the in-game button opens the map with this set (feature 3). */
 const PLAYER_PARAM = new URLSearchParams(location.search).get("player") || "";
+/* Deep links (feature 13): ?from= / ?to= with place:<id or name>, station:<id or name> or
+ * point:<x>,<z>[,<y>] open the planner already aimed — MTR-Games' "Directions" links use them. */
+const DEEP_FROM = new URLSearchParams(location.search).get("from") || "";
+const DEEP_TO = new URLSearchParams(location.search).get("to") || "";
 const PREFS_KEY = "sa_mapplus_prefs";
 
 /**
@@ -206,6 +210,24 @@ const STREET_TRANSFER_NEIGHBOURS = 3;
 const POINT_FROM = "@from";
 const POINT_TO = "@to";
 
+/* ---- wayfinding: places + exit pins (feature 11) ---- */
+/** Exit pins (the Exit Marker blocks) are drawn from this zoom in (px per block). */
+const EXIT_PIN_ZOOM = 0.6;
+/** Landmarks and attractions show their icon from here… */
+const PLACE_MAJOR_ZOOM = 0.12;
+/** …every other place from here… */
+const PLACE_ZOOM = 0.3;
+/** …and a place names itself from here (majors a little earlier). */
+const PLACE_LABEL_ZOOM = 0.45;
+const PLACE_MAJOR = new Set(["landmark", "attraction"]);
+/** Districts are area labels, not pins: drawn between these zooms. */
+const DISTRICT_ZOOM_MIN = 0.05, DISTRICT_ZOOM_MAX = 1.6;
+const PLACE_CATEGORY_LABELS = {
+	landmark: "Landmark", attraction: "Attraction", park: "Park", shopping: "Shopping", food: "Food",
+	culture: "Culture", sports: "Sports", civic: "Civic", district: "District", other: "Place",
+};
+const EXIT_GREEN = "#1e8e3e";
+
 /* ---- live player GPS (feature 3) ---- */
 /** Player samples kept for interpolation (the feed runs at 4 Hz). */
 const PLAYER_SAMPLES = 4;
@@ -282,6 +304,10 @@ const state = {
 	trainCard: null,               // vehicle id whose floating card is open (10a)
 	follow: null,                  // {vehicleId, since, lastSeenAt, fading} — followReduce
 	stationPanel: null,            // {stationId, partId} of the open station panel (10b)
+	placePanel: null,              // {placeId} of the open place panel (feature 11) — shares #stationPanel
+	places: [],                    // [{id, name, category, color, description, x, y, z, radius}] (mapdata)
+	placeHits: [],                 // world boxes of drawn place icons/labels -> place panel
+	exitHits: [],                  // world boxes of drawn exit pins -> station panel
 	labelHits: [],                 // world-space boxes of the drawn station labels
 	chipHits: [],                  // world-space boxes of the bullets drawn after station names -> line view
 	weakLabels: new Map(),         // name word (lower) -> the unique bullet text buildLines gave it
@@ -478,9 +504,68 @@ async function boot() {
 		setTimeout(boot, 5000);
 		return;
 	}
+	applyDeepLink(DEEP_FROM, DEEP_TO);
 	setInterval(refetchNetwork, 60000);
 	requestAnimationFrame(frame);
 	setInterval(tickLive, 1000);
+}
+
+/**
+ * A deep-link end: "place:<id or name>", "station:<id or name>" or "point:<x>,<z>[,<y>]".
+ * Returns {kind, …} or null when it names nothing on this map.
+ */
+function resolveDeepTarget(spec) {
+	const raw = String(spec || "").trim();
+	const colon = raw.indexOf(":");
+	if (colon <= 0) return null;
+	const kind = raw.slice(0, colon).toLowerCase(), value = raw.slice(colon + 1).trim();
+	if (!value) return null;
+	if (kind === "place") {
+		const lower = value.toLowerCase();
+		const place = state.places.find((p) => p.id === value) || state.places.find((p) => p.name.toLowerCase() === lower);
+		return place ? { kind, place } : null;
+	}
+	if (kind === "station") {
+		const lower = value.toLowerCase();
+		const st = state.stations.get(value) || [...state.stations.values()].find((x) => x.display.toLowerCase() === lower);
+		return st ? { kind, stationId: st.id } : null;
+	}
+	if (kind === "point") {
+		const n = value.split(",").map(Number);
+		if (n.length < 2 || !Number.isFinite(n[0]) || !Number.isFinite(n[1])) return null;
+		return { kind, x: n[0], z: n[1], y: Number.isFinite(n[2]) ? n[2] : undefined };
+	}
+	return null;
+}
+
+/** Fill the planner from ?from= / ?to= once the map data is in. Returns what was applied. */
+function applyDeepLink(from, to) {
+	const applied = [];
+	for (const [which, spec] of [["from", from], ["to", to]]) {
+		if (!spec) continue;
+		const t = resolveDeepTarget(spec);
+		if (!t) { showBanner("This link points at something not on this map: " + spec); continue; }
+		if (t.kind === "place") planToPlace(which, t.place);
+		else if (t.kind === "station") pickStation(t.stationId, null, which);
+		else setPlanPoint(which, t.x, t.z, t.y, which === "to" ? "Destination" : "Start", false);
+		applied.push(which + ":" + t.kind);
+	}
+	// look at where the rider is going (or starting from)
+	const end = state.plan.to || state.plan.from;
+	if (end) {
+		const xz = end.point ? end.point : (() => {
+			const st = state.stations.get(end.stationId);
+			const part = st && st.parts[0];
+			return part ? [part.x, part.z] : null;
+		})();
+		if (xz) {
+			state.view.x = xz[0];
+			state.view.z = xz[1];
+			state.view.scale = Math.max(state.view.scale, 0.6);
+			invalidateStatic();
+		}
+	}
+	return applied;
 }
 
 async function loadDimension(n) {
@@ -640,6 +725,13 @@ function applyMapdata(md) {
 		// exits are a newer mapdata field: absent on older payloads, so never overwrite
 		// what a previous payload gave us with nothing
 		if (Array.isArray(s.exits)) st.exits = s.exits;
+		// the scanned walking layout (feature 12), when the station has been scanned
+		if (s.layout !== undefined) st.layout = normalizeLayout(s.layout);
+		st.accessibleSource = s.accessibleSource || null;
+		// where the exits ARE: every Exit Marker pinned to one (feature 11), tied to the
+		// layout's anchors; a station with no pinned exit walks through the street
+		// openings its scan found instead
+		st.exitPoints = exitPointsOf(st.exits, st.layout);
 		st.partWalks = s.partWalks || [];
 		st.platformDistances = s.platformDistances || [];
 		st.platformDistancesTruncated = !!s.platformDistancesTruncated;
@@ -674,6 +766,17 @@ function applyMapdata(md) {
 			if (pl) pl.partId = part.id;
 		}
 	}
+
+	// PLACES (feature 11): named points of interest from Place Marker blocks and /place.
+	// Absent on older payloads, which simply means no places.
+	state.places = (Array.isArray(md.places) ? md.places : [])
+		.filter((p) => p && p.id && Array.isArray(p.pos) && p.pos.length >= 3)
+		.map((p) => ({
+			id: String(p.id), name: String(p.name || "Place"), category: String(p.category || "other"),
+			color: Number.isFinite(p.color) ? colorHex(p.color) : "#8a8a94",
+			description: String(p.description || ""),
+			x: +p.pos[0], y: +p.pos[1], z: +p.pos[2], radius: Math.max(0, +p.radius || 0),
+		}));
 
 	// route ids per platform: mapdata is authoritative about which route calls where
 	for (const rt of state.routes.values()) {
@@ -1291,7 +1394,21 @@ function labelSourceWord(name) {
  * unique across the map instead of a three-letter stub. Both directions share the word,
  * so they collapse to ONE bullet.
  */
+/**
+ * The line's bullet shape from MTR's Edit Route screen (server field bulletShape)
+ * rides the label as a suffix, the way express already did: "4*" = diamond,
+ * "4#" = square. Applied after every naming rule below.
+ */
 function routeLabelInfo(rt) {
+	const info = routeLabelInfoBase(rt);
+	const shape = rt && rt.bulletShape;
+	if (shape === "diamond" || shape === "square") {
+		info.label = bulletText(info.label) + (shape === "diamond" ? "*" : "#");
+	}
+	return info;
+}
+
+function routeLabelInfoBase(rt) {
 	const num = rt && rt.number != null ? String(rt.number).trim() : "";
 	const fromNum = stripDirectionTokens(num);
 	if (fromNum) return { label: fromNum, strong: true, word: "" };
@@ -1311,15 +1428,17 @@ function routeServiceLabel(rt) {
 	return routeLabelInfo(rt).label;
 }
 
-/** Express services are written "4*" (a diamond on the map); this is the number inside it. */
-const bulletText = (label) => String(label || "").replace(/\*$/, "");
+/** Express services are written "4*" (a diamond on the map), square bullets "4#"; this is the text inside. */
+const bulletText = (label) => String(label || "").replace(/[*#]$/, "");
 const bulletIsExpress = (label) => /\*$/.test(String(label || ""));
+const bulletIsSquare = (label) => /#$/.test(String(label || ""));
 
 /** "4" before "4*" before "4S": the base service first, its express diamond next, then variants. */
 function compareServiceLabels(a, b) {
 	const ba = bulletText(a), bb = bulletText(b);
 	if (ba !== bb) return ba.localeCompare(bb, undefined, { numeric: true, sensitivity: "base" });
-	return (bulletIsExpress(a) ? 1 : 0) - (bulletIsExpress(b) ? 1 : 0);
+	const rank = (l) => (bulletIsExpress(l) ? 1 : bulletIsSquare(l) ? 2 : 0);
+	return rank(a) - rank(b);
 }
 
 /* ---- near-identical colours are ONE line (feature: shade drift) ------------
@@ -2756,6 +2875,11 @@ function drawStatic(dpr) {
 	if (satEnabled() && satHasTiles()) drawSatellite(g, vp);
 	else drawMaskMap(g, vp);
 
+	// district names sit on the land, under everything that moves or can be clicked
+	state.placeHits = [];
+	state.exitHits = [];
+	drawDistricts(g, vp, state.selection);
+
 	const sel = state.selection;
 	const journeyKeys = sel ? sel.ribbonKeys : null;
 
@@ -2781,14 +2905,18 @@ function drawStatic(dpr) {
 	drawWalks(g, vp, sel ? PALETTE.dim : 1);
 	drawStreetLinks(g, vp, sel ? PALETTE.dim : 1);
 
-	// 5. station glyphs
+	// 5. station glyphs, then the wayfinding pins (exits at street level, places)
 	drawGlyphs(g, vp, sel);
+	drawExitPins(g, vp, sel);
+	drawPlaces(g, vp, sel);
 
 	// journey overlay: glow + full-strength ribbons, walks, glyphs, origin/destination
 	if (sel) drawJourneyOverlay(g, vp);
 
-	// 6. labels last so nothing paints over them
+	// 6. labels last so nothing paints over them; place names only where a station
+	//    name has not already claimed the space
 	drawLabels(g, vp, sel);
+	drawPlaceLabels(g, vp, sel);
 }
 
 /**
@@ -3013,6 +3141,9 @@ function drawBullet(g, x, y, R, hex, label) {
 		const d = R * 1.25;
 		g.moveTo(x, y - d); g.lineTo(x + d, y); g.lineTo(x, y + d); g.lineTo(x - d, y);
 		g.closePath();
+	} else if (bulletIsSquare(label)) {
+		const h = R * 0.92;
+		g.rect(x - h, y - h, h * 2, h * 2);
 	} else {
 		g.arc(x, y, R, 0, Math.PI * 2);
 	}
@@ -3200,6 +3331,317 @@ function drawLabels(g, vp, sel) {
 		g.globalAlpha = 1;
 	}
 	g.textAlign = "left";
+	labelObstacles = placed;   // place names (drawn next) must not cover a station name
+}
+
+/* ---- wayfinding layer: districts, exit pins, places (feature 11) ---- */
+
+/**
+ * `exits` (mapdata) -> the pinned positions, flattened: one entry per Exit Marker,
+ * `{name:"Exit A1", short:"A1", destinations, xz, y}`. The planner walks riders through
+ * these and the map draws them as small green badges.
+ */
+function exitPointsOf(exits, layout) {
+	const out = [];
+	for (const e of exits || []) {
+		if (!e || !Array.isArray(e.pins)) continue;
+		const short = firstLang(String(e.name == null ? "" : e.name)).trim();
+		if (!short) continue;
+		const name = /exit/i.test(short) ? short : "Exit " + short;
+		const destinations = (e.destinations || []).map((d) => firstLang(String(d == null ? "" : d)).trim()).filter(Boolean);
+		for (const p of e.pins) {
+			if (!Array.isArray(p) || p.length < 3 || !p.every(Number.isFinite)) continue;
+			const point = { name, short: short.replace(/^exit\s*/i, ""), destinations, xz: [p[0], p[2]], y: p[1], anchor: null };
+			// the layout anchor for THIS marker: same exit name, same spot
+			if (layout) {
+				let best = null, bestD = 3;
+				for (const a of layout.anchors.values()) {
+					if (a.kind !== "exit" || a.name !== short) continue;
+					const d = Math.hypot(a.pos[0] - p[0], a.pos[2] - p[2]);
+					if (d < bestD) { bestD = d; best = a; }
+				}
+				if (best) point.anchor = best.id;
+			}
+			out.push(point);
+		}
+	}
+	if (!out.length && layout) {
+		// no Exit Marker at all: the street openings the scan found stand in for exits
+		for (const a of layout.anchors.values()) {
+			if (a.kind !== "opening") continue;
+			out.push({ name: "Street entrance", short: "", destinations: [], xz: [a.pos[0], a.pos[2]], y: a.pos[1],
+				anchor: a.id, opening: true });
+		}
+	}
+	return out;
+}
+
+/* ---- station layouts (feature 12): the scanned walks inside a station ---- */
+
+/** mapdata `layout` -> {anchors: Map(id -> anchor), links: Map("from>to" -> link), scannedAt}. */
+function normalizeLayout(raw) {
+	if (!raw || !Array.isArray(raw.anchors) || !Array.isArray(raw.links)) return null;
+	const anchors = new Map();
+	for (const a of raw.anchors) {
+		if (a && a.id && Array.isArray(a.pos)) anchors.set(String(a.id), { id: String(a.id), kind: a.kind, name: String(a.name || ""), pos: a.pos });
+	}
+	const links = new Map();
+	for (const l of raw.links) {
+		if (l && l.from && l.to) links.set(l.from + ">" + l.to, l);
+	}
+	return { anchors, links, scannedAt: raw.scannedAt || 0 };
+}
+
+/** A scanned leg list walked the other way: reversed, climbs become descents. */
+function reverseLegs(legs) {
+	return (legs || []).slice().reverse().map((g) => ({ ...g, dy: -(g.dy || 0) }));
+}
+
+/**
+ * The scanned walk between two anchors of a station, in the asked direction:
+ * `{meters, extraSeconds, stepFree, legs, path, alt}` (alt = the step-free alternative,
+ * same shape) or null when the station was not scanned / the pair was not found.
+ */
+function layoutLink(st, fromId, toId) {
+	const layout = st && st.layout;
+	if (!layout) return null;
+	const pack = (l, reverse) => l && {
+		meters: +l.meters || 0, extraSeconds: +l.extraSeconds || 0, stepFree: !!l.stepFree,
+		legs: reverse ? reverseLegs(l.legs) : (l.legs || []).slice(),
+		path: Array.isArray(l.path) ? (reverse ? l.path.slice().reverse() : l.path.slice()) : null,
+	};
+	let l = layout.links.get(fromId + ">" + toId), reverse = false;
+	if (!l) { l = layout.links.get(toId + ">" + fromId); reverse = !!l; }
+	if (!l) return null;
+	const out = pack(l, reverse);
+	out.alt = l.stepFreeAlt ? pack(l.stepFreeAlt, reverse) : null;
+	return out;
+}
+
+/** "stairs ↓10 · fare control · 12 m" — what a scanned walk asks of the rider. */
+function stepsText(legs) {
+	const parts = [];
+	for (const g of legs || []) {
+		const dy = Math.round(g.dy || 0);
+		const arrow = dy > 0 ? " ↑" + dy + " m" : dy < 0 ? " ↓" + (-dy) + " m" : "";
+		if (g.kind === "stairs") parts.push("Stairs" + arrow);
+		else if (g.kind === "escalator") parts.push("Escalator" + arrow);
+		else if (g.kind === "lift") parts.push("Lift" + arrow);
+		else if (g.kind === "fare") parts.push("Fare control");
+		else if (g.kind === "emergency") parts.push("Emergency door");
+		else if ((g.meters || 0) >= 1) parts.push(fmtMeters(g.meters));
+	}
+	return parts.join(" · ");
+}
+
+/** Places whose icon is visible at the current zoom (districts are labels, never pins). */
+function placeVisible(p) {
+	if (p.category === "district") return false;
+	return state.view.scale >= (PLACE_MAJOR.has(p.category) ? PLACE_MAJOR_ZOOM : PLACE_ZOOM);
+}
+
+/** A place that is one end of the planned journey stays at full strength. */
+function placeInPlan(p) {
+	const f = state.plan.from, t = state.plan.to;
+	return !!((f && f.placeId === p.id) || (t && t.placeId === p.id));
+}
+
+function pushWorldHit(list, x0, y0, x1, y1, extra) {
+	const a = screenToWorld(x0, y0), b = screenToWorld(x1, y1);
+	list.push({ ...extra, box: [Math.min(a[0], b[0]), Math.min(a[1], b[1]), Math.max(a[0], b[0]), Math.max(a[1], b[1])] });
+}
+
+/** Neighbourhood names: wide, spaced, faint capitals over their radius. */
+function drawDistricts(g, vp, sel) {
+	const scale = state.view.scale;
+	if (scale < DISTRICT_ZOOM_MIN || scale > DISTRICT_ZOOM_MAX) return;
+	const s = uiScale();
+	g.save();
+	g.textAlign = "center";
+	g.textBaseline = "middle";
+	for (const p of state.places) {
+		if (p.category !== "district") continue;
+		const reach = Math.max(p.radius, 24);
+		if (p.x + reach < vp.l || p.x - reach > vp.r || p.z + reach < vp.t || p.z - reach > vp.b) continue;
+		const [sx, sy] = worldToScreen(p.x, p.z);
+		const size = clamp(reach * scale * 0.22, 11 * s, 26 * s);
+		const text = p.name.toUpperCase().split("").join(" ");
+		g.font = "700 " + size.toFixed(1) + "px " + FONT;
+		g.globalAlpha = (sel && !placeInPlan(p) ? 0.25 : 0.55);
+		g.lineWidth = 3 * s;
+		g.strokeStyle = PALETTE.paper;
+		g.strokeText(text, sx, sy);
+		g.fillStyle = PALETTE.ink2;
+		g.fillText(text, sx, sy);
+		const w = g.measureText(text).width;
+		pushWorldHit(state.placeHits, sx - w / 2, sy - size / 2, sx + w / 2, sy + size / 2, { place: p });
+	}
+	g.restore();
+}
+
+/**
+ * Exit Marker pins: a small green badge with the exit's letter, at street level.
+ * `onlyUsed` redraws just the selected journey's exits on top of its walk lines.
+ */
+function drawExitPins(g, vp, sel, onlyUsed) {
+	const used = sel && sel.exitsUsed ? sel.exitsUsed : null;
+	if (state.view.scale < EXIT_PIN_ZOOM && !used) return;
+	const s = uiScale();
+	g.save();
+	g.textAlign = "center";
+	g.textBaseline = "middle";
+	for (const st of state.stations.values()) {
+		for (const e of st.exitPoints || []) {
+			if (e.opening) continue;            // a scan suggestion, not a real exit
+			const key = st.id + "|" + e.short + "|" + e.xz[0] + "," + e.xz[1];
+			const inJourney = !!(used && used.has(key));
+			if ((onlyUsed || state.view.scale < EXIT_PIN_ZOOM) && !inJourney) continue;
+			if (e.xz[0] < vp.l || e.xz[0] > vp.r || e.xz[1] < vp.t || e.xz[1] > vp.b) continue;
+			const [sx, sy] = worldToScreen(e.xz[0], e.xz[1]);
+			const size = (inJourney ? 10.5 : 9) * s;
+			g.font = "700 " + size.toFixed(1) + "px " + FONT;
+			const w = Math.max(size * 1.6, g.measureText(e.short).width + size * 0.9);
+			const h = size * 1.55;
+			g.globalAlpha = sel && !inJourney ? PALETTE.dim : 1;
+			g.fillStyle = PALETTE.paper;
+			roundRect(g, sx - w / 2 - 1.5 * s, sy - h / 2 - 1.5 * s, w + 3 * s, h + 3 * s, 4 * s);
+			g.fill();
+			g.fillStyle = EXIT_GREEN;
+			roundRect(g, sx - w / 2, sy - h / 2, w, h, 3 * s);
+			g.fill();
+			g.fillStyle = "#fff";
+			g.fillText(e.short, sx, sy + 0.5);
+			pushWorldHit(state.exitHits, sx - w / 2, sy - h / 2, sx + w / 2, sy + h / 2, { stationId: st.id, exit: e });
+		}
+	}
+	g.restore();
+}
+
+function roundRect(g, x, y, w, h, r) {
+	g.beginPath();
+	g.moveTo(x + r, y);
+	g.lineTo(x + w - r, y); g.quadraticCurveTo(x + w, y, x + w, y + r);
+	g.lineTo(x + w, y + h - r); g.quadraticCurveTo(x + w, y + h, x + w - r, y + h);
+	g.lineTo(x + r, y + h); g.quadraticCurveTo(x, y + h, x, y + h - r);
+	g.lineTo(x, y + r); g.quadraticCurveTo(x, y, x + r, y);
+	g.closePath();
+}
+
+/** Place icons: a category-coloured disc with a white pictogram. */
+function drawPlaces(g, vp, sel) {
+	const s = uiScale();
+	for (const p of state.places) {
+		if (!placeVisible(p) && !placeInPlan(p)) continue;
+		if (p.x < vp.l || p.x > vp.r || p.z < vp.t || p.z > vp.b) continue;
+		const [sx, sy] = worldToScreen(p.x, p.z);
+		const r = (PLACE_MAJOR.has(p.category) ? 8 : 7) * s;
+		g.save();
+		g.globalAlpha = sel && !placeInPlan(p) ? PALETTE.dim : 1;
+		g.beginPath(); g.arc(sx, sy, r + 1.8 * s, 0, Math.PI * 2);
+		g.fillStyle = PALETTE.paper; g.fill();
+		g.beginPath(); g.arc(sx, sy, r, 0, Math.PI * 2);
+		g.fillStyle = p.color; g.fill();
+		drawPlaceGlyph(g, p.category, sx, sy, r);
+		g.restore();
+		pushWorldHit(state.placeHits, sx - r, sy - r, sx + r, sy + r, { place: p });
+	}
+}
+
+/** The white pictogram inside a place disc, drawn in a unit box scaled to the disc. */
+function drawPlaceGlyph(g, category, cx, cy, r) {
+	const u = r / 10;                     // the pictograms are authored on a 20-unit disc
+	g.save();
+	g.translate(cx, cy);
+	g.scale(u, u);
+	g.fillStyle = "#fff";
+	g.strokeStyle = "#fff";
+	g.lineWidth = 1.6;
+	g.lineCap = "round";
+	g.lineJoin = "round";
+	const star = (points, outer, inner) => {
+		g.beginPath();
+		for (let i = 0; i < points * 2; i++) {
+			const a = -Math.PI / 2 + i * Math.PI / points;
+			const rr = i % 2 ? inner : outer;
+			if (i) g.lineTo(Math.cos(a) * rr, Math.sin(a) * rr); else g.moveTo(Math.cos(a) * rr, Math.sin(a) * rr);
+		}
+		g.closePath(); g.fill();
+	};
+	switch (category) {
+		case "landmark": star(5, 6.2, 2.6); break;
+		case "attraction": star(4, 6.2, 1.8); break;
+		case "park":
+			g.beginPath(); g.moveTo(0, -6); g.lineTo(5, 2.5); g.lineTo(-5, 2.5); g.closePath(); g.fill();
+			g.fillRect(-0.9, 2.5, 1.8, 3.5);
+			break;
+		case "shopping":
+			g.fillRect(-4.5, -1.5, 9, 7);
+			g.beginPath(); g.arc(0, -1.5, 2.6, Math.PI, 0); g.stroke();
+			break;
+		case "food":
+			g.beginPath(); g.moveTo(-2.5, -5.5); g.lineTo(-2.5, 5.5); g.stroke();
+			g.beginPath(); g.moveTo(-4.2, -5.5); g.lineTo(-4.2, -2); g.moveTo(-0.8, -5.5); g.lineTo(-0.8, -2); g.stroke();
+			g.beginPath(); g.moveTo(3, -5.5); g.quadraticCurveTo(5, -2, 3, 0); g.lineTo(3, 5.5); g.stroke();
+			break;
+		case "culture":
+			g.beginPath(); g.moveTo(-6, -2.5); g.lineTo(0, -6.5); g.lineTo(6, -2.5); g.closePath(); g.fill();
+			for (const x of [-4, 0, 4]) g.fillRect(x - 0.8, -1.5, 1.6, 5.5);
+			g.fillRect(-6, 4.5, 12, 1.6);
+			break;
+		case "sports":
+			g.beginPath(); g.arc(0, 0, 5.2, 0, Math.PI * 2); g.stroke();
+			g.beginPath(); g.moveTo(-5, -1.5); g.quadraticCurveTo(0, 2, 5, -1.5); g.stroke();
+			break;
+		case "civic":
+			g.beginPath(); g.moveTo(-3.5, 6); g.lineTo(-3.5, -6); g.stroke();
+			g.beginPath(); g.moveTo(-3.5, -6); g.lineTo(5, -4); g.lineTo(-3.5, -1); g.closePath(); g.fill();
+			break;
+		default:
+			g.beginPath(); g.arc(0, 0, 2.6, 0, Math.PI * 2); g.fill();
+	}
+	g.restore();
+}
+
+/** Place names beside their icons, only where no station name already sits. */
+function drawPlaceLabels(g, vp, sel) {
+	if (state.prefs.hideLabels && !sel) return;
+	const s = uiScale();
+	const placed = labelObstacles;
+	g.save();
+	g.textAlign = "left";
+	g.textBaseline = "alphabetic";
+	for (const p of state.places) {
+		if (p.category === "district") continue;
+		const inPlan = placeInPlan(p);
+		if (sel && !inPlan) continue;
+		const threshold = PLACE_MAJOR.has(p.category) ? PLACE_LABEL_ZOOM * 0.66 : PLACE_LABEL_ZOOM;
+		if (!inPlan && (state.view.scale < threshold || !placeVisible(p))) continue;
+		if (p.x < vp.l || p.x > vp.r || p.z < vp.t || p.z > vp.b) continue;
+		const [sx, sy] = worldToScreen(p.x, p.z);
+		const size = 11.5 * s * labelScale();
+		g.font = "600 " + size.toFixed(1) + "px " + FONT;
+		const tw = g.measureText(p.name).width;
+		const r = 9 * s;
+		const th = size * 1.05;
+		let chosen = null;
+		for (const x0 of [sx + r + 4 * s, sx - r - 4 * s - tw]) {
+			const box = [x0 - 2, sy - th * 0.7, x0 + tw + 2, sy + th * 0.45];
+			if (!placed.some((q) => box[0] < q[2] && box[2] > q[0] && box[1] < q[3] && box[3] > q[1])) {
+				chosen = { x0, box };
+				break;
+			}
+		}
+		if (!chosen) continue;
+		placed.push(chosen.box);
+		g.lineWidth = 3.5 * s;
+		g.lineJoin = "round";
+		g.strokeStyle = PALETTE.paper;
+		g.strokeText(p.name, chosen.x0, sy + size * 0.35);
+		g.fillStyle = PALETTE.ink2;
+		g.fillText(p.name, chosen.x0, sy + size * 0.35);
+		pushWorldHit(state.placeHits, chosen.box[0], chosen.box[1], chosen.box[2], chosen.box[3], { place: p });
+	}
+	g.restore();
 }
 
 /* ---- selected-journey overlay ---- */
@@ -3257,8 +3699,10 @@ function drawJourneyOverlay(g, vp) {
 		g.setLineDash([1.5, 7]);
 		g.beginPath(); g.moveTo(a[0], a[1]); g.lineTo(b[0], b[1]); g.stroke();
 		g.setLineDash([]);
-		drawWalkChip(g, (a[0] + b[0]) / 2, (a[1] + b[1]) / 2, fmtMeters(wk.dist));
+		if (!wk.noChip) drawWalkChip(g, (a[0] + b[0]) / 2, (a[1] + b[1]) / 2, fmtMeters(wk.dist));
 	}
+	// the exits those walks pass, back on top of the dotted lines (feature 11)
+	if (sel.exitsUsed && sel.exitsUsed.size) drawExitPins(g, vp, sel, true);
 
 	// journey stations at full strength
 	for (const gl of state.glyphs) {
@@ -3875,8 +4319,21 @@ function hoverAt(sx, sy) {
 	const t = trainAt(sx, sy);
 	const gl = t ? null : glyphAt(sx, sy);
 	// a line under the pointer is a click target too (feature 4)
-	const rb = t || gl ? null : (chipAt(sx, sy) || ribbonAt(sx, sy));
-	canvas.classList.toggle("pointing", !!(t || gl || rb));
+	const ex = t || gl ? null : exitAt(sx, sy);
+	const pl = t || gl || ex ? null : placeAt(sx, sy);
+	const rb = t || gl || ex || pl ? null : (chipAt(sx, sy) || ribbonAt(sx, sy));
+	canvas.classList.toggle("pointing", !!(t || gl || ex || pl || rb));
+	if (ex || pl) {
+		const st = ex ? state.stations.get(ex.stationId) : null;
+		tip.innerHTML = ex
+			? `<span class="swatch" style="background:${EXIT_GREEN}"></span>${esc(ex.exit.name)}${st ? ' <span style="color:#8a929c">· ' + esc(st.display) + "</span>" : ""}${
+				ex.exit.destinations.length ? ' <span style="color:#8a929c">· ' + esc(ex.exit.destinations.join(", ")) + "</span>" : ""}`
+			: `<span class="swatch" style="background:${pl.place.color}"></span>${esc(pl.place.name)} <span style="color:#8a929c">· ${esc(PLACE_CATEGORY_LABELS[pl.place.category] || "Place")}</span>`;
+		tip.classList.remove("hidden");
+		tip.style.left = (sx + 16) + "px";
+		tip.style.top = (sy - 12) + "px";
+		return;
+	}
 	if (!t && !gl) {
 		if (!rb) { tip.classList.add("hidden"); return; }
 		const labels = lineLabels(rb.hex);
@@ -3926,6 +4383,26 @@ function labelAt(sx, sy) {
 	return null;
 }
 
+/** A place icon, district or place name under the pointer (world boxes, feature 11). */
+function placeAt(sx, sy) {
+	const [wx, wz] = screenToWorld(sx, sy);
+	for (let i = state.placeHits.length - 1; i >= 0; i--) {
+		const h = state.placeHits[i];
+		if (wx >= h.box[0] && wx <= h.box[2] && wz >= h.box[1] && wz <= h.box[3]) return h;
+	}
+	return null;
+}
+
+/** An Exit Marker badge under the pointer (feature 11). */
+function exitAt(sx, sy) {
+	const [wx, wz] = screenToWorld(sx, sy);
+	for (let i = state.exitHits.length - 1; i >= 0; i--) {
+		const h = state.exitHits[i];
+		if (wx >= h.box[0] && wx <= h.box[2] && wz >= h.box[1] && wz <= h.box[3]) return h;
+	}
+	return null;
+}
+
 /** A service bullet after a station name (world boxes, recorded by drawLabels). */
 function chipAt(sx, sy) {
 	const [wx, wz] = screenToWorld(sx, sy);
@@ -3960,11 +4437,12 @@ function ribbonAt(sx, sy) {
 
 /**
  * CLICK PRIORITY, as one pure decision (the harness drives it directly):
- *   train -> station glyph -> station label -> line chip -> line ribbon -> map point / clear.
+ *   train -> station glyph -> station label -> exit pin -> place -> line chip -> line ribbon
+ *   -> map point / clear.
  * A line is deliberately BELOW every station target: a rider aiming at a stop on a line
  * must never get the line instead.
  */
-const HIT_ORDER = ["train", "glyph", "label", "chip", "ribbon", "pick"];
+const HIT_ORDER = ["train", "glyph", "label", "exit", "place", "chip", "ribbon", "pick"];
 function pickHit(hits) {
 	for (const k of HIT_ORDER) if (hits && hits[k]) return k;
 	return "clear";
@@ -3981,6 +4459,8 @@ function clickAt(sx, sy) {
 		train: trainAt(sx, sy),
 		glyph: glyphAt(sx, sy) || labelAt(sx, sy),
 		label: null,                                   // folded into `glyph` above
+		exit: exitAt(sx, sy),
+		place: placeAt(sx, sy),
 		chip: chipAt(sx, sy),
 		ribbon: ribbonAt(sx, sy),
 		pick: state.mapPick ? { which: state.mapPick } : null,
@@ -3988,6 +4468,12 @@ function clickAt(sx, sy) {
 	switch (pickHit(hits)) {
 		case "train": openTrainCard(hits.train.id); return;
 		case "glyph": openStationPanel(hits.glyph.stationId, hits.glyph.partId); return;
+		case "exit": openStationPanel(hits.exit.stationId, null); return;
+		case "place":
+			// armed to pick a point: the place IS the point; otherwise show what it is
+			if (state.mapPick) planToPlace(state.mapPick, hits.place.place);
+			else openPlacePanel(hits.place.place.id);
+			return;
 		case "chip": selectLine(hits.chip.hex); return;
 		case "ribbon": selectLine(hits.ribbon.hex); return;
 		case "pick": dropMapPoint(hits.pick.which, sx, sy); return;
@@ -4028,18 +4514,26 @@ function pointTarget() {
 }
 
 /** Put an arbitrary world point into the planner. `live` = it follows the player. */
-function setPlanPoint(which, x, z, y, label, live) {
+function setPlanPoint(which, x, z, y, label, live, placeId) {
 	const key = which === "to" ? "to" : "from";
 	state.plan[key] = {
 		stationId: null, partId: null, point: [x, z],
 		y: Number.isFinite(y) ? y : undefined,
 		label: label || (key === "to" ? "Dropped pin (dest)" : "Dropped pin"),
 		live: !!live,
+		placeId: placeId || null,
 	};
 	disarmMapPick();
 	syncFields();
 	replan();
 	return state.plan[key];
+}
+
+/** A place (feature 11) as a journey end: a map point that carries the place's name. */
+function planToPlace(which, place) {
+	if (!place) return null;
+	closeStationPanel();
+	return setPlanPoint(which === "to" ? "to" : "from", place.x, place.z, place.y, place.name, false, place.id);
 }
 
 function dropMapPoint(which, sx, sy) {
@@ -5855,7 +6349,9 @@ function stationExits(station) {
 		// MTR's own exit editor stores bare letters ("A", "B1"), so the word is ours to
 		// add — but never twice, for a server that already spells it out
 		const label = !name ? "Exit" : /exit/i.test(name) ? name : "Exit " + name;
-		out.push({ name: label, destinations, text: destinations.length ? label + " · " + destinations.join(", ") : label });
+		const pins = (Array.isArray(e.pins) ? e.pins : []).filter((p) => Array.isArray(p) && p.length >= 3);
+		out.push({ name: label, destinations, pinned: pins.length > 0, pin: pins.length ? [pins[0][0], pins[0][2]] : null,
+			text: destinations.length ? label + " · " + destinations.join(", ") : label });
 	}
 	return out;
 }
@@ -5894,6 +6390,7 @@ function stationPanelData(stationId, partId, atMs) {
 		groups: buildDepartureGroups(state.plan.graph, stationId, Number.isFinite(atMs) ? atMs : now()),
 		exits: stationExits(st),
 		access: stationAccessibility(st),
+		accessibleSource: st.accessibleSource || null,
 	};
 }
 
@@ -5927,6 +6424,8 @@ function stationPanelHtml(data) {
 		.map((lb) => `<span class="bullet sm line-bullet" role="button" tabindex="0" title="Show this line"
 			data-line="${esc(l.hex)}" style="background:${l.hex}">${esc(lb)}</span>`).join("")).join("");
 	const acc = data.access;
+	const accNote = data.accessibleSource === "layout"
+		? `<div class="st-accnote">Worked out from the station's layout scan.</div>` : "";
 	const accBody = acc.all
 		? `<div class="st-accline">${ACCESS_IMG}All platforms step-free</div>`
 		: acc.platforms.length
@@ -5952,12 +6451,13 @@ function stationPanelHtml(data) {
 		${data.exits.length ? `
 		<div class="st-sec">
 			<div class="st-sectitle">Exits</div>
-			${data.exits.map((e) => `<div class="st-exit"><b>${esc(e.name)}</b>${
+			${data.exits.map((e, i) => `<div class="st-exit${e.pinned ? " pinned" : ""}"${e.pinned ? ` role="button" tabindex="0" data-exit="${i}" title="Show on the map"` : ""}>${
+				e.pinned ? '<span class="exit-dot"></span>' : ""}<b>${esc(e.name)}</b>${
 				e.destinations.length ? ' <span class="st-exitdest">· ' + esc(e.destinations.join(", ")) + "</span>" : ""}</div>`).join("")}
 		</div>` : ""}
 		<div class="st-sec">
 			<div class="st-sectitle">Accessibility</div>
-			${accBody}
+			${accBody}${accNote}
 		</div>
 		<div class="st-actions">
 			<button class="st-btn" type="button" data-plan="from">Plan from here</button>
@@ -5967,13 +6467,22 @@ function stationPanelHtml(data) {
 
 function openStationPanel(stationId, partId) {
 	if (!state.stations.has(stationId)) return;
+	state.placePanel = null;
 	state.stationPanel = { stationId, partId: partId || null, openedAt: now() };
 	renderStationPanel();
 }
 
-function closeStationPanel() {
-	if (!state.stationPanel) return;
+function openPlacePanel(placeId) {
+	if (!state.places.some((p) => p.id === placeId)) return;
 	state.stationPanel = null;
+	state.placePanel = { placeId, openedAt: now() };
+	renderStationPanel();
+}
+
+function closeStationPanel() {
+	if (!state.stationPanel && !state.placePanel) return;
+	state.stationPanel = null;
+	state.placePanel = null;
 	const el = $("stationPanel");
 	if (el && el.classList) el.classList.add("hidden");
 }
@@ -5981,6 +6490,7 @@ function closeStationPanel() {
 function renderStationPanel() {
 	const el = $("stationPanel");
 	if (!el) return;
+	if (state.placePanel) { renderPlacePanel(el); return; }
 	const sp = state.stationPanel;
 	if (!sp) { if (el.classList) el.classList.add("hidden"); return; }
 	const data = stationPanelData(sp.stationId, sp.partId, now());
@@ -5995,6 +6505,82 @@ function renderStationPanel() {
 	}
 	for (const b of (el.querySelectorAll ? el.querySelectorAll(".line-bullet") : [])) {
 		b.onclick = () => { if (b.dataset && b.dataset.line) selectLine(b.dataset.line); };
+	}
+	// a pinned exit centres the map on its Exit Marker, zoomed in far enough to show it
+	for (const row of (el.querySelectorAll ? el.querySelectorAll("[data-exit]") : [])) {
+		row.onclick = () => {
+			const e = data.exits[parseInt(row.dataset.exit, 10)];
+			if (!e || !e.pin) return;
+			state.view.x = e.pin[0];
+			state.view.z = e.pin[1];
+			state.view.scale = Math.max(state.view.scale, EXIT_PIN_ZOOM * 2);
+			invalidateStatic();
+		};
+	}
+}
+
+/* ---- place panel (feature 11): what a place is, and the stations you walk to it from ---- */
+
+/** Everything the place panel renders, as plain values. */
+function placePanelData(placeId) {
+	const p = state.places.find((q) => q.id === placeId);
+	if (!p) return null;
+	if (!state.plan.graph) state.plan.graph = buildGraph();
+	const point = { xz: [p.x, p.z], y: p.y };
+	const near = stationsNearPoint(state.plan.graph, point).map((hit) => {
+		const st = state.stations.get(hit.stationId);
+		const via = hit.exit ? hit.exit : null;
+		return {
+			stationId: hit.stationId, name: st ? st.display : hit.stationId,
+			meters: hit.meters, seconds: walkSeconds(hit.meters),
+			exit: via ? { name: via.name, short: via.short } : null,
+		};
+	});
+	return {
+		id: p.id, name: p.name, category: p.category, categoryLabel: PLACE_CATEGORY_LABELS[p.category] || "Place",
+		color: p.color, description: p.description, x: Math.floor(p.x), y: Math.round(p.y), z: Math.floor(p.z),
+		near,
+	};
+}
+
+function placePanelHtml(d) {
+	return `
+		<div class="st-head">
+			<div class="st-title">
+				<h2>${esc(d.name)}</h2>
+				<div class="st-part"><span class="pl-chip" style="background:${d.color}">${esc(d.categoryLabel)}</span>
+					<span class="pl-coords">${d.x} ${d.y} ${d.z}</span></div>
+			</div>
+			<button class="st-close" type="button" title="Close" aria-label="Close">×</button>
+		</div>
+		${d.description ? `<div class="st-sec"><div class="pl-desc">${esc(d.description)}</div></div>` : ""}
+		<div class="st-sec">
+			<div class="st-sectitle">Nearest stations</div>
+			${d.near.length ? d.near.map((n) => `
+				<div class="st-exit pl-near" role="button" tabindex="0" data-station="${esc(n.stationId)}">
+					<b>${esc(n.name)}</b> <span class="st-exitdest">· ${esc(fmtMeters(n.meters))} · ${esc(fmtMin(n.seconds))} walk${
+						n.exit ? ' · via <span class="exit-badge">' + esc(n.exit.short) + "</span>" : ""}</span>
+				</div>`).join("") : '<div class="st-empty">No station within walking range.</div>'}
+		</div>
+		<div class="st-actions">
+			<button class="st-btn" type="button" data-plan="from">Plan from here</button>
+			<button class="st-btn" type="button" data-plan="to">Plan to here</button>
+		</div>`;
+}
+
+function renderPlacePanel(el) {
+	const data = placePanelData(state.placePanel.placeId);
+	if (!data) { closeStationPanel(); return; }
+	el.innerHTML = placePanelHtml(data);
+	if (el.classList) el.classList.remove("hidden");
+	const close = el.querySelector ? el.querySelector(".st-close") : null;
+	if (close) close.onclick = () => closeStationPanel();
+	const place = state.places.find((q) => q.id === data.id);
+	for (const b of (el.querySelectorAll ? el.querySelectorAll("[data-plan]") : [])) {
+		b.onclick = () => planToPlace(b.dataset ? b.dataset.plan : "to", place);
+	}
+	for (const row of (el.querySelectorAll ? el.querySelectorAll(".pl-near") : [])) {
+		row.onclick = () => { if (row.dataset && row.dataset.station) openStationPanel(row.dataset.station, null); };
 	}
 }
 
@@ -6045,6 +6631,11 @@ function rebuildSearchIndex() {
 				});
 			}
 		}
+	}
+	// places (feature 11): a pick fills the field with the place as a map point
+	for (const p of state.places) {
+		searchIndex.push({ label: p.name, sub: PLACE_CATEGORY_LABELS[p.category] || "Place",
+			stationId: null, partId: null, placeId: p.id, colors: [p.color], accessible: false });
 	}
 	searchIndex.sort((a, b) => a.label.localeCompare(b.label) || (a.partId ? 1 : -1));
 }
@@ -6135,7 +6726,7 @@ function setupCombo(inputId, listId, which) {
 				<svg class="icon sm"><use href="#${a.icon}"/></svg><span>${esc(a.text)}</span>
 			</div>`).join("");
 		if (!entries.length) {
-			list.innerHTML = head + '<div class="ac-empty">No matching station</div>';
+			list.innerHTML = head + '<div class="ac-empty">No matching station or place</div>';
 		} else {
 			list.innerHTML = head + entries.map((e, i) => `
 				<div class="ac-row${i === active ? " active" : ""}" data-i="${i}">
@@ -6158,6 +6749,13 @@ function setupCombo(inputId, listId, which) {
 	};
 	const choose = (e) => {
 		if (!e) return;
+		if (e.placeId) {
+			const place = state.places.find((p) => p.id === e.placeId);
+			list.classList.add("hidden");
+			active = -1;
+			if (place) planToPlace(which, place);
+			return;
+		}
 		disarmMapPick();
 		state.plan[which] = { stationId: e.stationId, partId: e.partId };
 		input.value = entryText(e);
@@ -6439,7 +7037,7 @@ function itineraryHtml(j) {
 				<div class="n"><span class="node" style="border-color:${leg.color}"></span><span class="rail" style="background:${leg.color}"></span></div>
 				<div class="c">
 					<div class="stop-name">${esc(legEndLabel(leg, "from"))}</div>
-					${pendingWalk ? walkChipHtml(pendingWalk, true) : ""}
+					${pendingWalk ? walkChipHtml(pendingWalk, true) + transferStepsHtml(pendingWalk) : ""}
 					<div class="stop-sub">${sub}</div>
 					${throughRowsHtml(leg)}
 					<div class="ride">${leg.stopCount} stop${leg.stopCount === 1 ? "" : "s"} · ${fmtMin((leg.arrMs - leg.depMs) / 1000)}</div>
@@ -6457,6 +7055,7 @@ function itineraryHtml(j) {
 				<div class="c">
 					<div class="stop-name">${esc(legEndLabel(leg, "from"))}</div>
 					${walkChipHtml(leg, false)}
+					${exitNoteHtml(leg)}
 					${leg.note && !leg.fromPoint && !leg.toPoint ? `<div class="stop-sub">${esc(leg.note)}</div>` : ""}
 				</div>`);
 		}
@@ -6473,6 +7072,27 @@ function legEndLabel(leg, which) {
 	const point = which === "to" ? leg.toPoint : leg.fromPoint;
 	if (point) return (which === "to" ? leg.toName : leg.fromName) || "Dropped pin";
 	return which === "to" ? stationLabel(leg.toStation, leg.toPart) : stationLabel(leg.fromStation, leg.fromPart);
+}
+
+/** "Leave by Exit A1 · Main St" under a street walk that passes an Exit Marker (feature 11). */
+function exitNoteHtml(leg) {
+	if (!leg || !leg.exit) return "";
+	const steps = leg.exit.legs ? stepsText(leg.exit.legs) : "";
+	const stepsRow = steps ? `<div class="stop-sub steps">${esc(steps)}</div>` : "";
+	if (leg.exit.opening) {
+		return `<div class="stop-sub exit-note">${esc(leg.exit.role === "enter" ? "Enter from the street" : "Out to the street")}</div>${stepsRow}`;
+	}
+	const verb = leg.exit.role === "enter" ? "Enter by" : "Leave by";
+	const dest = leg.exit.destinations.length ? " · " + leg.exit.destinations.join(", ") : "";
+	const note = `<div class="stop-sub exit-note"><span class="exit-badge">${esc(leg.exit.short)}</span>${esc(verb + " " + leg.exit.name + dest)}</div>`;
+	// entering: exit first, then the way down; leaving: the way up, then the exit
+	return leg.exit.role === "enter" ? note + stepsRow : stepsRow + note;
+}
+
+/** The scanned steps of a transfer inside a station (feature 12), under its chip. */
+function transferStepsHtml(leg) {
+	const steps = leg && leg.steps ? stepsText(leg.steps) : "";
+	return steps ? `<div class="stop-sub steps">${esc(steps)}</div>` : "";
 }
 
 function walkChipHtml(leg, transfer) {
@@ -6514,6 +7134,7 @@ function selectJourney(journey) {
 	const routeIds = new Set();
 	const walks = [];
 	const fallbacks = [];
+	const exitsUsed = new Set();
 	let origin = null, dest = null, boardPlatform = null;
 
 	const partOf = (platformId) => {
@@ -6554,7 +7175,31 @@ function selectJourney(journey) {
 			// only concourse-scale walks get a connector on the map; a cross-platform
 			// change inside one part would just stipple the station glyph (the
 			// itinerary's transfer chip already tells the rider about it)
-			if (a && b && pa !== pb && dist(a, b) > 0.5) {
+			if (leg.exit) {
+				const e = leg.exit.xz;
+				exitsUsed.add(leg.exit.stationId + "|" + leg.exit.short + "|" + e[0] + "," + e[1]);
+			}
+			if (leg.exit && a && b) {
+				// a street walk through an Exit Marker: the street half straight, the inside
+				// half along the SCANNED path when the station has one (feature 12)
+				const e = leg.exit.xz;
+				const street = leg.exit.role === "enter" ? [a, e] : [e, b];
+				walks.push({ ax: street[0][0], az: street[0][1], bx: street[1][0], bz: street[1][1],
+					dist: Math.hypot(street[0][0] - street[1][0], street[0][1] - street[1][1]) });
+				const path = leg.exit.path;
+				if (path && path.length >= 2) {
+					let total = 0;
+					for (let k = 1; k < path.length; k++) total += Math.hypot(path[k][0] - path[k - 1][0], path[k][2] - path[k - 1][2]);
+					for (let k = 1; k < path.length; k++) {
+						walks.push({ ax: path[k - 1][0], az: path[k - 1][2], bx: path[k][0], bz: path[k][2],
+							dist: total, noChip: k !== Math.ceil((path.length - 1) / 2) });
+					}
+				} else {
+					const inner = leg.exit.role === "enter" ? [e, b] : [a, e];
+					walks.push({ ax: inner[0][0], az: inner[0][1], bx: inner[1][0], bz: inner[1][1],
+						dist: Math.hypot(inner[0][0] - inner[1][0], inner[0][1] - inner[1][1]) });
+				}
+			} else if (a && b && pa !== pb && dist(a, b) > 0.5) {
 				walks.push({ ax: a[0], az: a[1], bx: b[0], bz: b[1], dist: leg.meters });
 			}
 		}
@@ -6567,7 +7212,7 @@ function selectJourney(journey) {
 	// (feature 2), which also means a followed train on another line is let go
 	const lineHexes = selectionLineHexes({ journey });
 
-	state.selection = { kind: "journey", journey, ribbonKeys, partIds, routeIds, walks, fallbacks, origin, dest, boardPlatform, lineHexes };
+	state.selection = { kind: "journey", journey, ribbonKeys, partIds, routeIds, walks, fallbacks, origin, dest, boardPlatform, lineHexes, exitsUsed };
 	if (state.follow) {
 		const rec = state.vehicles.get(state.follow.vehicleId);
 		if (!vehiclePassesSelection(rec, state.selection)) stopFollow("filtered");
@@ -7261,7 +7906,27 @@ function buildGraph() {
 	};
 	for (const st of state.stations.values()) {
 		const seen = new Set();
+		// a SCANNED station knows its real walks (stairs, gates, lifts) between platforms
+		if (st.layout) {
+			const ids = byStation.get(st.id) || [];
+			for (let i = 0; i < ids.length; i++) for (let j = 0; j < ids.length; j++) {
+				if (i === j) continue;
+				const link = layoutLink(st, "platform:" + ids[i], "platform:" + ids[j]);
+				if (!link) continue;
+				const a = nodes.get(ids[i]), b = nodes.get(ids[j]);
+				if (!a || !b) continue;
+				const base = { from: ids[i], to: ids[j], walk: true, sameStation: true, samePart: a.partId === b.partId, street: false };
+				transferEdges.push({ ...base, meters: link.meters, seconds: walkSeconds(link.meters) + link.extraSeconds,
+					extraSeconds: link.extraSeconds, accessible: a.accessible && b.accessible && link.stepFree, legs: link.legs });
+				if (link.alt) {
+					transferEdges.push({ ...base, meters: link.alt.meters, seconds: walkSeconds(link.alt.meters) + link.alt.extraSeconds,
+						extraSeconds: link.alt.extraSeconds, accessible: a.accessible && b.accessible, legs: link.alt.legs });
+				}
+				seen.add(ids[i] + ">" + ids[j]);
+			}
+		}
 		for (const d of st.platformDistances || []) {
+			if (seen.has(d.a + ">" + d.b)) continue;
 			pushTransfer(d.a, d.b, d.dist);
 			pushTransfer(d.b, d.a, d.dist);
 			seen.add(d.a + ">" + d.b);
@@ -7351,13 +8016,42 @@ function stationsNearPoint(graph, point) {
 		for (const id of ids) {
 			const n = graph.nodes.get(id);
 			if (!n) continue;
-			const m = walkDistance3(point, n);
-			if (!best || m < best.meters) best = { stationId, platformId: id, meters: m };
+			const walk = streetToPlatform(point, stationId, n);
+			if (!best || walk.meters < best.meters) best = { stationId, platformId: id, meters: walk.meters, exit: walk.exit };
 		}
 		if (best && best.meters <= POINT_WALK_RADIUS) out.push(best);
 	}
 	out.sort((a, b) => a.meters - b.meters || (a.stationId < b.stationId ? -1 : 1));
 	return out.slice(0, POINT_WALK_STATIONS);
+}
+
+/**
+ * The walk between a street point and a platform (feature 11). A station with pinned
+ * exits (Exit Marker blocks) is entered and left THROUGH one of them — the one that
+ * makes the whole walk shortest — instead of in a straight line through its walls; a
+ * station with none keeps the straight line. Returns `{meters, exit|null}`.
+ */
+function streetToPlatform(point, stationId, node, stepFreeOnly) {
+	const st = state.stations.get(stationId);
+	const exits = st && st.exitPoints;
+	if (!exits || !exits.length) return { meters: walkDistance3(point, node), exit: null, extraSeconds: 0, stepFree: true, legs: null };
+	let best = null;
+	for (const e of exits) {
+		const outside = walkDistance3(point, e);
+		// inside the station: the SCANNED walk from this exit to this platform when there
+		// is one (feature 12), else the straight line
+		let link = e.anchor ? layoutLink(st, e.anchor, "platform:" + node.id) : null;
+		if (link && stepFreeOnly && !link.stepFree) link = link.alt;
+		if (e.anchor && st.layout && !link) continue;      // scanned, and no way through from here
+		const inside = link ? link.meters : walkDistance3(e, node);
+		const extra = link ? link.extraSeconds : 0;
+		const cost = outside + inside + extra * walkSpeed();
+		if (!best || cost < best.cost) {
+			best = { cost, meters: outside + inside, extraSeconds: extra, exit: e,
+				stepFree: link ? link.stepFree : true, legs: link ? link.legs : null, path: link ? link.path : null };
+		}
+	}
+	return best || { meters: walkDistance3(point, node), exit: null, extraSeconds: 0, stepFree: true, legs: null };
 }
 
 /**
@@ -7399,13 +8093,29 @@ function injectPointNodes(graph, points) {
 			for (const platformId of graph.byStation.get(hit.stationId) || []) {
 				const n = graph.nodes.get(platformId);
 				if (!n) continue;
-				const meters = walkDistance3(pt, n);
-				const edge = {
-					from: pt.id, to: platformId, meters, seconds: walkSeconds(meters),
-					walk: true, accessible: !!n.accessible, sameStation: false, samePart: false, point: true,
-				};
-				mine.transfers.push(edge);
-				adjOf(platformId).transfers.push({ ...edge, from: platformId, to: pt.id });
+				// the fastest walk, and — when it takes stairs — the step-free one as its own edge,
+				// so a step-free plan still finds a way in (feature 12)
+				const walks = [streetToPlatform(pt, hit.stationId, n, false)];
+				if (!walks[0].stepFree) {
+					const sf = streetToPlatform(pt, hit.stationId, n, true);
+					if (sf && sf.stepFree && sf.exit) walks.push(sf);
+				}
+				for (const walk of walks) {
+					const meters = walk.meters;
+					const exitFor = (reverse) => walk.exit ? {
+						...walk.exit, stationId: hit.stationId,
+						legs: walk.legs ? (reverse ? reverseLegs(walk.legs) : walk.legs.slice()) : null,
+						path: walk.path ? (reverse ? walk.path.slice().reverse() : walk.path.slice()) : null,
+					} : null;
+					const edge = {
+						from: pt.id, to: platformId, meters, seconds: walkSeconds(meters) + (walk.extraSeconds || 0),
+						extraSeconds: walk.extraSeconds || 0,
+						walk: true, accessible: !!n.accessible && walk.stepFree !== false, sameStation: false, samePart: false,
+						point: true, exit: exitFor(false),
+					};
+					mine.transfers.push(edge);
+					adjOf(platformId).transfers.push({ ...edge, from: platformId, to: pt.id, exit: exitFor(true) });
+				}
 			}
 		}
 		added.push(pt.id);
@@ -7822,11 +8532,14 @@ function assembleJourney(label) {
 			});
 			i = j;
 		} else {
-			let j = i, meters = 0, seconds = 0, walkAccessible = true;
+			let j = i, meters = 0, seconds = 0, walkAccessible = true, exit = null;
+			const inside = [];
 			while (j < steps.length && steps[j].via.kind === "walk") {
 				meters += steps[j].via.edge.meters;
 				seconds += steps[j].via.edge.seconds;
 				walkAccessible = walkAccessible && !!steps[j].via.edge.accessible;
+				if (steps[j].via.edge.exit) exit = steps[j].via.edge.exit;
+				if (steps[j].via.edge.legs) inside.push(...steps[j].via.edge.legs);
 				j++;
 			}
 			const first = steps[i], last = steps[j - 1];
@@ -7841,6 +8554,13 @@ function assembleJourney(label) {
 				fromStation: a.station, fromPart: a.part, fromPlatform: first.from,
 				toStation: b.station, toPart: b.part, toPlatform: last.to,
 				fromPoint: a.point, toPoint: b.point, fromName: a.name, toName: b.name,
+				// the Exit Marker this street walk passes (feature 11): entered from a point,
+				// left toward one
+				exit: exit ? { name: exit.name, short: exit.short, destinations: exit.destinations.slice(),
+					xz: exit.xz.slice(), stationId: exit.stationId, role: a.point ? "enter" : "leave",
+					opening: !!exit.opening, legs: exit.legs || null, path: exit.path || null } : null,
+				// the scanned steps of a transfer inside one station (feature 12)
+				steps: inside.length ? inside : null,
 				depMs: Math.round(first.startMs), arrMs: Math.round(first.startMs + seconds * 1000),
 			});
 			i = j;
@@ -8549,9 +9269,10 @@ function buildDemoCity() {
 	// EXITS: the newer mapdata field. Only two demo stations publish one, so the panel's
 	// "omit the section entirely when absent" path is exercised by every other station.
 	const exits = {
+		// Exit A and B carry Exit Marker positions (feature 11); C is unpinned
 		bc: [
-			{ name: "Exit A", destinations: ["Main St", "Transit Museum"] },
-			{ name: "Exit B", destinations: ["City Hall", "Baker Plaza"] },
+			{ name: "A", destinations: ["Main St", "Transit Museum"], pins: [[602.5, 64, 440.5]] },
+			{ name: "B", destinations: ["City Hall", "Baker Plaza"], pins: [[672.5, 64, 497.5]] },
 			{ name: "Exit C", destinations: ["Bus terminal"] },
 		],
 		ap: [
@@ -8561,12 +9282,53 @@ function buildDemoCity() {
 	};
 	// Northgate's explicit step-free list (see the platform table above)
 	const accessiblePlatforms = { ng: ["ng_g"] };
+	/* STATION LAYOUT (feature 12): Baker City Central as a scan would publish it. Exit A
+	 * goes down stairs through the gates (with a lift as the step-free way round); Exit B
+	 * is a ramp; the two platforms are one flight up and one down apart. */
+	const layouts = {
+		bc: {
+			scannedAt: 0,
+			anchors: [
+				{ id: "exit:A", kind: "exit", name: "A", pos: [602.5, 64, 440.5] },
+				{ id: "exit:B", kind: "exit", name: "B", pos: [672.5, 64, 497.5] },
+				{ id: "platform:bc_g", kind: "platform", name: "1", pos: [636, 56, 468] },
+				{ id: "platform:bc_b", kind: "platform", name: "3", pos: [634, 56, 468] },
+			],
+			links: [
+				{ from: "exit:A", to: "platform:bc_g", meters: 55, extraSeconds: 3, stepFree: false,
+					legs: [{ kind: "walk", meters: 8, dy: 0 }, { kind: "stairs", meters: 12, dy: -8 }, { kind: "walk", meters: 15, dy: 0 },
+						{ kind: "fare", meters: 0, dy: 0, seconds: 3 }, { kind: "walk", meters: 20, dy: 0 }],
+					path: [[602.5, 64, 440.5], [610, 64, 446], [618, 56, 452], [628, 56, 462], [636, 56, 466]],
+					stepFreeAlt: { meters: 80, extraSeconds: 19, stepFree: true,
+						legs: [{ kind: "walk", meters: 30, dy: 0 }, { kind: "lift", meters: 0, dy: -8, seconds: 16 },
+							{ kind: "walk", meters: 30, dy: 0 }, { kind: "fare", meters: 0, dy: 0, seconds: 3 }, { kind: "walk", meters: 20, dy: 0 }],
+						path: [[602.5, 64, 440.5], [625, 64, 440], [625, 56, 440], [636, 56, 466]] } },
+				{ from: "exit:A", to: "platform:bc_b", meters: 57, extraSeconds: 3, stepFree: false,
+					legs: [{ kind: "walk", meters: 8, dy: 0 }, { kind: "stairs", meters: 12, dy: -8 }, { kind: "walk", meters: 17, dy: 0 },
+						{ kind: "fare", meters: 0, dy: 0, seconds: 3 }, { kind: "walk", meters: 20, dy: 0 }],
+					path: [[602.5, 64, 440.5], [618, 56, 452], [634, 56, 466]] },
+				{ from: "exit:B", to: "platform:bc_g", meters: 60, extraSeconds: 3, stepFree: true,
+					legs: [{ kind: "walk", meters: 25, dy: -8 }, { kind: "fare", meters: 0, dy: 0, seconds: 3 }, { kind: "walk", meters: 35, dy: 0 }],
+					path: [[672.5, 64, 497.5], [650, 56, 480], [636, 56, 470]] },
+				{ from: "platform:bc_g", to: "platform:bc_b", meters: 14, extraSeconds: 0, stepFree: false,
+					legs: [{ kind: "stairs", meters: 5, dy: 5 }, { kind: "walk", meters: 4, dy: 0 }, { kind: "stairs", meters: 5, dy: -5 }],
+					path: [[636, 56, 468], [635, 61, 470], [634, 56, 468]],
+					stepFreeAlt: { meters: 40, extraSeconds: 32, stepFree: true,
+						legs: [{ kind: "walk", meters: 10, dy: 0 }, { kind: "lift", meters: 0, dy: 5, seconds: 14.5 },
+							{ kind: "walk", meters: 20, dy: 0 }, { kind: "lift", meters: 0, dy: -5, seconds: 14.5 }, { kind: "walk", meters: 10, dy: 0 }],
+						path: [[636, 56, 468], [640, 56, 474], [630, 61, 474], [634, 56, 468]] } },
+			],
+			platformStepFree: { bc_g: true, bc_b: false },
+			warnings: [],
+		},
+	};
 
 	const mdStations = stations.map((st) => {
 		const extra = partsFor(st);
 		return {
 			id: st.id, name: st.name, color: st.color, accessible: st.accessible,
 			...(exits[st.id] ? { exits: exits[st.id] } : {}),
+			...(layouts[st.id] ? { layout: layouts[st.id] } : {}),
 			...(accessiblePlatforms[st.id] ? { accessiblePlatforms: accessiblePlatforms[st.id] } : {}),
 			platforms: st.platformIds.map((id) => {
 				const p = platforms.find((q) => q.id === id);
@@ -8588,6 +9350,18 @@ function buildDemoCity() {
 			 * bullet — which is exactly the case the planner must not price as a
 			 * transfer, and the itinerary must draw as a "Continues as S" note. */
 			throughRuns: [{ from: "rA", to: "rS", platform: "hv_b" }],
+			/* PLACES (feature 11): a landmark by Baker City Central's Exit A, a park by
+			 * its Exit B, a district label over the old town, and a stadium out east. */
+			places: [
+				{ id: "p_museum", name: "Transit Museum", category: "landmark", color: 0xE0A21B,
+					description: "Retired cars from every line.", pos: [586.5, 64, 424.5], radius: 12 },
+				{ id: "p_plaza", name: "Baker Plaza", category: "park", color: 0x3F9A4E,
+					pos: [700.5, 64, 520.5], radius: 20 },
+				{ id: "p_oldtown", name: "Old Town", category: "district", color: 0x6B6B78,
+					pos: [760.5, 64, 380.5], radius: 90 },
+				{ id: "p_stadium", name: "Harbor Stadium", category: "sports", color: 0x2E8FD0,
+					pos: [1250.5, 64, 720.5], radius: 30 },
+			],
 		},
 	};
 }

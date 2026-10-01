@@ -69,3 +69,16 @@ jar {
         rename { "${it}_${project.base.archivesName.get()}" }
     }
 }
+
+// The public wayfinding API (com.stationannouncer.api — pure Java, no Minecraft
+// types) as a small jar other mods compile against: MTR-Games uses Mojang
+// mappings, so it must never see our Yarn-named classes. Classes + sources.
+// `./gradlew apiJar` -> build/libs/station-announcer-<ver>-api.jar
+// (tools/build_api_jar.sh builds the same jar without Gradle.)
+tasks.register('apiJar', Jar) {
+    group = 'build'
+    description = 'The pure-Java wayfinding API jar for other mods.'
+    archiveClassifier = 'api'
+    from(sourceSets.main.output) { include 'com/stationannouncer/api/**' }
+    from(sourceSets.main.java) { include 'com/stationannouncer/api/**' }
+}

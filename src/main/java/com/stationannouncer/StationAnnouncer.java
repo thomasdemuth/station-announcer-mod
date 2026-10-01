@@ -30,6 +30,8 @@ public class StationAnnouncer implements ModInitializer {
     @Override
     public void onInitialize() {
         ModContent.register();
+        // Ramps and stairs in any full block's texture (world material palette).
+        com.stationannouncer.material.MaterialBlocks.register();
         AnnouncerNetworking.registerServerReceivers();
         AnnounceCommand.register();
         if (FabricLoader.getInstance().isDevelopmentEnvironment()) {
