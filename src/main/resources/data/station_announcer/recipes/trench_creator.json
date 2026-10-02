@@ -1,0 +1,23 @@
+{
+  "type": "minecraft:crafting_shaped",
+  "category": "tools",
+  "key": {
+    "C": {
+      "item": "minecraft:cobblestone"
+    },
+    "R": {
+      "item": "minecraft:rail"
+    },
+    "P": {
+      "item": "minecraft:iron_pickaxe"
+    }
+  },
+  "pattern": [
+    "CRC",
+    "CPC"
+  ],
+  "result": {
+    "item": "station_announcer:trench_creator",
+    "count": 1
+  }
+}

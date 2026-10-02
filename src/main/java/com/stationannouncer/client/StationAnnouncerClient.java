@@ -170,6 +170,22 @@ public class StationAnnouncerClient implements ClientModInitializer {
                                     // Dev-only: the Bridge Creator screen for the held item.
                                     client.setScreen(new com.stationannouncer.client.mtr.BridgeCreatorScreen(
                                             net.minecraft.util.Hand.MAIN_HAND, client.player.getMainHandStack()));
+                                } else if (cmd.startsWith("#earthworks-editor")) {
+                                    // Dev-only: the earthworks screen for the held tool
+                                    // (#earthworks-editor [part] [before]).
+                                    net.minecraft.item.ItemStack held = client.player.getMainHandStack();
+                                    if (held.getItem() instanceof com.stationannouncer.mtr.ItemEarthworksCreator tool) {
+                                        com.stationannouncer.client.mtr.EarthworksScreen screen = new com.stationannouncer.client.mtr.EarthworksScreen(
+                                                net.minecraft.util.Hand.MAIN_HAND, held, tool.kind);
+                                        String[] a = cmd.split("\\s+");
+                                        if (a.length > 1) {
+                                            screen.select(a[1]);
+                                        }
+                                        if (a.length > 2 && a[2].equals("before")) {
+                                            screen.showBefore();
+                                        }
+                                        client.setScreen(screen);
+                                    }
                                 } else if (cmd.equals("#material-picker")) {
                                     // Dev-only: the ramp/stairs texture picker for the held item.
                                     client.setScreen(com.stationannouncer.client.material.MaterialPickerScreen.forHand(

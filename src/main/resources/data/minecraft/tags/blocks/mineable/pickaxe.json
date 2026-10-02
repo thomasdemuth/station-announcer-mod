@@ -310,6 +310,12 @@
     "station_announcer:material_stairs",
     "station_announcer:curved_platform_edge",
     "station_announcer:curved_gap_filler",
-    "station_announcer:curved_gap_filler_loop"
+    "station_announcer:curved_gap_filler_loop",
+    "station_announcer:ramp_handrail_standing",
+    "station_announcer:ramp_handrail_wall",
+    "station_announcer:ramp_handrail_double",
+    "station_announcer:ramp_handrail_floating",
+    "station_announcer:ramp_railing_glass",
+    "station_announcer:ramp_railing_pickets"
   ]
 }

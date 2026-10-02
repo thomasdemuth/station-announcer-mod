@@ -311,7 +311,7 @@ public final class BridgeService {
 
     // ------------------------------------------------------------- helpers
 
-    private static Simulator simulatorFor(ServerWorld world) {
+    static Simulator simulatorFor(ServerWorld world) {
         ObjectImmutableList<Simulator> simulators = MtrSimulators.get();
         if (simulators == null) {
             return null;
@@ -330,7 +330,7 @@ public final class BridgeService {
         return null;
     }
 
-    private static boolean boxesOverlap(RailMath a, RailMath b, int reach) {
+    static boolean boxesOverlap(RailMath a, RailMath b, int reach) {
         return b.maxX >= a.minX - reach && b.minX <= a.maxX + reach
                 && b.maxZ >= a.minZ - reach && b.minZ <= a.maxZ + reach
                 && b.maxY >= a.minY - 16 && b.minY <= a.maxY + 16;

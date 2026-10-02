@@ -1,0 +1,23 @@
+{
+  "type": "minecraft:crafting_shaped",
+  "category": "tools",
+  "key": {
+    "D": {
+      "item": "minecraft:dirt"
+    },
+    "R": {
+      "item": "minecraft:rail"
+    },
+    "S": {
+      "item": "minecraft:iron_shovel"
+    }
+  },
+  "pattern": [
+    "DRD",
+    "DSD"
+  ],
+  "result": {
+    "item": "station_announcer:embankment_creator",
+    "count": 1
+  }
+}

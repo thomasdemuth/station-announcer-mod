@@ -162,10 +162,10 @@ public final class BridgeBuilder {
     // --------------------------------------------------------------- sampling
 
     /** One track's presence at a sample: its lateral cell and rail height. */
-    private record Track(int index, int cell, int railY) {
+    record Track(int index, int cell, int railY) {
     }
 
-    private static final class Sample {
+    static final class Sample {
         final double distance;
         final Vector centre;
         final double tx, tz;   // unit tangent (horizontal)
@@ -210,7 +210,7 @@ public final class BridgeBuilder {
         }
     }
 
-    private static List<Sample> sample(Path reference, List<Path> companions) {
+    static List<Sample> sample(Path reference, List<Path> companions) {
         List<Polyline> lines = new ArrayList<>();
         for (Path c : companions) {
             lines.add(new Polyline(c, 1.0));

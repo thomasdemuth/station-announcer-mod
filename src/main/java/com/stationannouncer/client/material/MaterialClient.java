@@ -4,6 +4,8 @@ import com.stationannouncer.StationAnnouncer;
 import com.stationannouncer.material.MaterialBlocks;
 import com.stationannouncer.material.MaterialPalette;
 import com.stationannouncer.material.MaterialRampBlock;
+import com.stationannouncer.material.RampRailBlock;
+import com.stationannouncer.material.RampRails;
 import net.fabricmc.api.EnvType;
 import net.fabricmc.api.Environment;
 import net.fabricmc.fabric.api.blockrenderlayer.v1.BlockRenderLayerMap;
@@ -41,6 +43,10 @@ public final class MaterialClient {
         ModelLoadingPlugin.register(context -> {
             registerStates(context, MaterialBlocks.MATERIAL_RAMP, MaterialGeometry.RAMP);
             registerStates(context, MaterialBlocks.MATERIAL_STAIRS, MaterialGeometry.STAIRS);
+            for (RampRailBlock rail : RampRails.BLOCKS.values()) {
+                RampRailGeometry geometry = new RampRailGeometry(rail.style());
+                registerStates(context, rail, geometry, geometry.textures(), "steel");
+            }
             context.resolveModel().register(resolve -> {
                 Identifier id = resolve.id();
                 if (RAMP_ITEM_MODEL.equals(id)) {
@@ -60,6 +66,7 @@ public final class MaterialClient {
 
         BlockRenderLayerMap.INSTANCE.putBlock(MaterialBlocks.MATERIAL_RAMP, RenderLayer.getCutoutMipped());
         BlockRenderLayerMap.INSTANCE.putBlock(MaterialBlocks.MATERIAL_STAIRS, RenderLayer.getCutoutMipped());
+        BlockRenderLayerMap.INSTANCE.putBlock(RampRails.GLASS, RenderLayer.getTranslucent());
 
         ColorProviderRegistry.BLOCK.register((state, world, pos, tintIndex) -> {
             if (tintIndex < 0 || state == null) {

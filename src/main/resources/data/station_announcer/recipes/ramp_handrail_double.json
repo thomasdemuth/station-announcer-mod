@@ -1,0 +1,16 @@
+{
+  "type": "minecraft:crafting_shapeless",
+  "category": "building",
+  "ingredients": [
+    {
+      "item": "station_announcer:subway_handrail_double"
+    },
+    {
+      "item": "station_announcer:material_ramp"
+    }
+  ],
+  "result": {
+    "item": "station_announcer:ramp_handrail_double",
+    "count": 1
+  }
+}

@@ -44,6 +44,65 @@ rig's Gradle wrappers (and sometimes the JVMs) get SIGKILLed — forbid agents f
 entirely and check rig health after each one finishes; an orphaned JVM keeps serving but
 loses the console fifo.
 
+### EARTHWORKS: EMBANKMENT / TRENCH CREATORS + ROW CLEARER (2026-10-02) — rig-verified, DEPLOYED in 3.4.6 to both profiles, committed
+
+Thomas's answers (do not re-ask): THREE separate items (not one cut-and-fill tool), weighted block
+mixes per layer, all slope controls (ratio presets + custom, retaining walls, benches, natural edge
+blending), clearer removes whole trees + ground plants + snow/ice + optionally terrain in a clearance
+envelope. Built on the bridge creator's pattern (Operations tab, node clicks, FlatUi screen, presets,
+sneak-click pick, undo):
+- `mtr/EarthworksSpec` (one spec class, `Kind` EMBANKMENT/TRENCH/CLEARER, NBT `Earthworks`; layers
+  TOP/CORE/SLOPE/TOE embankment, FLOOR/DITCH/FACE trench, WALL both) · `EarthworksPalette` (text
+  `"60 minecraft:gravel, 30 minecraft:andesite"`, position-hashed pick so preview == build) ·
+  `EarthworksBuilder` (reuses BridgeBuilder's sampler — `Sample`/`Track`/`sample()` made
+  package-private; reads a `View`, writes a `Plan`; `profile()` = slope steps + benches) ·
+  `EarthworksService` (rails like BridgeService — `simulatorFor`/`boxesOverlap` now package-private;
+  applies plans 8000 blocks/tick, removals top-down then placements bottom-up, flags
+  NOTIFY_LISTENERS|FORCE_STATE; one undo per player; "busy" while a job runs) · `EarthworksPresets`
+  (16 built-ins) · `ItemEarthworksCreator` (one class, 3 ids: embankment_creator, trench_creator,
+  row_clearer) · `Earthworks` (registration from MtrPillars, packets update_earthworks /
+  earthworks_action, `/earthworks build|line|preset|undo` — `line` works with NO rail, used for rig tests).
+- Safety rules: cuts/clearing only remove natural terrain (carver-replaceable tags + ores + extras),
+  fluids, plants (not crops), snow/ice, trees; a TREE = logs with adjacent non-persistent leaves (or
+  huge mushroom) — leaves go only if their DISTANCE ≥ BFS depth from this tree (neighbours keep their
+  crown); never block entities / mtr / station_announcer / msd blocks. Embankment fills only fillable
+  cells. Over a void (no ground within maxHeight+2) a column is skipped / the slope stops — the first
+  cut filled 50 deep into the air off a floating test platform (82k blocks), fixed.
+- Client: `client/mtr/EarthworksScreen` (bridge layout, palette rows with −/+ weight (shift ±5), %,
+  ×, + Add (block grid), Pick (replace/add), Clear; After/Before preview), `EarthworksPreview`
+  (generated valley / wooded hill / meadow through the real builder, 3-block ground skin),
+  `EarthworksUserPresets` (`config/station_announcer/earthworks_presets.json`, kind → name → SNBT).
+  Opener branch in MtrPidsClient; dev hook `#earthworks-editor [part] [before]`.
+  Assets `tools/gen_earthworks_assets.py`.
+- RIG-VERIFIED (world_baker, sky test terrain x 195..295 z -80..-20 y 140..163, screenshots
+  2026-10-02 15:39–15:51): embankment over a valley (auto walls in the deep part, grassy slopes on the
+  flat), trench through a 12-high hill (gravel bed, clad faces, auto walls, 2 trees felled whole),
+  clearer (corridor trees/grass/snow gone, outside trees intact), undo restores; REAL MTR rail
+  `/earthworks build -2460 74 2028 -2321 74 1892` = curved 3-track auto-companions embankment with
+  walls along the river (then undone); all three screens screenshotted. NOT verified: any click in
+  the screen, real node clicking + sneak-pick, user preset save/load, planning time on huge cuts
+  (planning runs on the server thread; 82k-block plan took 30 ms, apply sliced).
+
+### RAMP RAILS (2026-10-02) — 6 blocks for the 1:12 material ramp; rig-verified render, DEPLOYED in 3.4.6, committed
+
+Thomas's answers (do not re-ask): all four MTA styles + both MSD (Station Decoration) styles, BOTH
+placements, MSD-style item shape cycle. `material/RampRailBlock` (+`RampRailItem`, `RampRails`
+registry, called from MaterialBlocks.register): `ramp_handrail_{standing,wall,double,floating}`,
+`ramp_railing_{glass,pickets}`. Props FACING (uphill) · SHAPE flat/start/slope/end/corner_outer/
+corner_inner (right-click air cycles) · SEG (the ramp's) · MODE floor|on|beside · RIGHT (side).
+"In-cell" = the rail block stands in the lane ON the ramp (cell above it, geometry reaches down into
+the ramp cell) — NOT a ramp property (would multiply ramp states ~49×). BESIDE = next cell, hugs the
+shared edge at the ramp's height, posts/panels down to that cell's floor. Rail centre = surface +
+14.5 px (subway handrail height). Geometry `client/material/RampRailGeometry` on ShapeModel (sheared
+octagon tubes with vertical cross-sections → joints identical, no end faces; fatter elbow fittings at
+corners/ends). NO blockstate files; assets by `tools/gen_ramp_rail_assets.py`. Neighbour updates only
+change SEG/MODE, never FACING (/setblock's postProcessState re-aimed landing cross rails — fixed);
+on a landing (seg 12) placement faces the player's look unless the shape is slope/start/end.
+Rig-verified (screenshots 2026-10-02 14:16–14:21, sky over Albany x 39..53 z -53..-39 y 160): every
+style ON + BESIDE along two 12-segment ramps, start/end pieces, outer corner + cross rail on a landing,
+double U-end. NOT verified: real click placement (side from click half, ramp detection), inner corner
+look, collision feel, item icons in a slot. Wall style in BESIDE mode brackets into the ramp side.
+
 ### PA / SPEAKER SYSTEM ON FLATUI (2026-10-01) — built + rig-verified, shipped in 3.4.5
 
 Thomas picked all of: FlatUi Control Box, speaker screen + range preview, area linking,

@@ -184,6 +184,8 @@ public final class MtrPidsClient {
                 net.minecraft.item.ItemStack held = client.player.getStackInHand(hand);
                 if (held.getItem() instanceof com.stationannouncer.mtr.ItemBridgeCreator) {
                     client.setScreen(new BridgeCreatorScreen(hand, held));
+                } else if (held.getItem() instanceof com.stationannouncer.mtr.ItemEarthworksCreator earthworks) {
+                    client.setScreen(new EarthworksScreen(hand, held, earthworks.kind));
                 } else {
                     client.setScreen(new CreatorSettingsScreen(hand, held));
                 }

@@ -62,6 +62,7 @@ public final class MaterialBlocks {
         Registry.register(Registries.ITEM, StationAnnouncer.id("material_stairs"), MATERIAL_STAIRS_ITEM);
         ModContent.DECORATION_ENTRIES.add(MATERIAL_RAMP_ITEM);
         ModContent.DECORATION_ENTRIES.add(MATERIAL_STAIRS_ITEM);
+        RampRails.register();
 
         ServerLifecycleEvents.SERVER_STARTED.register(MaterialPalette::load);
         ServerLifecycleEvents.SERVER_STOPPED.register(server -> MaterialPalette.unload());

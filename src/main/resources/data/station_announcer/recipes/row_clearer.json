@@ -1,0 +1,23 @@
+{
+  "type": "minecraft:crafting_shaped",
+  "category": "tools",
+  "key": {
+    "S": {
+      "item": "minecraft:oak_sapling"
+    },
+    "R": {
+      "item": "minecraft:rail"
+    },
+    "A": {
+      "item": "minecraft:iron_axe"
+    }
+  },
+  "pattern": [
+    "SRS",
+    " A "
+  ],
+  "result": {
+    "item": "station_announcer:row_clearer",
+    "count": 1
+  }
+}
