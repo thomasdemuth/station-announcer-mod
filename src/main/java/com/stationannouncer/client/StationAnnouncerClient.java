@@ -229,6 +229,11 @@ public class StationAnnouncerClient implements ClientModInitializer {
                                         }
                                         ClientPlayNetworking.send(AnnouncerNetworking.NETWORK_EDIT_C2S, buf);
                                     }
+                                } else if (cmd.startsWith("#line-style")) {
+                                    com.stationannouncer.client.mtraddon.ClientLineStyles.devHook(client, cmd);
+                                } else if (cmd.equals("#use")) {
+                                    // Dev-only: a right-click with the held item (opens MTR's dashboard).
+                                    client.interactionManager.interactItem(client.player, net.minecraft.util.Hand.MAIN_HAND);
                                 } else if (cmd.equals("#pa-close")) {
                                     client.setScreen(null);
                                 } else if (cmd.startsWith("#pa-gui ")) {

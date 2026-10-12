@@ -216,6 +216,15 @@ public class RoutePicker {
     public static void drawBullet(DrawContext context, TextRenderer font, RouteBullets.Bullet bullet, int x, int y) {
         switch (bullet.shape()) {
             case SQUARE -> context.fill(x + 1, y + 1, x + BULLET - 1, y + BULLET - 1, bullet.color());
+            case HEXAGON -> {
+                // Points left and right, flat top and bottom: each row steps in by dy·tan 30°.
+                float half = BULLET / 2.0f;
+                for (int row = 1; row < BULLET - 1; row++) {
+                    float dy = Math.abs(row + 0.5f - half);
+                    int inset = Math.round(dy * 0.577f);
+                    context.fill(x + inset, y + row, x + BULLET - inset, y + row + 1, bullet.color());
+                }
+            }
             case DIAMOND -> {
                 // One row per pixel, widest across the middle.
                 float half = BULLET / 2.0f;
@@ -238,7 +247,7 @@ public class RoutePicker {
             context.fill(x + 2, y + BULLET / 2 - 1, x + BULLET - 2, y + BULLET / 2 + 1, 0xFFFFFFFF);
             return;
         }
-        int textColor = RouteBullets.needsDarkText(bullet.color()) ? 0xFF101014 : 0xFFFFFFFF;
+        int textColor = bullet.ink();
         int labelWidth = font.getWidth(bullet.label());
         context.drawText(font, bullet.label(), x + (BULLET - labelWidth) / 2, y + 3, textColor, false);
     }

@@ -24,35 +24,37 @@ import java.util.Locale;
 import java.util.Map;
 
 /**
- * Per-LINE bullet shape: the NYC circle, the express diamond (6◆, 7◆) or a
- * square. Set from MTR's Edit Route screen, drawn by every bullet in the mod —
- * NYC PIDS, entrance and MTA signs, posters, pickers and the Map+ web map.
+ * Per-LINE bullet style: the shape (the NYC circle, the express diamond, a
+ * square or a hexagon), the bullet TEXT and its ink (auto / white / black).
+ * Set from the "Line style…" editor on MTR's Edit Route screen, drawn by every
+ * bullet in the mod — NYC PIDS, entrance and MTA signs, posters, pickers and
+ * the Map+ web map. The line's COLOUR is not stored here: it is MTR's own
+ * route colour (the editor writes it to every route of the line), so a bullet
+ * and a Map+ ribbon can never disagree.
  *
  * <p>Keyed by LINE name — the part of an MTR route name before its {@code ||}
  * direction, first language (the same key posters and signs already use) — so
- * both directions of a line share one shape, and a line drawn only by name
- * (a poster's {@code {b:LINE}}) finds it. Only non-circle shapes are stored.</p>
+ * both directions of a line share one style, and a line drawn only by name
+ * (a poster's {@code {b:LINE}}) finds it. Only non-default styles are stored.</p>
  *
  * <p>Server: {@code <save>/station-announcer-addon/line_styles.json}, edits
  * gated like the other addon settings ({@code editPermissionLevel}), the whole
- * map synced to every client on join and after each change. {@link #shapeFor}
+ * map synced to every client on join and after each change. {@link #styleFor}
  * reads a volatile immutable snapshot, so the dispatch map's simulator thread
  * can call it too.</p>
  */
 public final class LineStyles {
+    /** Appended only — the packet carries the ordinal. */
     public enum Shape {
         CIRCLE("circle"),
         DIAMOND("diamond"),
-        SQUARE("square");
+        SQUARE("square"),
+        HEXAGON("hexagon");
 
         public final String id;
 
         Shape(String id) {
             this.id = id;
-        }
-
-        public Shape next() {
-            return values()[(ordinal() + 1) % values().length];
         }
 
         public static Shape byOrdinal(int ordinal) {
@@ -70,13 +72,74 @@ public final class LineStyles {
         }
     }
 
+    /** The bullet's lettering: AUTO picks whichever reads on the line colour (black on the N/Q/R/W yellow). */
+    public enum TextColor {
+        AUTO("auto"),
+        WHITE("white"),
+        BLACK("black");
+
+        public final String id;
+
+        TextColor(String id) {
+            this.id = id;
+        }
+
+        public static TextColor byOrdinal(int ordinal) {
+            TextColor[] values = values();
+            return ordinal >= 0 && ordinal < values.length ? values[ordinal] : AUTO;
+        }
+
+        public static TextColor byId(String id) {
+            for (TextColor color : values()) {
+                if (color.id.equals(id)) {
+                    return color;
+                }
+            }
+            return AUTO;
+        }
+    }
+
+    /**
+     * One line's style. {@code label} empty = automatic (MTR's route number,
+     * else the first number or letter of the name).
+     */
+    public record Style(Shape shape, String label, TextColor text) {
+        public static final Style DEFAULT = new Style(Shape.CIRCLE, "", TextColor.AUTO);
+
+        public Style {
+            shape = shape == null ? Shape.CIRCLE : shape;
+            label = cleanLabel(label);
+            text = text == null ? TextColor.AUTO : text;
+        }
+
+        public boolean isDefault() {
+            return shape == Shape.CIRCLE && label.isEmpty() && text == TextColor.AUTO;
+        }
+
+        /** True when the lettering on a bullet of this colour is black. */
+        public boolean darkText(int argb) {
+            return switch (text) {
+                case BLACK -> true;
+                case WHITE -> false;
+                default -> needsDarkText(argb);
+            };
+        }
+
+        /** This style's text, or {@code fallback} when it is automatic. */
+        public String labelOr(String fallback) {
+            return label.isEmpty() ? fallback : label;
+        }
+    }
+
     public static final Identifier UPDATE_LINE_STYLE_C2S = StationAnnouncer.id("update_line_style");
     public static final Identifier LINE_STYLES_S2C = StationAnnouncer.id("line_styles");
     public static final int MAX_LINE_LENGTH = 128;
+    /** Bullet text: NYC uses one or two characters; three still fit ("FS", "42", "SIR"). */
+    public static final int MAX_LABEL_LENGTH = 3;
     private static final int MAX_ENTRIES = 4096;
 
     private static final Gson GSON = new GsonBuilder().setPrettyPrinting().create();
-    private static volatile Map<String, Shape> shapes = Map.of();
+    private static volatile Map<String, Style> styles = Map.of();
     private static Path path;
 
     private LineStyles() {
@@ -97,33 +160,71 @@ public final class LineStyles {
         return first.isEmpty() ? line.trim() : first;
     }
 
+    /** Bullet text as stored: trimmed, no line breaks, at most {@value #MAX_LABEL_LENGTH} characters. */
+    public static String cleanLabel(String label) {
+        if (label == null) {
+            return "";
+        }
+        String clean = label.replace('\n', ' ').replace('\r', ' ').replace('|', ' ').trim();
+        return clean.length() > MAX_LABEL_LENGTH ? clean.substring(0, MAX_LABEL_LENGTH) : clean;
+    }
+
+    /** Black or white lettering, whichever reads on a bullet of this colour (perceived brightness). */
+    public static boolean needsDarkText(int argb) {
+        int r = argb >> 16 & 0xFF;
+        int g = argb >> 8 & 0xFF;
+        int b = argb & 0xFF;
+        return (r * 299 + g * 587 + b * 114) / 1000 > 140;
+    }
+
+    /** Server side (any thread): the style of a route's or line's bullet. */
+    public static Style styleFor(String routeOrLineName) {
+        Map<String, Style> current = styles;
+        return current.isEmpty() ? Style.DEFAULT : current.getOrDefault(lineKey(routeOrLineName), Style.DEFAULT);
+    }
+
     /** Server side (any thread): the shape of a route's or line's bullet. */
     public static Shape shapeFor(String routeOrLineName) {
-        Map<String, Shape> current = shapes;
-        return current.isEmpty() ? Shape.CIRCLE : current.getOrDefault(lineKey(routeOrLineName), Shape.CIRCLE);
+        return styleFor(routeOrLineName).shape();
+    }
+
+    // ---------------------------------------------------------------- packets
+
+    /** The C2S edit, also used by the client to build it. */
+    public static void writeStyle(PacketByteBuf buf, Style style) {
+        buf.writeByte(style.shape().ordinal());
+        buf.writeString(style.label(), MAX_LABEL_LENGTH * 4);
+        buf.writeByte(style.text().ordinal());
+    }
+
+    public static Style readStyle(PacketByteBuf buf) {
+        Shape shape = Shape.byOrdinal(buf.readByte());
+        String label = buf.readString(MAX_LABEL_LENGTH * 4);
+        TextColor text = TextColor.byOrdinal(buf.readByte());
+        return new Style(shape, label, text);
     }
 
     public static void register() {
         ServerLifecycleEvents.SERVER_STARTED.register(LineStyles::load);
         ServerLifecycleEvents.SERVER_STOPPED.register(server -> {
-            shapes = Map.of();
+            styles = Map.of();
             path = null;
         });
         ServerPlayConnectionEvents.JOIN.register((handler, sender, server) -> syncTo(sender));
         ServerPlayNetworking.registerGlobalReceiver(UPDATE_LINE_STYLE_C2S, (server, player, handler, buf, responseSender) -> {
             String line = lineKey(buf.readString(MAX_LINE_LENGTH));
-            Shape shape = Shape.byOrdinal(buf.readByte());
+            Style style = readStyle(buf);
             server.execute(() -> {
                 if (line.isEmpty() || !player.hasPermissionLevel(AddonServerConfig.get().editPermissionLevel)) {
                     return;
                 }
-                Map<String, Shape> next = new HashMap<>(shapes);
-                if (shape == Shape.CIRCLE) {
+                Map<String, Style> next = new HashMap<>(styles);
+                if (style.isDefault()) {
                     next.remove(line);
                 } else if (next.size() < MAX_ENTRIES || next.containsKey(line)) {
-                    next.put(line, shape);
+                    next.put(line, style);
                 }
-                shapes = Map.copyOf(next);
+                styles = Map.copyOf(next);
                 save();
                 for (ServerPlayerEntity online : server.getPlayerManager().getPlayerList()) {
                     ServerPlayNetworking.send(online, LINE_STYLES_S2C, buildSync());
@@ -137,12 +238,12 @@ public final class LineStyles {
     }
 
     private static PacketByteBuf buildSync() {
-        Map<String, Shape> current = shapes;
+        Map<String, Style> current = styles;
         PacketByteBuf buf = PacketByteBufs.create();
         buf.writeVarInt(current.size());
-        current.forEach((line, shape) -> {
+        current.forEach((line, style) -> {
             buf.writeString(line, MAX_LINE_LENGTH);
-            buf.writeByte(shape.ordinal());
+            writeStyle(buf, style);
         });
         return buf;
     }
@@ -152,25 +253,50 @@ public final class LineStyles {
     private static void load(MinecraftServer server) {
         path = server.getSavePath(WorldSavePath.ROOT)
                 .resolve("station-announcer-addon").resolve("line_styles.json").normalize();
-        Map<String, Shape> loaded = new HashMap<>();
+        Map<String, Style> loaded = new HashMap<>();
         try {
             if (Files.exists(path)) {
                 JsonObject root = JsonParser.parseString(Files.readString(path)).getAsJsonObject();
-                JsonObject lines = root.getAsJsonObject("bulletShapes");
-                if (lines != null) {
-                    for (Map.Entry<String, JsonElement> entry : lines.entrySet()) {
+                // Pre-3.5 files hold only "bulletShapes" (line → shape id).
+                JsonObject shapes = root.getAsJsonObject("bulletShapes");
+                if (shapes != null) {
+                    for (Map.Entry<String, JsonElement> entry : shapes.entrySet()) {
                         Shape shape = Shape.byId(entry.getValue().getAsString().toLowerCase(Locale.ROOT));
                         String line = lineKey(entry.getKey());
                         if (shape != Shape.CIRCLE && !line.isEmpty()) {
-                            loaded.put(line, shape);
+                            loaded.put(line, new Style(shape, "", TextColor.AUTO));
+                        }
+                    }
+                }
+                JsonObject lines = root.getAsJsonObject("lines");
+                if (lines != null) {
+                    for (Map.Entry<String, JsonElement> entry : lines.entrySet()) {
+                        String line = lineKey(entry.getKey());
+                        if (line.isEmpty() || !entry.getValue().isJsonObject()) {
+                            continue;
+                        }
+                        JsonObject json = entry.getValue().getAsJsonObject();
+                        Style style = new Style(
+                                Shape.byId(string(json, "shape").toLowerCase(Locale.ROOT)),
+                                string(json, "label"),
+                                TextColor.byId(string(json, "text").toLowerCase(Locale.ROOT)));
+                        if (style.isDefault()) {
+                            loaded.remove(line);
+                        } else {
+                            loaded.put(line, style);
                         }
                     }
                 }
             }
         } catch (Exception e) {
-            StationAnnouncer.LOGGER.warn("Could not read {}, all bullets are circles", path, e);
+            StationAnnouncer.LOGGER.warn("Could not read {}, all bullets are plain circles", path, e);
         }
-        shapes = Map.copyOf(loaded);
+        styles = Map.copyOf(loaded);
+    }
+
+    private static String string(JsonObject json, String key) {
+        JsonElement element = json.get(key);
+        return element != null && element.isJsonPrimitive() ? element.getAsString() : "";
     }
 
     private static void save() {
@@ -178,11 +304,23 @@ public final class LineStyles {
         if (file == null) {
             return;
         }
+        // "bulletShapes" stays alongside so an older build still finds its shapes.
+        JsonObject shapes = new JsonObject();
         JsonObject lines = new JsonObject();
-        shapes.entrySet().stream().sorted(Map.Entry.comparingByKey())
-                .forEach(entry -> lines.addProperty(entry.getKey(), entry.getValue().id));
+        styles.entrySet().stream().sorted(Map.Entry.comparingByKey()).forEach(entry -> {
+            Style style = entry.getValue();
+            if (style.shape() != Shape.CIRCLE && style.shape() != Shape.HEXAGON) {
+                shapes.addProperty(entry.getKey(), style.shape().id);
+            }
+            JsonObject json = new JsonObject();
+            json.addProperty("shape", style.shape().id);
+            json.addProperty("label", style.label());
+            json.addProperty("text", style.text().id);
+            lines.add(entry.getKey(), json);
+        });
         JsonObject root = new JsonObject();
-        root.add("bulletShapes", lines);
+        root.add("bulletShapes", shapes);
+        root.add("lines", lines);
         try {
             Files.createDirectories(file.getParent());
             Files.writeString(file, GSON.toJson(root));

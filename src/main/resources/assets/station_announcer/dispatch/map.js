@@ -1396,20 +1396,27 @@ function labelSourceWord(name) {
  * so they collapse to ONE bullet.
  */
 /**
- * The line's bullet shape from MTR's Edit Route screen (server field bulletShape)
+ * The line's bullet shape from the Line style editor (server field bulletShape)
  * rides the label as a suffix, the way express already did: "4*" = diamond,
- * "4#" = square. Applied after every naming rule below.
+ * "4#" = square, "4~" = hexagon. Applied after every naming rule below. A forced
+ * white/black lettering (bulletText) is remembered per label for drawBullet.
  */
 function routeLabelInfo(rt) {
 	const info = routeLabelInfoBase(rt);
 	const shape = rt && rt.bulletShape;
-	if (shape === "diamond" || shape === "square") {
-		info.label = bulletText(info.label) + (shape === "diamond" ? "*" : "#");
-	}
+	const suffix = shape === "diamond" ? "*" : shape === "square" ? "#" : shape === "hexagon" ? "~" : "";
+	if (suffix) info.label = bulletText(info.label) + suffix;
+	if (rt && (rt.bulletText === "white" || rt.bulletText === "black")) bulletInks.set(info.label, rt.bulletText);
 	return info;
 }
 
+/** Bullet label -> "white" | "black" for lines whose lettering is forced (else by brightness). */
+const bulletInks = new Map();
+
 function routeLabelInfoBase(rt) {
+	// The Line style editor's own text wins over every naming rule.
+	const custom = rt && rt.bulletLabel != null ? String(rt.bulletLabel).trim() : "";
+	if (custom) return { label: custom, strong: true, word: "" };
 	const num = rt && rt.number != null ? String(rt.number).trim() : "";
 	const fromNum = stripDirectionTokens(num);
 	if (fromNum) return { label: fromNum, strong: true, word: "" };
@@ -1429,16 +1436,40 @@ function routeServiceLabel(rt) {
 	return routeLabelInfo(rt).label;
 }
 
-/** Express services are written "4*" (a diamond on the map), square bullets "4#"; this is the text inside. */
-const bulletText = (label) => String(label || "").replace(/[*#]$/, "");
+/** Express services are written "4*" (a diamond on the map), square bullets "4#", hexagons "4~"; this is the text inside. */
+const bulletText = (label) => String(label || "").replace(/[*#~]$/, "");
 const bulletIsExpress = (label) => /\*$/.test(String(label || ""));
 const bulletIsSquare = (label) => /#$/.test(String(label || ""));
+const bulletIsHex = (label) => /~$/.test(String(label || ""));
+
+/**
+ * The lettering on a bullet: the line's forced ink, else black on a light line colour
+ * (the N/Q/R/W yellow) and white on the rest — the same brightness rule as in game.
+ */
+function bulletInk(label, hex) {
+	const forced = bulletInks.get(label);
+	if (forced) return forced === "black" ? "#111" : "#fff";
+	const n = parseInt(String(hex || "").replace("#", ""), 16);
+	if (!Number.isFinite(n)) return "#fff";
+	const r = (n >> 16) & 255, g = (n >> 8) & 255, b = n & 255;
+	return (r * 299 + g * 587 + b * 114) / 1000 > 140 ? "#111" : "#fff";
+}
+
+/** One service bullet as HTML, in its shape and ink (map.css .bullet.b-diamond / b-square / b-hex). */
+function bulletHtml(label, hex, extraClass, attrs) {
+	const shape = bulletIsExpress(label) ? " b-diamond" : bulletIsSquare(label) ? " b-square"
+		: bulletIsHex(label) ? " b-hex" : "";
+	const text = bulletText(label);
+	const long = text.length > 2 ? " b-long" : "";
+	return `<span class="bullet${extraClass ? " " + extraClass : ""}${shape}${long}"${attrs ? " " + attrs : ""}`
+		+ ` style="background:${hex};color:${bulletInk(label, hex)}">${esc(text)}</span>`;
+}
 
 /** "4" before "4*" before "4S": the base service first, its express diamond next, then variants. */
 function compareServiceLabels(a, b) {
 	const ba = bulletText(a), bb = bulletText(b);
 	if (ba !== bb) return ba.localeCompare(bb, undefined, { numeric: true, sensitivity: "base" });
-	const rank = (l) => (bulletIsExpress(l) ? 1 : bulletIsSquare(l) ? 2 : 0);
+	const rank = (l) => (bulletIsExpress(l) ? 1 : bulletIsSquare(l) ? 2 : bulletIsHex(l) ? 3 : 0);
 	return rank(a) - rank(b);
 }
 
@@ -1489,6 +1520,7 @@ function buildLines() {
 		rt.hex = colorHex(rep);
 	}
 	state.weakLabels = new Map();
+	bulletInks.clear();
 	for (const rt of candidateRoutes()) {
 		let line = state.lines.get(rt.hex);
 		if (!line) {
@@ -3135,7 +3167,7 @@ function drawGlyph(g, gl, s, w) {
  */
 function drawBullet(g, x, y, R, hex, label) {
 	const express = bulletIsExpress(label);
-	const text = bulletText(label).slice(0, 2);
+	const text = bulletText(label).slice(0, 3);
 	g.fillStyle = hex;
 	g.beginPath();
 	if (express) {
@@ -3145,12 +3177,17 @@ function drawBullet(g, x, y, R, hex, label) {
 	} else if (bulletIsSquare(label)) {
 		const h = R * 0.92;
 		g.rect(x - h, y - h, h * 2, h * 2);
+	} else if (bulletIsHex(label)) {
+		const r = R * 1.1, half = r * 0.5, h = r * 0.866;
+		g.moveTo(x - r, y); g.lineTo(x - half, y - h); g.lineTo(x + half, y - h);
+		g.lineTo(x + r, y); g.lineTo(x + half, y + h); g.lineTo(x - half, y + h);
+		g.closePath();
 	} else {
 		g.arc(x, y, R, 0, Math.PI * 2);
 	}
 	g.fill();
-	g.fillStyle = "#fff";                      // bullets are always white-on-colour
-	g.font = "700 " + (R * (text.length > 1 ? 1.05 : 1.3)).toFixed(1) + "px " + FONT;
+	g.fillStyle = bulletInk(label, hex);
+	g.font = "700 " + (R * (text.length > 2 ? 0.78 : text.length > 1 ? 1.05 : 1.3)).toFixed(1) + "px " + FONT;
 	g.textAlign = "center";
 	g.textBaseline = "middle";
 	g.fillText(text, x, y + R * 0.05);
@@ -4406,7 +4443,7 @@ function hoverAt(sx, sy) {
 			const n = routeBase((state.routes.get(id) || {}).name);
 			if (n && !names.includes(n)) names.push(n);
 		}
-		tip.innerHTML = labels.map((l) => `<span class="bullet sm" style="background:${rb.hex}">${esc(l)}</span>`).join("")
+		tip.innerHTML = labels.map((l) => bulletHtml(l, rb.hex, "sm")).join("")
 			+ `<span>${esc(names[0] || "Line")}</span>`;
 		tip.classList.remove("hidden");
 		tip.style.left = (sx + 16) + "px";
@@ -4744,7 +4781,7 @@ function closeTrainCard() {
 
 function trainCardHtml(d, following) {
 	const bullet = d.label
-		? `<span class="bullet sm" style="background:${d.hex}">${esc(d.label)}</span>`
+		? bulletHtml(d.label, d.hex, "sm")
 		: `<span class="fc-swatch" style="background:${d.hex}"></span>`;
 	const head = d.dest ? "→ " + d.dest : d.routeName;
 	const facts = [];
@@ -5513,7 +5550,7 @@ function renderTrackBanner(ctx) {
 	const d = trackBannerText(t, ctx || null);
 	const loud = t.alert === "alight" || t.alert === "boarding";
 	const html = `<span class="tb-body">${esc(d.pre)}${
-		d.bullet ? `<span class="bullet sm" style="background:${d.hex || PALETTE.accent}">${esc(d.bullet)}</span>` : ""
+		d.bullet ? bulletHtml(d.bullet, d.hex || PALETTE.accent, "sm") : ""
 	}${esc(d.post)}${d.detail ? `<span class="tb-detail">${esc(d.detail)}</span>` : ""}</span>`
 		+ `<button class="tb-close" type="button" title="Stop tracking" aria-label="Stop tracking">×</button>`;
 	const key = t.phase + "|" + (t.alert || "") + "|" + html;
@@ -6477,7 +6514,7 @@ function departuresHtml(data) {
 	return data.groups.map((g) => `
 		<div class="st-group">
 			<div class="st-grouphead" style="--line:${g.hex}">
-				${g.labels.map((l) => `<span class="bullet sm" style="background:${g.hex}">${esc(l)}</span>`).join("")
+				${g.labels.map((l) => bulletHtml(l, g.hex, "sm")).join("")
 					|| `<span class="fc-swatch" style="background:${g.hex}"></span>`}
 			</div>
 			${g.rows.map((r) => `
@@ -6492,8 +6529,8 @@ function departuresHtml(data) {
 function stationPanelHtml(data) {
 	// each bullet opens that line's view (feature 4)
 	const bullets = data.lines.map((l) => (l.labels.length ? l.labels : [""])
-		.map((lb) => `<span class="bullet sm line-bullet" role="button" tabindex="0" title="Show this line"
-			data-line="${esc(l.hex)}" style="background:${l.hex}">${esc(lb)}</span>`).join("")).join("");
+		.map((lb) => bulletHtml(lb, l.hex, "sm line-bullet",
+			`role="button" tabindex="0" title="Show this line" data-line="${esc(l.hex)}"`)).join("")).join("");
 	const acc = data.access;
 	const accNote = data.accessibleSource === "layout"
 		? `<div class="st-accnote">Worked out from the station's layout scan.</div>` : "";
@@ -7005,7 +7042,7 @@ function throughRowsHtml(leg) {
 	return (leg.continuations || []).map((c) => `
 		<div class="thru">
 			<span class="thru-key">Continues as</span>
-			<span class="bullet sm" style="background:${c.color}">${esc(continuationLabel(c))}</span>
+			${bulletHtml(continuationLabel(c), c.color, "sm")}
 			<span class="thru-dest">${c.headsign ? "toward " + esc(firstLang(c.headsign)) : esc(c.routeName || "")}</span>
 			${c.station ? `<span class="thru-at">at ${esc(c.station)}</span>` : ""}
 		</div>`).join("");
@@ -7017,10 +7054,9 @@ function optionCard(j, selected) {
 		if (leg.kind === "ride") {
 			// a through run shows both bullets joined by a hairline "stays aboard" link,
 			// never by the transfer chevron — the rider does not get off
-			seq.push([`<span class="bullet" style="background:${leg.color}">${esc(legLabel(leg))}</span>`]
+			seq.push([bulletHtml(legLabel(leg), leg.color)]
 				.concat((leg.continuations || []).map((c) =>
-					`<span class="thru-join" title="stays aboard">·</span><span class="bullet" style="background:${c.color}">${
-						esc(continuationLabel(c))}</span>`)).join(""));
+					`<span class="thru-join" title="stays aboard">·</span>${bulletHtml(continuationLabel(c), c.color)}`)).join(""));
 		} else {
 			const icon = leg.mode === "boat" ? "i-boat" : "i-walk";
 			seq.push(`<span class="modechip"><svg class="icon sm"><use href="#${icon}"/></svg>${esc(fmtMeters(leg.meters))}</span>`);
@@ -7459,10 +7495,10 @@ function closeLineView() {
 
 function lineCardHtml(d) {
 	const bullets = (d.labels.length ? d.labels : [""])
-		.map((l) => `<span class="bullet" style="background:${d.hex}">${esc(l)}</span>`).join("");
+		.map((l) => bulletHtml(l, d.hex)).join("");
 	const chips = d.services.length > 1
 		? `<div class="lv-services">${d.services.map((s) => `
-			<span class="lv-svc"><span class="bullet sm" style="background:${d.hex}">${esc(s.label)}</span>${
+			<span class="lv-svc">${bulletHtml(s.label, d.hex, "sm")}${
 				s.dest ? "to " + esc(s.dest) : esc(s.name)}</span>`).join("")}</div>`
 		: "";
 	const stops = d.stops.map((s, i) => `

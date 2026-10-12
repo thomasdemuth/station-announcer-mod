@@ -267,9 +267,10 @@ public class PidsNycRenderer implements BlockEntityRenderer<PidsBlockEntity> {
         float centerY = y + height / 2.0f;
 
         float leftX = 8;
-        painter.routeBullet(leftX + bulletRadius, centerY, bulletRadius,
-                0xFF000000 | arrival.getRouteColor(), bulletLabel(arrival), inverted,
-                com.stationannouncer.client.mtraddon.ClientLineStyles.shape(arrival.getRouteName()));
+        RouteBullets.Bullet bullet = RouteBullets.styled(arrival.getRouteName(), bulletLabel(arrival),
+                0xFF000000 | arrival.getRouteColor());
+        painter.routeBullet(leftX + bulletRadius, centerY, bulletRadius, bullet.color(), bullet.label(),
+                inverted || bullet.darkText(), bullet.shape());
 
         Eta eta = eta(arrival);
         String number = arriving ? "0" : eta.number();
@@ -392,9 +393,6 @@ public class PidsNycRenderer implements BlockEntityRenderer<PidsBlockEntity> {
         }
     }
 
-    /** A connecting route at a station: bullet color + short label. */
-    private record Connection(int color, String label, com.stationannouncer.mtraddon.LineStyles.Shape shape) {
-    }
 
     /** "6" from "Line 6", "19" from "Route 19/BakerLink", else the first letter. */
     private static String routeLabel(String routeName) {
@@ -420,7 +418,7 @@ public class PidsNycRenderer implements BlockEntityRenderer<PidsBlockEntity> {
      * this is exactly what MTR's own RouteMapGenerator reads.
      */
     /** Interchange bullets per stop, rebuilt every {@value #CONNECTIONS_TTL_MS} ms. */
-    private static final java.util.Map<SimplifiedRoutePlatform, List<Connection>> CONNECTIONS = new java.util.HashMap<>();
+    private static final java.util.Map<SimplifiedRoutePlatform, List<RouteBullets.Bullet>> CONNECTIONS = new java.util.HashMap<>();
     private static final long CONNECTIONS_TTL_MS = 3000;
     private static long connectionsExpiry;
 
@@ -429,7 +427,7 @@ public class PidsNycRenderer implements BlockEntityRenderer<PidsBlockEntity> {
      * stop on both faces, every frame, and the answer only changes when MTR
      * pushes new route data.
      */
-    private static List<Connection> connectionsFor(SimplifiedRoutePlatform stop) {
+    private static List<RouteBullets.Bullet> connectionsFor(SimplifiedRoutePlatform stop) {
         long now = System.currentTimeMillis();
         if (now >= connectionsExpiry) {
             CONNECTIONS.clear();
@@ -438,8 +436,8 @@ public class PidsNycRenderer implements BlockEntityRenderer<PidsBlockEntity> {
         return CONNECTIONS.computeIfAbsent(stop, PidsNycRenderer::buildConnections);
     }
 
-    private static List<Connection> buildConnections(SimplifiedRoutePlatform stop) {
-        List<Connection> connections = new ArrayList<>();
+    private static List<RouteBullets.Bullet> buildConnections(SimplifiedRoutePlatform stop) {
+        List<RouteBullets.Bullet> connections = new ArrayList<>();
         stop.forEach((color, routeNamesForColor) -> {
             StringBuilder firstName = new StringBuilder();
             routeNamesForColor.forEach(name -> {
@@ -447,8 +445,8 @@ public class PidsNycRenderer implements BlockEntityRenderer<PidsBlockEntity> {
                     firstName.append(name);
                 }
             });
-            connections.add(new Connection(0xFF000000 | color, routeLabel(firstName.toString()),
-                    com.stationannouncer.client.mtraddon.ClientLineStyles.shape(firstName.toString())));
+            connections.add(RouteBullets.styled(firstName.toString(), routeLabel(firstName.toString()),
+                    0xFF000000 | color));
         });
         return connections;
     }
@@ -489,7 +487,7 @@ public class PidsNycRenderer implements BlockEntityRenderer<PidsBlockEntity> {
         List<Runnable> deferred = new ArrayList<>(); // draw dots/rows after the bar (bar goes underneath)
         for (int i = 0; i < upcoming.size(); i++) {
             SimplifiedRoutePlatform stop = upcoming.get(i);
-            List<Connection> connections = connectionsFor(stop);
+            List<RouteBullets.Bullet> connections = connectionsFor(stop);
             float rowHeight = rowBase + (connections.isEmpty() ? 0 : connectionExtra);
             boolean isLast = i == upcoming.size() - 1;
             // Keep room for the "further stops" footer if we cannot fit everything.
@@ -526,7 +524,7 @@ public class PidsNycRenderer implements BlockEntityRenderer<PidsBlockEntity> {
 
     /** One station row: dot on the bar, name (pill for the next stop), connection bullets below. */
     private void drawStationRow(CanvasPainter painter, float barX, float nameX, float y,
-                                SimplifiedRoutePlatform stop, List<Connection> connections,
+                                SimplifiedRoutePlatform stop, List<RouteBullets.Bullet> connections,
                                 boolean highlight, float maxWidth) {
         painter.quad(barX - 2.5f, y - 2.5f, barX + 2.5f, y + 2.5f, -1.0f, 0xFFFFFFFF);
         String name = firstLang(stop.getStationName());
@@ -542,11 +540,11 @@ public class PidsNycRenderer implements BlockEntityRenderer<PidsBlockEntity> {
             float radius = 4;
             float x = nameX + radius;
             float rowY = y + 6 + radius;
-            for (Connection connection : connections) {
+            for (RouteBullets.Bullet connection : connections) {
                 if (x + radius > 124) {
                     break; // keep the right margin
                 }
-                painter.routeBullet(x, rowY, radius, connection.color(), connection.label(), false, connection.shape());
+                painter.routeBullet(x, rowY, radius, connection);
                 x += radius * 2 + 2.5f;
             }
         }

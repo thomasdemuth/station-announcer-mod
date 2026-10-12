@@ -471,8 +471,7 @@ public class StationDecorRenderer implements BlockEntityRenderer<StationDecorBlo
             if (RouteBullets.isNoEntry(routeName)) {
                 painter.prohibitionBullet(bulletX, bulletY, diameter / 2.0f, bullet.color());
             } else {
-                painter.routeBullet(bulletX, bulletY, diameter / 2.0f, bullet.color(), bullet.label(),
-                        RouteBullets.needsDarkText(bullet.color()), bullet.shape());
+                painter.routeBullet(bulletX, bulletY, diameter / 2.0f, bullet);
             }
             bulletX += diameter + gap;
         }

@@ -231,11 +231,17 @@ public final class DispatchMapData {
             routeJson.addProperty("number", route.getRouteNumber());
             routeJson.addProperty("color", route.getColor());
             routeJson.addProperty("hidden", route.getHidden());
-            // The line's bullet shape from MTR's Edit Route screen (LineStyles); circle = absent.
-            com.stationannouncer.mtraddon.LineStyles.Shape bulletShape =
-                    com.stationannouncer.mtraddon.LineStyles.shapeFor(route.getName());
-            if (bulletShape != com.stationannouncer.mtraddon.LineStyles.Shape.CIRCLE) {
-                routeJson.addProperty("bulletShape", bulletShape.id);
+            // The line's bullet style from the Line style editor (LineStyles); defaults are absent.
+            com.stationannouncer.mtraddon.LineStyles.Style bulletStyle =
+                    com.stationannouncer.mtraddon.LineStyles.styleFor(route.getName());
+            if (bulletStyle.shape() != com.stationannouncer.mtraddon.LineStyles.Shape.CIRCLE) {
+                routeJson.addProperty("bulletShape", bulletStyle.shape().id);
+            }
+            if (!bulletStyle.label().isEmpty()) {
+                routeJson.addProperty("bulletLabel", bulletStyle.label());
+            }
+            if (bulletStyle.text() != com.stationannouncer.mtraddon.LineStyles.TextColor.AUTO) {
+                routeJson.addProperty("bulletText", bulletStyle.text().id);
             }
             routeJson.addProperty("mode", route.getTransportMode().toString().toLowerCase(Locale.ROOT));
             try {

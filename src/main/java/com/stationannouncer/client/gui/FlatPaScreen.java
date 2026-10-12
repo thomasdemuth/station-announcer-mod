@@ -23,7 +23,7 @@ import java.util.Map;
  * {@link #onSlider} and {@link #onEnter}.
  */
 @Environment(EnvType.CLIENT)
-abstract class FlatPaScreen extends Screen {
+public abstract class FlatPaScreen extends Screen {
     protected static final int HIT_SLIDER = -1;
 
     /** x, y, w, h, id, arg. */

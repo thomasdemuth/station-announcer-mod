@@ -244,6 +244,11 @@ body {
 	font-size: 12.5px; font-weight: 700;
 	display: inline-flex; align-items: center; justify-content: center; flex: none;
 }
+/* Line style shapes (bulletHtml): express diamond, square, hexagon; three-character text shrinks. */
+.bullet.b-diamond { border-radius: 0; clip-path: polygon(50% 0, 100% 50%, 50% 100%, 0 50%); transform: scale(1.2); font-size: 10px; }
+.bullet.b-square { border-radius: 2px; }
+.bullet.b-hex { border-radius: 0; clip-path: polygon(0 50%, 25% 7%, 75% 7%, 100% 50%, 75% 93%, 25% 93%); }
+.bullet.b-long { font-size: 9.5px; letter-spacing: -.3px; }
 .sep { color: var(--dots); display: flex; }
 .modechip {
 	display: inline-flex; align-items: center; gap: 5px; font-size: 12px; font-weight: 600;

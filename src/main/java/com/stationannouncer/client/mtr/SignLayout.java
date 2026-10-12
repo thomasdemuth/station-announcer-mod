@@ -787,14 +787,13 @@ public final class SignLayout {
         RouteBullets.Bullet bullet = PosterLayout.lineBullet(name);
         if (diamond) {
             // A per-tile "d:" forces the express diamond whatever the line's own shape.
-            bullet = new RouteBullets.Bullet(bullet.label(), bullet.color(),
-                    com.stationannouncer.mtraddon.LineStyles.Shape.DIAMOND);
+            bullet = bullet.withShape(com.stationannouncer.mtraddon.LineStyles.Shape.DIAMOND);
         }
         PosterLayout.bulletShape(s, bullet, cx, cy, r, 2);
         String label = bullet.label();
-        float cap = diameter * (label.length() > 1 ? 0.48f : 0.6f)
+        float cap = diameter * (label.length() > 2 ? 0.36f : label.length() > 1 ? 0.48f : 0.6f)
                 * (bullet.shape() == com.stationannouncer.mtraddon.LineStyles.Shape.DIAMOND ? 0.9f : 1f);
-        int ink = RouteBullets.needsDarkText(bullet.color()) ? INK : WHITE;
+        int ink = bullet.darkText() ? INK : WHITE;
         capCentered(s, label, cx - capWidth(s, label, cap) / 2.0f, cy, cap, ink);
     }
 

@@ -44,6 +44,28 @@ rig's Gradle wrappers (and sometimes the JVMs) get SIGKILLed — forbid agents f
 entirely and check rig health after each one finishes; an orphaned JVM keeps serving but
 loses the console fifo.
 
+### LINE STYLE EDITOR (2026-10-12) — javac (whole tree) + Map+ bullets browser-verified; NOT built/deployed, in-game screen NOT seen, uncommitted
+
+Thomas: expand the Edit Route line number into Subway-Builder-style settings (bullet text, shape incl.
+hexagon, colour, more). The old cycling "Bullet:" button on MTR's Edit Route screen is now
+"Line style…" → `client/mtraddon/LineStyleScreen` (FlatUi on FlatPaScreen): bullet text (≤3 chars,
+empty = auto), shape circle/diamond/square/HEXAGON (appended — packet uses ordinals), colour (24-swatch
+MTA + general palette, hex box, H/S/V sliders), lettering auto/white/black, "other lines" strip (click =
+its colour, shift = its shape+ink), clash warning, live previews (hero on black + paper, sign band,
+PIDS row, Map+ ribbon; bullets drawn at PHYSICAL pixel resolution by undoing the GUI scale).
+- Store `LineStyles.Style(shape, label, text)`, file `line_styles.json` gains `"lines"` (old
+  `"bulletShapes"` still read AND written for older builds; hexagon not written there).
+- Colour + text are ALSO written to MTR: every route of the line gets the colour; route number only
+  when the text was edited (operators using IN/OUT keep theirs). The opening route is edited in place
+  (MTR's screen re-inits its widgets from it and saves on close); before opening, MTR's `saveData()` is
+  invoked reflectively so typed name/colour/number are not lost by the re-init.
+- Drawing: `RouteBullets.Bullet` gained `darkText` (+`ink()`, `withShape`), `RouteBullets.styled(name,
+  autoLabel, color)` is THE way to build a styled bullet; `PosterLayout.bulletLabel` + hexagon in
+  `bulletShape`, `CanvasPainter.routeBullet` hexagon + fits 2–3 char text, RoutePicker hexagon rows.
+  PIDS departure rows: style text > MTR route number. Map+: `bulletLabel`/`bulletText` route fields,
+  `~` suffix = hexagon, `bulletInk` (forced, else brightness — yellow lines now get black text),
+  `bulletHtml()` for every HTML bullet (they used to print the raw `*`/`#` suffix).
+
 ### EARTHWORKS: EMBANKMENT / TRENCH CREATORS + ROW CLEARER (2026-10-02) — rig-verified, DEPLOYED in 3.4.6 to both profiles, committed
 
 Thomas's answers (do not re-ask): THREE separate items (not one cut-and-fill tool), weighted block

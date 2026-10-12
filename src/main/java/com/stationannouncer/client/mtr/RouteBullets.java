@@ -54,14 +54,39 @@ public final class RouteBullets {
     private static final long COLORS_TTL_MS = 3000;
 
     /**
-     * One drawable bullet: the short label, the colour, and the shape its LINE
-     * is set to on MTR's Edit Route screen (circle / express diamond / square,
-     * {@link com.stationannouncer.mtraddon.LineStyles}).
+     * One drawable bullet: the short label, the colour, the shape its LINE is
+     * set to in the Line style editor (circle / express diamond / square /
+     * hexagon, {@link com.stationannouncer.mtraddon.LineStyles}) and whether
+     * the lettering is black.
      */
-    public record Bullet(String label, int color, com.stationannouncer.mtraddon.LineStyles.Shape shape) {
+    public record Bullet(String label, int color, com.stationannouncer.mtraddon.LineStyles.Shape shape,
+                         boolean darkText) {
+        public Bullet(String label, int color, com.stationannouncer.mtraddon.LineStyles.Shape shape) {
+            this(label, color, shape, needsDarkText(color));
+        }
+
         public Bullet(String label, int color) {
             this(label, color, com.stationannouncer.mtraddon.LineStyles.Shape.CIRCLE);
         }
+
+        /** The lettering colour on this bullet. */
+        public int ink() {
+            return darkText ? 0xFF101014 : 0xFFFFFFFF;
+        }
+
+        public Bullet withShape(com.stationannouncer.mtraddon.LineStyles.Shape newShape) {
+            return new Bullet(label, color, newShape, darkText);
+        }
+    }
+
+    /**
+     * A bullet for a route or line name in its line's style: the style's text
+     * (else {@code autoLabel}), shape and ink, on {@code color}.
+     */
+    public static Bullet styled(String routeOrLineName, String autoLabel, int color) {
+        com.stationannouncer.mtraddon.LineStyles.Style style =
+                com.stationannouncer.client.mtraddon.ClientLineStyles.style(routeOrLineName);
+        return new Bullet(style.labelOr(autoLabel), color, style.shape(), style.darkText(color));
     }
 
     /** A route that could be put on a sign: its stored name plus how it will look. */
@@ -110,8 +135,7 @@ public final class RouteBullets {
             return cached;
         }
         Integer color = colors.get(routeName);
-        Bullet bullet = new Bullet(label(routeName), color != null ? color : UNKNOWN_COLOR,
-                com.stationannouncer.client.mtraddon.ClientLineStyles.shape(routeName));
+        Bullet bullet = styled(routeName, label(routeName), color != null ? color : UNKNOWN_COLOR);
         BULLETS.put(routeName, bullet);
         return bullet;
     }
@@ -139,8 +163,7 @@ public final class RouteBullets {
                     continue;
                 }
                 options.put(routeName, new Option(routeName, RailroadRouteData.firstLang(routeName),
-                        new Bullet(label(routeName), 0xFF000000 | route.getColor(),
-                                com.stationannouncer.client.mtraddon.ClientLineStyles.shape(routeName))));
+                        styled(routeName, label(routeName), 0xFF000000 | route.getColor())));
             }
         } catch (Exception ignored) {
             // MTR data mid-sync — the list just comes back short
@@ -205,9 +228,10 @@ public final class RouteBullets {
     }
 
     /**
-     * What goes on the disc: the line's number if the name has one, otherwise
-     * its first letter — the same heuristic the PIDS route map uses, since MTR
-     * routes have no separate "number" field.
+     * What goes on the disc when the line's style sets no text: the line's
+     * number if the name has one, otherwise its first letter — the same
+     * heuristic the PIDS route map uses (simplified routes do not carry MTR's
+     * route number; the Line style editor copies its text into it).
      */
     public static String label(String routeName) {
         String name = RailroadRouteData.firstLang(routeName);
@@ -225,9 +249,6 @@ public final class RouteBullets {
 
     /** Black or white lettering, whichever reads on a bullet of this colour. */
     public static boolean needsDarkText(int argb) {
-        int r = argb >> 16 & 0xFF;
-        int g = argb >> 8 & 0xFF;
-        int b = argb & 0xFF;
-        return (r * 299 + g * 587 + b * 114) / 1000 > 140;
+        return com.stationannouncer.mtraddon.LineStyles.needsDarkText(argb);
     }
 }

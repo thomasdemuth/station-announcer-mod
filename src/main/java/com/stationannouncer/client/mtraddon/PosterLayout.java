@@ -154,10 +154,7 @@ public final class PosterLayout {
             for (int i = lines.size() - 1; i >= 0; i--) {
                 RouteBullets.Bullet bullet = lineBullet(lines.get(i));
                 bulletShape(s, bullet, cx, cy, radius, 2);
-                float labelSize = radius * (bullet.shape() == com.stationannouncer.mtraddon.LineStyles.Shape.DIAMOND ? 1.0f : 1.15f);
-                int ink = RouteBullets.needsDarkText(bullet.color()) ? INK : WHITE;
-                s.text(bullet.label(), cx - s.width(bullet.label(), labelSize, true) / 2, cy - labelSize / 2,
-                        labelSize, ink, true);
+                bulletLabel(s, bullet, cx, cy, radius);
                 cx -= pitch;
             }
             bulletsLeft = cx + pitch - radius - 4;
@@ -359,9 +356,7 @@ public final class PosterLayout {
                 RouteBullets.Bullet bullet = lineBullet(arg);
                 float radius = size * 0.575f;
                 bulletShape(s, bullet, x + radius, cy, radius, 2);
-                float labelSize = radius * (bullet.shape() == com.stationannouncer.mtraddon.LineStyles.Shape.DIAMOND ? 1.0f : 1.15f);
-                s.text(bullet.label(), x + radius - s.width(bullet.label(), labelSize, true) / 2,
-                        cy - labelSize / 2, labelSize, RouteBullets.needsDarkText(bullet.color()) ? INK : WHITE, true);
+                bulletLabel(s, bullet, x + radius, cy, radius);
             }
             case "d" -> {
                 RouteBullets.Bullet bullet = lineBullet(arg);
@@ -371,7 +366,7 @@ public final class PosterLayout {
                         new float[]{cy - radius, cy, cy + radius, cy}, bullet.color(), 2);
                 float labelSize = radius * 1.0f;
                 s.text(bullet.label(), cx - s.width(bullet.label(), labelSize, true) / 2,
-                        cy - labelSize / 2, labelSize, RouteBullets.needsDarkText(bullet.color()) ? INK : WHITE, true);
+                        cy - labelSize / 2, labelSize, bullet.darkText() ? INK : WHITE, true);
             }
             case "wc" -> wheelchair(s, x, y + size * 0.02f, size * 1.0f, 2);
             case "<" -> bigArrow(s, x + size * 0.45f, cy, 4, size / 40.0f, ink, 2);
@@ -399,8 +394,32 @@ public final class PosterLayout {
                 float h = radius * 0.9f;
                 s.rect(cx - h, cy - h, cx + h, cy + h, bullet.color(), layer);
             }
+            case HEXAGON -> {
+                // Points left and right, flat top and bottom (the wide way, for two-character text).
+                float r = radius * 1.08f;
+                float half = r * 0.5f;
+                float h = r * 0.866f;
+                s.poly(new float[]{cx - r, cx - half, cx + half, cx + r, cx + half, cx - half},
+                        new float[]{cy, cy - h, cy - h, cy, cy + h, cy + h}, bullet.color(), layer);
+            }
             default -> s.disc(cx, cy, radius, bullet.color(), layer);
         }
+    }
+
+    /** A bullet's text, centred on cx/cy, in its ink; shrinks so two or three characters stay inside. */
+    public static void bulletLabel(Surface s, RouteBullets.Bullet bullet, float cx, float cy, float radius) {
+        String label = bullet.label();
+        if (label.isEmpty()) {
+            return;
+        }
+        boolean diamond = bullet.shape() == com.stationannouncer.mtraddon.LineStyles.Shape.DIAMOND;
+        float size = radius * (diamond ? 1.0f : 1.15f);
+        float maxWidth = radius * (diamond ? 1.25f : 1.6f);
+        float w = s.width(label, size, true);
+        if (w > maxWidth && w > 0) {
+            size *= maxWidth / w;
+        }
+        s.text(label, cx - s.width(label, size, true) / 2, cy - size / 2, size, bullet.darkText() ? INK : WHITE, true);
     }
 
     /**
@@ -573,7 +592,7 @@ public final class PosterLayout {
         if (bullet != null) {
             return bullet;
         }
-        return new RouteBullets.Bullet(RouteBullets.label(lineName), UNKNOWN.color(), ClientLineStyles.shape(lineName));
+        return RouteBullets.styled(lineName, RouteBullets.label(lineName), UNKNOWN.color());
     }
 
     /** Every line in the world, in MTR's order, for the editor's picker. */
@@ -599,8 +618,8 @@ public final class PosterLayout {
                 }
                 String line = AddonUi.splitLineAndDirection(raw)[0];
                 if (!line.isEmpty()) {
-                    LINE_BULLETS.putIfAbsent(line, new RouteBullets.Bullet(RouteBullets.label(raw),
-                            0xFF000000 | route.getColor(), ClientLineStyles.shape(line)));
+                    LINE_BULLETS.putIfAbsent(line, RouteBullets.styled(line, RouteBullets.label(raw),
+                            0xFF000000 | route.getColor()));
                 }
             }
         } catch (Exception ignored) {
@@ -617,8 +636,8 @@ public final class PosterLayout {
                 }
                 String line = AddonUi.splitLineAndDirection(raw)[0];
                 if (!line.isEmpty()) {
-                    LINE_BULLETS.putIfAbsent(line, new RouteBullets.Bullet(RouteBullets.label(raw),
-                            0xFF000000 | route.getColor(), ClientLineStyles.shape(line)));
+                    LINE_BULLETS.putIfAbsent(line, RouteBullets.styled(line, RouteBullets.label(raw),
+                            0xFF000000 | route.getColor()));
                 }
             }
         } catch (Exception ignored) {

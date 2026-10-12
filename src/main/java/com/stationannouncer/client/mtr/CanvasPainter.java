@@ -125,30 +125,62 @@ public class CanvasPainter {
     }
 
     /**
-     * A route bullet in its line's shape (MTR Edit Route → Bullet): the circle,
-     * the express diamond, or a square. Same footprint rules as
+     * A route bullet in its line's shape (the Line style editor): the circle,
+     * the express diamond, a square or a hexagon. Same footprint rules as
      * PosterLayout.bulletShape, so a PIDS and a sign of the same line agree.
+     * {@code inverted} = black lettering.
      */
     public void routeBullet(float cx, float cy, float radius, int color, String label, boolean inverted,
                             com.stationannouncer.mtraddon.LineStyles.Shape shape) {
+        VertexConsumer buffer = consumers.getBuffer(layer());
+        Matrix4f matrix = matrices.peek().getPositionMatrix();
+        float textScale;
         switch (shape) {
             case DIAMOND -> {
                 float d = radius * 1.12f;
-                VertexConsumer buffer = consumers.getBuffer(layer());
-                Matrix4f matrix = matrices.peek().getPositionMatrix();
                 // Same corner order as quad(): top, right, bottom, left.
                 quad3d(buffer, matrix, cx, cy - d, -0.6f, cx + d, cy, -0.6f, cx, cy + d, -0.6f, cx - d, cy, -0.6f, color);
-                float size = radius * 0.95f;
-                textCentered(label, cx, cy - size / 2.0f, size, inverted ? TEXT_BLACK : 0xFFFFFFFF);
+                textScale = 0.95f;
             }
             case SQUARE -> {
                 float h = radius * 0.9f;
                 quad(cx - h, cy - h, cx + h, cy + h, -0.6f, color);
-                float size = radius * 1.1f;
-                textCentered(label, cx, cy - size / 2.0f, size, inverted ? TEXT_BLACK : 0xFFFFFFFF);
+                textScale = 1.1f;
             }
-            default -> circleBullet(cx, cy, radius, color, label, inverted);
+            case HEXAGON -> {
+                // Points left and right, flat top and bottom: the wide way, for two-character text.
+                float r = radius * 1.08f;
+                float half = r * 0.5f;
+                float h = r * 0.866f;
+                quad3d(buffer, matrix, cx - r, cy, -0.6f, cx - half, cy - h, -0.6f, cx + half, cy - h, -0.6f, cx + r, cy, -0.6f, color);
+                quad3d(buffer, matrix, cx - r, cy, -0.6f, cx + r, cy, -0.6f, cx + half, cy + h, -0.6f, cx - half, cy + h, -0.6f, color);
+                textScale = 1.05f;
+            }
+            default -> {
+                circleBullet(cx, cy, radius, color, "", inverted);
+                textScale = 1.1f;
+            }
         }
+        bulletLabel(label, cx, cy, radius, textScale, shape == com.stationannouncer.mtraddon.LineStyles.Shape.DIAMOND
+                ? 1.25f : 1.6f, inverted);
+    }
+
+    public void routeBullet(float cx, float cy, float radius, RouteBullets.Bullet bullet) {
+        routeBullet(cx, cy, radius, bullet.color(), bullet.label(), bullet.darkText(), bullet.shape());
+    }
+
+    /** A bullet's text, centred, shrunk until it fits {@code maxWidth}×radius across. */
+    private void bulletLabel(String label, float cx, float cy, float radius, float textScale, float maxWidth,
+                             boolean dark) {
+        if (label == null || label.isEmpty()) {
+            return;
+        }
+        float size = radius * textScale;
+        float w = width(label, size);
+        if (w > radius * maxWidth && w > 0) {
+            size *= radius * maxWidth / w;
+        }
+        textCentered(label, cx, cy - size / 2.0f, size, dark ? TEXT_BLACK : 0xFFFFFFFF);
     }
 
     /** Proper circular route bullet with a centered label. */
