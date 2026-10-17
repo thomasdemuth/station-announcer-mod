@@ -39,6 +39,9 @@ public final class DispatchPingServlet extends HttpServlet {
         JsonArray dimensions = new JsonArray();
         state.simulators().forEach(simulator -> dimensions.add(simulator.dimension));
         json.add("dimensions", dimensions);
+        // which world this is: an offline copy only goes live against the world it was saved from
+        json.addProperty("worldId", DispatchOfflineMap.worldId());
+        json.addProperty("worldName", DispatchOfflineMap.worldName());
         DispatchStaticServlet.sendText(response, 200, "application/json;charset=utf-8", json.toString());
     }
 }

@@ -63,6 +63,10 @@ public final class PaTemplates {
             line("Unattended bags", "Please do not leave bags unattended. Report anything suspicious to station staff."),
             line("Courtesy", "Please let customers off the train before boarding, and make room for others."),
             line("Platform edge", "For your safety, please stand behind the yellow line."),
+            // {access} comes from the station's layout scan (silent until it is scanned)
+            line("Accessibility", "{access}"),
+            line("Accessible boarding", "Customers needing step-free access: {access}"),
+            line("Next train", "The next train is a {dest}-bound {route} train."),
             new Template("Station loop", List.of(
                     new PaText.Entry("Welcome to {station}.", true),
                     new PaText.Entry("Please stand behind the yellow line.", true),

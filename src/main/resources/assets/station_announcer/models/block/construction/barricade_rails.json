@@ -1,0 +1,164 @@
+{
+ "parent": "minecraft:block/block",
+ "textures": {
+  "stripes": "station_announcer:block/construction/barricade_stripes",
+  "edge": "station_announcer:block/construction/barricade_edge",
+  "post": "station_announcer:block/construction/barricade_post",
+  "skid": "station_announcer:block/construction/barricade_skid",
+  "lamp": "station_announcer:block/construction/barricade_lamp_body",
+  "lens": "station_announcer:block/construction/barricade_lens",
+  "particle": "station_announcer:block/construction/barricade_stripes"
+ },
+ "elements": [
+  {
+   "from": [
+    0,
+    5.0,
+    7.4
+   ],
+   "to": [
+    16,
+    8.0,
+    8.6
+   ],
+   "faces": {
+    "north": {
+     "texture": "#stripes",
+     "uv": [
+      0,
+      8.0,
+      16,
+      11.0
+     ]
+    },
+    "south": {
+     "texture": "#stripes",
+     "uv": [
+      0,
+      8.0,
+      16,
+      11.0
+     ]
+    },
+    "up": {
+     "texture": "#edge",
+     "uv": [
+      0,
+      7.4,
+      16,
+      8.6
+     ]
+    },
+    "down": {
+     "texture": "#edge",
+     "uv": [
+      0,
+      7.4,
+      16,
+      8.6
+     ]
+    }
+   }
+  },
+  {
+   "from": [
+    0,
+    12.0,
+    7.4
+   ],
+   "to": [
+    16,
+    15.0,
+    8.6
+   ],
+   "faces": {
+    "north": {
+     "texture": "#stripes",
+     "uv": [
+      0,
+      1.0,
+      16,
+      4.0
+     ]
+    },
+    "south": {
+     "texture": "#stripes",
+     "uv": [
+      0,
+      1.0,
+      16,
+      4.0
+     ]
+    },
+    "up": {
+     "texture": "#edge",
+     "uv": [
+      0,
+      7.4,
+      16,
+      8.6
+     ]
+    },
+    "down": {
+     "texture": "#edge",
+     "uv": [
+      0,
+      7.4,
+      16,
+      8.6
+     ]
+    }
+   }
+  },
+  {
+   "from": [
+    0,
+    19.0,
+    7.4
+   ],
+   "to": [
+    16,
+    22.0,
+    8.6
+   ],
+   "faces": {
+    "north": {
+     "texture": "#stripes",
+     "uv": [
+      0,
+      10.0,
+      16,
+      13.0
+     ]
+    },
+    "south": {
+     "texture": "#stripes",
+     "uv": [
+      0,
+      10.0,
+      16,
+      13.0
+     ]
+    },
+    "up": {
+     "texture": "#edge",
+     "uv": [
+      0,
+      7.4,
+      16,
+      8.6
+     ]
+    },
+    "down": {
+     "texture": "#edge",
+     "uv": [
+      0,
+      7.4,
+      16,
+      8.6
+     ]
+    }
+   }
+  }
+ ]
+}

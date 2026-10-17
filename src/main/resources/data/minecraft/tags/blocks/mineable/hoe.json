@@ -1,0 +1,8 @@
+{
+  "replace": false,
+  "values": [
+    "station_announcer:cobweb_corner",
+    "station_announcer:trash_bags",
+    "station_announcer:caution_tape"
+  ]
+}

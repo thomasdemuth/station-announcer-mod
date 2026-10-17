@@ -1412,18 +1412,18 @@ function updateDetail() {
 	const heldTag = vehicleHeld(rec) ? ' <span class="badge held">HELD</span>' : "";
 	const blockedTag = state.obstructed.has(state.selected) ? ' <span class="badge blocked">BLOCKED</span>' : "";
 	const rows = [
-		["Destination", firstLang(r.dest) || "—"],
-		["Next station", firstLang(r.nextStation) || "—"],
+		["Destination", escapeHtml(firstLang(r.dest) || "—")],
+		["Next station", escapeHtml(firstLang(r.nextStation) || "—")],
 		["Speed", (d.kmh ?? 0).toFixed(1) + " km/h"],
 		["Schedule", `<span class="${devCls}">${devTxt}</span>` + heldTag],
 		["Doors", (d.doors ? "OPEN" : "closed") + blockedTag],
 		["Dwell left", dwellS],
 		["Mode", d.manual ? "MANUAL" : "ATO"],
 	];
-	if (rec.consist) rows.push(["Depot", firstLang(rec.consist.depot) || "—"]);
+	if (rec.consist) rows.push(["Depot", escapeHtml(firstLang(rec.consist.depot) || "—")]);
 	let html = rows.map(([k, v]) => `<div class="row"><span class="k">${k}</span><span class="v">${v}</span></div>`).join("");
 	if (rec.consist && rec.consist.cars) {
-		html += `<div class="consist">${rec.consist.cars.length} car(s): ${rec.consist.cars.join(" + ")}</div>`;
+		html += `<div class="consist">${rec.consist.cars.length} car(s): ${rec.consist.cars.map(escapeHtml).join(" + ")}</div>`;
 	}
 	$("followBtn").style.display = "";
 	if (html !== lastDetailHtml) { lastDetailHtml = html; $("detailBody").innerHTML = html; }
@@ -1565,9 +1565,9 @@ function renderBoard() {
 		if (row.held) tr.classList.add("held-row");
 		const [devTxt, devCls] = fmtDev(row.dev);
 		tr.innerHTML =
-			`<td><span class="chip" style="background:${row.color}">${row.route}</span></td>` +
+			`<td><span class="chip" style="background:${row.color}">${escapeHtml(row.route)}</span></td>` +
 			`<td>${escapeHtml(row.line)}${row.variant ? ` <span class="board-variant">· ${escapeHtml(row.variant)}</span>` : ""}</td>` +
-			`<td>${row.dest}</td><td>${row.next}</td>` +
+			`<td>${escapeHtml(row.dest)}</td><td>${escapeHtml(row.next)}</td>` +
 			`<td class="num">${row.kmh.toFixed(0)}</td>` +
 			`<td class="num ${devCls}">${devTxt}</td>` +
 			`<td>${row.doors}${row.held ? '<span class="badge held">HELD</span>' : ""}${row.blocked ? '<span class="badge blocked">BLK</span>' : ""}</td>` +

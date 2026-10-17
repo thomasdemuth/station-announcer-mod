@@ -32,6 +32,8 @@ import net.minecraft.util.math.Vec3d;
  *       box screen's Network tab asks for every member's link health and settings.</li>
  *   <li>{@code station_announcer:network_edit} (C2S) — Network tab Save: unlink members and set
  *       speakers' volume/radius.</li>
+ *   <li>{@code station_announcer:update_train_pa} (C2S) — Trains tab Save: the source's
+ *       train-timed announcements ({@link com.stationannouncer.pa.TrainAnnouncements}).</li>
  * </ul>
  * Every C2S packet is validated server-side (distance, permission, length caps).
  */
@@ -46,6 +48,7 @@ public final class AnnouncerNetworking {
     public static final Identifier NETWORK_QUERY_C2S = StationAnnouncer.id("network_query");
     public static final Identifier NETWORK_INFO_S2C = StationAnnouncer.id("network_info");
     public static final Identifier NETWORK_EDIT_C2S = StationAnnouncer.id("network_edit");
+    public static final Identifier UPDATE_TRAIN_PA_C2S = StationAnnouncer.id("update_train_pa");
 
     /** Network rows on the wire: every speaker and display a box may hold. */
     public static final int MAX_NETWORK_ROWS = ControlBoxBlockEntity.MAX_SPEAKERS * 2;
@@ -157,6 +160,22 @@ public final class AnnouncerNetworking {
             });
         });
 
+        ServerPlayNetworking.registerGlobalReceiver(UPDATE_TRAIN_PA_C2S, (server, player, handler, buf, responseSender) -> {
+            BlockPos pos = buf.readBlockPos();
+            com.stationannouncer.pa.TrainAnnouncements trains;
+            try {
+                trains = com.stationannouncer.pa.TrainAnnouncements.read(buf);
+            } catch (RuntimeException e) {
+                return; // malformed: ignore rather than kick
+            }
+            com.stationannouncer.pa.TrainAnnouncements capped = capTrains(trains);
+            server.execute(() -> {
+                if (canEdit(player, pos) && player.getServerWorld().getBlockEntity(pos) instanceof AbstractPaBlockEntity source) {
+                    source.applyTrains(capped);
+                }
+            });
+        });
+
         ServerPlayNetworking.registerGlobalReceiver(NETWORK_QUERY_C2S, (server, player, handler, buf, responseSender) -> {
             BlockPos pos = buf.readBlockPos();
 
@@ -223,6 +242,15 @@ public final class AnnouncerNetworking {
         return text.length() > maxText ? text.substring(0, maxText) : text;
     }
 
+    /** The server's per-message text cap, on every train row. */
+    private static com.stationannouncer.pa.TrainAnnouncements capTrains(com.stationannouncer.pa.TrainAnnouncements in) {
+        java.util.List<com.stationannouncer.pa.TrainAnnouncements.Row> rows = new java.util.ArrayList<>();
+        for (com.stationannouncer.pa.TrainAnnouncements.Row row : in.rows) {
+            rows.add(row.withText(capText(row.text())));
+        }
+        return new com.stationannouncer.pa.TrainAnnouncements(in.autoPlatforms, in.platforms, rows);
+    }
+
     /**
      * A control box pool: the server's text cap applies to EACH message (it is
      * "how long may one announcement be"), the pool as a whole to
@@ -245,6 +273,16 @@ public final class AnnouncerNetworking {
 
     public static void sendAnnouncement(ServerPlayerEntity player, String text, float volume, BlockPos pos,
                                         boolean showChat, boolean playChime, String chimeSound) {
+        sendAnnouncement(player, text, volume, pos, showChat, playChime, chimeSound, false);
+    }
+
+    /**
+     * @param queued the client waits for what it is playing to end instead of
+     *               interrupting it (train-timed announcements). Written LAST, so a
+     *               client reads it only when it is there.
+     */
+    public static void sendAnnouncement(ServerPlayerEntity player, String text, float volume, BlockPos pos,
+                                        boolean showChat, boolean playChime, String chimeSound, boolean queued) {
         PacketByteBuf buf = PacketByteBufs.create();
         buf.writeString(text, AbstractPaBlockEntity.MAX_TEXT_LENGTH);
         buf.writeFloat(volume);
@@ -252,6 +290,7 @@ public final class AnnouncerNetworking {
         buf.writeBoolean(showChat);
         buf.writeBoolean(playChime);
         buf.writeString(chimeSound, AbstractPaBlockEntity.MAX_CHIME_SOUND_LENGTH);
+        buf.writeBoolean(queued);
         ServerPlayNetworking.send(player, ANNOUNCE_S2C, buf);
     }
 }

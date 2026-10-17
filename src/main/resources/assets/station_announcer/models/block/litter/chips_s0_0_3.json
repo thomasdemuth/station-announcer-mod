@@ -1,0 +1,221 @@
+{
+  "textures": {
+    "piece_chips": "station_announcer:block/litter/piece_chips",
+    "particle": "station_announcer:block/litter/piece_chips"
+  },
+  "elements": [
+    {
+      "from": [
+        3.17,
+        0.007,
+        2.615
+      ],
+      "to": [
+        6.03,
+        1.307,
+        6.385
+      ],
+      "faces": {
+        "west": {
+          "uv": [
+            0.25,
+            0.25,
+            3.25,
+            1.25
+          ],
+          "texture": "#piece_chips"
+        },
+        "east": {
+          "uv": [
+            3.75,
+            0.25,
+            6.75,
+            1.25
+          ],
+          "texture": "#piece_chips"
+        },
+        "up": {
+          "uv": [
+            7.25,
+            0.25,
+            10.25,
+            2.5
+          ],
+          "texture": "#piece_chips",
+          "rotation": 270
+        }
+      }
+    },
+    {
+      "from": [
+        3.04,
+        0.137,
+        1.965
+      ],
+      "to": [
+        6.16,
+        0.943,
+        2.68
+      ],
+      "faces": {
+        "west": {
+          "uv": [
+            10.75,
+            0.25,
+            11.25,
+            0.75
+          ],
+          "texture": "#piece_chips"
+        },
+        "east": {
+          "uv": [
+            10.75,
+            0.25,
+            11.25,
+            0.75
+          ],
+          "texture": "#piece_chips"
+        },
+        "north": {
+          "uv": [
+            11.75,
+            0.25,
+            14.25,
+            0.75
+          ],
+          "texture": "#piece_chips"
+        },
+        "up": {
+          "uv": [
+            14.75,
+            0.25,
+            15.25,
+            2.75
+          ],
+          "texture": "#piece_chips",
+          "rotation": 270
+        }
+      }
+    },
+    {
+      "from": [
+        3.04,
+        0.137,
+        6.32
+      ],
+      "to": [
+        6.16,
+        0.943,
+        7.035
+      ],
+      "faces": {
+        "west": {
+          "uv": [
+            10.75,
+            0.25,
+            11.25,
+            0.75
+          ],
+          "texture": "#piece_chips"
+        },
+        "east": {
+          "uv": [
+            10.75,
+            0.25,
+            11.25,
+            0.75
+          ],
+          "texture": "#piece_chips"
+        },
+        "south": {
+          "uv": [
+            11.75,
+            0.25,
+            14.25,
+            0.75
+          ],
+          "texture": "#piece_chips"
+        },
+        "up": {
+          "uv": [
+            14.75,
+            0.25,
+            15.25,
+            2.75
+          ],
+          "texture": "#piece_chips",
+          "rotation": 270
+        }
+      }
+    },
+    {
+      "from": [
+        3.69,
+        1.177,
+        3.72
+      ],
+      "to": [
+        5.25,
+        1.723,
+        5.54
+      ],
+      "faces": {
+        "west": {
+          "uv": [
+            10.75,
+            1.25,
+            12.25,
+            1.75
+          ],
+          "texture": "#piece_chips"
+        },
+        "east": {
+          "uv": [
+            12.75,
+            1.25,
+            14.25,
+            1.75
+          ],
+          "texture": "#piece_chips"
+        },
+        "north": {
+          "uv": [
+            0.25,
+            1.75,
+            1.5,
+            2.25
+          ],
+          "texture": "#piece_chips"
+        },
+        "south": {
+          "uv": [
+            2.0,
+            1.75,
+            3.25,
+            2.25
+          ],
+          "texture": "#piece_chips"
+        },
+        "up": {
+          "uv": [
+            3.75,
+            1.75,
+            5.25,
+            3.0
+          ],
+          "texture": "#piece_chips",
+          "rotation": 270
+        }
+      },
+      "rotation": {
+        "axis": "y",
+        "angle": 22.5,
+        "origin": [
+          4.6,
+          0.007,
+          4.5
+        ]
+      }
+    }
+  ]
+}

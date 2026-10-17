@@ -1,0 +1,201 @@
+{
+  "multipart": [
+    {
+      "when": {
+        "down": "true"
+      },
+      "apply": [
+        {
+          "model": "station_announcer:block/grime/oil_0_floor",
+          "weight": 8
+        },
+        {
+          "model": "station_announcer:block/grime/oil_0_floor",
+          "weight": 2,
+          "y": 90
+        },
+        {
+          "model": "station_announcer:block/grime/oil_0_floor",
+          "weight": 2,
+          "y": 180
+        },
+        {
+          "model": "station_announcer:block/grime/oil_0_floor",
+          "weight": 2,
+          "y": 270
+        },
+        {
+          "model": "station_announcer:block/grime/oil_0_floor_m",
+          "weight": 2
+        },
+        {
+          "model": "station_announcer:block/grime/oil_0_floor_m",
+          "weight": 2,
+          "y": 90
+        },
+        {
+          "model": "station_announcer:block/grime/oil_0_floor_m",
+          "weight": 2,
+          "y": 180
+        },
+        {
+          "model": "station_announcer:block/grime/oil_0_floor_m",
+          "weight": 2,
+          "y": 270
+        },
+        {
+          "model": "station_announcer:block/grime/oil_1_floor",
+          "weight": 2
+        },
+        {
+          "model": "station_announcer:block/grime/oil_1_floor",
+          "weight": 2,
+          "y": 90
+        },
+        {
+          "model": "station_announcer:block/grime/oil_1_floor",
+          "weight": 2,
+          "y": 180
+        },
+        {
+          "model": "station_announcer:block/grime/oil_1_floor",
+          "weight": 2,
+          "y": 270
+        },
+        {
+          "model": "station_announcer:block/grime/oil_1_floor_m",
+          "weight": 2
+        },
+        {
+          "model": "station_announcer:block/grime/oil_1_floor_m",
+          "weight": 2,
+          "y": 90
+        },
+        {
+          "model": "station_announcer:block/grime/oil_1_floor_m",
+          "weight": 2,
+          "y": 180
+        },
+        {
+          "model": "station_announcer:block/grime/oil_1_floor_m",
+          "weight": 2,
+          "y": 270
+        },
+        {
+          "model": "station_announcer:block/grime/oil_2_floor",
+          "weight": 2
+        },
+        {
+          "model": "station_announcer:block/grime/oil_2_floor",
+          "weight": 2,
+          "y": 90
+        },
+        {
+          "model": "station_announcer:block/grime/oil_2_floor",
+          "weight": 2,
+          "y": 180
+        },
+        {
+          "model": "station_announcer:block/grime/oil_2_floor",
+          "weight": 2,
+          "y": 270
+        },
+        {
+          "model": "station_announcer:block/grime/oil_2_floor_m",
+          "weight": 2
+        },
+        {
+          "model": "station_announcer:block/grime/oil_2_floor_m",
+          "weight": 2,
+          "y": 90
+        },
+        {
+          "model": "station_announcer:block/grime/oil_2_floor_m",
+          "weight": 2,
+          "y": 180
+        },
+        {
+          "model": "station_announcer:block/grime/oil_2_floor_m",
+          "weight": 2,
+          "y": 270
+        },
+        {
+          "model": "station_announcer:block/grime/oil_3_floor",
+          "weight": 2
+        },
+        {
+          "model": "station_announcer:block/grime/oil_3_floor",
+          "weight": 2,
+          "y": 90
+        },
+        {
+          "model": "station_announcer:block/grime/oil_3_floor",
+          "weight": 2,
+          "y": 180
+        },
+        {
+          "model": "station_announcer:block/grime/oil_3_floor",
+          "weight": 2,
+          "y": 270
+        },
+        {
+          "model": "station_announcer:block/grime/oil_3_floor_m",
+          "weight": 2
+        },
+        {
+          "model": "station_announcer:block/grime/oil_3_floor_m",
+          "weight": 2,
+          "y": 90
+        },
+        {
+          "model": "station_announcer:block/grime/oil_3_floor_m",
+          "weight": 2,
+          "y": 180
+        },
+        {
+          "model": "station_announcer:block/grime/oil_3_floor_m",
+          "weight": 2,
+          "y": 270
+        },
+        {
+          "model": "station_announcer:block/grime/oil_4_floor",
+          "weight": 2
+        },
+        {
+          "model": "station_announcer:block/grime/oil_4_floor",
+          "weight": 2,
+          "y": 90
+        },
+        {
+          "model": "station_announcer:block/grime/oil_4_floor",
+          "weight": 2,
+          "y": 180
+        },
+        {
+          "model": "station_announcer:block/grime/oil_4_floor",
+          "weight": 2,
+          "y": 270
+        },
+        {
+          "model": "station_announcer:block/grime/oil_4_floor_m",
+          "weight": 2
+        },
+        {
+          "model": "station_announcer:block/grime/oil_4_floor_m",
+          "weight": 2,
+          "y": 90
+        },
+        {
+          "model": "station_announcer:block/grime/oil_4_floor_m",
+          "weight": 2,
+          "y": 180
+        },
+        {
+          "model": "station_announcer:block/grime/oil_4_floor_m",
+          "weight": 2,
+          "y": 270
+        }
+      ]
+    }
+  ]
+}

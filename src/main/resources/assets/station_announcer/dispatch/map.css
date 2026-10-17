@@ -79,6 +79,8 @@ body {
 	padding: 9px 16px; text-align: center;
 }
 #banner.hidden, .hidden { display: none !important; }
+/* not an error: the map is showing saved data (offline) and reconnects by itself */
+#banner.info { background: #3d4452; }
 
 #mapTip {
 	position: absolute; z-index: 20; pointer-events: none;
@@ -222,6 +224,16 @@ body {
 .liverow em { font-style: normal; color: var(--live); }
 .liverow.offline .dot { background: #b3261e; }
 .liverow.offline em { color: #b3261e; }
+.liverow.saved .dot { background: #c98a00; }
+.liverow.saved em { color: #c98a00; }
+.liverefresh {
+	margin-left: auto; display: inline-flex; align-items: center; justify-content: center;
+	width: 22px; height: 22px; padding: 0; border: 1px solid var(--hair); border-radius: 50%;
+	background: var(--card); color: var(--ink-2); cursor: pointer;
+}
+.liverefresh:hover { color: var(--ink); background: var(--field); }
+.liverefresh.busy svg { animation: spin .9s linear infinite; }
+@keyframes spin { to { transform: rotate(360deg); } }
 
 .hint {
 	margin: 10px 2px 2px; font-size: 12.5px; line-height: 1.45; color: var(--ink-3);
@@ -739,6 +751,14 @@ body {
 .layer:hover { background: var(--field); }
 .layer input { accent-color: var(--accent); }
 .set-hint { font-size: 12px; color: var(--ink-3); padding: 4px 6px; }
+.set-btns { display: flex; gap: 6px; }
+.set-btn {
+	font-family: var(--font); font-size: 11.5px; font-weight: 600; text-decoration: none;
+	padding: 5px 11px; border: 1px solid var(--hair); border-radius: 999px;
+	background: var(--card); color: var(--ink-2); cursor: pointer; white-space: nowrap;
+}
+.set-btn:hover { background: var(--field); color: var(--ink); }
+.set-btn.off { opacity: .45; pointer-events: none; }
 
 /* Narrow windows: the planner becomes a sheet across the top-left, never full-bleed
    (the map stays the primary surface, as in the mock). */

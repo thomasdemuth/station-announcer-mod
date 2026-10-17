@@ -39,10 +39,119 @@ units are BLOCKS not 1/16, x/z are negated vs bbmodel, flipped entries compose R
 R179 door travel is |m|−0.5, etc.).** Pipeline order: convert_openbve_m7.py →
 gen_m7_assets.py → convert_openbve_m7.py --check. Assets are generated — never hand-edit.
 
+**Rig hazard (2026-10-05): never `kill -9` the rig SERVER.** A hard kill can leave MTR's saved siding
+data without its generated path (a depot then runs trains straight back into the siding until Refresh
+Path). Stop it through RCON (`stop`, port 25575 / `rigpass`) so MTR saves, then kill only if it hangs.
+Also: only ONE Gradle task may compile — running runClient's compile while the server runs deletes
+class files the server loads lazily (ClassNotFoundException crash); the client restart uses `-x compileJava`.
+
 **Rig hazard learned this session:** while background agents run heavy Java work, the
 rig's Gradle wrappers (and sometimes the JVMs) get SIGKILLed — forbid agents from Gradle
 entirely and check rig health after each one finishes; an orphaned JVM keeps serving but
 loses the console fifo.
+
+### RELEASE 3.4.11 (2026-10-16) — platform screen + route screen + line folders + dashboard tool rail, DEPLOYED to both profiles, uncommitted
+
+Built from a `cp -c` clone in the session scratchpad (`./gradlew build --offline`), whole working tree as it stood
+(includes other sessions' uncommitted work); jar copied to build/libs + releases/, `tools/deploy_jar.sh` cmp-verified both
+profiles. Whole-tree javac + PlatformOccupancyTest green first. NOT play-tested yet.
+
+### DASHBOARD TOOL RAIL (2026-10-14) — javac + scratch-rig screenshots (427x240 GUI and larger); NOT built/deployed, uncommitted
+
+Thomas: the buttons squeezed into MTR's dashboard bottom rows (Dispatch, Map+, Disruptions, Tools…) were bad on small
+screens → `client/mtraddon/DashboardRail`: a slim column of 18 px pixel-icon buttons docked on the map's right edge
+(below MTR's coordinate readout, above its bottom rows), hover tooltip (name, wrapped description, live line),
+badges (active disruptions; dispatch alerts = held platforms + obstructed doors via new `ClientHoldState.count()` /
+`ClientDoorObstructions.count()`), a "recent" group of the last 2 tools at the top (`AddonClientConfig.recentDashboardTools`,
+config file), wraps into extra columns on short windows. Items: Dispatch, Map+ (web, only when ClientDispatchInfo is
+available), Disruptions, Lines & folders, Interlining, Duplicate line, Navigation (permission + the old show* toggles),
+MTR's Transport System Map / Resource Pack Creator / Options (FOLDED IN: hidden by label in AFTER_INIT, pressed from the
+rail — MTR never re-shows them), Station Announcer settings. Pure Fabric screen events (afterRender + allowMouseClick).
+The old Dispatch/Map+/Disruptions/Tools button injections and `DispatchToolsScreen` are DELETED. Dev hooks
+`#rail hover N`, `#press <label>`. Tooltip is pushed to z+600 (MTR's list panel drew over a z-400 tooltip).
+
+### LINE FOLDERS (2026-10-14) — javac + scratch-rig screenshots + save verified on the rig clone; NOT built/deployed, uncommitted
+
+Thomas's answers: memory `route-screen-and-line-folders`. Folders live INSIDE MTR's dashboard Routes list:
+`mixin/DashboardScreenFoldersMixin` redirects `tick2`'s `DashboardList.setData(ObjectSet,…)` (sorts by name) to
+`ClientLineFolders.dashboardList`, which (Routes list = every item a Route, empty search) hands MTR an ORDERED
+`setData(ObjectArrayList,…)` with synthetic folder rows `DashboardListItem(id, "+ Line 4  (8)", colour)`
+(data == null); HEAD-cancels on `onDrawArea` (= open/close), `onEdit` (= LineFolderScreen), `onDelete`/`onFind`
+for folder rows. `DashboardListItemMixin` indents routes inside open folders ("└"); `DashboardListAccessor` reads the
+search box (a search = MTR's flat list). Config `dashboardFolders`.
+- Storage `mtraddon/LineFolders` (`<save>/station-announcer-addon/line_folders.json`): folders {id, name, parent,
+  order, line} + manual placements route id → {folder, order}; edits are a full-state C2S JSON (validated: parents,
+  cycles, depth ≤ 6), whole state synced. A route with no placement goes to the stored folder with its `lineKey`
+  (`line`), else to an AUTOMATIC folder when ≥ 2 routes share the line name (virtual, id `virtualId(line)` < 0, stored
+  only when edited — "materialised"). Unordered folders use order Integer.MAX_VALUE/2 (alphabetical); ↑↓ numbers
+  siblings 0..n (a first cut gave a materialised folder order = sibling count and it jumped to the top).
+- `LineFolderScreen` (Tools → "Lines & folders…", or a folder row's edit icon): tree + Contents (rename, ↑↓, Move…,
+  + subfolder, routes ↑↓/Move, colour all, hide/show all, delete → children move up) | Style (line folder =
+  LineStyleEditor seeded from the line's most common route number; hand-made folder = shape/lettering as every route's
+  own style) | Overview (stop strips, red/amber overlaps, Interlining holds) | Diagram (merged station order, rows per
+  route, rotated names). Schedules requested in chunks of 64.
+- Dev hooks: `#lines open [folder] | select | tab N | new | name X | route X | move X | save | expand X`,
+  `#press <label part>` (presses an MTR button, e.g. the Routes tab). Rig-verified 18:56–18:58: folders + indent +
+  subfolder in MTR's dashboard, all four tabs, save wrote line_folders.json. NOT verified: real clicks on the folder
+  row icons, Move modal, bulk colour/hide save, the order fix (javac only).
+
+### ROUTE SCREEN (2026-10-14) — javac (whole tree) + scratch-rig screenshots + Save verified on the rig clone; NOT built/deployed, uncommitted
+
+Thomas's answers: memory `route-screen-and-line-folders` (do not re-ask; LINE FOLDERS w/ subfolders are
+the NEXT step). `client/mtraddon/RouteSettingsScreen` REPLACES MTR's EditRouteScreen (same swap/bypass
+pattern as the platform screen; config `replaceRouteScreen`, off = MTR's screen + "Route settings…").
+Left: stops on a strip in the route colour (dwell + Default/Manual/Interlining tag + overlap badge, amber
+"now X" while the baked dwell differs). Right: tabs Route (name, colour, number, type, hidden, circular) |
+Style (Whole line = `client/gui/LineStyleEditor`, extracted from LineStyleScreen which is now a thin host;
+This route = text/shape/lettering override) | Announce (next-station template, FlatUi rebuild of the deleted
+RouteAnnouncementScreen, + MTR's disable-announcements flag) | Train PA (`TrainRowsEditor`, now public).
+Clicking a stop: dwell for this route there, schedule check, platform group, "Open platform screen".
+Stop changes (skip/add) deliberately left out — broken right now; slot marked in drawStopInspector.
+- Per-route bullet overrides: `LineStyles.RouteStyle` (null fields = inherit), `routeStyles` map keyed by
+  `routeKey` = the WHOLE route name (Baker City names are "Line 4||North Limited": before || is the LINE —
+  the first cut keyed before || and filed an override under the whole line), JSON `"routes"`, C2S
+  `update_route_style`, appended to the line_styles S2C. `styleFor`/`ClientLineStyles.style` merge it, so
+  signs/PIDS/Map+ need no change.
+- Schedule request now carries a LIST of platform ids (≤64, one reply each); ClientPlatformSchedule caches per
+  platform; ClientDwellOverrides has a version.
+- Save order: line style (colour/number into every route of the line) → route fields via
+  PacketUpdateData(addRoute) (+ PacketSetRouteIdHasDisabledAnnouncements) → route style → template → train
+  PA → groups → dwell per platform with regenerate. Esc saves (MTR parity).
+- Dev hook `#route open <name part>` / `tab N | stop N | scope N | own N secs | shape N | scroll PX | save`;
+  `#platform … save` too. Rig-verified 17:42–17:47 (Line 4||North Limited): all four tabs, stop view, 230 s
+  dwell → ⚠ 54 at Beverly, Save wrote source "manual" + route override key, depots regenerated (baked =
+  saved). NOT verified: mouse clicks, the picker modal, renaming a route with an override.
+
+### PLATFORM SCREEN OVERHAUL (2026-10-14) — javac (whole tree) + unit test + scratch-rig screenshots; NOT built/deployed, Save path NOT exercised, uncommitted
+
+Thomas: Interlining's holds (per-route dwell overrides) were hard to find/edit behind "Per-route dwell…";
+wanted one clean UI + a per-route overlap warning. His answers are in memory `platform-screen-overhaul`
+(do not re-ask). `client/mtraddon/PlatformSettingsScreen` (FlatUi on FlatPaScreen) REPLACES MTR's
+PlatformScreen (AFTER_INIT swap deferred one tick; "MTR screen" button re-opens the original with a
+one-shot bypass; config `replacePlatformScreen`, off = MTR's screen + "Platform settings…" button).
+Old HoldRuleScreen / RouteDwellScreen / PlatformGroupScreen / PlatformGroupEditScreen + their three
+buttons/toggles are DELETED (`firstLang` moved to PlatformSettingsScreen).
+- Number + default dwell saved through MTR's own `PacketUpdateData(addPlatform)` (what its onClose2 sends);
+  Esc saves like MTR's screen, Cancel discards. Hold rule / groups via the existing addon packets.
+- Dwell overrides now carry a SOURCE (`AddonStore.DWELL_SOURCE_*`, JSON `dwellOverrideSources`; Interline
+  Apply tags INTERLINE); S2C dwell sync gained a byte per entry; the dwell C2S gained a source byte per
+  entry + trailing `regenerate` flag → `PlatformSchedule.regenerateFor` (40 ticks later, Depot.generateDepots).
+- Schedule check: C2S/S2C `addon_platform_schedule(_request)` (`mtraddon/PlatformSchedule`) sends each
+  siding's REAL departures (SidingSlotAccessor) + baked stop times at the platform; pure
+  `mtraddon/PlatformOccupancy` re-times them with the edited dwells (a dwell change shifts later stops of
+  the same train cycle), merges same-train back-to-back stops, and reports conflicts (other route =
+  platform occupied, same route = dwell ≥ headway, hold-rule worst case = "maybe"). **The cycle is the
+  sidings' repeat interval, NOT gameMillisPerDay** (world_baker2's Line 4 repeats every 60 min on a 20-min
+  day — folding onto the day stacked every train on itself). Test: `tools/platform_test/PlatformOccupancyTest.java`.
+- Dev hook `#platform open <station part> [number]` (after `#use` with a dashboard) / `select N|hold`,
+  `own N secs`, `default secs`, `window N`, `dump`.
+- Scratch rig recipe used (no Gradle): javac whole tree → scratchpad, argFile classpath with build dirs
+  swapped, `net.fabricmc.devlaunchinjector.Main` + `-Dfabric.dli.config=.gradle/loom-cache/launch.cfg
+  -Dfabric.dli.env=server|client -Dfabric.dli.main=...KnotServer|KnotClient`, APFS clone of world_baker2,
+  ports 25570/rcon 25580/MTR web 8899, NO resource packs (the client OOMs with run/resourcepacks at 3 GB).
+- Verified (screenshots 17:05–17:08 at Sahara pl. 1): swap opens ours, baseline clean, 3m50s own dwell
+  → 18 same-route overlaps drawn red, hold inspector. NOT verified: any click, Save end to end (MTR update,
+  regenerate), picker modals, tag display of real Interlining overrides.
 
 ### LINE STYLE EDITOR (2026-10-12) — javac (whole tree) + Map+ bullets browser-verified; NOT built/deployed, in-game screen NOT seen, uncommitted
 
@@ -65,6 +174,123 @@ PIDS row, Map+ ribbon; bullets drawn at PHYSICAL pixel resolution by undoing the
   PIDS departure rows: style text > MTR route number. Map+: `bulletLabel`/`bulletText` route fields,
   `~` suffix = hexagon, `bulletInk` (forced, else brightness — yellow lines now get black text),
   `bulletHtml()` for every HTML bullet (they used to print the raw `*`/`#` suffix).
+
+### MAP+ REFRESH / OFFLINE + REMOVABLE SUGGESTED EXITS (2026-10-11) — javac + layout unit test + browser-verified against the rig's API; DEPLOYED as 3.4.9 to both profiles (built from a scratchpad clone), uncommitted
+
+Thomas: maps "cache or don't refresh" after world changes; want them to work offline (singleplayer AND
+server down) and go live when online, a refresh button is fine; and remove suggested exits.
+- Staleness causes: network/mapdata behind a 30 s server `CachedResponse` + 60 s page poll; the basemap
+  only ever drew MISSING tiles. Now: `?fresh=1` on network/mapdata rebuilds the cache (≤ once / 2 s / dim,
+  `DispatchApiServlet.cached`); `ChunkIndex` also reads the region header's TIMESTAMP table and
+  `BasemapScanner` keeps a per-tile `drawnAt` (index.json + satmeta tiles are `[tx,tz,drawnAt]`, old pairs
+  read as the index's scannedAt) — the incremental pass redraws tiles whose chunks were saved since.
+  Runs at launch, every `dispatch.basemapRefreshMinutes` (default 5, quiet logs), on Map+ Refresh
+  (`api/basemaprefresh`, rate-limited 20 s) and `/dispatch basemap update`. Terrain changes still need the
+  world's save (chunks on disk).
+- Map+ (`map.js` section 4b): Refresh button in the live row + settings "Data" group; per-tile refetch
+  (`&v=drawnAt`, unchanged bitmaps kept); IndexedDB snapshot per server; `connectLive`/`bootFromSnapshot`/
+  reconnect every 10 s; "SAVED MAP" state + grey `#banner.info`. `API` is now `let`.
+- Offline copy: `GET /dispatch/api/offline[?satellite=1][&download=1]` (`DispatchOfflineMap`) = map.html
+  with css/js inlined + `window.MAPPLUS_OFFLINE` (network/mapdata/satmeta per dim, mask tiles as data URIs,
+  colour tiles only with satellite=1, server base URL, `worldId` = hashed level name + seed, also on
+  `ping`). Opened from disk it shows the snapshot and goes live when its server (same worldId; localhost
+  copies also probe ports 8888–8897) answers. Client `OfflineMapSaver` downloads it 1 min after join and
+  every 10 min to `<game dir>/station_announcer/offline_maps/` (`offlineMapCopies`, config screen has the
+  switch + "Open offline maps"). Settings card: Save / + Satellite links.
+- Suggested exits = layout street OPENINGS. Exit editor Layout tab: Remove per opening + Restore
+  (ops, `SCAN_PERMISSION`); `LayoutScanner` ACTION_DISMISS_OPENING(3, + x y z ints)/ACTION_RESTORE_OPENINGS(4),
+  store `<save>/station-announcer-addon/layout_removed_openings.json` (NOT in layouts/ — every json there
+  is read as a layout), rescans the station; solver skips candidates within 12 blocks (±6 y)
+  (`LayoutInput.dismissedOpenings`, test in LayoutSolverTest). S2C layout_data gained a trailing varint.
+- Verified: javac of every touched class; layout tests all pass; an offline copy built from the rig's real
+  API (python mimic of DispatchOfflineMap) rendered 118 stations + 302 terrain tiles with the server
+  unreachable, then switched live (view kept, 173 trains, cross-origin tiles), Refresh toast, demo mode
+  clean. NOT verified: the Java endpoints/basemap redraw on a running server, the in-game Remove click.
+
+### ATMOSPHERE: FAILING LIGHTS, GRIME, LITTER, CONSTRUCTION PROPS, WEATHERING TOOL (2026-10-05) — READ `ATMOSPHERE_PLAN.md` §8 — built, javac + scratch-rig verified, DEPLOYED in 3.4.8 (2026-10-08, built from a scratchpad clone while the rig ran), uncommitted
+
+Thomas: "I like everything except F (the moving/alive layer). Start building. I especially like the
+construction assets." Package `atmosphere/` (registered from StationAnnouncer's MTR block) + client
+`client/atmosphere/`, own tab "Baker City: Atmosphere" (`AtmosphereRegistry`). Light conditions on ANY
+glowing block by position (PersistentState `station_announcer_lights`, mixin config
+`station_announcer.atmosphere.mixins.json` hooks `ChunkBlockLightProvider.getLightSourceLuminance` AND the
+initial-chunk lambda `method_51532`): dim/warm/dead really change light, flickers redraw the lamp's own
+model per-face-normal-offset at a COLOUR-dimmed full light (lightmap dimming went brown). Maintenance Tool
+(lights, out-of-service fare gear via `OutOfService` + hooks in FareLane/FareMachineBlock, poster wear).
+Weathering Tool (`WeatherSpec` presets pristine..abandoned, `WeatheringPlanner` looks family blocks up BY ID,
+wall grime only at base / ceiling bands). Sign wear = `SignSpec.Panel.wear` + `client/mtr/SignWear`.
+Families by agents: grime decals (`GrimeDecalBlock extends MultifaceGrowthBlock`, floor-only kinds have ONLY
+the `down` property), litter/trash, construction props, wear variants (damaged tile walls/floors).
+Generators: `tools/atmo_common.py` (upsert lang/tags), `gen_atmosphere_assets.py`, `gen_grime_assets.py`,
+`gen_litter_assets.py`, `gen_construction_assets.py`, `gen_wear_assets.py`. Scratch rig (no Gradle, never
+the shared rig): session scratchpad `rig/` build.sh / server.sh (25568, rcon 25578, web 8898, APFS clone of
+world_baker2) / client.sh; `/atmosphere light|lights|service|weather …` for headless tests.
+
+### PA TRAIN ANNOUNCEMENTS (STATION + ON-BOARD PER ROUTE) + {access} TOKEN (2026-10-05) — READ `PA_TRAIN_PLAN.md` — built, javac + unit tests, live-verified on a SEPARATE scratch server (not the rig); DEPLOYED as 3.4.7 to both profiles (2026-10-05), uncommitted
+
+ROUND 2 (Thomas: "for the ROUTE/TRAIN, not the station"): `mtr/RouteTrainPa` — per-route rows spoken
+to the players RIDING the route's trains at every stop ({station} = the stop served); "Train PA…"
+button on MTR's Edit Route screen → `client/gui/RouteTrainScreen`; row UI shared via
+`client/gui/TrainRowsEditor`; on-board "before arrival" from a new `simulateMoving` HEAD hook
+(ETA d/v + v/2a, riders only). Separate from the older per-route next-station TEMPLATE feature.
+Scratch-server recipe (no Gradle, no rig): javac to scratchpad, swap build/classes+resources in a copy
+of `build/loom-cache/argFiles/runServer|runClient`, `cp -c -R run/world_baker` (APFS clone), other ports.
+Another session's rig restart `pkill`s every KnotServer — yours too. 3.4.7 was BUILT FROM A
+`cp -c` CLONE of the project in the scratchpad (`./gradlew build --offline` there), so the live rig's
+build/ dir was never rewritten — the safe way to make a jar while someone else's rig runs.
+
+Thomas's answers are in the plan (do not re-ask): front/center/rear only, `{access}` TOKEN + templates
+(no block), all four triggers (before arrival / doors open / doors closing / after departure) with
+repeats in the source's train settings, unscanned station = silent.
+- `pa/TrainAnnouncements` (pure; NBT `Trains` on every PA source; C2S `update_train_pa`),
+  `pa/AccessPhrase` (pure Java + Gson: layout JSON → "The elevator is at the rear of the platform.";
+  unit test `tools/pa_test/AccessPhraseTest.java`, runs with LayoutSolverTest's synthetic subway),
+  PaText tokens `{access} {route} {dest} {next} {nextstop} {platform}` + `PaText.Train` +
+  `serverContext` hook.
+- `mtr/PaTrains`: VehicleMixin calls (`simulateStopped` HEAD after the gap-filler tick → doors open /
+  predicted close, gap fillers via the new `GapFillerEngine.plannedCloseAt`; `startUp` TAIL → departure),
+  `Siding.getArrivals` polled every 0.5 s for listened-to platforms (before arrival); platform snapshot
+  (rail ends in travel direction from the sidings' paths) every 10 s for AUTO platforms (≤16 m of the
+  source or a box's speakers) and `{access}`. Clock guard: sim clock ahead of wall (Instant Deploy
+  replay) or > 5 s behind (catch-up) = ignored. Dev runs log `[pa train] …` per firing.
+- Client: announce packet gained a trailing `queued` flag — train announcements wait for the estimated
+  end of what is playing; StationAnnouncerClient's delayed-task loop now runs due tasks AFTER iterating
+  (a queued task schedules its own speech). PaSourceScreen right pane: Settings | Trains | Network
+  (announcer: Settings | Trains); `#pa-gui x y z trains [row]`. Templates: Accessibility / Accessible
+  boarding / Next train.
+
+### MANUAL DRIVING OVERHAUL (2026-10-05) — READ `MANUAL_DRIVING_HANDOFF.md` FIRST — phases 0–6 built, cab HUD + slots rig-verified with Thomas driving, NOT committed
+
+Entry point = `MANUAL_DRIVING_HANDOFF.md` (state table, rig recipe, dev hooks, known issues, next tasks).
+Decisions = `MANUAL_DRIVING_PLAN.md` §6 (do not re-ask); build logs §8–§10; approved HUD §9; MTR slot
+mechanics = `SLOT_TAKEOVER_RESEARCH.md`. Code: server `mtraddon/crew/` (CrewProtocol/Service/State/Engine,
+CabFeed + FeedBuilder, SlotEngine, IncidentEngine), mixins `VehicleCrewMixin`, `VehicleExtraDataCrewInvoker`,
+`SidingSlotMixin`, `SidingSlotAccessor`, `NameColorDataAccessor`, client `DrivingGuiRendererMixin`,
+`VehicleExtensionCabMixin`, `CabSeatRidingMixin`, `CabCameraMixin`, `CabCameraRenderVehiclesMixin`;
+client `client/mtraddon/crew/` and `client/mtraddon/cab/` (CabHud, CabData, CabScreen = cab menu K,
+CabStartup, CabSeat, CabCamera, CabScore, CabReportScreen, CabDevHooks). Keys: B buzz, G horn, V vigilance,
+J HUD detail, K cab menu, N cab seat, Left Alt lean. MTR facts that matter: manual controls only work on
+manual sidings; a guard key also counts as `isDriver()` server-side; MTR syncs a client only the path up
+to the stopping point (hence the server cab feed). Rig now runs `run/world_baker2` (copy of Thomas's Oct 4
+save) with his resource packs in `run/resourcepacks`.
+
+### TRACK GEOMETRY: RAIL TILT + COMPOUND CURVES + TRACK EDITOR (2026-10-02) — READ `TRACK_GEOMETRY_PLAN.md` — built, javac + gradle build green, NOT yet booted/in game
+
+Thomas's answers are in the plan (do not re-ask). Brush + right-click a rail node now opens OUR
+`client/track/TrackEditorScreen` (FlatUi; replaces MTR's RailModifierScreen via
+`RailModifierScreenOpenMixin`): every track at the node, free chain of straights/arcs/transition
+spirals per rail with lock/free solver, custom height, tilt points (±45°, pivot = inner/low rail,
++ = right side low w.r.t. the rail's canonical A→B), "suggest cant", node panel, Editor | 3D
+(`TrackView3D`), live in-world preview. Core = PURE JAVA `com.stationannouncer.track`
+(`tools/track_test/TrackTest.java` checks it against MTR 4.0.1's REAL RailMath: 600 rails import
+exactly). `RailMathMixin` makes MTR (simulator + client) follow a saved `TrackPath` (lazy, keyed by
+node positions + MTR angles; client/server split by constructing thread — `TrackSide`). Store
+`<save>/station-announcer-addon/track_profiles.json`; length-changing saves regenerate the affected
+depots (MTR's own generate → trains redeploy). Tilted rails drawn by `TrackRailRenderer`
+(`RenderRailsTiltMixin`), cars roll via 5 `*Lean*` mixins (first MixinExtras use). Decompiled 4.0.1
+source for this work: session scratchpad `mtr401src` (Vineflower) — regenerate if gone.
+NOT VERIFIED: first boot (mixin load), anything in game — the rig was another session's when this
+was built.
 
 ### EARTHWORKS: EMBANKMENT / TRENCH CREATORS + ROW CLEARER (2026-10-02) — rig-verified, DEPLOYED in 3.4.6 to both profiles, committed
 

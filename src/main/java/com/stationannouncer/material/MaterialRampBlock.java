@@ -167,4 +167,10 @@ public class MaterialRampBlock extends Block implements MaterialBlock {
     public ItemStack getPickStack(WorldView world, BlockPos pos, BlockState state) {
         return stackFor(this, state, world instanceof World w ? w : null);
     }
+
+    @Override
+    public BlockState onBreak(World world, BlockPos pos, BlockState state, net.minecraft.entity.player.PlayerEntity player) {
+        MaterialBlocks.clientRemesh(world, pos);
+        return super.onBreak(world, pos, state, player);
+    }
 }

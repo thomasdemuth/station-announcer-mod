@@ -1,0 +1,72 @@
+{
+ "parent": "minecraft:block/block",
+ "textures": {
+  "tube": "station_announcer:block/construction/scaf_tube",
+  "clamp": "station_announcer:block/construction/scaf_clamp",
+  "cap": "station_announcer:block/construction/scaf_cap",
+  "plate": "station_announcer:block/construction/scaf_plate",
+  "plank": "station_announcer:block/construction/scaf_plank",
+  "particle": "station_announcer:block/construction/scaf_cap"
+ },
+ "elements": [
+  {
+   "from": [
+    15.05,
+    15.5,
+    15.05
+   ],
+   "to": [
+    16.95,
+    16.6,
+    16.95
+   ],
+   "faces": {
+    "north": {
+     "texture": "#cap",
+     "uv": [
+      14.1,
+      14.9,
+      16,
+      16
+     ]
+    },
+    "south": {
+     "texture": "#cap",
+     "uv": [
+      14.1,
+      14.9,
+      16,
+      16
+     ]
+    },
+    "east": {
+     "texture": "#cap",
+     "uv": [
+      14.1,
+      14.9,
+      16,
+      16
+     ]
+    },
+    "west": {
+     "texture": "#cap",
+     "uv": [
+      14.1,
+      14.9,
+      16,
+      16
+     ]
+    },
+    "up": {
+     "texture": "#cap",
+     "uv": [
+      14.1,
+      14.1,
+      16,
+      16
+     ]
+    }
+   }
+  }
+ ]
+}

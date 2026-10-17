@@ -20,17 +20,23 @@ public class AddonClientConfig {
     private static final Gson GSON = new GsonBuilder().setPrettyPrinting().create();
     private static AddonClientConfig instance;
 
-    /** Show the "Hold rules…" button on MTR's platform screen (it only appears with dashboard permission anyway). */
-    public boolean showHoldRulesButton = true;
+    /**
+     * Replace MTR's platform screen with ours (number, dwell per route, hold rule, platform
+     * groups, schedule check). Off = MTR's screen with a "Platform settings…" button.
+     */
+    public boolean replacePlatformScreen = true;
 
-    /** Show the "Per-route dwell…" button on MTR's platform screen (same permission gating). */
-    public boolean showRouteDwellButton = true;
+    /** Replace MTR's Edit Route screen with ours. Off = MTR's screen with a "Route settings…" button. */
+    public boolean replaceRouteScreen = true;
+
+    /** Group the dashboard's Routes list into line folders (off = MTR's flat list). */
+    public boolean dashboardFolders = true;
+
+    /** The dashboard rail's recently used tools, newest first (ids). */
+    public java.util.List<String> recentDashboardTools = new java.util.ArrayList<>();
 
     /** Show the "Door sides…" button on MTR's lift customization screen (same permission gating). */
     public boolean showLiftDoorSidesButton = true;
-
-    /** Show the "Platform group…" button on MTR's platform screen (same permission gating). */
-    public boolean showPlatformGroupButton = true;
 
     /** Show the "Disruptions" button on MTR's dashboard (same permission gating). */
     public boolean showDisruptionsButton = true;
@@ -42,6 +48,50 @@ public class AddonClientConfig {
 
     /** Master toggle for the driving HUD overlay. */
     public boolean hudEnabled = true;
+
+    /**
+     * Driving HUD style: {@code "cab"} = the cab HUD (signal + speed bottom left, the run bottom
+     * right, destination top left; MANUAL_DRIVING_PLAN.md §9), {@code "classic"} = the original
+     * text panel. The {@code hudShow*} toggles below apply to the classic panel.
+     */
+    public String hudStyle = "cab";
+
+    /** Skip the startup ritual (key in, battery, brake test) — the train starts up at once. */
+    public boolean crewSkipStartup = false;
+
+    /** Driver snaps to the front of the leading car while driving (Thomas: "snap to the front cab"). */
+    public boolean cabSeatEnabled = true;
+    /** Blocks behind the frontmost floor edge (min 0.35). */
+    public double cabSeatInset = 0.6;
+    /** Blocks right of the car's centre line in the direction of travel. */
+    public double cabSeatLateral = 0.0;
+    /** Camera up/down while seated, clamped ±1.5. */
+    public double cabSeatEyeOffset = 0.0;
+    /** Per train type (leading car's vehicle id) overrides of the seat placement. */
+    public java.util.Map<String, com.stationannouncer.client.mtraddon.cab.CabSeat.Placement> cabSeatTrains = new java.util.HashMap<>();
+    /** Hold the lean key to look out of the cab window along the train. */
+    public boolean cabLeanEnabled = true;
+    public double cabLeanMax = 1.8;
+
+    /** Cab HUD: speed in mph instead of km/h. */
+    public boolean cabMph = false;
+
+    /** Cab HUD panels expanded (true) or collapsed — the "HUD detail" key cycles them. */
+    public boolean cabDestOpen = false;
+    public boolean cabDriveOpen = true;
+    public boolean cabRunOpen = false;
+
+    /** Cab HUD size multiplier in GUI pixels (1 = native GUI scale). */
+    public int cabScale = 1;
+
+    /** Cosmetic passengers on the platforms of the train you drive or guard (client-only). */
+    public boolean cabPassengers = true;
+    /** Hard cap on cosmetic passengers (0 = off). */
+    public int cabPassengersMax = 40;
+
+    public boolean isClassicHud() {
+        return "classic".equals(hudStyle);
+    }
 
     /** Show upcoming speed-limit changes on the HUD. */
     public boolean hudShowSpeedLimits = true;
@@ -88,6 +138,12 @@ public class AddonClientConfig {
      */
     public String navHudCorner = "top_right";
 
+    /**
+     * Keep an offline copy of Map+ for each world in {@code station_announcer/offline_maps}
+     * (refreshed every 10 minutes while connected) — it opens without the game running.
+     */
+    public boolean offlineMapCopies = true;
+
     /** Draw the in-world marker at the current navigation target. */
     public boolean navWaypointEnabled = true;
 
@@ -99,6 +155,17 @@ public class AddonClientConfig {
 
     /** Play a chime alongside those alerts. */
     public boolean navSoundEnabled = true;
+
+    // ---- Train crew (driver / guard, buzzer, horn, vigilance) ----
+
+    /** Show the small crew panel (role, ready lamps, buzz codes, vigilance) while holding a crew role. */
+    public boolean crewPanelEnabled = true;
+
+    /** Ask the server for periodic vigilance checks while driving (the server may clamp or disable it). */
+    public boolean crewVigilanceEnabled = true;
+
+    /** Seconds between vigilance checks (clamped to CrewProtocol.MIN/MAX_VIGIL_SECONDS when sent). */
+    public int crewVigilanceSeconds = 45;
 
     /** Writes the current settings to disk (used by the HUD settings screen's Done button). */
     public static synchronized void persist() {

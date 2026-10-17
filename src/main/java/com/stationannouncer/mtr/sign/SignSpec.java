@@ -68,8 +68,10 @@ public record SignSpec(Style style, List<Row> rows, Panel panel) {
      * applied to every tile's content. What lets a sign be bigger, smaller or
      * elsewhere than the block it sits on.
      */
-    public record Panel(float width, float height, float dx, float dy, float scale) {
+    public record Panel(float width, float height, float dx, float dy, float scale, int wear) {
         public static final Panel DEFAULT = new Panel(0, 0, 0, 0, 1);
+        /** Wear levels: 0 new, 1 weathered, 2 worn, 3 vandalised (ATMOSPHERE_PLAN.md §1 D). */
+        public static final int MAX_WEAR = 3;
 
         public Panel {
             width = clampF(width, 0, MAX_PANEL);
@@ -77,10 +79,15 @@ public record SignSpec(Style style, List<Row> rows, Panel panel) {
             dx = clampF(dx, -MAX_PANEL, MAX_PANEL);
             dy = clampF(dy, -MAX_PANEL, MAX_PANEL);
             scale = scale <= 0 ? 1 : clampF(scale, MIN_SCALE, MAX_SCALE);
+            wear = Math.max(0, Math.min(MAX_WEAR, wear));
+        }
+
+        public Panel(float width, float height, float dx, float dy, float scale) {
+            this(width, height, dx, dy, scale, 0);
         }
 
         public boolean isDefault() {
-            return width == 0 && height == 0 && dx == 0 && dy == 0 && scale == 1;
+            return width == 0 && height == 0 && dx == 0 && dy == 0 && scale == 1 && wear == 0;
         }
     }
 
@@ -395,6 +402,9 @@ public record SignSpec(Style style, List<Row> rows, Panel panel) {
             p.addProperty("x", panel.dx());
             p.addProperty("y", panel.dy());
             p.addProperty("s", panel.scale());
+            if (panel.wear() != 0) {
+                p.addProperty("wear", panel.wear());
+            }
             json.add("panel", p);
         }
         return json;
@@ -430,7 +440,8 @@ public record SignSpec(Style style, List<Row> rows, Panel panel) {
         Panel panel = Panel.DEFAULT;
         if (json.has("panel") && json.get("panel").isJsonObject()) {
             JsonObject p = json.getAsJsonObject("panel");
-            panel = new Panel(num(p, "w", 0), num(p, "h", 0), num(p, "x", 0), num(p, "y", 0), num(p, "s", 1));
+            panel = new Panel(num(p, "w", 0), num(p, "h", 0), num(p, "x", 0), num(p, "y", 0), num(p, "s", 1),
+                    (int) num(p, "wear", 0));
         }
         return new SignSpec(Style.byName(str(json, "style")), rows, panel);
     }
@@ -466,6 +477,7 @@ public record SignSpec(Style style, List<Row> rows, Panel panel) {
         public float panelDx;
         public float panelDy;
         public float panelScale = 1;
+        public int panelWear;
 
         public static final class RowDraft {
             public Align align = Align.LEFT;
@@ -493,6 +505,7 @@ public record SignSpec(Style style, List<Row> rows, Panel panel) {
             panelDx = spec.panel().dx();
             panelDy = spec.panel().dy();
             panelScale = spec.panel().scale();
+            panelWear = spec.panel().wear();
         }
 
         public SignSpec build() {
@@ -500,7 +513,7 @@ public record SignSpec(Style style, List<Row> rows, Panel panel) {
             for (RowDraft row : rows) {
                 built.add(new Row(row.align, row.tiles));
             }
-            return new SignSpec(style, built, new Panel(panelWidth, panelHeight, panelDx, panelDy, panelScale));
+            return new SignSpec(style, built, new Panel(panelWidth, panelHeight, panelDx, panelDy, panelScale, panelWear));
         }
     }
 }

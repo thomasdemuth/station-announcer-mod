@@ -105,6 +105,10 @@ public final class LayoutScanner {
     public static final int ACTION_STATUS = 0;
     public static final int ACTION_SCAN = 1;
     public static final int ACTION_SCAN_ALL = 2;
+    /** Remove one suggested street opening (three more ints follow: x, y, z), then rescan. */
+    public static final int ACTION_DISMISS_OPENING = 3;
+    /** Bring back every opening removed at this station, then rescan. */
+    public static final int ACTION_RESTORE_OPENINGS = 4;
 
     public static final byte STATE_NONE = 0;
     public static final byte STATE_QUEUED = 1;
@@ -117,7 +121,8 @@ public final class LayoutScanner {
     public static final int SCAN_PERMISSION = 2;
 
     private static final int[] MARGINS = {24, 12, 6};
-    private static final long MAX_CELLS = 8_000_000L;
+    /** Blocks one scan may read (2 bytes each in LayoutInput — 80 MB at the cap, on the worker thread). */
+    private static final long MAX_CELLS = 40_000_000L;
     private static final int MAX_SPAN = 768;
     private static final int Y_PAD_BELOW = 6;
     private static final int Y_PAD_ABOVE = 8;
@@ -131,6 +136,12 @@ public final class LayoutScanner {
     /** Station-page geometry (layouts/geometry/<id>.json), read from disk on first ask. */
     private static final Map<Long, String> GEOMETRY = new ConcurrentHashMap<>();
     private static final Map<Long, String> FAILURES = new ConcurrentHashMap<>();
+    /**
+     * Station id → street openings players removed ({x, y, z}). Lives next to the layouts
+     * folder (not in it: every {@code *.json} in there is read as a layout), survives rescans.
+     */
+    private static final Map<Long, List<int[]>> DISMISSED = new ConcurrentHashMap<>();
+    private static Path dismissedFile;
     private static volatile Map<Long, Map<Long, Boolean>> stepFree = Map.of();
     private static volatile List<KnownStation> known = List.of();
 
@@ -160,7 +171,14 @@ public final class LayoutScanner {
         ServerPlayNetworking.registerGlobalReceiver(REQUEST_C2S, (srv, player, handler, buf, sender) -> {
             int action = buf.readByte();
             long stationId = buf.readLong();
-            srv.execute(() -> handleRequest(player, action, stationId));
+            int[] pos = action == ACTION_DISMISS_OPENING ? new int[]{buf.readInt(), buf.readInt(), buf.readInt()} : null;
+            srv.execute(() -> {
+                if (pos != null) {
+                    dismissOpening(player, stationId, pos);
+                } else {
+                    handleRequest(player, action, stationId);
+                }
+            });
         });
     }
 
@@ -170,6 +188,8 @@ public final class LayoutScanner {
         RESULTS.clear();
         GEOMETRY.clear();
         FAILURES.clear();
+        dismissedFile = dir.getParent().resolve("layout_removed_openings.json");
+        loadDismissed();
         Map<Long, Map<Long, Boolean>> flags = new HashMap<>();
         try {
             if (Files.isDirectory(dir)) {
@@ -366,8 +386,97 @@ public final class LayoutScanner {
                 }
                 requestAll(player.getUuid());
             }
+            case ACTION_RESTORE_OPENINGS -> {
+                if (!player.hasPermissionLevel(SCAN_PERMISSION)) {
+                    player.sendMessage(Text.translatable("msg.station_announcer.layout.no_permission").formatted(Formatting.RED), false);
+                    return;
+                }
+                if (DISMISSED.remove(stationId) != null) {
+                    saveDismissed();
+                }
+                request(List.of(stationId), player.getUuid(), false);
+            }
             default -> {
             }
+        }
+    }
+
+    /**
+     * Server thread: a player removed a suggested street opening. Remembered for the
+     * station (a rescan would only suggest it again) and the station is rescanned, so the
+     * editor, the in-world paths and Map+ all drop it.
+     */
+    private static void dismissOpening(ServerPlayerEntity player, long stationId, int[] pos) {
+        if (!player.hasPermissionLevel(SCAN_PERMISSION)) {
+            player.sendMessage(Text.translatable("msg.station_announcer.layout.no_permission").formatted(Formatting.RED), false);
+            return;
+        }
+        if (Math.abs(pos[0]) > 30_000_000 || Math.abs(pos[2]) > 30_000_000 || Math.abs(pos[1]) > 4096) {
+            return;
+        }
+        List<int[]> list = new ArrayList<>(DISMISSED.getOrDefault(stationId, List.of()));
+        if (list.size() >= 64) {
+            list.remove(0);
+        }
+        list.add(pos.clone());
+        DISMISSED.put(stationId, List.copyOf(list));
+        saveDismissed();
+        request(List.of(stationId), player.getUuid(), false);
+    }
+
+    /** How many suggested openings were removed at a station (the editor offers to restore them). */
+    public static int dismissedCount(long stationId) {
+        return DISMISSED.getOrDefault(stationId, List.of()).size();
+    }
+
+    private static void loadDismissed() {
+        DISMISSED.clear();
+        Path file = dismissedFile;
+        if (file == null || !Files.isRegularFile(file)) {
+            return;
+        }
+        try {
+            JsonObject root = JsonParser.parseString(Files.readString(file)).getAsJsonObject();
+            for (Map.Entry<String, JsonElement> entry : root.entrySet()) {
+                List<int[]> list = new ArrayList<>();
+                for (JsonElement element : entry.getValue().getAsJsonArray()) {
+                    JsonArray pos = element.getAsJsonArray();
+                    list.add(new int[]{pos.get(0).getAsInt(), pos.get(1).getAsInt(), pos.get(2).getAsInt()});
+                }
+                if (!list.isEmpty()) {
+                    DISMISSED.put(Long.parseLong(entry.getKey()), List.copyOf(list));
+                }
+            }
+        } catch (Exception e) {
+            StationAnnouncer.LOGGER.warn("Could not read removed street openings from {}", file, e);
+        }
+    }
+
+    /** Server thread. */
+    private static void saveDismissed() {
+        Path file = dismissedFile;
+        if (file == null) {
+            return;
+        }
+        JsonObject root = new JsonObject();
+        for (Map.Entry<Long, List<int[]>> entry : DISMISSED.entrySet()) {
+            JsonArray list = new JsonArray();
+            for (int[] pos : entry.getValue()) {
+                JsonArray p = new JsonArray();
+                p.add(pos[0]);
+                p.add(pos[1]);
+                p.add(pos[2]);
+                list.add(p);
+            }
+            root.add(Long.toString(entry.getKey()), list);
+        }
+        try {
+            Files.createDirectories(file.getParent());
+            Path temp = file.resolveSibling(file.getFileName() + ".tmp");
+            Files.writeString(temp, root.toString());
+            Files.move(temp, file, StandardCopyOption.REPLACE_EXISTING, StandardCopyOption.ATOMIC_MOVE);
+        } catch (Exception e) {
+            StationAnnouncer.LOGGER.warn("Could not save removed street openings to {}", file, e);
         }
     }
 
@@ -606,6 +715,8 @@ public final class LayoutScanner {
             data = new byte[0]; // absurdly large layout: the editor shows the summary only
         }
         buf.writeByteArray(data);
+        // trailing: removed suggestions at this station (older clients stop reading before it)
+        buf.writeVarInt(stationId == 0 ? 0 : dismissedCount(stationId));
         ServerPlayNetworking.send(player, DATA_S2C, buf);
     }
 
@@ -695,6 +806,7 @@ public final class LayoutScanner {
         LayoutInput input = null;
         Snapshot snapshot = null;
         String size = "";
+        int[] tall = {0, 0, 0}; // the last attempt's {height, minY, maxY}
         for (int margin : MARGINS) {
             snapshot = null;
             for (Simulator simulator : simulators) {
@@ -724,20 +836,31 @@ public final class LayoutScanner {
             if (r[3] - r[0] + 1 > MAX_SPAN || r[5] - r[2] + 1 > MAX_SPAN) {
                 continue;
             }
-            input = readBlocks(srv, snapshot, columns);
+            input = readBlocks(srv, snapshot, columns, tall);
             if (input != null) {
                 input.margin = margin;
                 break;
             }
         }
         if (input == null) {
-            throw new ScanException(snapshot == null ? "station not found"
-                    : snapshot.name() + ": the station area is too big to scan (" + size
-                    + " blocks with its platforms; the limit is " + MAX_SPAN + " a side or 8 million blocks in all — shrink its MTR area)");
+            if (snapshot == null) {
+                throw new ScanException("station not found");
+            }
+            int[] r = snapshot.region();
+            if (r[3] - r[0] + 1 > MAX_SPAN || r[5] - r[2] + 1 > MAX_SPAN) {
+                throw new ScanException(snapshot.name() + ": the station area is too wide to scan (" + size
+                        + " blocks with its platforms; the limit is " + MAX_SPAN + " a side — shrink its MTR area)");
+            }
+            long blocks = (long) (r[3] - r[0] + 1) * (r[5] - r[2] + 1) * tall[0];
+            throw new ScanException(String.format(java.util.Locale.ROOT,
+                    "%s: too much to scan — %s blocks and %d tall (y %d to %d) is %.1f million blocks; the limit is %d million. "
+                            + "Its platforms, lifts and Exit Markers span that height; shrink its MTR area or split it into stations",
+                    snapshot.name(), size, tall[0], tall[1], tall[2], blocks / 1e6, MAX_CELLS / 1_000_000));
         }
         input.stationId = stationId;
         input.stationName = snapshot.name();
         input.exits.addAll(exits);
+        input.dismissedOpenings.addAll(DISMISSED.getOrDefault(stationId, List.of()));
         if (cancelled) {
             throw new ScanException("cancelled");
         }
@@ -867,7 +990,7 @@ public final class LayoutScanner {
      * Null when the region is over the cell budget at this margin.
      */
     @Nullable
-    private static LayoutInput readBlocks(MinecraftServer srv, Snapshot snapshot, long columns) throws Exception {
+    private static LayoutInput readBlocks(MinecraftServer srv, Snapshot snapshot, long columns, int[] tall) throws Exception {
         ServerWorld world = worldFor(srv, snapshot.dimension());
         if (world == null) {
             throw new ScanException("the station's world is not loaded");
@@ -971,6 +1094,9 @@ public final class LayoutScanner {
         int minY = Math.max(world.getBottomY(), (int) Math.floor(lo) - Y_PAD_BELOW);
         int maxY = Math.min(world.getTopY() - 1, (int) Math.ceil(hi) + Y_PAD_ABOVE);
         int sizeY = maxY - minY + 1;
+        tall[0] = sizeY;
+        tall[1] = minY;
+        tall[2] = maxY;
         if (columns * sizeY > MAX_CELLS) {
             return null;
         }
@@ -980,11 +1106,8 @@ public final class LayoutScanner {
         input.minX = minX;
         input.minY = minY;
         input.minZ = minZ;
-        input.sizeX = sizeX;
-        input.sizeY = sizeY;
-        input.sizeZ = sizeZ;
+        input.allocate(sizeX, sizeY, sizeZ);
         input.surface = surface;
-        input.cells = new CellInfo[sizeX * sizeY * sizeZ];
         input.areaMinX = snapshot.areaMinX();
         input.areaMaxX = snapshot.areaMaxX();
         input.areaMinZ = snapshot.areaMinZ();
@@ -1002,7 +1125,7 @@ public final class LayoutScanner {
                     int wx = minX + x;
                     ChunkView view = chunks[((wz >> 4) - cz0) * chunksX + ((wx >> 4) - cx0)];
                     BlockState state = view.state(wx & 15, wy, wz & 15);
-                    input.cells[((y * sizeZ) + z) * sizeX + x] = cache.computeIfAbsent(state, LayoutScanner::classify);
+                    input.set(x, y, z, cache.computeIfAbsent(state, LayoutScanner::classify));
                 }
             }
             if (cancelled) {

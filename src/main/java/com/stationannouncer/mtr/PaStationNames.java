@@ -80,7 +80,23 @@ public final class PaStationNames {
         }
     }
 
+    /** A station's rectangle (all heights): name and x/z bounds, inclusive. */
+    public record StationArea(String name, int minX, int maxX, int minZ, int maxZ) {
+    }
+
+    /** The smallest MTR station area containing {@code pos} (snapshot ≤ 10 s old), or null. */
+    @org.jetbrains.annotations.Nullable
+    public static StationArea area(World world, BlockPos pos) {
+        Area best = best(world, pos);
+        return best == null ? null : new StationArea(best.name(), best.minX(), best.maxX(), best.minZ(), best.maxZ());
+    }
+
     private static String lookup(World world, BlockPos pos) {
+        Area best = best(world, pos);
+        return best == null ? null : best.name();
+    }
+
+    private static Area best(World world, BlockPos pos) {
         String dimension;
         try {
             dimension = org.mtr.mod.Init.getWorldId(new org.mtr.mapping.holder.World(world));
@@ -97,6 +113,6 @@ public final class PaStationNames {
                 best = area;
             }
         }
-        return best == null ? null : best.name();
+        return best;
     }
 }

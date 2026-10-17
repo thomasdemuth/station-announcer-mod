@@ -1,0 +1,38 @@
+{
+  "variants": {
+    "broom=false": [
+      {
+        "model": "station_announcer:block/litter/swept_pile"
+      },
+      {
+        "model": "station_announcer:block/litter/swept_pile",
+        "y": 90
+      },
+      {
+        "model": "station_announcer:block/litter/swept_pile",
+        "y": 180
+      },
+      {
+        "model": "station_announcer:block/litter/swept_pile",
+        "y": 270
+      }
+    ],
+    "broom=true": [
+      {
+        "model": "station_announcer:block/litter/swept_pile_broom"
+      },
+      {
+        "model": "station_announcer:block/litter/swept_pile_broom",
+        "y": 90
+      },
+      {
+        "model": "station_announcer:block/litter/swept_pile_broom",
+        "y": 180
+      },
+      {
+        "model": "station_announcer:block/litter/swept_pile_broom",
+        "y": 270
+      }
+    ]
+  }
+}

@@ -51,6 +51,23 @@ public final class MaterialBlocks {
     };
     public static Consumer<BlockPos> BLOCK_PICKER_OPENER = pos -> {
     };
+    /** Client: re-mesh around a broken code-modelled block a moment later (see {@link #clientRemesh}). */
+    public static Consumer<BlockPos> CLIENT_REMESH = pos -> {
+    };
+
+    /**
+     * Called from the code-modelled blocks' {@code onBreak} (ramps, stairs, ramp
+     * rails, curved edges). Breaking one by hand could leave its picture behind —
+     * walk-through, gone after F3+A — on Thomas's client (Sodium + Iris + a large
+     * mod set; not reproducible on the rig), i.e. the section rebuild for the
+     * break got lost. The client re-meshes the spot again shortly after, a
+     * targeted F3+A. No-op on the server.
+     */
+    public static void clientRemesh(net.minecraft.world.World world, BlockPos pos) {
+        if (world.isClient) {
+            CLIENT_REMESH.accept(pos.toImmutable());
+        }
+    }
 
     private MaterialBlocks() {
     }

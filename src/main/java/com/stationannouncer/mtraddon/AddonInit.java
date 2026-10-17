@@ -59,15 +59,22 @@ public final class AddonInit {
     /** 0 = waiting out the delay, 2 = the automatic basemap pass has been kicked (or is off). */
     private static int autoScanStage;
     private static int autoScanCountdown;
+    /** Ticks until the next periodic basemap refresh (after the launch pass). */
+    private static int basemapRefreshCountdown;
 
     public static void register() {
         AddonNetworking.registerServerReceivers();
+        PlatformSchedule.register(); // the platform screen's occupancy data
         DisruptionNetworking.registerServerReceivers();
         // Interline tooling: depot delays, groups, section analysis, suggestions, Apply.
         com.stationannouncer.mtraddon.interline.InterlineService.register();
         // Per-line bullet shape (circle / diamond / square): store, packet, join sync.
         LineStyles.register();
+        LineFolders.register(); // line folders (dashboard tree)
+        // Custom track geometry + tilt: store, packets, sync, depot regeneration, orphan pruning.
+        com.stationannouncer.mtr.track.TrackService.register();
         AnalyticsCommand.register();
+        com.stationannouncer.mtraddon.crew.CrewService.register(); // train crews: roles, buzzer, horn, vigilance
         // Journey directions: /nav and /navpair. Registered AFTER AnalyticsCommand on
         // purpose — see NavCommand's javadoc for why pairing gets its own ungated root
         // instead of merging into the op-gated /dispatch tree.
@@ -86,6 +93,7 @@ public final class AddonInit {
             // …and arm the once-per-launch automatic scan (see the ticker below).
             autoScanStage = 0;
             autoScanCountdown = AUTO_SCAN_DELAY_TICKS;
+            basemapRefreshCountdown = Math.max(1, AddonServerConfig.get().dispatch.basemapRefreshMinutes) * 1200;
             // Timetable analytics: opens <save>/station-announcer-addon/analytics/, prunes
             // expired day files, replays the recent tail into the metric window and starts
             // the writer thread. A no-op when analytics.enabled is false.
@@ -153,6 +161,13 @@ public final class AddonInit {
             // the scanner's incremental pass (it runs on its own thread from there).
             if (autoScanStage < 2) {
                 autoScanTick();
+            } else if (--basemapRefreshCountdown <= 0) {
+                // the periodic pass: only tiles whose chunks were saved since they were drawn
+                int minutes = AddonServerConfig.get().dispatch.basemapRefreshMinutes;
+                basemapRefreshCountdown = Math.max(1, minutes) * 1200;
+                if (minutes > 0 && AddonServerConfig.get().dispatch.autoScan && BasemapScanner.isIdle()) {
+                    BasemapScanner.autoScan(true);
+                }
             }
             // The dispatch map's player layer, four times a second. Ahead of the
             // countdown early-return below for the same reason: it is one list walk,

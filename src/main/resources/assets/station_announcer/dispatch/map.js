@@ -24,7 +24,13 @@
  * ========================================================================== */
 
 const SCHEMA_VERSION = 1;
-const API = "api";
+/**
+ * Map+ saved as ONE file (the server's api/offline, DispatchOfflineMap): the snapshot it
+ * carries — network, map data, basemap tiles, the server it came from — else null.
+ */
+const OFFLINE = (typeof window !== "undefined" && window.MAPPLUS_OFFLINE) || null;
+/** The server's API: relative on the served page, absolute in an offline copy (section 4b). */
+let API = OFFLINE && OFFLINE.server ? OFFLINE.server + "api" : "api";
 const DEMO = new URLSearchParams(location.search).get("demo") === "1";
 /** ?player=<username> — the in-game button opens the map with this set (feature 3). */
 const PLAYER_PARAM = new URLSearchParams(location.search).get("player") || "";
@@ -251,6 +257,17 @@ const state = {
 	dim: 0,
 	updateMillis: 333,
 	status: "connecting",          // connecting | live | offline
+	/* --- live vs saved (section 4b) --- */
+	live: false,                   // the data on screen comes from a server that answers
+	offlineSnap: null,             // the saved map on screen while not live
+	connecting: false,
+	reconnectTimer: 0,
+	refreshing: false,
+	rawByDim: {},                  // dim index -> {network, mapdata, satmeta} as last fetched
+	snapSavedAt: 0,
+	worldId: "",
+	worldName: "",
+	bannerKind: "",
 	es: null,
 	lastEventAt: 0,
 	lastServerTime: 0,
@@ -433,12 +450,12 @@ const P_PIN = new Path2D("M0,0 C0,0 15,-10.5 15,-19.5 C15,-27.5 9,-34 0,-34 C-9,
 /** The step-free badge (Thomas's artwork), drawn on the map and used in the DOM. */
 const ACCESS_ICON = new Image();
 ACCESS_ICON.onload = () => invalidateStatic();
-ACCESS_ICON.src = "access_badge.svg";
+ACCESS_ICON.src = assetUrl("access_badge.svg");
 const ACCESS_IMG = '<svg class="badge-14"><use href="#i-badge"/></svg>';
 /** The outline badge: step-free at some platforms only (the filled tile means every platform). */
 const ACCESS_ICON_OUTLINE = new Image();
 ACCESS_ICON_OUTLINE.onload = () => invalidateStatic();
-ACCESS_ICON_OUTLINE.src = "access_badge_outline.svg";
+ACCESS_ICON_OUTLINE.src = assetUrl("access_badge_outline.svg");
 const ACCESS_IMG_OUTLINE = '<svg class="badge-14"><use href="#i-badge-outline"/></svg>';
 
 /** True when a station is step-free at some, but not all, of its platforms. */
@@ -488,23 +505,16 @@ async function boot() {
 	initUi();
 	initPlanner();
 	navBoot();               // paint the pairing controls; re-validate a stored token
+	initDataUi();
 	if (DEMO) { bootDemo(); return; }
-	try {
-		const ping = await (await fetch(`${API}/ping`)).json();
-		const p = ping.data || ping;
-		if (p.schemaVersion && p.schemaVersion !== SCHEMA_VERSION) {
-			showBanner(`Schema mismatch: server v${p.schemaVersion}, map v${SCHEMA_VERSION} — update the mod or hard-refresh`);
-		}
-		state.dims = p.dimensions || [];
-		state.updateMillis = p.updateMillis || 333;
-		const saved = clamp(state.prefs.dim | 0, 0, Math.max(0, state.dims.length - 1));
-		await loadDimension(saved);
-	} catch (e) {
+	// live when the server answers; otherwise the saved map (an offline copy's own, or the
+	// last one this browser kept), and a quiet retry until the server is back
+	const live = await connectLive();
+	if (!live && !(await bootFromSnapshot())) {
 		setStatus("offline");
-		showBanner("Dispatch backend unreachable — is the server (and its MTR webserver) running?");
-		setTimeout(boot, 5000);
-		return;
+		showBanner("Dispatch backend unreachable — is the server (and its MTR webserver) running? Retrying…");
 	}
+	if (!live) scheduleReconnect();
 	applyDeepLink(DEEP_FROM, DEEP_TO);
 	setInterval(refetchNetwork, 60000);
 	requestAnimationFrame(frame);
@@ -584,48 +594,75 @@ async function loadDimension(n) {
 	if (state.es) { state.es.close(); state.es = null; }
 
 	// network + mapdata + basemap index in parallel — mapdata and the basemap are
-	// optional, the map degrades to raw rails / plain paper rather than failing.
+	// optional, the map degrades to raw rails / plain paper rather than failing. Not live,
+	// the same three payloads come out of the saved map instead (section 4b).
 	state.satmeta = null;
 	state.satTiles = new Map();
 	state.satQueue = [];
 	state.satInflight = 0;
-	const [net, md, sat] = await Promise.all([
-		fetchJson(`${API}/network?dimension=${n}`),
-		fetchJson(`${API}/mapdata?dimension=${n}`).catch(() => null),
-		fetchJson(`${API}/satmeta?dimension=${n}`).catch(() => null),
-	]);
+	let net, md, sat;
+	if (state.live) {
+		[net, md, sat] = await Promise.all([
+			fetchJson(`${API}/network?dimension=${n}`),
+			fetchJson(`${API}/mapdata?dimension=${n}`).catch(() => null),
+			fetchJson(`${API}/satmeta?dimension=${n}`).catch(() => null),
+		]);
+		rememberPayloads(n, net, md, sat);
+	} else {
+		const saved = state.offlineSnap && Array.isArray(state.offlineSnap.data) ? state.offlineSnap.data[n] : null;
+		if (!saved || !saved.network) throw new Error("this world is not in the saved map");
+		net = saved.network; md = saved.mapdata || null; sat = saved.satmeta || null;
+	}
 	applyNetwork(net);
 	if (md) applyMapdata(md);
 	if (sat) applySatmeta(sat);
 	prepareGeometry();
 	fitView();
 	syncDimUi();
-	openStream();
-	hideBanner();
+	if (state.live) {
+		openStream();
+		hideBanner();
+		saveSnapshot(true);
+	}
 }
 
 async function fetchJson(url) {
-	const body = await (await fetch(url)).json();
+	// no-store: the browser must never answer a map request from its own cache
+	const body = await (await fetch(url, { cache: "no-store" })).json();
 	return body.data || body;   // envelope unwrap, exactly like app.js
 }
 
+/**
+ * Re-read the current dimension from the server, keeping the view, the selection and the
+ * plan. {@code fresh} = Refresh: the server rebuilds its 30 s caches now. {@code forceSat}
+ * applies the basemap index even when unchanged (coming back from a saved map).
+ */
+async function reloadData(fresh, forceSat) {
+	const d = state.dim, q = fresh ? "&fresh=1" : "";
+	// the basemap index rides along: a scan running while the page is open publishes
+	// new tiles every batch, and this is what makes them appear without a reload
+	const [net, md, sat] = await Promise.all([
+		fetchJson(`${API}/network?dimension=${d}${q}`),
+		fetchJson(`${API}/mapdata?dimension=${d}${q}`).catch(() => null),
+		fetchJson(`${API}/satmeta?dimension=${d}`).catch(() => null),
+	]);
+	if (d !== state.dim) return;              // the world was switched meanwhile
+	// a mapdata hiccup keeps the last one rather than collapsing every station to a dot
+	const mapdata = md || state.mapdata;
+	applyNetwork(net);
+	if (mapdata) applyMapdata(mapdata);
+	// only when the index actually changed: an identical index every 60 s must never be
+	// "applied" (applySatmeta keeps only the tiles whose draw time did not move)
+	if (sat && (forceSat || satmetaChanged(state.satmeta, sat))) applySatmeta(sat);
+	prepareGeometry();
+	rememberPayloads(d, net, mapdata, sat);
+	saveSnapshot(fresh);
+}
+
 async function refetchNetwork() {
-	if (DEMO || document.hidden) return;
+	if (DEMO || document.hidden || !state.live) return;   // not live: the reconnect timer works
 	try {
-		// the basemap index rides along: a scan running while the page is open publishes
-		// new tiles every batch, and this is what makes them appear without a reload
-		const [net, md, sat] = await Promise.all([
-			fetchJson(`${API}/network?dimension=${state.dim}`),
-			fetchJson(`${API}/mapdata?dimension=${state.dim}`).catch(() => null),
-			fetchJson(`${API}/satmeta?dimension=${state.dim}`).catch(() => null),
-		]);
-		applyNetwork(net);
-		if (md) applyMapdata(md);
-		// only when the index actually changed: applySatmeta throws away every cached
-		// bitmap and repaints the static layer, so an identical index every 60 s must
-		// never be "applied"
-		if (satmetaChanged(state.satmeta, sat)) applySatmeta(sat);
-		prepareGeometry();
+		await reloadData(false, false);
 	} catch (e) { /* transient — the stream status covers visibility */ }
 }
 
@@ -789,6 +826,322 @@ function applyMapdata(md) {
 	state.plan.graph = null;
 }
 
+/* ============================================================================
+ * 4b. LIVE vs SAVED — reconnecting, the offline snapshot, Refresh, the offline copy
+ * ----------------------------------------------------------------------------
+ * The page is LIVE while its server answers. When it does not (game closed, server
+ * down, an offline copy opened from disk) it shows the newest SAVED map it has — the
+ * snapshot an offline copy carries, or the one this browser kept in IndexedDB the last
+ * time it was live — and keeps looking for the server; the moment it answers (and is
+ * the same world: ping's worldId) the map goes live without losing the view.
+ * ========================================================================== */
+
+/** How long a ping may take before the server counts as unreachable. */
+const PING_TIMEOUT_MS = 3500;
+/** While showing a saved map, how often to look for the server again. */
+const RECONNECT_MS = 10000;
+/** While live, the kept snapshot is rewritten at most this often (and on every Refresh). */
+const SNAPSHOT_EVERY_MS = 5 * 60000;
+const SNAP_DB = "sa_mapplus", SNAP_STORE = "snapshots";
+
+/** A page asset: inlined in an offline copy, a sibling file on the served page. */
+function assetUrl(name) {
+	return (OFFLINE && OFFLINE.assets && OFFLINE.assets[name]) || name;
+}
+
+/** The server's /dispatch/ address this page belongs to — also the snapshot's key. */
+function serverBase() {
+	if (OFFLINE && OFFLINE.server) return OFFLINE.server;
+	return location.origin + location.pathname.replace(/[^/]*$/, "");
+}
+
+function hostLabel() {
+	try { return new URL(serverBase()).host || "the server"; } catch (e) { return "the server"; }
+}
+
+async function fetchTimeout(url, ms) {
+	const ctl = typeof AbortController === "function" ? new AbortController() : null;
+	const timer = ctl ? setTimeout(() => ctl.abort(), ms) : 0;
+	try {
+		return await fetch(url, ctl ? { cache: "no-store", signal: ctl.signal } : { cache: "no-store" });
+	} finally {
+		if (timer) clearTimeout(timer);
+	}
+}
+
+/**
+ * API bases to try, the page's own first. An offline copy of a SINGLEPLAYER world also
+ * tries the next ports: MTR starts its webserver on the first free port from 8888, so the
+ * same world can come back on another one. The worldId check keeps it from going live
+ * against a different world.
+ */
+function apiCandidates() {
+	const own = OFFLINE && OFFLINE.server ? OFFLINE.server + "api" : "api";
+	const list = [own];
+	if (OFFLINE && OFFLINE.server) {
+		try {
+			const u = new URL(OFFLINE.server);
+			if (/^(localhost|127\.0\.0\.1|\[::1\])$/i.test(u.hostname)) {
+				for (let port = 8888; port <= 8897; port++) {
+					if (String(port) !== u.port) list.push(`${u.protocol}//${u.hostname}:${port}${u.pathname}api`);
+				}
+			}
+		} catch (e) { /* not a URL: the saved address only */ }
+	}
+	return list;
+}
+
+/** The first server that answers ping and is this page's world, as {api, ping}; else null. */
+async function findServer() {
+	const want = (OFFLINE && OFFLINE.worldId) || "";
+	for (const api of apiCandidates()) {
+		try {
+			const res = await fetchTimeout(`${api}/ping`, PING_TIMEOUT_MS);
+			if (!res.ok) continue;
+			const body = await res.json();
+			const p = body.data || body;
+			if (want && p.worldId && p.worldId !== want) continue;
+			return { api, ping: p };
+		} catch (e) { /* unreachable — try the next */ }
+	}
+	return null;
+}
+
+/** Go live: find the server and load from it. True on success. */
+async function connectLive() {
+	if (state.connecting || DEMO) return false;
+	state.connecting = true;
+	const fromSaved = !state.live && !!state.offlineSnap && !!state.network;
+	try {
+		const found = await findServer();
+		if (!found) return false;
+		const p = found.ping;
+		if (p.schemaVersion && p.schemaVersion !== SCHEMA_VERSION) {
+			showBanner(`Schema mismatch: server v${p.schemaVersion}, map v${SCHEMA_VERSION} — update the mod or hard-refresh`);
+		}
+		API = found.api;
+		const dims = p.dimensions || [];
+		const sameWorlds = dims.length === state.dims.length && dims.every((d, i) => d === state.dims[i]);
+		state.dims = dims;
+		state.updateMillis = p.updateMillis || 333;
+		state.worldId = p.worldId || "";
+		state.worldName = p.worldName || "";
+		state.live = true;
+		if (fromSaved && sameWorlds) {
+			// coming back from the saved map: swap the data under the rider's view
+			await reloadData(false, true);
+			openStream();
+			hideBanner();
+			navShowToast("Connected — the map is live again", "ok");
+		} else {
+			await loadDimension(clamp(state.prefs.dim | 0, 0, Math.max(0, state.dims.length - 1)));
+		}
+		state.offlineSnap = null;
+		renderDataUi();
+		return true;
+	} catch (e) {
+		state.live = false;
+		return false;
+	} finally {
+		state.connecting = false;
+	}
+}
+
+function scheduleReconnect() {
+	if (state.reconnectTimer) return;
+	state.reconnectTimer = setInterval(async () => {
+		if (state.live) { clearInterval(state.reconnectTimer); state.reconnectTimer = 0; return; }
+		if (document.hidden) return;
+		if (await connectLive()) { clearInterval(state.reconnectTimer); state.reconnectTimer = 0; }
+	}, RECONNECT_MS);
+}
+
+/** The snapshot an offline copy was saved with, in the kept-snapshot shape. */
+function embeddedSnapshot() {
+	if (!OFFLINE || !Array.isArray(OFFLINE.data)) return null;
+	return {
+		key: serverBase(), savedAt: OFFLINE.savedAt || 0,
+		worldId: OFFLINE.worldId || "", worldName: OFFLINE.worldName || "",
+		dims: OFFLINE.dimensions || [], updateMillis: OFFLINE.updateMillis || 333,
+		data: OFFLINE.data.map((d) => d ? { network: d.network, mapdata: d.mapdata, satmeta: d.satmeta } : null),
+	};
+}
+
+/** Show the newest saved map there is. False when there is none. */
+async function bootFromSnapshot() {
+	const want = (OFFLINE && OFFLINE.worldId) || "";
+	const options = [];
+	const embedded = embeddedSnapshot();
+	if (embedded) options.push(embedded);
+	const kept = await snapLoad(serverBase());
+	if (kept && Array.isArray(kept.data) && (!want || !kept.worldId || kept.worldId === want)) options.push(kept);
+	if (!options.length) return false;
+	options.sort((a, b) => (b.savedAt || 0) - (a.savedAt || 0));
+	const snap = options[0];
+	state.offlineSnap = snap;
+	state.live = false;
+	state.dims = snap.dims || [];
+	state.updateMillis = snap.updateMillis || 333;
+	state.worldName = snap.worldName || "";
+	try {
+		await loadDimension(clamp(state.prefs.dim | 0, 0, Math.max(0, state.dims.length - 1)));
+	} catch (e) {
+		try { await loadDimension(0); } catch (e2) { state.offlineSnap = null; return false; }
+	}
+	setStatus("offline");
+	showBanner(`Offline — showing the map as it was ${fmtSavedAt(snap.savedAt)}. It goes live by itself when ${hostLabel()} answers.`, "info");
+	renderDataUi();
+	return true;
+}
+
+function fmtSavedAt(ms) {
+	if (!ms) return "when it was saved";
+	const d = new Date(ms);
+	const today = new Date();
+	const sameDay = d.toDateString() === today.toDateString();
+	return (sameDay ? "today" : "on " + d.toLocaleDateString()) + " at " + d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+}
+
+function rememberPayloads(dim, network, mapdata, satmeta) {
+	const prev = state.rawByDim[dim] || {};
+	state.rawByDim[dim] = {
+		network: network || prev.network || null,
+		mapdata: mapdata || prev.mapdata || null,
+		satmeta: satmeta || prev.satmeta || null,
+	};
+}
+
+/** Keep what is on screen as this server's saved map (IndexedDB; any failure is silent). */
+async function saveSnapshot(force) {
+	if (DEMO || !state.live) return;
+	if (!force && now() - state.snapSavedAt < SNAPSHOT_EVERY_MS) return;
+	state.snapSavedAt = now();
+	const kept = (await snapLoad(serverBase())) || null;
+	const keptMatches = kept && Array.isArray(kept.data) && Array.isArray(kept.dims)
+		&& kept.dims.length === state.dims.length && kept.dims.every((d, i) => d === state.dims[i]);
+	const data = state.dims.map((d, i) => state.rawByDim[i] || (keptMatches ? kept.data[i] : null) || null);
+	await snapPut({
+		key: serverBase(), savedAt: now(), worldId: state.worldId, worldName: state.worldName,
+		dims: state.dims.slice(), updateMillis: state.updateMillis, data,
+	});
+}
+
+function snapDb() {
+	if (state.snapDb) return state.snapDb;
+	state.snapDb = new Promise((resolve) => {
+		try {
+			if (typeof indexedDB === "undefined" || !indexedDB) { resolve(null); return; }
+			const req = indexedDB.open(SNAP_DB, 1);
+			req.onupgradeneeded = () => req.result.createObjectStore(SNAP_STORE, { keyPath: "key" });
+			req.onsuccess = () => resolve(req.result);
+			req.onerror = () => resolve(null);
+			req.onblocked = () => resolve(null);
+		} catch (e) { resolve(null); }
+	});
+	return state.snapDb;
+}
+
+async function snapLoad(key) {
+	const db = await snapDb();
+	if (!db) return null;
+	return new Promise((resolve) => {
+		try {
+			const req = db.transaction(SNAP_STORE, "readonly").objectStore(SNAP_STORE).get(key);
+			req.onsuccess = () => resolve(req.result || null);
+			req.onerror = () => resolve(null);
+		} catch (e) { resolve(null); }
+	});
+}
+
+async function snapPut(record) {
+	const db = await snapDb();
+	if (!db) return false;
+	return new Promise((resolve) => {
+		try {
+			const tx = db.transaction(SNAP_STORE, "readwrite");
+			tx.objectStore(SNAP_STORE).put(record);
+			tx.oncomplete = () => resolve(true);
+			tx.onerror = () => resolve(false);
+			tx.onabort = () => resolve(false);
+		} catch (e) { resolve(false); }
+	});
+}
+
+/** The embedded basemap tiles of an offline copy for the current world: {"tx,tz": {m, c}}. */
+function offlineTiles() {
+	const d = OFFLINE && Array.isArray(OFFLINE.data) ? OFFLINE.data[state.dim] : null;
+	return (d && d.tiles) || {};
+}
+
+/**
+ * Refresh: rebuild the server's map data now (instead of up to a minute and a half of
+ * caches), ask it to redraw the terrain tiles whose chunks were saved since they were
+ * drawn, and re-plan. Not live: try to reconnect right away.
+ */
+async function refreshNow() {
+	if (DEMO || state.refreshing) return;
+	state.refreshing = true;
+	setRefreshBusy(true);
+	try {
+		if (!state.live) {
+			if (!(await connectLive())) navShowToast(`${hostLabel()} is not answering — still showing the saved map`, "err");
+			return;
+		}
+		await reloadData(true, false);
+		let basemap = "";
+		try {
+			const res = await fetchTimeout(`${API}/basemaprefresh?dimension=${state.dim}`, 5000);
+			const body = await res.json();
+			basemap = (body && body.basemap) || "";
+		} catch (e) { /* an older server: data refresh only */ }
+		if (state.plan.from && state.plan.to) replan(true);
+		navShowToast(basemap === "started" ? "Map refreshed — redrawing changed terrain" : "Map refreshed", "ok");
+		// the redrawn tiles land over the next seconds; pick them up without a reload
+		if (basemap === "started" || basemap === "busy") {
+			setTimeout(refetchNetwork, 12000);
+			setTimeout(refetchNetwork, 40000);
+		}
+	} catch (e) {
+		navShowToast("Refresh failed — the server did not answer", "err");
+	} finally {
+		state.refreshing = false;
+		setRefreshBusy(false);
+		renderDataUi();
+	}
+}
+
+function setRefreshBusy(busy) {
+	const btn = $("refreshBtn");
+	if (btn && btn.classList) btn.classList.toggle("busy", !!busy);
+}
+
+function initDataUi() {
+	const top = $("refreshBtn");
+	if (top) top.onclick = () => refreshNow();
+	const inCard = $("dataRefresh");
+	if (inCard) inCard.onclick = () => refreshNow();
+	renderDataUi();
+}
+
+/** The settings card's Data group: where the map comes from, and the offline copy links. */
+function renderDataUi() {
+	const note = $("dataNote");
+	if (note) {
+		note.textContent = DEMO ? "Demo data — nothing to refresh."
+			: state.live ? `Live from ${hostLabel()}. Refresh updates now; changed terrain shows once the world has saved.`
+			: state.offlineSnap ? `Showing the map saved ${fmtSavedAt(state.offlineSnap.savedAt)}. It reconnects to ${hostLabel()} by itself.`
+			: `Not connected to ${hostLabel()} — retrying.`;
+	}
+	for (const [id, satellite] of [["saveOffline", false], ["saveOfflineSat", true]]) {
+		const a = $(id);
+		if (!a || !a.classList) continue;
+		const can = state.live && !DEMO;
+		a.classList.toggle("off", !can);
+		if (can) a.setAttribute("href", `${API}/offline?download=1${satellite ? "&satellite=1" : ""}`);
+		else a.removeAttribute("href");
+	}
+}
+
 /* ----------------------------------------------------------------------------
  * 4a. SATELLITE BASEMAP (feature 5) — tile index, tile maths, tile loading
  * --------------------------------------------------------------------------
@@ -863,6 +1216,12 @@ function satmetaChanged(current, payload) {
 
 function applySatmeta(meta) {
 	if (!meta) return;
+	const prev = state.satmeta;
+	const oldTiles = state.satTiles;
+	const tiles = (meta.tiles || []).filter((t) => Array.isArray(t) && t.length >= 2);
+	// [tx, tz, drawnAt]: a tile is fetched again only when the server redrew it
+	const versions = new Map();
+	for (const t of tiles) versions.set(satKey(t[0], t[1]), t.length > 2 ? t[2] : 0);
 	state.satmeta = {
 		available: !!meta.available,
 		dimension: meta.dimension,
@@ -871,14 +1230,25 @@ function applySatmeta(meta) {
 		tileSamples: meta.tileSamples || 256,
 		originX: meta.originX || 0,
 		originZ: meta.originZ || 0,
-		tiles: (meta.tiles || []).filter((t) => Array.isArray(t) && t.length >= 2),
+		tiles,
+		versions,
 		bbox: meta.bbox || null,
 		mask: !!meta.mask,               // this server writes class-mask tiles
 		scanning: !!meta.scanning,
 	};
-	// A changed index invalidates every cached bitmap: a full refresh rewrites tiles
-	// under the same keys, and the only thing the client can tell apart is scannedAt.
+	// A changed index drops every bitmap whose tile was redrawn (its drawnAt moved) or is
+	// gone; the rest stay, so a refresh that redrew three tiles refetches three tiles. An
+	// older server (no drawnAt) or a moved grid drops everything, as before.
 	state.satTiles = new Map();
+	const sameGrid = prev && prev.versions && prev.dimension === state.satmeta.dimension
+		&& prev.scale === state.satmeta.scale && prev.tileSamples === state.satmeta.tileSamples
+		&& prev.originX === state.satmeta.originX && prev.originZ === state.satmeta.originZ;
+	if (sameGrid && oldTiles) {
+		for (const [key, v] of versions) {
+			const rec = oldTiles.get(key);
+			if (rec && v && prev.versions.get(key) === v && (rec.ok || rec.maskOk)) state.satTiles.set(key, rec);
+		}
+	}
 	state.satQueue = [];
 	state.satInflight = 0;
 	invalidateStatic();                  // either basemap may draw from these tiles
@@ -1007,7 +1377,20 @@ function pumpSatQueue() {
 			state.satInflight--;
 			pumpSatQueue();
 		};
-		img.src = `${API}/sattile?dimension=${state.dim}&tx=${tx}&tz=${tz}` + (isMask ? "&kind=mask" : "");
+		if (!state.live && OFFLINE) {
+			// the saved map: tiles come out of the offline copy itself
+			const saved = offlineTiles()[satKey(tx, tz)];
+			const uri = saved && (isMask ? saved.m : saved.c);
+			if (!uri) { img.onerror(); continue; }
+			img.src = uri;
+			continue;
+		}
+		// an offline copy that went live reads the server cross-origin; the mask is read
+		// back with getImageData, which needs a CORS-clean image (sattile sends ACAO *)
+		if (OFFLINE) img.crossOrigin = "anonymous";
+		const v = state.satmeta && state.satmeta.versions ? state.satmeta.versions.get(satKey(tx, tz)) : 0;
+		img.src = `${API}/sattile?dimension=${state.dim}&tx=${tx}&tz=${tz}` + (isMask ? "&kind=mask" : "")
+			+ (v ? `&v=${v}` : "");
 	}
 }
 
@@ -7572,8 +7955,10 @@ function tickLive() {
 	$("liveAge").textContent = "UPDATED " + age + "S AGO";
 	const row = document.querySelector(".liverow");
 	const off = state.status === "offline";
-	row.classList.toggle("offline", off);
-	$("liveWord").textContent = off ? "OFFLINE" : state.status === "live" ? "LIVE" : "CONNECTING";
+	const saved = !state.live && !!state.offlineSnap;
+	row.classList.toggle("offline", off && !saved);
+	row.classList.toggle("saved", saved);
+	$("liveWord").textContent = saved ? "SAVED MAP" : off ? "OFFLINE" : state.status === "live" ? "LIVE" : "CONNECTING";
 	// keep the "departs in N min" lines honest without a full re-render storm
 	if (state.plan.journeys.length) {
 		for (const el of document.querySelectorAll(".opt-live")) el.dataset.tick = age;
@@ -7613,9 +7998,23 @@ function followLiveOrigin() {
 function setStatus(s) {
 	if (state.status === s) return;
 	state.status = s;
+	// a live page that loses its server keeps everything on screen; say so, quietly
+	if (s === "offline" && state.live) {
+		showBanner(`Lost the connection to ${hostLabel()} — the map stays as it was and reconnects by itself.`, "info");
+	} else if (s === "live" && state.bannerKind === "info") {
+		hideBanner();
+	}
+	renderDataUi();
 }
-function showBanner(msg) { const b = $("banner"); b.textContent = msg; b.classList.remove("hidden"); }
-function hideBanner() { $("banner").classList.add("hidden"); }
+/** kind "info" = not an error (a saved map, a dropped connection); default = red. */
+function showBanner(msg, kind) {
+	const b = $("banner");
+	b.textContent = msg;
+	b.classList.remove("hidden");
+	b.classList.toggle("info", kind === "info");
+	state.bannerKind = kind === "info" ? "info" : "error";
+}
+function hideBanner() { $("banner").classList.add("hidden"); state.bannerKind = ""; }
 
 function savePrefs() {
 	try {
@@ -7929,7 +8328,10 @@ function initSettings() {
 			const n = parseInt(dim.value, 10);
 			if (!Number.isFinite(n) || n === state.dim) return;
 			if (DEMO) { syncDimUi(); return; }        // the demo city is one world
-			loadDimension(n);
+			loadDimension(n).catch(() => {
+				navShowToast("That world is not in the saved map", "err");
+				syncDimUi();
+			});
 		};
 	}
 	const slider = (id, min, max, step, apply) => {

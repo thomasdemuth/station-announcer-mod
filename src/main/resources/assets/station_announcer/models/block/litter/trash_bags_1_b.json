@@ -1,0 +1,422 @@
+{
+  "parent": "minecraft:block/block",
+  "textures": {
+    "trash_bag": "station_announcer:block/litter/trash_bag",
+    "particle": "station_announcer:block/litter/trash_bag"
+  },
+  "elements": [
+    {
+      "from": [
+        1.6,
+        0,
+        4.4
+      ],
+      "to": [
+        11.7,
+        6.4,
+        12.0
+      ],
+      "faces": {
+        "north": {
+          "uv": [
+            4.3,
+            9.6,
+            14.4,
+            16
+          ],
+          "texture": "#trash_bag"
+        },
+        "south": {
+          "uv": [
+            1.6,
+            9.6,
+            11.7,
+            16
+          ],
+          "texture": "#trash_bag"
+        },
+        "east": {
+          "uv": [
+            4.0,
+            9.6,
+            11.6,
+            16
+          ],
+          "texture": "#trash_bag"
+        },
+        "west": {
+          "uv": [
+            4.4,
+            9.6,
+            12.0,
+            16
+          ],
+          "texture": "#trash_bag"
+        },
+        "up": {
+          "uv": [
+            1.6,
+            4.4,
+            11.7,
+            12.0
+          ],
+          "texture": "#trash_bag"
+        }
+      }
+    },
+    {
+      "from": [
+        1.9,
+        0.384,
+        4.628
+      ],
+      "to": [
+        11.5,
+        6.016,
+        11.772
+      ],
+      "faces": {
+        "north": {
+          "uv": [
+            4.5,
+            9.984,
+            14.1,
+            15.616
+          ],
+          "texture": "#trash_bag"
+        },
+        "south": {
+          "uv": [
+            1.9,
+            9.984,
+            11.5,
+            15.616
+          ],
+          "texture": "#trash_bag"
+        },
+        "east": {
+          "uv": [
+            4.228,
+            9.984,
+            11.372,
+            15.616
+          ],
+          "texture": "#trash_bag"
+        },
+        "west": {
+          "uv": [
+            4.628,
+            9.984,
+            11.772,
+            15.616
+          ],
+          "texture": "#trash_bag"
+        },
+        "up": {
+          "uv": [
+            1.9,
+            4.628,
+            11.5,
+            11.772
+          ],
+          "texture": "#trash_bag"
+        }
+      },
+      "rotation": {
+        "axis": "x",
+        "angle": 45,
+        "origin": [
+          7.2,
+          3.2,
+          8.2
+        ]
+      }
+    },
+    {
+      "from": [
+        1.1,
+        1.152,
+        5.464
+      ],
+      "to": [
+        1.61,
+        5.248,
+        10.936
+      ],
+      "faces": {
+        "north": {
+          "uv": [
+            14.39,
+            10.752,
+            14.9,
+            14.848
+          ],
+          "texture": "#trash_bag"
+        },
+        "south": {
+          "uv": [
+            1.1,
+            10.752,
+            1.61,
+            14.848
+          ],
+          "texture": "#trash_bag"
+        },
+        "west": {
+          "uv": [
+            5.464,
+            10.752,
+            10.936,
+            14.848
+          ],
+          "texture": "#trash_bag"
+        },
+        "up": {
+          "uv": [
+            1.1,
+            5.464,
+            1.61,
+            10.936
+          ],
+          "texture": "#trash_bag"
+        }
+      }
+    },
+    {
+      "from": [
+        11.69,
+        1.024,
+        5.92
+      ],
+      "to": [
+        12.6,
+        5.12,
+        10.48
+      ],
+      "faces": {
+        "north": {
+          "uv": [
+            3.4,
+            10.88,
+            4.31,
+            14.976
+          ],
+          "texture": "#trash_bag"
+        },
+        "south": {
+          "uv": [
+            11.69,
+            10.88,
+            12.6,
+            14.976
+          ],
+          "texture": "#trash_bag"
+        },
+        "east": {
+          "uv": [
+            5.52,
+            10.88,
+            10.08,
+            14.976
+          ],
+          "texture": "#trash_bag"
+        },
+        "up": {
+          "uv": [
+            11.69,
+            5.92,
+            12.6,
+            10.48
+          ],
+          "texture": "#trash_bag"
+        }
+      }
+    },
+    {
+      "from": [
+        12.59,
+        2.45,
+        7.4
+      ],
+      "to": [
+        13.45,
+        3.95,
+        9.0
+      ],
+      "faces": {
+        "north": {
+          "uv": [
+            2.55,
+            12.05,
+            3.41,
+            13.55
+          ],
+          "texture": "#trash_bag"
+        },
+        "south": {
+          "uv": [
+            12.59,
+            12.05,
+            13.45,
+            13.55
+          ],
+          "texture": "#trash_bag"
+        },
+        "east": {
+          "uv": [
+            7.0,
+            12.05,
+            8.6,
+            13.55
+          ],
+          "texture": "#trash_bag"
+        },
+        "up": {
+          "uv": [
+            12.59,
+            7.4,
+            13.45,
+            9.0
+          ],
+          "texture": "#trash_bag"
+        }
+      }
+    },
+    {
+      "from": [
+        13.3,
+        2.75,
+        7.25
+      ],
+      "to": [
+        15.1,
+        3.65,
+        7.8
+      ],
+      "faces": {
+        "north": {
+          "uv": [
+            0.9,
+            12.35,
+            2.7,
+            13.25
+          ],
+          "texture": "#trash_bag"
+        },
+        "south": {
+          "uv": [
+            13.3,
+            12.35,
+            15.1,
+            13.25
+          ],
+          "texture": "#trash_bag"
+        },
+        "east": {
+          "uv": [
+            8.2,
+            12.35,
+            8.75,
+            13.25
+          ],
+          "texture": "#trash_bag"
+        },
+        "up": {
+          "uv": [
+            13.3,
+            7.25,
+            15.1,
+            7.8
+          ],
+          "texture": "#trash_bag"
+        },
+        "west": {
+          "uv": [
+            7.25,
+            12.35,
+            7.8,
+            13.25
+          ],
+          "texture": "#trash_bag"
+        }
+      },
+      "rotation": {
+        "axis": "y",
+        "angle": 22.5,
+        "origin": [
+          13.3,
+          3.2,
+          7.55
+        ]
+      }
+    },
+    {
+      "from": [
+        13.3,
+        2.8,
+        8.6
+      ],
+      "to": [
+        14.9,
+        3.6,
+        9.15
+      ],
+      "faces": {
+        "north": {
+          "uv": [
+            1.1,
+            12.4,
+            2.7,
+            13.2
+          ],
+          "texture": "#trash_bag"
+        },
+        "south": {
+          "uv": [
+            13.3,
+            12.4,
+            14.9,
+            13.2
+          ],
+          "texture": "#trash_bag"
+        },
+        "east": {
+          "uv": [
+            6.85,
+            12.4,
+            7.4,
+            13.2
+          ],
+          "texture": "#trash_bag"
+        },
+        "up": {
+          "uv": [
+            13.3,
+            8.6,
+            14.9,
+            9.15
+          ],
+          "texture": "#trash_bag"
+        },
+        "west": {
+          "uv": [
+            8.6,
+            12.4,
+            9.15,
+            13.2
+          ],
+          "texture": "#trash_bag"
+        }
+      },
+      "rotation": {
+        "axis": "y",
+        "angle": -22.5,
+        "origin": [
+          13.3,
+          3.2,
+          8.85
+        ]
+      }
+    }
+  ]
+}

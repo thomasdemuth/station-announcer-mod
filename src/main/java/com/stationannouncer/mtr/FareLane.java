@@ -104,6 +104,13 @@ public final class FareLane {
             LAST_ATTEMPT.entrySet().removeIf(entry -> time - entry.getValue() > 400);
         }
 
+        // Taped off with the Maintenance Tool: the lane stays locked.
+        if (com.stationannouncer.atmosphere.OutOfService.isOut(world, pos)) {
+            refuse(host, world, pos, be);
+            com.stationannouncer.atmosphere.OutOfService.refuse(world, pos, player);
+            return;
+        }
+
         // Which way is this rider trying to go? Behind the barrier plane
         // (relative to FACING) means entering.
         int dir = travelDirection(host, state, pos, player);

@@ -25,6 +25,11 @@ public final class ClientHoldState {
         return !held.isEmpty() && held.contains(platformId);
     }
 
+    /** How many platforms are holding a train right now. */
+    public static int count() {
+        return held.size();
+    }
+
     static void replace(Set<Long> newHeld) {
         held = newHeld;
     }

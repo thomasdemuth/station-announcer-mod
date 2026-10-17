@@ -1,0 +1,68 @@
+{
+  "parent": "minecraft:block/block",
+  "textures": {
+    "cardboard": "station_announcer:block/litter/cardboard",
+    "particle": "station_announcer:block/litter/cardboard"
+  },
+  "elements": [
+    {
+      "from": [
+        1.5,
+        0,
+        2.7
+      ],
+      "to": [
+        14.5,
+        0.6,
+        13.3
+      ],
+      "faces": {
+        "north": {
+          "uv": [
+            0.25,
+            0.25,
+            6.25,
+            0.75
+          ],
+          "texture": "#cardboard"
+        },
+        "south": {
+          "uv": [
+            0.25,
+            0.25,
+            6.25,
+            0.75
+          ],
+          "texture": "#cardboard"
+        },
+        "east": {
+          "uv": [
+            0.25,
+            0.25,
+            6.25,
+            0.75
+          ],
+          "texture": "#cardboard"
+        },
+        "west": {
+          "uv": [
+            0.25,
+            0.25,
+            6.25,
+            0.75
+          ],
+          "texture": "#cardboard"
+        },
+        "up": {
+          "uv": [
+            0.25,
+            6.25,
+            7.25,
+            11.75
+          ],
+          "texture": "#cardboard"
+        }
+      }
+    }
+  ]
+}

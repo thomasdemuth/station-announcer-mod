@@ -1,0 +1,343 @@
+{
+  "multipart": [
+    {
+      "when": {
+        "north": "true"
+      },
+      "apply": [
+        {
+          "model": "station_announcer:block/grime/efflo_wall_0_wall",
+          "weight": 3
+        },
+        {
+          "model": "station_announcer:block/grime/efflo_wall_0_wall_m",
+          "weight": 2
+        },
+        {
+          "model": "station_announcer:block/grime/efflo_wall_1_wall",
+          "weight": 2
+        },
+        {
+          "model": "station_announcer:block/grime/efflo_wall_1_wall_m",
+          "weight": 2
+        },
+        {
+          "model": "station_announcer:block/grime/efflo_wall_2_wall",
+          "weight": 2
+        },
+        {
+          "model": "station_announcer:block/grime/efflo_wall_2_wall_m",
+          "weight": 2
+        },
+        {
+          "model": "station_announcer:block/grime/efflo_wall_3_wall",
+          "weight": 2
+        },
+        {
+          "model": "station_announcer:block/grime/efflo_wall_3_wall_m",
+          "weight": 2
+        },
+        {
+          "model": "station_announcer:block/grime/efflo_wall_4_wall",
+          "weight": 2
+        },
+        {
+          "model": "station_announcer:block/grime/efflo_wall_4_wall_m",
+          "weight": 2
+        }
+      ]
+    },
+    {
+      "when": {
+        "east": "true"
+      },
+      "apply": [
+        {
+          "model": "station_announcer:block/grime/efflo_wall_0_wall",
+          "weight": 4,
+          "y": 90
+        },
+        {
+          "model": "station_announcer:block/grime/efflo_wall_0_wall_m",
+          "weight": 2,
+          "y": 90
+        },
+        {
+          "model": "station_announcer:block/grime/efflo_wall_1_wall",
+          "weight": 2,
+          "y": 90
+        },
+        {
+          "model": "station_announcer:block/grime/efflo_wall_1_wall_m",
+          "weight": 2,
+          "y": 90
+        },
+        {
+          "model": "station_announcer:block/grime/efflo_wall_2_wall",
+          "weight": 2,
+          "y": 90
+        },
+        {
+          "model": "station_announcer:block/grime/efflo_wall_2_wall_m",
+          "weight": 2,
+          "y": 90
+        },
+        {
+          "model": "station_announcer:block/grime/efflo_wall_3_wall",
+          "weight": 2,
+          "y": 90
+        },
+        {
+          "model": "station_announcer:block/grime/efflo_wall_3_wall_m",
+          "weight": 2,
+          "y": 90
+        },
+        {
+          "model": "station_announcer:block/grime/efflo_wall_4_wall",
+          "weight": 2,
+          "y": 90
+        },
+        {
+          "model": "station_announcer:block/grime/efflo_wall_4_wall_m",
+          "weight": 2,
+          "y": 90
+        }
+      ]
+    },
+    {
+      "when": {
+        "south": "true"
+      },
+      "apply": [
+        {
+          "model": "station_announcer:block/grime/efflo_wall_0_wall",
+          "weight": 5,
+          "y": 180
+        },
+        {
+          "model": "station_announcer:block/grime/efflo_wall_0_wall_m",
+          "weight": 2,
+          "y": 180
+        },
+        {
+          "model": "station_announcer:block/grime/efflo_wall_1_wall",
+          "weight": 2,
+          "y": 180
+        },
+        {
+          "model": "station_announcer:block/grime/efflo_wall_1_wall_m",
+          "weight": 2,
+          "y": 180
+        },
+        {
+          "model": "station_announcer:block/grime/efflo_wall_2_wall",
+          "weight": 2,
+          "y": 180
+        },
+        {
+          "model": "station_announcer:block/grime/efflo_wall_2_wall_m",
+          "weight": 2,
+          "y": 180
+        },
+        {
+          "model": "station_announcer:block/grime/efflo_wall_3_wall",
+          "weight": 2,
+          "y": 180
+        },
+        {
+          "model": "station_announcer:block/grime/efflo_wall_3_wall_m",
+          "weight": 2,
+          "y": 180
+        },
+        {
+          "model": "station_announcer:block/grime/efflo_wall_4_wall",
+          "weight": 2,
+          "y": 180
+        },
+        {
+          "model": "station_announcer:block/grime/efflo_wall_4_wall_m",
+          "weight": 2,
+          "y": 180
+        }
+      ]
+    },
+    {
+      "when": {
+        "west": "true"
+      },
+      "apply": [
+        {
+          "model": "station_announcer:block/grime/efflo_wall_0_wall",
+          "weight": 6,
+          "y": 270
+        },
+        {
+          "model": "station_announcer:block/grime/efflo_wall_0_wall_m",
+          "weight": 2,
+          "y": 270
+        },
+        {
+          "model": "station_announcer:block/grime/efflo_wall_1_wall",
+          "weight": 2,
+          "y": 270
+        },
+        {
+          "model": "station_announcer:block/grime/efflo_wall_1_wall_m",
+          "weight": 2,
+          "y": 270
+        },
+        {
+          "model": "station_announcer:block/grime/efflo_wall_2_wall",
+          "weight": 2,
+          "y": 270
+        },
+        {
+          "model": "station_announcer:block/grime/efflo_wall_2_wall_m",
+          "weight": 2,
+          "y": 270
+        },
+        {
+          "model": "station_announcer:block/grime/efflo_wall_3_wall",
+          "weight": 2,
+          "y": 270
+        },
+        {
+          "model": "station_announcer:block/grime/efflo_wall_3_wall_m",
+          "weight": 2,
+          "y": 270
+        },
+        {
+          "model": "station_announcer:block/grime/efflo_wall_4_wall",
+          "weight": 2,
+          "y": 270
+        },
+        {
+          "model": "station_announcer:block/grime/efflo_wall_4_wall_m",
+          "weight": 2,
+          "y": 270
+        }
+      ]
+    },
+    {
+      "when": {
+        "up": "true"
+      },
+      "apply": [
+        {
+          "model": "station_announcer:block/grime/efflo_ceiling_0_ceiling",
+          "weight": 7
+        },
+        {
+          "model": "station_announcer:block/grime/efflo_ceiling_0_ceiling",
+          "weight": 2,
+          "y": 90
+        },
+        {
+          "model": "station_announcer:block/grime/efflo_ceiling_0_ceiling",
+          "weight": 2,
+          "y": 180
+        },
+        {
+          "model": "station_announcer:block/grime/efflo_ceiling_0_ceiling",
+          "weight": 2,
+          "y": 270
+        },
+        {
+          "model": "station_announcer:block/grime/efflo_ceiling_0_ceiling_m",
+          "weight": 2
+        },
+        {
+          "model": "station_announcer:block/grime/efflo_ceiling_0_ceiling_m",
+          "weight": 2,
+          "y": 90
+        },
+        {
+          "model": "station_announcer:block/grime/efflo_ceiling_0_ceiling_m",
+          "weight": 2,
+          "y": 180
+        },
+        {
+          "model": "station_announcer:block/grime/efflo_ceiling_0_ceiling_m",
+          "weight": 2,
+          "y": 270
+        },
+        {
+          "model": "station_announcer:block/grime/efflo_ceiling_1_ceiling",
+          "weight": 2
+        },
+        {
+          "model": "station_announcer:block/grime/efflo_ceiling_1_ceiling",
+          "weight": 2,
+          "y": 90
+        },
+        {
+          "model": "station_announcer:block/grime/efflo_ceiling_1_ceiling",
+          "weight": 2,
+          "y": 180
+        },
+        {
+          "model": "station_announcer:block/grime/efflo_ceiling_1_ceiling",
+          "weight": 2,
+          "y": 270
+        },
+        {
+          "model": "station_announcer:block/grime/efflo_ceiling_1_ceiling_m",
+          "weight": 2
+        },
+        {
+          "model": "station_announcer:block/grime/efflo_ceiling_1_ceiling_m",
+          "weight": 2,
+          "y": 90
+        },
+        {
+          "model": "station_announcer:block/grime/efflo_ceiling_1_ceiling_m",
+          "weight": 2,
+          "y": 180
+        },
+        {
+          "model": "station_announcer:block/grime/efflo_ceiling_1_ceiling_m",
+          "weight": 2,
+          "y": 270
+        },
+        {
+          "model": "station_announcer:block/grime/efflo_ceiling_2_ceiling",
+          "weight": 2
+        },
+        {
+          "model": "station_announcer:block/grime/efflo_ceiling_2_ceiling",
+          "weight": 2,
+          "y": 90
+        },
+        {
+          "model": "station_announcer:block/grime/efflo_ceiling_2_ceiling",
+          "weight": 2,
+          "y": 180
+        },
+        {
+          "model": "station_announcer:block/grime/efflo_ceiling_2_ceiling",
+          "weight": 2,
+          "y": 270
+        },
+        {
+          "model": "station_announcer:block/grime/efflo_ceiling_2_ceiling_m",
+          "weight": 2
+        },
+        {
+          "model": "station_announcer:block/grime/efflo_ceiling_2_ceiling_m",
+          "weight": 2,
+          "y": 90
+        },
+        {
+          "model": "station_announcer:block/grime/efflo_ceiling_2_ceiling_m",
+          "weight": 2,
+          "y": 180
+        },
+        {
+          "model": "station_announcer:block/grime/efflo_ceiling_2_ceiling_m",
+          "weight": 2,
+          "y": 270
+        }
+      ]
+    }
+  ]
+}

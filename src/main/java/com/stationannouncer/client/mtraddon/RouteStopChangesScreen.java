@@ -82,8 +82,8 @@ public class RouteStopChangesScreen extends Screen {
         if (platform == null) {
             return "?";
         }
-        String stationName = platform.area == null ? "" : PlatformGroupScreen.firstLang(platform.area.getName());
-        String platformName = PlatformGroupScreen.firstLang(platform.getName());
+        String stationName = platform.area == null ? "" : PlatformSettingsScreen.firstLang(platform.area.getName());
+        String platformName = PlatformSettingsScreen.firstLang(platform.getName());
         if (stationName.isEmpty()) {
             return platformName.isEmpty() ? "#" + platform.getId() : platformName;
         }

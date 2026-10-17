@@ -1,0 +1,187 @@
+{
+  "multipart": [
+    {
+      "when": {
+        "facing": "north"
+      },
+      "apply": [
+        {
+          "model": "station_announcer:block/construction/plastic_barrier_core_a",
+          "weight": 3
+        },
+        {
+          "model": "station_announcer:block/construction/plastic_barrier_core_b",
+          "weight": 2
+        }
+      ]
+    },
+    {
+      "when": {
+        "facing": "north",
+        "left": "false"
+      },
+      "apply": {
+        "model": "station_announcer:block/construction/plastic_barrier_end_left"
+      }
+    },
+    {
+      "when": {
+        "facing": "north",
+        "right": "false"
+      },
+      "apply": {
+        "model": "station_announcer:block/construction/plastic_barrier_end_right"
+      }
+    },
+    {
+      "when": {
+        "facing": "north",
+        "left": "true"
+      },
+      "apply": {
+        "model": "station_announcer:block/construction/plastic_barrier_joint_left"
+      }
+    },
+    {
+      "when": {
+        "facing": "east"
+      },
+      "apply": [
+        {
+          "model": "station_announcer:block/construction/plastic_barrier_core_a",
+          "y": 90,
+          "weight": 3
+        },
+        {
+          "model": "station_announcer:block/construction/plastic_barrier_core_b",
+          "y": 90,
+          "weight": 2
+        }
+      ]
+    },
+    {
+      "when": {
+        "facing": "east",
+        "left": "false"
+      },
+      "apply": {
+        "model": "station_announcer:block/construction/plastic_barrier_end_left",
+        "y": 90
+      }
+    },
+    {
+      "when": {
+        "facing": "east",
+        "right": "false"
+      },
+      "apply": {
+        "model": "station_announcer:block/construction/plastic_barrier_end_right",
+        "y": 90
+      }
+    },
+    {
+      "when": {
+        "facing": "east",
+        "left": "true"
+      },
+      "apply": {
+        "model": "station_announcer:block/construction/plastic_barrier_joint_left",
+        "y": 90
+      }
+    },
+    {
+      "when": {
+        "facing": "south"
+      },
+      "apply": [
+        {
+          "model": "station_announcer:block/construction/plastic_barrier_core_a",
+          "y": 180,
+          "weight": 3
+        },
+        {
+          "model": "station_announcer:block/construction/plastic_barrier_core_b",
+          "y": 180,
+          "weight": 2
+        }
+      ]
+    },
+    {
+      "when": {
+        "facing": "south",
+        "left": "false"
+      },
+      "apply": {
+        "model": "station_announcer:block/construction/plastic_barrier_end_left",
+        "y": 180
+      }
+    },
+    {
+      "when": {
+        "facing": "south",
+        "right": "false"
+      },
+      "apply": {
+        "model": "station_announcer:block/construction/plastic_barrier_end_right",
+        "y": 180
+      }
+    },
+    {
+      "when": {
+        "facing": "south",
+        "right": "true"
+      },
+      "apply": {
+        "model": "station_announcer:block/construction/plastic_barrier_joint_right",
+        "y": 180
+      }
+    },
+    {
+      "when": {
+        "facing": "west"
+      },
+      "apply": [
+        {
+          "model": "station_announcer:block/construction/plastic_barrier_core_a",
+          "y": 270,
+          "weight": 3
+        },
+        {
+          "model": "station_announcer:block/construction/plastic_barrier_core_b",
+          "y": 270,
+          "weight": 2
+        }
+      ]
+    },
+    {
+      "when": {
+        "facing": "west",
+        "left": "false"
+      },
+      "apply": {
+        "model": "station_announcer:block/construction/plastic_barrier_end_left",
+        "y": 270
+      }
+    },
+    {
+      "when": {
+        "facing": "west",
+        "right": "false"
+      },
+      "apply": {
+        "model": "station_announcer:block/construction/plastic_barrier_end_right",
+        "y": 270
+      }
+    },
+    {
+      "when": {
+        "facing": "west",
+        "right": "true"
+      },
+      "apply": {
+        "model": "station_announcer:block/construction/plastic_barrier_joint_right",
+        "y": 270
+      }
+    }
+  ]
+}

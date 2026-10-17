@@ -7,6 +7,13 @@
     "station_announcer:el_house_wall_cream",
     "station_announcer:el_house_wall_cream_window",
     "station_announcer:el_wood_platform",
-    "station_announcer:el_soffit"
+    "station_announcer:el_soffit",
+    "station_announcer:cardboard_pile",
+    "station_announcer:newspaper_stack",
+    "station_announcer:barricade",
+    "station_announcer:police_barricade",
+    "station_announcer:construction_wall",
+    "station_announcer:plywood_board",
+    "station_announcer:sidewalk_shed"
   ]
 }

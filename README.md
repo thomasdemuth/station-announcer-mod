@@ -5,8 +5,10 @@ Place announcer blocks around a station, type an announcement, and trigger it wi
 `/announce` — nearby players see the message as `[PA] ...` and hear it **read aloud by their own
 computer's text-to-speech**, preceded by a classic ding-dong chime.
 
-Designed to sit alongside [Minecraft Transit Railway (MTR)](https://www.minecrafttransitrailway.com/) —
-it does not depend on MTR and does not conflict with it (no mixins, no vanilla behavior overrides).
+Built as an addon for [Minecraft Transit Railway (MTR)](https://www.minecrafttransitrailway.com/) 4.x,
+which it requires. Beyond the PA system it adds station decoration, PIDS, dispatch tools and manual
+driving. The MTR integrations use mixins into MTR's simulation and rendering; vanilla gameplay is
+left alone.
 
 - **Mod ID:** `station_announcer`
 - **Environment:** works on singleplayer, LAN, and dedicated servers (announcements are fully
@@ -322,6 +324,178 @@ the code into the panel. Only players with the addon's edit permission can apply
 Depots on a real-time timetable or with continuous movement (cable cars) can't be delayed.
 Suggestions use scheduled times, so holds, door obstructions and gap-filler dwells still show up
 in the measured headway.
+
+### Driving: crew, cab HUD and timetable runs (requires MTR)
+
+Driving a train by hand gets a proper crew, a cab display, real timetable runs and a score.
+MTR's rules still apply: you can only drive a train from a **manual siding**.
+
+**Crew roles.** What you hold when you board decides your role:
+
+- An MTR **driver key** makes you the **driver**. A driver with no guard aboard is **OPTO**
+  (one-person operation) and works the doors as well as driving.
+- MTR's **guard key** makes you the **guard**.
+
+A train has one driver and one guard, first come first served. A role only counts while you are
+aboard, and you lose it when you leave the train or disconnect. Door obstructions and the
+incidents below only happen while a player is driving or crewing the train, never on
+automatic trains.
+
+**Keys** (all rebindable under *Station Announcer* in Controls):
+
+| Key | Default | What it does |
+|---|---|---|
+| Cab buzzer | `B` | Buzz the other end of the train. Presses are grouped into codes on their HUD |
+| Train horn (hold) | `G` | Driver only. Sounds while held and fades out on release |
+| Vigilance acknowledge | `V` | Resets the vigilance timer and releases a vigilance brake once stopped |
+| Cab HUD detail | `J` | Cycles the panels: default → all expanded → all collapsed |
+| Cab menu | `K` | Start up, pick a service, set the horn |
+| Cab seat: stand up / sit down | `N` | While driving you sit at the front of the leading car. Stand up to walk about |
+| Lean out of the cab window (hold) | `Left Alt` | Eases the camera out of the side window, looking along the train, on the platform side |
+| Driving HUD Settings | `H` | HUD style and the crew settings below |
+
+**Cab HUD.** While you drive or guard, the cab HUD replaces MTR's driving overlay, its
+action-bar line and its next-station chat lines (the spoken announcement stays). The middle of
+the screen stays clear:
+
+- **Top left**: line bullet, destination, next stop and its distance. Expanded, it adds the stop
+  after that.
+- **Bottom left (drive)**: the next signal (Clear / Caution / Danger) and its distance beside your
+  speed, the current speed limit, and the next limit with where it starts. Expanded, it adds the
+  stop marker (counts down to 0 m as you brake for a platform), the power/brake ladder
+  (EB, B7–B1, N, P1–P7) and lamps for doors, guard ready and hold. A guard sees a doors and buzzer
+  panel here instead.
+- **Bottom right (run)**: how early or late you are, the clock, the next two stops (scheduled →
+  expected) and a departure countdown at platforms. Expanded, it lists the whole run. On a
+  timetable run it also shows your live score.
+- **Top centre**: one line, only when something needs you (leave the yard, start up, wait for a
+  buzz, vigilance, incidents).
+
+*HUD style* in the settings (`H`) picks **Cab (km/h)**, **Cab (mph)** or **Classic** (the older
+text panel plus a small crew panel).
+
+**Cab menu (`K`)** has three tabs:
+
+- **Start up**: key in, battery on, then a brake test (apply the brake to B7). The train won't
+  take power until this is done, once per driver per train (unless the server turns
+  `startupRequired` off). **Skip** does it at once, and *Skip
+  startup* in the settings always skips it.
+- **Service**: pick a timetable slot (see below), or **Give back** one you have not started yet.
+- **Train**: choose the horn for this train type: NYC subway (the default), commuter rail
+  three-chime, European two-tone or steam whistle. **Test** plays it, **Use** saves it for every
+  train of this type. Operators only (the addon's `editPermissionLevel`). `/crew horn
+  <nyc|lirr|euro|steam>` does the same while you ride the train.
+
+**Timetable runs.** From a manual siding's train, while it is still in its siding, the Service tab
+lists the next departures (up to 12) you can take over. They come from automatic sidings in the
+same depot, or in any depot that runs exactly the same routes (a depot group of such depots works
+too). For another depot, the stops must also be at the same platforms. Each row shows the
+departure and when you need to **leave the yard**, corrected for your own siding's run to the first
+platform. Departures less than about 20 seconds from their yard time are not offered. Take one and:
+
+- the automatic train for that departure stays in its depot, and your train runs it in its place;
+- every board keeps showing the departure, **late when you are late**. Very late runs are capped
+  on the boards just under MTR's limit (about 9 minutes on the default day), but the cab HUD
+  always shows the real figure;
+- if you have not left the yard **2 minutes** after your yard time, the slot goes back and the
+  automatic train runs it, late;
+- if MTR's manual→automatic timeout fires mid-run (the siding's own setting), the train keeps the
+  slot and drives on automatically, trying to catch up.
+
+Only one driver can take a slot. Taken slots are not saved across a server restart.
+
+**Interlocks and vigilance.** With both a driver and a guard aboard:
+
+- the **guard owns the doors**. The driver's door key is ignored;
+- the **driver waits for the guard**. At a stop where the doors opened, power stays at neutral
+  until the guard has closed the doors and buzzed;
+- optionally the **guard waits for the driver**. The guard can't close the doors until the driver
+  has buzzed at this stop (off by default).
+
+**Vigilance** (deadman): while the train moves, any driver control or the vigilance key resets a
+timer. A warning sounds for the last few seconds, then the emergency brake is applied and held
+until the train has stopped and you press the vigilance key. The server decides whether each driver
+picks (default), it is always on, or it is off.
+
+**Incidents** (crewed trains only, small delays that never break the timetable):
+
+- **Door fault**: a door won't lock. Press the door key twice to cut it out.
+- **Held by control**: held at a platform for 8–25 s.
+- **Sick passenger**: the doors stay open for 30–60 s.
+- **Passenger alarm**: the emergency brake goes on while moving. It is released 10 s after the
+  train stops.
+
+**Passengers.** While you drive or guard, people wait on the platforms of your next stop and the
+one you stand at, mostly where the train will stop. When the doors open some get off and walk away,
+and the rest walk to the nearest door and board. A few are waiting for another line and stay put.
+Anyone who wanted your train and is still on the platform when you depart counts as left behind.
+The guard (or an OPTO driver) sees "N passengers still boarding" while the doors are open. The crowd
+exists only on your screen: it is cosmetic, nothing is sent to the server, and a driver and guard
+on the same train see the same people. Turn it off or change the cap (default 40) in `H`.
+
+**Score.** A timetable run is scored as you drive:
+
+- **Departures**: +10 for each departure within 30 s of time. Late beyond that costs −1 per
+  10 s (at most −10 a stop). More than 15 s early is −5, and a skipped stop is −10.
+- **Stopping**: +2 for stopping within half a metre of the mark, −3 for overrunning it by more
+  than 2 m.
+- **Other**: −5 per emergency brake (yours, vigilance or a passenger alarm), −1 per passenger
+  left behind.
+
+At the end of the run a **report card** opens: on-time departures, latest departure, perfect stops,
+overruns, emergency brakes and passengers left behind, plus a line per event. Your last 50 runs
+are kept in `config/station_announcer/run_history.json`.
+
+**`/crew status`** prints your train, your role, who is aboard, the ready lamps, vigilance and
+the horn.
+
+**Server config**: the `crew` block of `config/station-announcer-addon.json`:
+
+```json
+"crew": {
+  "enabled": true,
+  "driverWaitsForGuard": true,
+  "guardWaitsForDriver": false,
+  "guardOwnsDoors": true,
+  "vigilance": "player",
+  "vigilanceDefaultSeconds": 45,
+  "vigilanceWarningSeconds": 6,
+  "startupRequired": true,
+  "incidents": true,
+  "doorFaultPercent": 2,
+  "heldPercent": 3,
+  "heldMinSeconds": 8,
+  "heldMaxSeconds": 25,
+  "sickPassengerPercent": 1,
+  "sickPassengerMinSeconds": 30,
+  "sickPassengerMaxSeconds": 60,
+  "passengerAlarmPerHour": 0.5,
+  "hornRange": 160
+}
+```
+
+- `enabled`: master switch for crews. Off means no roles are accepted.
+- `driverWaitsForGuard` / `guardWaitsForDriver` / `guardOwnsDoors`: the interlocks above.
+- `vigilance`: `"player"` (each driver chooses), `"required"` (always on, at the driver's
+  interval or `vigilanceDefaultSeconds` if they turned it off) or `"off"`.
+  `vigilanceWarningSeconds` is the warning before the brake.
+- `startupRequired`: hold a manual train at neutral until its driver has started it up (players
+  can still skip it on their side).
+- `incidents`: master switch for incidents. The `*Percent` values are chances: a door fault per
+  door close at a stop, held and sick passenger per platform arrival. The `*Seconds` pairs set the
+  durations. `passengerAlarmPerHour` is the expected alarms per hour of driving.
+- `hornRange`: how far a horn carries, in blocks (at least 16).
+
+Horn choices per train type are stored in `<world>/station-announcer-addon/crew_horns.json`.
+Door obstruction chances stay in the separate `doorObstruction` block.
+
+**Client settings** (`config/station-announcer-addon-client.json`, mostly through `H`):
+`hudStyle` (`"cab"` or `"classic"`), `cabMph` (false), `cabScale` (1, a size multiplier on
+the GUI scale), `crewSkipStartup` (false), `crewVigilanceEnabled` (true) and `crewVigilanceSeconds`
+(45, 10–300), `cabSeatEnabled` (true), `cabSeatInset` (0.6 blocks behind the front of the floor),
+`cabSeatLateral` (0), `cabSeatEyeOffset` (0), `cabSeatTrains` (per-train-type seat overrides),
+`cabLeanEnabled` (true), `cabLeanMax` (1.8), `cabPassengers` (true), `cabPassengersMax` (40, the
+crowd cap) and `crewPanelEnabled` (true, the Classic style's crew panel).
 
 ### Bridge Creator (requires MTR, new in 3.2)
 

@@ -202,6 +202,9 @@ public final class SignLayout {
         List<TileBounds> tiles = new ArrayList<>();
         List<Row> rows = spec.rows();
         if (rows.isEmpty()) {
+            if (spec.panel().wear() > 0) {
+                SignWear.paint(s, spec, x0, y0, pw, ph, white);
+            }
             return new Metrics(rowBounds, tiles);
         }
         float rowHeight = (ph - top - PAD_Y) / rows.size();
@@ -209,6 +212,9 @@ public final class SignLayout {
             float rowTop = y0 + top + r * rowHeight;
             rowBounds.add(new float[]{rowTop, rowTop + rowHeight});
             paintRow(s, rows.get(r), r, rowTop, rowHeight, x0, pw, spec.panel().scale(), ink, ctx, tiles);
+        }
+        if (spec.panel().wear() > 0) {
+            SignWear.paint(s, spec, x0, y0, pw, ph, white);
         }
         return new Metrics(rowBounds, tiles);
     }

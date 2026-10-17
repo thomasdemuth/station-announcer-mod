@@ -379,7 +379,9 @@ public final class InterlineService {
             dwell.forEach((platformId, byRoute) -> {
                 Map<Long, Long> merged = new LinkedHashMap<>(existing.getOrDefault(platformId, new java.util.LinkedHashMap<>()));
                 merged.putAll(byRoute);
-                AddonStore.setDwellOverrides(platformId, merged);
+                Map<Long, Byte> sources = new LinkedHashMap<>();
+                byRoute.keySet().forEach(routeId -> sources.put(routeId, AddonStore.DWELL_SOURCE_INTERLINE));
+                AddonStore.setDwellOverrides(platformId, merged, sources);
             });
             AddonNetworking.broadcastDwellOverrides(server);
         }

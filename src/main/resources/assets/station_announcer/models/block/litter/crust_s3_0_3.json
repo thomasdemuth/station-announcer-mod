@@ -1,0 +1,170 @@
+{
+  "textures": {
+    "piece_crust": "station_announcer:block/litter/piece_crust",
+    "particle": "station_announcer:block/litter/piece_crust"
+  },
+  "elements": [
+    {
+      "from": [
+        4.154,
+        0.063,
+        9.94
+      ],
+      "to": [
+        5.35,
+        1.233,
+        13.06
+      ],
+      "faces": {
+        "west": {
+          "uv": [
+            0.25,
+            0.25,
+            2.75,
+            1.25
+          ],
+          "texture": "#piece_crust"
+        },
+        "east": {
+          "uv": [
+            3.25,
+            0.25,
+            5.75,
+            1.25
+          ],
+          "texture": "#piece_crust"
+        },
+        "up": {
+          "uv": [
+            6.25,
+            0.25,
+            8.75,
+            1.25
+          ],
+          "texture": "#piece_crust",
+          "rotation": 270
+        }
+      }
+    },
+    {
+      "from": [
+        4.18,
+        0.063,
+        8.445
+      ],
+      "to": [
+        5.324,
+        1.168,
+        10.2
+      ],
+      "faces": {
+        "west": {
+          "uv": [
+            9.25,
+            0.25,
+            10.5,
+            1.0
+          ],
+          "texture": "#piece_crust"
+        },
+        "east": {
+          "uv": [
+            11.0,
+            0.25,
+            12.25,
+            1.0
+          ],
+          "texture": "#piece_crust"
+        },
+        "north": {
+          "uv": [
+            12.75,
+            0.25,
+            13.75,
+            1.0
+          ],
+          "texture": "#piece_crust"
+        },
+        "up": {
+          "uv": [
+            14.25,
+            0.25,
+            15.5,
+            1.25
+          ],
+          "texture": "#piece_crust",
+          "rotation": 270
+        }
+      },
+      "rotation": {
+        "axis": "y",
+        "angle": -22.5,
+        "origin": [
+          4.7,
+          0.063,
+          10.07
+        ]
+      }
+    },
+    {
+      "from": [
+        4.18,
+        0.063,
+        12.8
+      ],
+      "to": [
+        5.324,
+        1.181,
+        14.555
+      ],
+      "faces": {
+        "west": {
+          "uv": [
+            9.25,
+            0.25,
+            10.5,
+            1.0
+          ],
+          "texture": "#piece_crust"
+        },
+        "east": {
+          "uv": [
+            11.0,
+            0.25,
+            12.25,
+            1.0
+          ],
+          "texture": "#piece_crust"
+        },
+        "south": {
+          "uv": [
+            12.75,
+            0.25,
+            13.75,
+            1.0
+          ],
+          "texture": "#piece_crust"
+        },
+        "up": {
+          "uv": [
+            14.25,
+            0.25,
+            15.5,
+            1.25
+          ],
+          "texture": "#piece_crust",
+          "rotation": 270
+        }
+      },
+      "rotation": {
+        "axis": "y",
+        "angle": 22.5,
+        "origin": [
+          4.7,
+          0.063,
+          12.93
+        ]
+      }
+    }
+  ]
+}

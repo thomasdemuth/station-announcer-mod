@@ -1,0 +1,132 @@
+{
+ "parent": "minecraft:block/block",
+ "textures": {
+  "tube": "station_announcer:block/construction/scaf_tube",
+  "clamp": "station_announcer:block/construction/scaf_clamp",
+  "cap": "station_announcer:block/construction/scaf_cap",
+  "plate": "station_announcer:block/construction/scaf_plate",
+  "plank": "station_announcer:block/construction/scaf_plank",
+  "particle": "station_announcer:block/construction/scaf_plate"
+ },
+ "elements": [
+  {
+   "from": [
+    14.4,
+    0,
+    -1.6
+   ],
+   "to": [
+    17.6,
+    0.4,
+    1.6
+   ],
+   "faces": {
+    "north": {
+     "texture": "#plate",
+     "uv": [
+      12.8,
+      14.6,
+      16,
+      15
+     ]
+    },
+    "south": {
+     "texture": "#plate",
+     "uv": [
+      12.8,
+      14.6,
+      16,
+      15
+     ]
+    },
+    "east": {
+     "texture": "#plate",
+     "uv": [
+      12.8,
+      14.6,
+      16,
+      15
+     ]
+    },
+    "west": {
+     "texture": "#plate",
+     "uv": [
+      12.8,
+      14.6,
+      16,
+      15
+     ]
+    },
+    "up": {
+     "texture": "#plate",
+     "uv": [
+      12.8,
+      12.8,
+      16,
+      16
+     ]
+    },
+    "down": {
+     "texture": "#plate",
+     "uv": [
+      12.8,
+      12.8,
+      16,
+      16
+     ],
+     "cullface": "down"
+    }
+   }
+  },
+  {
+   "from": [
+    15.5,
+    0.4,
+    -0.5
+   ],
+   "to": [
+    16.5,
+    1.6,
+    0.5
+   ],
+   "faces": {
+    "north": {
+     "texture": "#clamp",
+     "uv": [
+      15.0,
+      14.4,
+      16,
+      15.6
+     ]
+    },
+    "south": {
+     "texture": "#clamp",
+     "uv": [
+      15.0,
+      14.4,
+      16,
+      15.6
+     ]
+    },
+    "east": {
+     "texture": "#clamp",
+     "uv": [
+      15.0,
+      14.4,
+      16,
+      15.6
+     ]
+    },
+    "west": {
+     "texture": "#clamp",
+     "uv": [
+      15.0,
+      14.4,
+      16,
+      15.6
+     ]
+    }
+   }
+  }
+ ]
+}

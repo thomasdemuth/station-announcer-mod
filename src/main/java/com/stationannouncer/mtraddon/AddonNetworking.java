@@ -147,10 +147,15 @@ public final class AddonNetworking {
             }
             long[] routeIds = new long[count];
             int[] millis = new int[count];
+            byte[] sources = new byte[count];
             for (int i = 0; i < count; i++) {
                 routeIds[i] = buf.readLong();
                 millis[i] = buf.readVarInt();
+                sources[i] = buf.readByte();
             }
+            // The platform screen asks for a depot regeneration when it changed anything
+            // that is baked into the path (dwell, platform groups).
+            boolean regenerate = buf.readBoolean();
 
             server.execute(() -> {
                 if (!player.hasPermissionLevel(AddonServerConfig.get().editPermissionLevel)) {
@@ -159,12 +164,19 @@ public final class AddonNetworking {
                 // LinkedHashMap keeps the GUI's order and drops duplicate route ids
                 // (last write wins). Clamp to MTR's own dwell range.
                 Map<Long, Long> byRoute = new java.util.LinkedHashMap<>();
+                Map<Long, Byte> bySource = new java.util.LinkedHashMap<>();
                 for (int i = 0; i < routeIds.length; i++) {
                     long clamped = Math.max(MIN_DWELL_MILLIS, Math.min(MAX_DWELL_MILLIS, millis[i]));
                     byRoute.put(routeIds[i], clamped);
+                    byte source = sources[i] == AddonStore.DWELL_SOURCE_INTERLINE || sources[i] == AddonStore.DWELL_SOURCE_MANUAL
+                            ? sources[i] : AddonStore.DWELL_SOURCE_UNKNOWN;
+                    bySource.put(routeIds[i], source);
                 }
-                AddonStore.setDwellOverrides(platformId, byRoute);
+                AddonStore.setDwellOverrides(platformId, byRoute, bySource);
                 broadcastDwellOverrides(server);
+                if (regenerate) {
+                    PlatformSchedule.regenerateFor(server, player.getServerWorld(), platformId);
+                }
             });
         });
 
@@ -518,6 +530,7 @@ public final class AddonNetworking {
             byRoute.forEach((routeId, millis) -> {
                 buf.writeLong(routeId);
                 buf.writeVarInt(millis.intValue());
+                buf.writeByte(AddonStore.dwellSource(platformId, routeId));
             });
         });
         return buf;

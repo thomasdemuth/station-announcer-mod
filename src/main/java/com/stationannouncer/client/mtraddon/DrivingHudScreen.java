@@ -1,6 +1,7 @@
 package com.stationannouncer.client.mtraddon;
 
 import com.stationannouncer.client.gui.IntSlider;
+import com.stationannouncer.mtraddon.crew.CrewProtocol;
 import net.fabricmc.api.EnvType;
 import net.fabricmc.api.Environment;
 import net.minecraft.client.gui.DrawContext;
@@ -9,6 +10,7 @@ import net.minecraft.client.gui.widget.ButtonWidget;
 import net.minecraft.client.gui.widget.CyclingButtonWidget;
 import net.minecraft.screen.ScreenTexts;
 import net.minecraft.text.Text;
+import net.minecraft.util.math.MathHelper;
 import org.jetbrains.annotations.Nullable;
 import java.util.List;
 
@@ -18,7 +20,8 @@ import java.util.List;
  * {@link AddonClientConfig}'s HUD fields IN PLACE so the panel previews live
  * behind the (non-pausing) screen; Done persists to disk, Cancel restores the
  * values captured at open. Everything is per-player client config — no
- * packets, no permissions.
+ * packets, no permissions. The bottom row holds the train-crew settings (crew
+ * panel, vigilance on/off and interval).
  */
 @Environment(EnvType.CLIENT)
 public class DrivingHudScreen extends Screen {
@@ -27,6 +30,8 @@ public class DrivingHudScreen extends Screen {
     private static final int WIDGET_HEIGHT = 20;
     private static final int ROW = WIDGET_HEIGHT + 4;
     private static final int TEXT_FAINT = 0xFF9A9AA5;
+    /** Widget rows per column (the seventh is the crew row). */
+    private static final int ROWS = 7;
 
     private static final List<String> CORNERS =
             List.of("top_left", "top_right", "bottom_left", "bottom_right");
@@ -46,6 +51,12 @@ public class DrivingHudScreen extends Screen {
     private final int oldOnTimeThresholdSeconds;
     private final String oldCorner;
     private final int oldMargin;
+    private final boolean oldCrewPanelEnabled;
+    private final boolean oldCrewVigilanceEnabled;
+    private final int oldCrewVigilanceSeconds;
+    private final String oldHudStyle;
+    private final boolean oldCabMph;
+    private final boolean oldSkipStartup;
 
     private int titleY;
     private int hintY;
@@ -65,6 +76,12 @@ public class DrivingHudScreen extends Screen {
         oldOnTimeThresholdSeconds = config.hudOnTimeThresholdSeconds;
         oldCorner = config.hudCorner;
         oldMargin = config.hudMargin;
+        oldCrewPanelEnabled = config.crewPanelEnabled;
+        oldCrewVigilanceEnabled = config.crewVigilanceEnabled;
+        oldCrewVigilanceSeconds = config.crewVigilanceSeconds;
+        oldHudStyle = config.hudStyle;
+        oldCabMph = config.cabMph;
+        oldSkipStartup = config.crewSkipStartup;
     }
 
     @Override
@@ -73,7 +90,7 @@ public class DrivingHudScreen extends Screen {
         int panelWidth = 2 * COLUMN_WIDTH + GAP;
         int leftX = (width - panelWidth) / 2;
         int rightX = leftX + COLUMN_WIDTH + GAP;
-        int contentHeight = 6 * ROW + 8 + 14 + ROW;
+        int contentHeight = ROWS * ROW + 8 + 14 + ROW;
         int top = Math.max(28, (height - contentHeight) / 2);
         titleY = top - 16;
 
@@ -108,6 +125,20 @@ public class DrivingHudScreen extends Screen {
                 .build(leftX, y, COLUMN_WIDTH, WIDGET_HEIGHT,
                         Text.translatable("gui.station_announcer.driving_hud.show_doors"),
                         (button, value) -> config.hudShowDoors = value));
+        y += ROW;
+        // HUD style: the cab HUD in km/h or mph, or the classic text panel (which brings the
+        // crew panel; the toggles above apply to the classic panel).
+        String style = config.isClassicHud() ? "classic" : config.cabMph ? "cab_mph" : "cab";
+        addDrawableChild(CyclingButtonWidget.<String>builder(
+                        value -> Text.translatable("gui.station_announcer.driving_hud.style_" + value))
+                .values(List.of("cab", "cab_mph", "classic"))
+                .initially(style)
+                .build(leftX, y, COLUMN_WIDTH, WIDGET_HEIGHT,
+                        Text.translatable("gui.station_announcer.driving_hud.style"),
+                        (button, value) -> {
+                            config.hudStyle = value.equals("classic") ? "classic" : "cab";
+                            config.cabMph = value.equals("cab_mph");
+                        }));
 
         // Right column: tunables.
         y = top;
@@ -132,13 +163,26 @@ public class DrivingHudScreen extends Screen {
                         Text.translatable("gui.station_announcer.driving_hud.corner"),
                         (button, value) -> config.hudCorner = value));
         y += ROW;
-        addDrawableChild(new IntSlider(rightX, y, COLUMN_WIDTH, WIDGET_HEIGHT, 0, 40, config.hudMargin,
-                value -> Text.translatable("gui.station_announcer.driving_hud.margin", value),
-                value -> config.hudMargin = value));
+        addDrawableChild(CyclingButtonWidget.onOffBuilder(config.crewSkipStartup)
+                .build(rightX, y, COLUMN_WIDTH, WIDGET_HEIGHT,
+                        Text.translatable("gui.station_announcer.driving_hud.skip_startup"),
+                        (button, value) -> config.crewSkipStartup = value));
+        y += ROW;
+        addDrawableChild(CyclingButtonWidget.onOffBuilder(config.crewVigilanceEnabled)
+                .build(rightX, y, COLUMN_WIDTH, WIDGET_HEIGHT,
+                        Text.translatable("gui.station_announcer.driving_hud.crew_vigilance"),
+                        (button, value) -> config.crewVigilanceEnabled = value));
+        y += ROW;
+        addDrawableChild(new IntSlider(rightX, y, COLUMN_WIDTH, WIDGET_HEIGHT,
+                CrewProtocol.MIN_VIGIL_SECONDS, CrewProtocol.MAX_VIGIL_SECONDS,
+                MathHelper.clamp(config.crewVigilanceSeconds, CrewProtocol.MIN_VIGIL_SECONDS,
+                        CrewProtocol.MAX_VIGIL_SECONDS),
+                value -> Text.translatable("gui.station_announcer.driving_hud.crew_vigilance_seconds", value),
+                value -> config.crewVigilanceSeconds = value));
 
         // Bottom row: Done / Cancel, spanning both columns.
-        int bottomY = top + 6 * ROW + 8 + 14;
-        hintY = top + 6 * ROW + 4;
+        int bottomY = top + ROWS * ROW + 8 + 14;
+        hintY = top + ROWS * ROW + 4;
         int half = (panelWidth - GAP) / 2;
         addDrawableChild(ButtonWidget.builder(ScreenTexts.DONE, button -> saveAndClose())
                 .dimensions(leftX, bottomY, half, WIDGET_HEIGHT).build());
@@ -164,6 +208,12 @@ public class DrivingHudScreen extends Screen {
         config.hudOnTimeThresholdSeconds = oldOnTimeThresholdSeconds;
         config.hudCorner = oldCorner;
         config.hudMargin = oldMargin;
+        config.crewPanelEnabled = oldCrewPanelEnabled;
+        config.crewVigilanceEnabled = oldCrewVigilanceEnabled;
+        config.crewVigilanceSeconds = oldCrewVigilanceSeconds;
+        config.hudStyle = oldHudStyle;
+        config.cabMph = oldCabMph;
+        config.crewSkipStartup = oldSkipStartup;
         close();
     }
 

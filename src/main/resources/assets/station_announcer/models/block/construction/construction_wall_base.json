@@ -1,0 +1,77 @@
+{
+ "parent": "minecraft:block/block",
+ "textures": {
+  "paint": "station_announcer:block/construction/cwall_plain",
+  "trim": "station_announcer:block/construction/cwall_trim",
+  "base": "station_announcer:block/construction/cwall_base",
+  "back": "station_announcer:block/construction/cwall_back",
+  "stud": "station_announcer:block/construction/cwall_stud",
+  "particle": "station_announcer:block/construction/cwall_base"
+ },
+ "elements": [
+  {
+   "from": [
+    0,
+    0,
+    12.6
+   ],
+   "to": [
+    16,
+    1.3,
+    14.0
+   ],
+   "faces": {
+    "north": {
+     "texture": "#base",
+     "uv": [
+      0,
+      14.7,
+      16,
+      16
+     ]
+    },
+    "up": {
+     "texture": "#base",
+     "uv": [
+      0,
+      12.6,
+      16,
+      14.0
+     ]
+    }
+   }
+  },
+  {
+   "from": [
+    0,
+    0,
+    14.0
+   ],
+   "to": [
+    16,
+    1.5,
+    15.9
+   ],
+   "faces": {
+    "south": {
+     "texture": "#stud",
+     "uv": [
+      0,
+      14.5,
+      16,
+      16
+     ]
+    },
+    "up": {
+     "texture": "#stud",
+     "uv": [
+      0,
+      14.0,
+      16,
+      15.9
+     ]
+    }
+   }
+  }
+ ]
+}

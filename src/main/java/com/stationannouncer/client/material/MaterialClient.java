@@ -33,6 +33,8 @@ import java.util.Map;
 public final class MaterialClient {
     private static final Identifier RAMP_ITEM_MODEL = StationAnnouncer.id("item/material_ramp");
     private static final Identifier STAIRS_ITEM_MODEL = StationAnnouncer.id("item/material_stairs");
+    /** Pending re-meshes: {pos, ticks left}. */
+    private static final java.util.List<long[]> REMESH = new java.util.ArrayList<>();
 
     private MaterialClient() {
     }
@@ -82,6 +84,35 @@ public final class MaterialClient {
             BlockState material = MaterialPalette.parse(MaterialPalette.materialOf(stack));
             return material == null ? -1 : MinecraftClient.getInstance().getBlockColors().getColor(material, null, null, tintIndex);
         }, MaterialBlocks.MATERIAL_RAMP_ITEM, MaterialBlocks.MATERIAL_STAIRS_ITEM);
+
+        // Re-mesh around a broken code-modelled block twice: next tick, and a second
+        // later (after any rebuild that was already in flight has landed).
+        MaterialBlocks.CLIENT_REMESH = pos -> {
+            synchronized (REMESH) {
+                REMESH.add(new long[]{pos.asLong(), 2});
+                REMESH.add(new long[]{pos.asLong(), 20});
+            }
+        };
+        net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents.END_CLIENT_TICK.register(client -> {
+            synchronized (REMESH) {
+                if (REMESH.isEmpty()) {
+                    return;
+                }
+                java.util.Iterator<long[]> it = REMESH.iterator();
+                while (it.hasNext()) {
+                    long[] entry = it.next();
+                    if (--entry[1] > 0) {
+                        continue;
+                    }
+                    it.remove();
+                    if (client.worldRenderer != null && client.world != null) {
+                        net.minecraft.util.math.BlockPos p = net.minecraft.util.math.BlockPos.fromLong(entry[0]);
+                        client.worldRenderer.scheduleBlockRenders(p.getX() - 1, p.getY() - 1, p.getZ() - 1,
+                                p.getX() + 1, p.getY() + 1, p.getZ() + 1);
+                    }
+                }
+            }
+        });
 
         MaterialBlocks.PICKER_OPENER = hand -> {
             MinecraftClient client = MinecraftClient.getInstance();

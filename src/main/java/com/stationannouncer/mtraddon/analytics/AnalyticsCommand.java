@@ -58,6 +58,9 @@ public final class AnalyticsCommand {
                         .then(CommandManager.argument("margin", IntegerArgumentType.integer(0, 1024))
                                 .executes(context -> BasemapScanner.startScan(context.getSource(),
                                         IntegerArgumentType.getInteger(context, "margin")))))
+                // only what changed since it was drawn (chunks saved since) + what is missing
+                .then(CommandManager.literal("update")
+                        .executes(context -> BasemapScanner.startScan(context.getSource(), DEFAULT_BASEMAP_MARGIN, true)))
                 .then(CommandManager.literal("status")
                         .executes(context -> {
                             context.getSource().sendFeedback(() -> Text.literal("Basemap: "

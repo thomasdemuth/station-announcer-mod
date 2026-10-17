@@ -1,0 +1,141 @@
+{
+ "parent": "minecraft:block/block",
+ "textures": {
+  "stripes": "station_announcer:block/construction/barricade_stripes",
+  "edge": "station_announcer:block/construction/barricade_edge",
+  "post": "station_announcer:block/construction/barricade_post",
+  "skid": "station_announcer:block/construction/barricade_skid",
+  "lamp": "station_announcer:block/construction/barricade_lamp_body",
+  "lens": "station_announcer:block/construction/barricade_lens",
+  "particle": "station_announcer:block/construction/barricade_lamp_body"
+ },
+ "elements": [
+  {
+   "from": [
+    14.7,
+    23.4,
+    7.1
+   ],
+   "to": [
+    17.3,
+    25.2,
+    8.9
+   ],
+   "faces": {
+    "north": {
+     "texture": "#lamp",
+     "uv": [
+      13.4,
+      6.8,
+      16,
+      8.6
+     ]
+    },
+    "south": {
+     "texture": "#lamp",
+     "uv": [
+      13.4,
+      6.8,
+      16,
+      8.6
+     ]
+    },
+    "east": {
+     "texture": "#lamp",
+     "uv": [
+      7.1,
+      6.8,
+      8.9,
+      8.6
+     ]
+    },
+    "west": {
+     "texture": "#lamp",
+     "uv": [
+      7.1,
+      6.8,
+      8.9,
+      8.6
+     ]
+    },
+    "up": {
+     "texture": "#lamp",
+     "uv": [
+      13.4,
+      7.1,
+      16,
+      8.9
+     ]
+    },
+    "down": {
+     "texture": "#lamp",
+     "uv": [
+      13.4,
+      7.1,
+      16,
+      8.9
+     ]
+    }
+   }
+  },
+  {
+   "from": [
+    14.8,
+    25.2,
+    7.55
+   ],
+   "to": [
+    17.2,
+    27.6,
+    8.45
+   ],
+   "faces": {
+    "north": {
+     "texture": "#lens",
+     "uv": [
+      0,
+      0,
+      16,
+      16
+     ]
+    },
+    "south": {
+     "texture": "#lens",
+     "uv": [
+      0,
+      0,
+      16,
+      16
+     ]
+    },
+    "east": {
+     "texture": "#lamp",
+     "uv": [
+      7.55,
+      4.4,
+      8.45,
+      6.8
+     ]
+    },
+    "west": {
+     "texture": "#lamp",
+     "uv": [
+      7.55,
+      4.4,
+      8.45,
+      6.8
+     ]
+    },
+    "up": {
+     "texture": "#lamp",
+     "uv": [
+      13.6,
+      7.55,
+      16,
+      8.45
+     ]
+    }
+   }
+  }
+ ]
+}

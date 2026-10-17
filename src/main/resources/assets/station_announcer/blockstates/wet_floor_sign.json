@@ -1,0 +1,49 @@
+{
+  "variants": {
+    "facing=north,variant=wet_floor": {
+      "model": "station_announcer:block/construction/wet_floor_sign_wet_floor"
+    },
+    "facing=north,variant=caution": {
+      "model": "station_announcer:block/construction/wet_floor_sign_caution"
+    },
+    "facing=north,variant=closed": {
+      "model": "station_announcer:block/construction/wet_floor_sign_closed"
+    },
+    "facing=east,variant=wet_floor": {
+      "model": "station_announcer:block/construction/wet_floor_sign_wet_floor",
+      "y": 90
+    },
+    "facing=east,variant=caution": {
+      "model": "station_announcer:block/construction/wet_floor_sign_caution",
+      "y": 90
+    },
+    "facing=east,variant=closed": {
+      "model": "station_announcer:block/construction/wet_floor_sign_closed",
+      "y": 90
+    },
+    "facing=south,variant=wet_floor": {
+      "model": "station_announcer:block/construction/wet_floor_sign_wet_floor",
+      "y": 180
+    },
+    "facing=south,variant=caution": {
+      "model": "station_announcer:block/construction/wet_floor_sign_caution",
+      "y": 180
+    },
+    "facing=south,variant=closed": {
+      "model": "station_announcer:block/construction/wet_floor_sign_closed",
+      "y": 180
+    },
+    "facing=west,variant=wet_floor": {
+      "model": "station_announcer:block/construction/wet_floor_sign_wet_floor",
+      "y": 270
+    },
+    "facing=west,variant=caution": {
+      "model": "station_announcer:block/construction/wet_floor_sign_caution",
+      "y": 270
+    },
+    "facing=west,variant=closed": {
+      "model": "station_announcer:block/construction/wet_floor_sign_closed",
+      "y": 270
+    }
+  }
+}

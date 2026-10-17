@@ -75,7 +75,7 @@ public final class ClientLayouts {
     };
 
     /** One station's state as last heard from the server. */
-    public record Entry(byte state, String message, @Nullable JsonObject layout, long receivedAt) {
+    public record Entry(byte state, String message, @Nullable JsonObject layout, long receivedAt, int removedOpenings) {
     }
 
     private static final Map<Long, Entry> ENTRIES = new ConcurrentHashMap<>();
@@ -91,8 +91,9 @@ public final class ClientLayouts {
             byte state = buf.readByte();
             String message = buf.readString(512);
             byte[] data = buf.readByteArray();
+            int removed = buf.isReadable() ? buf.readVarInt() : 0;
             JsonObject layout = data.length == 0 ? null : unzip(data);
-            client.execute(() -> receive(stationId, state, message, layout));
+            client.execute(() -> receive(stationId, state, message, layout, removed));
         });
         ClientPlayConnectionEvents.DISCONNECT.register((handler, client) -> {
             ENTRIES.clear();
@@ -102,14 +103,14 @@ public final class ClientLayouts {
         net.fabricmc.fabric.api.client.rendering.v1.HudRenderCallback.EVENT.register(ClientLayouts::renderLegend);
     }
 
-    private static void receive(long stationId, byte state, String message, @Nullable JsonObject layout) {
+    private static void receive(long stationId, byte state, String message, @Nullable JsonObject layout, int removed) {
         if (state == LayoutScanner.STATE_HIDE) {
             overlayStation = 0;
             return;
         }
         Entry previous = ENTRIES.get(stationId);
         JsonObject kept = layout != null ? layout : previous == null ? null : previous.layout();
-        ENTRIES.put(stationId, new Entry(state, message, kept, System.currentTimeMillis()));
+        ENTRIES.put(stationId, new Entry(state, message, kept, System.currentTimeMillis(), removed));
         if (state == LayoutScanner.STATE_DONE && layout != null) {
             overlayStation = stationId;
             overlayUntil = System.currentTimeMillis() + OVERLAY_MILLIS;
@@ -134,7 +135,18 @@ public final class ClientLayouts {
         overlayUntil = System.currentTimeMillis() + OVERLAY_MILLIS;
     }
 
-    /** Ask the server: 0 = status/data, 1 = scan this station, 2 = scan every station. */
+    /** Remove one suggested street opening at a station (the server remembers it and rescans). */
+    public static void dismissOpening(long stationId, int x, int y, int z) {
+        PacketByteBuf buf = PacketByteBufs.create();
+        buf.writeByte(LayoutScanner.ACTION_DISMISS_OPENING);
+        buf.writeLong(stationId);
+        buf.writeInt(x);
+        buf.writeInt(y);
+        buf.writeInt(z);
+        ClientPlayNetworking.send(LayoutScanner.REQUEST_C2S, buf);
+    }
+
+    /** Ask the server: 0 = status/data, 1 = scan this station, 2 = scan every station, 4 = restore removed openings. */
     public static void request(int action, long stationId) {
         PacketByteBuf buf = PacketByteBufs.create();
         buf.writeByte(action);

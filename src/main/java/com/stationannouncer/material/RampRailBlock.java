@@ -360,4 +360,10 @@ public class RampRailBlock extends Block {
         }
         return state;
     }
+
+    @Override
+    public BlockState onBreak(World world, BlockPos pos, BlockState state, net.minecraft.entity.player.PlayerEntity player) {
+        MaterialBlocks.clientRemesh(world, pos);
+        return super.onBreak(world, pos, state, player);
+    }
 }

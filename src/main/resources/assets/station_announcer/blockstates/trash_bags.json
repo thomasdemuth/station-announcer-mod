@@ -1,0 +1,100 @@
+{
+  "variants": {
+    "bags=1": [
+      {
+        "model": "station_announcer:block/litter/trash_bags_1_a"
+      },
+      {
+        "model": "station_announcer:block/litter/trash_bags_1_a",
+        "y": 90
+      },
+      {
+        "model": "station_announcer:block/litter/trash_bags_1_a",
+        "y": 180
+      },
+      {
+        "model": "station_announcer:block/litter/trash_bags_1_a",
+        "y": 270
+      },
+      {
+        "model": "station_announcer:block/litter/trash_bags_1_b"
+      },
+      {
+        "model": "station_announcer:block/litter/trash_bags_1_b",
+        "y": 90
+      },
+      {
+        "model": "station_announcer:block/litter/trash_bags_1_b",
+        "y": 180
+      },
+      {
+        "model": "station_announcer:block/litter/trash_bags_1_b",
+        "y": 270
+      }
+    ],
+    "bags=2": [
+      {
+        "model": "station_announcer:block/litter/trash_bags_2_a"
+      },
+      {
+        "model": "station_announcer:block/litter/trash_bags_2_a",
+        "y": 90
+      },
+      {
+        "model": "station_announcer:block/litter/trash_bags_2_a",
+        "y": 180
+      },
+      {
+        "model": "station_announcer:block/litter/trash_bags_2_a",
+        "y": 270
+      },
+      {
+        "model": "station_announcer:block/litter/trash_bags_2_b"
+      },
+      {
+        "model": "station_announcer:block/litter/trash_bags_2_b",
+        "y": 90
+      },
+      {
+        "model": "station_announcer:block/litter/trash_bags_2_b",
+        "y": 180
+      },
+      {
+        "model": "station_announcer:block/litter/trash_bags_2_b",
+        "y": 270
+      }
+    ],
+    "bags=3": [
+      {
+        "model": "station_announcer:block/litter/trash_bags_3_a"
+      },
+      {
+        "model": "station_announcer:block/litter/trash_bags_3_a",
+        "y": 90
+      },
+      {
+        "model": "station_announcer:block/litter/trash_bags_3_a",
+        "y": 180
+      },
+      {
+        "model": "station_announcer:block/litter/trash_bags_3_a",
+        "y": 270
+      },
+      {
+        "model": "station_announcer:block/litter/trash_bags_3_b"
+      },
+      {
+        "model": "station_announcer:block/litter/trash_bags_3_b",
+        "y": 90
+      },
+      {
+        "model": "station_announcer:block/litter/trash_bags_3_b",
+        "y": 180
+      },
+      {
+        "model": "station_announcer:block/litter/trash_bags_3_b",
+        "y": 270
+      }
+    ]
+  }
+}

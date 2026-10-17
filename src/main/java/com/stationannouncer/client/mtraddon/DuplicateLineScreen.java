@@ -80,7 +80,7 @@ public class DuplicateLineScreen extends Screen {
                 if (rows.size() >= MAX_ROWS_TOTAL) {
                     break;
                 }
-                rows.add(new Row(route, PlatformGroupScreen.firstLang(route.getName()),
+                rows.add(new Row(route, PlatformSettingsScreen.firstLang(route.getName()),
                         route.getRoutePlatforms().size()));
             }
         } catch (Exception ignored) {
@@ -169,9 +169,9 @@ public class DuplicateLineScreen extends Screen {
 
             status = skipped > 0
                     ? Text.translatable("gui.station_announcer.duplicate_line.done_partial",
-                    PlatformGroupScreen.firstLang(copy.getName()), copied, skipped).getString()
+                    PlatformSettingsScreen.firstLang(copy.getName()), copied, skipped).getString()
                     : Text.translatable("gui.station_announcer.duplicate_line.done",
-                    PlatformGroupScreen.firstLang(copy.getName()), copied).getString();
+                    PlatformSettingsScreen.firstLang(copy.getName()), copied).getString();
             statusColor = skipped > 0 ? WARN : OK;
         } catch (Exception e) {
             StationAnnouncer.LOGGER.warn("Could not duplicate route", e);

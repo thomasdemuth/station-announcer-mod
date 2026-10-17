@@ -1,5 +1,6 @@
 package com.stationannouncer.mixin;
 
+import com.stationannouncer.mtr.PaTrains;
 import com.stationannouncer.mtraddon.DoorObstructionEngine;
 import com.stationannouncer.mtraddon.GapFillerEngine;
 import com.stationannouncer.mtraddon.HoldRuleEngine;
@@ -145,6 +146,8 @@ public abstract class VehicleMixin extends VehicleSchema {
                                                   CallbackInfo ci) {
         AnalyticsRecorder.afterStartUp(getId(), speed, data,
                 ((VehicleDeviationAccessor) (Object) this).stationAnnouncer$getDeviation());
+        // PA "after departure" announcements (one volatile read when nothing listens).
+        PaTrains.afterStartUp(getId(), speed, data);
     }
 
     /**
@@ -176,6 +179,24 @@ public abstract class VehicleMixin extends VehicleSchema {
     }
 
     /**
+     * <b>PA on-board announcements — "before arrival".</b> {@code simulateMoving} runs
+     * every tick a vehicle moves (javap 4.0.1: {@code private void
+     * simulateMoving(JLObjectArrayList;I)V}); HEAD reads the speed and progress before
+     * this tick's move. Returns on one volatile read when no route has on-board
+     * announcements, and at most once a second per vehicle otherwise.
+     *
+     * <p><b>Thread:</b> the vehicle's SIMULATOR thread (clientside vehicles are ignored).</p>
+     */
+    @Inject(method = "simulateMoving(JLorg/mtr/libraries/it/unimi/dsi/fastutil/objects/ObjectArrayList;I)V",
+            at = @At("HEAD"))
+    private void stationAnnouncer$paApproach(
+            long millisElapsed,
+            ObjectArrayList<Object2ObjectAVLTreeMap<Position, Object2ObjectAVLTreeMap<Position, VehiclePosition>>> vehiclePositions,
+            int currentIndex, CallbackInfo ci) {
+        PaTrains.tickMoving(getId(), vehicleExtraData, railProgress, speed, data);
+    }
+
+    /**
      * <b>Gap fillers — the per-tick sequencer.</b> {@code simulateStopped} runs
      * every tick a vehicle stands still (javap 4.0.1: {@code private void
      * simulateStopped(JLObjectArrayList;I)V}); HEAD lands before its own door and
@@ -192,6 +213,9 @@ public abstract class VehicleMixin extends VehicleSchema {
             ObjectArrayList<Object2ObjectAVLTreeMap<Position, Object2ObjectAVLTreeMap<Position, VehiclePosition>>> vehiclePositions,
             int currentIndex, CallbackInfo ci) {
         GapFillerEngine.tickStopped(getId(), vehicleExtraData, railProgress, data);
+        // PA train announcements: doors open / doors closing (after the filler engine,
+        // whose planned close it reads). One volatile read when no PA source listens.
+        PaTrains.tickStopped(getId(), vehicleExtraData, railProgress, elapsedDwellTime, data);
         if (GapFillerEngine.blocksDeparture(getId())) {
             // simulate() already ran this tick's decrement (javap: doorCooldown =
             // doorsOpen ? 4200 : max(0, doorCooldown - elapsed)), so 1 ms here holds

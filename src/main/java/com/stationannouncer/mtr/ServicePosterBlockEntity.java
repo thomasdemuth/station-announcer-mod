@@ -28,6 +28,8 @@ public class ServicePosterBlockEntity extends BlockEntity {
     private long posterId;
     @Nullable
     private ServicePoster snapshot;
+    /** 0 new … 3 tagged (the Maintenance Tool cycles it, ATMOSPHERE_PLAN.md §1 D). */
+    private int wear;
 
     public ServicePosterBlockEntity(BlockPos pos, BlockState state) {
         super(MtrStationDecor.SERVICE_POSTER_BLOCK_ENTITY, pos, state);
@@ -42,6 +44,14 @@ public class ServicePosterBlockEntity extends BlockEntity {
         return snapshot;
     }
 
+    public int getWear() {
+        return wear;
+    }
+
+    public void setWear(int wear) {
+        this.wear = Math.max(0, Math.min(3, wear));
+    }
+
     /** Server thread. {@code null} poster with id 0 clears the frame. */
     public void setPoster(long id, @Nullable ServicePoster poster) {
         this.posterId = id;
@@ -52,6 +62,9 @@ public class ServicePosterBlockEntity extends BlockEntity {
     protected void writeNbt(NbtCompound nbt) {
         super.writeNbt(nbt);
         nbt.putLong("PosterId", posterId);
+        if (wear != 0) {
+            nbt.putInt("Wear", wear);
+        }
         if (snapshot != null) {
             nbt.putString("Poster", snapshot.toJson().toString());
         }
@@ -61,6 +74,7 @@ public class ServicePosterBlockEntity extends BlockEntity {
     public void readNbt(NbtCompound nbt) {
         super.readNbt(nbt);
         posterId = nbt.getLong("PosterId");
+        wear = Math.max(0, Math.min(3, nbt.getInt("Wear")));
         snapshot = null;
         if (nbt.contains("Poster")) {
             try {

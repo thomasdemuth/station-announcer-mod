@@ -31,6 +31,7 @@ import java.util.Map;
 @Environment(EnvType.CLIENT)
 public final class ClientLineStyles {
     private static volatile Map<String, LineStyles.Style> styles = Map.of();
+    private static volatile Map<String, LineStyles.RouteStyle> routeStyles = Map.of();
     private static volatile int version;
 
     private ClientLineStyles() {
@@ -42,7 +43,30 @@ public final class ClientLineStyles {
         if (current.isEmpty() || routeOrLineName == null) {
             return LineStyles.Style.DEFAULT;
         }
-        return current.getOrDefault(LineStyles.lineKey(routeOrLineName), LineStyles.Style.DEFAULT);
+        LineStyles.Style line = current.getOrDefault(LineStyles.lineKey(routeOrLineName), LineStyles.Style.DEFAULT);
+        Map<String, LineStyles.RouteStyle> routes = routeStyles;
+        return routes.isEmpty() ? line
+                : routes.getOrDefault(LineStyles.routeKey(routeOrLineName), LineStyles.RouteStyle.NONE).over(line);
+    }
+
+    /** The line's own style, ignoring any route override (the route screen's "Same as line"). */
+    public static LineStyles.Style lineStyle(String routeOrLineName) {
+        return routeOrLineName == null ? LineStyles.Style.DEFAULT
+                : styles.getOrDefault(LineStyles.lineKey(routeOrLineName), LineStyles.Style.DEFAULT);
+    }
+
+    /** A route's override of its line's style ({@link LineStyles.RouteStyle#NONE} = none). */
+    public static LineStyles.RouteStyle routeStyle(String routeName) {
+        return routeName == null ? LineStyles.RouteStyle.NONE
+                : routeStyles.getOrDefault(LineStyles.routeKey(routeName), LineStyles.RouteStyle.NONE);
+    }
+
+    /** Sends a route's override; the server answers with a full resync. */
+    public static void sendRoute(String routeName, LineStyles.RouteStyle style) {
+        PacketByteBuf buf = PacketByteBufs.create();
+        buf.writeString(LineStyles.routeKey(routeName), LineStyles.MAX_LINE_LENGTH);
+        LineStyles.writeRouteStyle(buf, style);
+        ClientPlayNetworking.send(LineStyles.UPDATE_ROUTE_STYLE_C2S, buf);
     }
 
     /** The bullet shape for a route or line name. */
@@ -73,43 +97,25 @@ public final class ClientLineStyles {
                 String line = buf.readString(LineStyles.MAX_LINE_LENGTH);
                 next.put(line, LineStyles.readStyle(buf));
             }
+            Map<String, LineStyles.RouteStyle> nextRoutes = new HashMap<>();
+            int routeCount = buf.isReadable() ? buf.readVarInt() : 0;
+            if (routeCount < 0 || routeCount > 10_000) {
+                return;
+            }
+            for (int i = 0; i < routeCount; i++) {
+                String key = buf.readString(LineStyles.MAX_LINE_LENGTH);
+                nextRoutes.put(key, LineStyles.readRouteStyle(buf));
+            }
             client.execute(() -> {
                 styles = Map.copyOf(next);
+                routeStyles = Map.copyOf(nextRoutes);
                 version++;
             });
         });
         ClientPlayConnectionEvents.DISCONNECT.register((handler, client) -> {
             styles = Map.of();
+            routeStyles = Map.of();
             version++;
-        });
-
-        // "Line style…" on MTR's Edit Route screen, one row above the addon's
-        // Announcement button: bullet text, shape, colour and ink for the whole
-        // LINE (both directions).
-        ScreenEvents.AFTER_INIT.register((client, screen, scaledWidth, scaledHeight) -> {
-            if (!(screen instanceof org.mtr.mod.screen.EditRouteScreen)) {
-                return;
-            }
-            if (!org.mtr.mod.client.MinecraftClientData.hasPermission()) {
-                return;
-            }
-            org.mtr.core.data.Route route = readRoute(screen);
-            if (route == null || LineStyles.lineKey(route.getName()).isEmpty()) {
-                return;
-            }
-            ButtonWidget button = ButtonWidget.builder(Text.translatable("gui.station_announcer.line_style.open"), b -> {
-                        // Commit what is typed in MTR's own fields first (name, colour,
-                        // route number): coming back re-runs MTR's init, which reloads
-                        // every field from the route and would otherwise drop them.
-                        commitEdits(screen);
-                        client.setScreen(new LineStyleScreen(route, screen));
-                    })
-                    .dimensions(screen.width - 124, screen.height - 46, 120, 20)
-                    .tooltip(net.minecraft.client.gui.tooltip.Tooltip.of(
-                            Text.translatable("gui.station_announcer.line_style.tooltip",
-                                    LineStyles.lineKey(route.getName()))))
-                    .build();
-            Screens.getButtons(screen).add(button);
         });
     }
 
@@ -134,16 +140,12 @@ public final class ClientLineStyles {
             StationAnnouncer.LOGGER.info("[line-style dev] no route matching '{}' ({} routes)", part,
                     org.mtr.mod.client.MinecraftClientData.getDashboardInstance().routes.size());
         } else if (args.equals("open")) {
-            if (client.currentScreen != null) {
-                for (net.minecraft.client.gui.widget.ClickableWidget widget : Screens.getButtons(client.currentScreen)) {
-                    if (widget instanceof ButtonWidget button
-                            && button.getMessage().getString().startsWith("Line style")) {
-                        button.onPress();
-                        return;
-                    }
-                }
+            org.mtr.core.data.Route route = client.currentScreen == null ? null : readRoute(client.currentScreen);
+            if (route != null) {
+                client.setScreen(new LineStyleScreen(route, client.currentScreen));
+                return;
             }
-            StationAnnouncer.LOGGER.info("[line-style dev] no Line style button on {}", client.currentScreen);
+            StationAnnouncer.LOGGER.info("[line-style dev] not on MTR's Edit Route screen ({})", client.currentScreen);
         } else if (client.currentScreen instanceof LineStyleScreen screen) {
             screen.devCommand(args);
         }

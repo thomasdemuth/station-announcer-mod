@@ -1,0 +1,351 @@
+{
+  "multipart": [
+    {
+      "when": {
+        "facing": "north",
+        "variant": "plain"
+      },
+      "apply": {
+        "model": "station_announcer:block/construction/construction_wall_sheet_plain"
+      }
+    },
+    {
+      "when": {
+        "facing": "north",
+        "variant": "notice"
+      },
+      "apply": {
+        "model": "station_announcer:block/construction/construction_wall_sheet_notice"
+      }
+    },
+    {
+      "when": {
+        "facing": "north",
+        "variant": "no_admittance"
+      },
+      "apply": {
+        "model": "station_announcer:block/construction/construction_wall_sheet_no_admittance"
+      }
+    },
+    {
+      "when": {
+        "facing": "north"
+      },
+      "apply": {
+        "model": "station_announcer:block/construction/construction_wall_stud"
+      }
+    },
+    {
+      "when": {
+        "facing": "north",
+        "up": "false"
+      },
+      "apply": {
+        "model": "station_announcer:block/construction/construction_wall_cap"
+      }
+    },
+    {
+      "when": {
+        "facing": "north",
+        "down": "false"
+      },
+      "apply": {
+        "model": "station_announcer:block/construction/construction_wall_base"
+      }
+    },
+    {
+      "when": {
+        "facing": "north",
+        "left": "false"
+      },
+      "apply": {
+        "model": "station_announcer:block/construction/construction_wall_trim_left"
+      }
+    },
+    {
+      "when": {
+        "facing": "north",
+        "right": "false"
+      },
+      "apply": {
+        "model": "station_announcer:block/construction/construction_wall_trim_right"
+      }
+    },
+    {
+      "when": {
+        "facing": "north",
+        "left": "true"
+      },
+      "apply": {
+        "model": "station_announcer:block/construction/construction_wall_batten_left"
+      }
+    },
+    {
+      "when": {
+        "facing": "east",
+        "variant": "plain"
+      },
+      "apply": {
+        "model": "station_announcer:block/construction/construction_wall_sheet_plain",
+        "y": 90
+      }
+    },
+    {
+      "when": {
+        "facing": "east",
+        "variant": "notice"
+      },
+      "apply": {
+        "model": "station_announcer:block/construction/construction_wall_sheet_notice",
+        "y": 90
+      }
+    },
+    {
+      "when": {
+        "facing": "east",
+        "variant": "no_admittance"
+      },
+      "apply": {
+        "model": "station_announcer:block/construction/construction_wall_sheet_no_admittance",
+        "y": 90
+      }
+    },
+    {
+      "when": {
+        "facing": "east"
+      },
+      "apply": {
+        "model": "station_announcer:block/construction/construction_wall_stud",
+        "y": 90
+      }
+    },
+    {
+      "when": {
+        "facing": "east",
+        "up": "false"
+      },
+      "apply": {
+        "model": "station_announcer:block/construction/construction_wall_cap",
+        "y": 90
+      }
+    },
+    {
+      "when": {
+        "facing": "east",
+        "down": "false"
+      },
+      "apply": {
+        "model": "station_announcer:block/construction/construction_wall_base",
+        "y": 90
+      }
+    },
+    {
+      "when": {
+        "facing": "east",
+        "left": "false"
+      },
+      "apply": {
+        "model": "station_announcer:block/construction/construction_wall_trim_left",
+        "y": 90
+      }
+    },
+    {
+      "when": {
+        "facing": "east",
+        "right": "false"
+      },
+      "apply": {
+        "model": "station_announcer:block/construction/construction_wall_trim_right",
+        "y": 90
+      }
+    },
+    {
+      "when": {
+        "facing": "east",
+        "left": "true"
+      },
+      "apply": {
+        "model": "station_announcer:block/construction/construction_wall_batten_left",
+        "y": 90
+      }
+    },
+    {
+      "when": {
+        "facing": "south",
+        "variant": "plain"
+      },
+      "apply": {
+        "model": "station_announcer:block/construction/construction_wall_sheet_plain",
+        "y": 180
+      }
+    },
+    {
+      "when": {
+        "facing": "south",
+        "variant": "notice"
+      },
+      "apply": {
+        "model": "station_announcer:block/construction/construction_wall_sheet_notice",
+        "y": 180
+      }
+    },
+    {
+      "when": {
+        "facing": "south",
+        "variant": "no_admittance"
+      },
+      "apply": {
+        "model": "station_announcer:block/construction/construction_wall_sheet_no_admittance",
+        "y": 180
+      }
+    },
+    {
+      "when": {
+        "facing": "south"
+      },
+      "apply": {
+        "model": "station_announcer:block/construction/construction_wall_stud",
+        "y": 180
+      }
+    },
+    {
+      "when": {
+        "facing": "south",
+        "up": "false"
+      },
+      "apply": {
+        "model": "station_announcer:block/construction/construction_wall_cap",
+        "y": 180
+      }
+    },
+    {
+      "when": {
+        "facing": "south",
+        "down": "false"
+      },
+      "apply": {
+        "model": "station_announcer:block/construction/construction_wall_base",
+        "y": 180
+      }
+    },
+    {
+      "when": {
+        "facing": "south",
+        "left": "false"
+      },
+      "apply": {
+        "model": "station_announcer:block/construction/construction_wall_trim_left",
+        "y": 180
+      }
+    },
+    {
+      "when": {
+        "facing": "south",
+        "right": "false"
+      },
+      "apply": {
+        "model": "station_announcer:block/construction/construction_wall_trim_right",
+        "y": 180
+      }
+    },
+    {
+      "when": {
+        "facing": "south",
+        "right": "true"
+      },
+      "apply": {
+        "model": "station_announcer:block/construction/construction_wall_batten_right",
+        "y": 180
+      }
+    },
+    {
+      "when": {
+        "facing": "west",
+        "variant": "plain"
+      },
+      "apply": {
+        "model": "station_announcer:block/construction/construction_wall_sheet_plain",
+        "y": 270
+      }
+    },
+    {
+      "when": {
+        "facing": "west",
+        "variant": "notice"
+      },
+      "apply": {
+        "model": "station_announcer:block/construction/construction_wall_sheet_notice",
+        "y": 270
+      }
+    },
+    {
+      "when": {
+        "facing": "west",
+        "variant": "no_admittance"
+      },
+      "apply": {
+        "model": "station_announcer:block/construction/construction_wall_sheet_no_admittance",
+        "y": 270
+      }
+    },
+    {
+      "when": {
+        "facing": "west"
+      },
+      "apply": {
+        "model": "station_announcer:block/construction/construction_wall_stud",
+        "y": 270
+      }
+    },
+    {
+      "when": {
+        "facing": "west",
+        "up": "false"
+      },
+      "apply": {
+        "model": "station_announcer:block/construction/construction_wall_cap",
+        "y": 270
+      }
+    },
+    {
+      "when": {
+        "facing": "west",
+        "down": "false"
+      },
+      "apply": {
+        "model": "station_announcer:block/construction/construction_wall_base",
+        "y": 270
+      }
+    },
+    {
+      "when": {
+        "facing": "west",
+        "left": "false"
+      },
+      "apply": {
+        "model": "station_announcer:block/construction/construction_wall_trim_left",
+        "y": 270
+      }
+    },
+    {
+      "when": {
+        "facing": "west",
+        "right": "false"
+      },
+      "apply": {
+        "model": "station_announcer:block/construction/construction_wall_trim_right",
+        "y": 270
+      }
+    },
+    {
+      "when": {
+        "facing": "west",
+        "right": "true"
+      },
+      "apply": {
+        "model": "station_announcer:block/construction/construction_wall_batten_right",
+        "y": 270
+      }
+    }
+  ]
+}

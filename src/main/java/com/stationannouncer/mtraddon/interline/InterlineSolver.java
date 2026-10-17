@@ -39,6 +39,14 @@ public final class InterlineSolver {
     private static final int MAX_STARTS = 6;
     private static final long PAD_STEP_MILLIS = 1_000;
     private static final double PAD_MIN_GAIN = 0.02;
+    /**
+     * A hold may keep a train at its platform for at most this share of the gap between trains
+     * calling there, and must leave at least {@link #HOLD_CLEARANCE_MILLIS} before the next one —
+     * otherwise the trains behind queue up (Thomas, 2026-10-01: a 3 min hold suggested on a section
+     * running every minute would clog the line).
+     */
+    private static final double HOLD_MAX_OCCUPANCY = 0.5;
+    private static final long HOLD_CLEARANCE_MILLIS = 30_000;
 
     private InterlineSolver() {
     }
@@ -278,20 +286,23 @@ public final class InterlineSolver {
 
         // ---- dwell pads
         Map<Timetable.PadSite, Long> pads = new LinkedHashMap<>();
+        Map<Timetable.PadSite, Long> ceilings = new LinkedHashMap<>();
+        Map<Timetable.PadSite, Long> gaps = new LinkedHashMap<>();
         List<InterlineModel.HoldSite> sites = new ArrayList<>();
         if (request.pads() && analysis.maxPadMs() > 0) {
             addSites(sites, forward, feedsF);
             if (reverse != null) {
                 addSites(sites, reverse, feedsR);
             }
+            ceilings = padCeilings(sites, analysis, departures, gaps);
             if (!sites.isEmpty()) {
-                pads = padSearch(scorer, bestDelays, sites, analysis.maxPadMs(), direction);
+                pads = padSearch(scorer, bestDelays, sites, ceilings, direction);
                 if (request.delays() && !same(bestDelays, current, period)) {
                     // Keeping today's delays and only holding trains can beat new delays plus
                     // holds (a depot running the same section twice, e.g. out and back, where a
                     // delay moves both runs together): try it, keep the cheaper answer.
                     Map<Long, Long> kept = new LinkedHashMap<>(current);
-                    Map<Timetable.PadSite, Long> keptPads = padSearch(scorer, kept, sites, analysis.maxPadMs(), direction);
+                    Map<Timetable.PadSite, Long> keptPads = padSearch(scorer, kept, sites, ceilings, direction);
                     if (finalScore(scorer, kept, keptPads, direction) < finalScore(scorer, bestDelays, pads, direction) - 0.005) {
                         bestDelays = kept;
                         pads = keptPads;
@@ -310,7 +321,7 @@ public final class InterlineSolver {
                         Map<Long, Long> refined = descend(directional, seed, variables, period);
                         Map<Long, Long> oneWayDelays = rebase(directional, refined, adjustable, period, pinFirst,
                                 directional.score(refined, Map.of()));
-                        Map<Timetable.PadSite, Long> oneWayPads = padSearch(scorer, oneWayDelays, sites, analysis.maxPadMs(), direction);
+                        Map<Timetable.PadSite, Long> oneWayPads = padSearch(scorer, oneWayDelays, sites, ceilings, direction);
                         double score = finalScore(scorer, oneWayDelays, oneWayPads, "balance");
                         if (score < bestFinal - 0.01) {
                             bestFinal = score;
@@ -356,6 +367,7 @@ public final class InterlineSolver {
         JsonObject frequencies = new JsonObject();
         chosenFrequency.forEach((id, f) -> frequencies.addProperty(Long.toString(id), f));
         out.add("frequencies", frequencies);
+        holdWarnings(sites, ceilings, gaps, pads, warnings);
         JsonArray padsJson = new JsonArray();
         for (InterlineModel.HoldSite site : sites) {
             Long extra = pads.get(new Timetable.PadSite(site.routeId(), site.stopIndex()));
@@ -657,8 +669,8 @@ public final class InterlineSolver {
      * the chosen one may not get worse; in balance/options mode they improve the balance.
      */
     private static Map<Timetable.PadSite, Long> padSearch(Scorer scorer, Map<Long, Long> delays,
-                                                          List<InterlineModel.HoldSite> sites, long maxPad,
-                                                          String direction) {
+                                                          List<InterlineModel.HoldSite> sites,
+                                                          Map<Timetable.PadSite, Long> ceilings, String direction) {
         InterlineModel.Stats[] base = scorer.stats(delays, Map.of());
         double baseF = badness(base[0]);
         double baseR = badness(base[1]);
@@ -691,7 +703,7 @@ public final class InterlineSolver {
         double best = start;
         for (InterlineModel.HoldSite stop : sites) {
             Timetable.PadSite site = new Timetable.PadSite(stop.routeId(), stop.stopIndex());
-            long ceiling = Math.max(0, Math.min(maxPad, 600_000 - stop.dwellMs()));
+            long ceiling = ceilings.getOrDefault(site, 0L);
             Map<Timetable.PadSite, Long> trial = new LinkedHashMap<>();
             for (long value = PAD_STEP_MILLIS; value <= ceiling; value += PAD_STEP_MILLIS) {
                 trial.put(site, value);
@@ -708,7 +720,7 @@ public final class InterlineSolver {
             for (InterlineModel.HoldSite stop : sites) {
                 Timetable.PadSite site = new Timetable.PadSite(stop.routeId(), stop.stopIndex());
                 long keep = pads.getOrDefault(site, 0L);
-                long ceiling = Math.max(0, Math.min(maxPad, 600_000 - stop.dwellMs()));
+                long ceiling = ceilings.getOrDefault(site, 0L);
                 for (long value = 0; value <= ceiling; value += PAD_STEP_MILLIS) {
                     pads.put(site, value);
                     double score = objective.applyAsDouble(pads);
@@ -726,6 +738,101 @@ public final class InterlineSolver {
         }
         pads.values().removeIf(value -> value <= 0);
         return spacing.applyAsDouble(empty) - spacing.applyAsDouble(pads) >= PAD_MIN_GAIN ? pads : new LinkedHashMap<>();
+    }
+
+    /**
+     * The longest pad each hold site can take: the configured maximum, MTR's 10 min dwell
+     * ceiling, and — the one that matters on a busy line — the platform's own traffic. Every
+     * train calling there (any depot, any route, not just this section's) counts; with the
+     * mean gap G between them a held train may occupy the platform for at most
+     * min(G × {@value #HOLD_MAX_OCCUPANCY}, G − 30 s). Sites with no room left are named in a
+     * warning; capped sites keep their smaller ceiling.
+     */
+    private static Map<Timetable.PadSite, Long> padCeilings(List<InterlineModel.HoldSite> sites,
+                                                            InterlineModel.Analysis analysis,
+                                                            Map<Long, long[]> departures,
+                                                            Map<Timetable.PadSite, Long> gaps) {
+        Map<Timetable.PadSite, Long> out = new LinkedHashMap<>();
+        long maxPad = analysis.maxPadMs();
+        for (InterlineModel.HoldSite site : sites) {
+            Timetable.PadSite key = new Timetable.PadSite(site.routeId(), site.stopIndex());
+            long ceiling = Math.max(0, Math.min(maxPad, 600_000 - site.dwellMs()));
+            long gap = platformGap(site.platformId(), analysis, departures);
+            if (gap > 0) {
+                long occupancy = Math.min(Math.round(gap * HOLD_MAX_OCCUPANCY), gap - HOLD_CLEARANCE_MILLIS);
+                ceiling = Math.min(ceiling, Math.max(0, occupancy - site.dwellMs()));
+                gaps.put(key, gap);
+            }
+            out.put(key, ceiling);
+        }
+        return out;
+    }
+
+    /**
+     * Says where the platform traffic limited the answer: holds the suggestion took right up to
+     * their cap, and — when no hold is suggested at all — stops with no room for one.
+     */
+    private static void holdWarnings(List<InterlineModel.HoldSite> sites, Map<Timetable.PadSite, Long> ceilings,
+                                     Map<Timetable.PadSite, Long> gaps, Map<Timetable.PadSite, Long> pads,
+                                     List<String> warnings) {
+        List<String> capped = new ArrayList<>();
+        List<String> blocked = new ArrayList<>();
+        for (InterlineModel.HoldSite site : sites) {
+            Timetable.PadSite key = new Timetable.PadSite(site.routeId(), site.stopIndex());
+            Long gap = gaps.get(key);
+            if (gap == null) {
+                continue;
+            }
+            long ceiling = ceilings.getOrDefault(key, 0L);
+            String label = site.stationName() + " (a train every " + duration(gap) + ")";
+            if (ceiling < PAD_STEP_MILLIS) {
+                blocked.add(label);
+            } else if (pads.getOrDefault(key, 0L) >= ceiling) {
+                capped.add(label + " held " + duration(ceiling) + " at most");
+            }
+        }
+        if (!capped.isEmpty()) {
+            warnings.add("Holds kept short so the next train is never blocked: "
+                    + String.join(", ", new LinkedHashSet<>(capped)) + ".");
+        }
+        if (pads.isEmpty() && !blocked.isEmpty()) {
+            warnings.add("No hold at " + String.join(", ", new LinkedHashSet<>(blocked))
+                    + ": a longer dwell there would make the trains behind queue.");
+        }
+    }
+
+    /**
+     * Mean gap between trains calling at a platform over the game day, from every depot whose
+     * cycle stops there (a route's first stop merged into the previous route's last is one
+     * stop, counted once). 0 = fewer than two trains a day (no limit).
+     */
+    static long platformGap(long platformId, InterlineModel.Analysis analysis, Map<Long, long[]> departures) {
+        long day = analysis.gameMillisPerDay();
+        long trains = 0;
+        for (InterlineModel.Depot depot : analysis.depots().values()) {
+            int visits = 0;
+            for (long routeId : depot.routeIds()) {
+                InterlineModel.Route route = analysis.routes().get(routeId);
+                if (route == null) {
+                    continue;
+                }
+                long[] platforms = route.platformIds();
+                for (int i = 0; i < platforms.length; i++) {
+                    if (platforms[i] == platformId && !(i == 0 && depot.mergedStart(routeId))) {
+                        visits++;
+                    }
+                }
+            }
+            if (visits == 0) {
+                continue;
+            }
+            long[] trips = departures.get(depot.id());
+            if (trips == null) {
+                trips = Timetable.departures(depot.effective(), day);
+            }
+            trains += (long) visits * trips.length;
+        }
+        return trains < 2 || day <= 0 ? 0 : day / trains;
     }
 
     // ------------------------------------------------------------ frequencies

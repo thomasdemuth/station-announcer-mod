@@ -250,6 +250,16 @@ public final class GapFillerEngine {
      * "doors open 1 s after stopping"): allowed only while the fillers are
      * fully out and our close has not come yet. True for every non-filler stop.
      */
+    /**
+     * PA train announcements: the sim-clock millis this vehicle's gap-filler stop
+     * closes its doors, or -1 when it is not at a filler stop or has already closed.
+     * Simulator thread (reads the vehicle's own entry).
+     */
+    public static long plannedCloseAt(long vehicleId) {
+        Stop stop = STOPS.get(vehicleId);
+        return stop == null || stop.closedAt >= 0 ? -1 : stop.closeAt;
+    }
+
     public static boolean mayOpenDoors(long vehicleId) {
         if (STOPS.isEmpty()) {
             return true;

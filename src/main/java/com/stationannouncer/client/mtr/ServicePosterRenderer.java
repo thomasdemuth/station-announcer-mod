@@ -65,6 +65,10 @@ public class ServicePosterRenderer implements BlockEntityRenderer<ServicePosterB
         matrices.scale(-unit, -unit, unit);
         PosterLayout.WorldSurface surface = new PosterLayout.WorldSurface(matrices, vertexConsumers);
         PosterLayout.Metrics metrics = PosterLayout.paint(surface, poster);
+        if (entity.getWear() > 0 && poster != EMPTY) {
+            SignWear.paintPoster(surface, entity.getPos().asLong() * 31 + entity.getPosterId(), entity.getWear(),
+                    PosterLayout.WIDTH, metrics.height());
+        }
         // The black frame around the sheet, a hair BEHIND it (positive z is away
         // from the viewer here) and still in front of the plate face.
         float border = 0.5f / 16.0f / unit;   // half a pixel, in canvas units

@@ -27,7 +27,7 @@ public class AddonServerConfig {
     /** Feature 1 — hold trains at a platform while a connecting train is approaching a watched platform. */
     public HoldRules holdRules = new HoldRules();
 
-    /** Random door obstructions — a low chance that something gets stuck in the doors on departure. */
+    /** Random door obstructions — a low chance that something gets stuck in the doors on departure. Crewed trains only (a rider holding a driver or guard key). */
     public DoorObstruction doorObstruction = new DoorObstruction();
 
     /** Feature 2 — per-route dwell time overrides at platforms. */
@@ -53,6 +53,60 @@ public class AddonServerConfig {
 
     /** Interline tooling — depot delays, depot groups, interline sections and headway suggestions (kept under the old "depotGroups" key so existing config files carry over). */
     public DepotGroups depotGroups = new DepotGroups();
+
+    /** Train crews for manual driving: driver / guard roles, buzzer interlocks, vigilance, horns. */
+    public Crew crew = new Crew();
+
+    public static class Crew {
+        /** Master switch; when false the crew mixins no-op with a single field read and no roles are accepted. */
+        public boolean enabled = true;
+
+        /** With a guard aboard, the driver cannot take power at a stop until the guard buzzes "ready" after closing the doors. */
+        public boolean driverWaitsForGuard = true;
+
+        /** With a driver aboard, the guard cannot close the doors at a stop until the driver has buzzed. */
+        public boolean guardWaitsForDriver = false;
+
+        /** With a guard aboard, only the guard works the doors (the driver's door key is ignored). */
+        public boolean guardOwnsDoors = true;
+
+        /**
+         * Vigilance (deadman) policy: {@code "player"} = each driver chooses in their own settings,
+         * {@code "required"} = always on (at the driver's interval, or {@link #vigilanceDefaultSeconds}),
+         * {@code "off"} = never.
+         */
+        public String vigilance = "player";
+
+        /** Interval used when vigilance is required and the driver has turned theirs off. */
+        public int vigilanceDefaultSeconds = 45;
+
+        /** Warning time before the emergency brake fires. */
+        public int vigilanceWarningSeconds = 6;
+
+        /**
+         * A driver must run the short startup ritual (key in, battery, brake test) before the train
+         * takes power — once per driver per train. Players can skip it in their own settings.
+         */
+        public boolean startupRequired = true;
+
+        /** Random incidents on crewed trains (small delays only): door fault, held by control, sick passenger, passenger alarm. */
+        public boolean incidents = true;
+        /** Chance per door close at a stop that a door will not lock until the crew cuts it out. */
+        public int doorFaultPercent = 2;
+        /** Chance per platform arrival of being held by control. */
+        public int heldPercent = 3;
+        public int heldMinSeconds = 8;
+        public int heldMaxSeconds = 25;
+        /** Chance per platform arrival of a sick passenger (doors stay open). */
+        public int sickPassengerPercent = 1;
+        public int sickPassengerMinSeconds = 30;
+        public int sickPassengerMaxSeconds = 60;
+        /** Expected passenger alarms (emergency brake) per hour of driving. */
+        public double passengerAlarmPerHour = 0.5;
+
+        /** How far a horn carries, in blocks (players further away are not sent it). */
+        public int hornRange = 160;
+    }
 
     public static class DepotGroups {
         /**
@@ -264,6 +318,15 @@ public class AddonServerConfig {
          * it samples).</p>
          */
         public boolean autoScan = true;
+
+        /**
+         * While the server runs, every this many minutes the basemap redraws the tiles
+         * whose chunks were saved since the tile was drawn (and draws newly explored
+         * land). Chunks reach the disk on the world's autosave, so 5 matches it. Only the
+         * changed tiles are read; 0 = off (launch pass and Map+'s Refresh only).
+         * Needs {@link #autoScan}.
+         */
+        public int basemapRefreshMinutes = 5;
     }
 
     public static class Analytics {

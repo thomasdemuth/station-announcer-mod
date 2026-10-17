@@ -1,0 +1,22 @@
+{
+  "variants": {
+    "": [
+      {
+        "model": "station_announcer:block/wear/wall_cracked_m0",
+        "weight": 3
+      },
+      {
+        "model": "station_announcer:block/wear/wall_cracked_m1",
+        "weight": 3
+      },
+      {
+        "model": "station_announcer:block/wear/wall_cracked_m2",
+        "weight": 2
+      },
+      {
+        "model": "station_announcer:block/wear/wall_cracked_m3",
+        "weight": 2
+      }
+    ]
+  }
+}

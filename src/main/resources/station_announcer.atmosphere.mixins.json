@@ -1,0 +1,15 @@
+{
+  "required": true,
+  "minVersion": "0.8",
+  "package": "com.stationannouncer.atmosphere.mixin",
+  "compatibilityLevel": "JAVA_17",
+  "mixins": [
+    "ChunkBlockLightProviderMixin",
+    "ChunkLightProviderAccessor"
+  ],
+  "client": [],
+  "server": [],
+  "injectors": {
+    "defaultRequire": 1
+  }
+}

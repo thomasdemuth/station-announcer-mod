@@ -1,0 +1,10 @@
+{
+  "replace": false,
+  "values": [
+    "station_announcer:grime_dust",
+    "station_announcer:grime_soot",
+    "station_announcer:grime_puddle",
+    "station_announcer:grime_gum",
+    "station_announcer:grime_oil"
+  ]
+}

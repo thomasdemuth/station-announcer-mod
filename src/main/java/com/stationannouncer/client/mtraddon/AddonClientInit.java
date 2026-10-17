@@ -117,6 +117,7 @@ public final class AddonClientInit {
             ClientHoldState.clear();
             ClientDoorObstructions.clear();
             ClientDwellOverrides.clear();
+            ClientPlatformSchedule.clear();
             ClientAnnouncementTemplates.clear();
             ClientAccessibility.clear();
             ClientLiftDoors.clear();
@@ -135,107 +136,39 @@ public final class AddonClientInit {
                     client.execute(() -> ClientDispatchInfo.setPort(port));
                 });
 
+        // Map+ offline copies, kept up to date while connected
+        OfflineMapSaver.register();
         registerDwellOverrideSync();
-        registerRouteDwellButton();
+        ClientPlatformSchedule.register();
+        registerPlatformScreen();
         registerAnnouncementTemplateSync();
-        registerRouteAnnouncementButton();
+        registerRouteScreen();
+        com.stationannouncer.client.gui.RouteTrainScreen.registerClient();
         ClientLineStyles.register();
+        ClientLineFolders.register();
+        // Custom track geometry: profile sync, client-thread marker, culling-box refresh.
+        com.stationannouncer.client.track.ClientTrackNetworking.register();
         registerAccessibilitySync();
         registerStationAccessibilityButton();
         registerLiftDoorSync();
         registerLiftDoorSidesButton();
         registerPlatformGroupSync();
-        registerPlatformGroupButton();
-        registerDispatchDashboardButton();
+        DashboardRail.register(); // the dashboard's tool rail (replaces the squeezed bottom buttons)
         registerDisruptionSync();
-        registerDisruptionsDashboardButton();
         registerInterlineReplies();
-        registerToolsDashboardButton();
         DrivingHud.register(); // Feature 4 — driving HUD (registers its own disconnect cleanup)
+        com.stationannouncer.client.mtraddon.crew.CrewClient.register(); // train crews: roles, buzzer, horn, vigilance
+        com.stationannouncer.client.mtraddon.cab.CabHud.register(); // cab HUD (hudStyle "cab"; the classic panel stays as a style)
+        com.stationannouncer.client.mtraddon.cab.CabPassengers.register(); // cosmetic platform passengers
+        com.stationannouncer.client.mtraddon.cab.CabSeat.register(); // cab seat + lean out (registers CabCamera too)
         // Journey directions: the addon_navigate receiver, the 4 Hz progress
         // tracker, the journey card and the in-world waypoint marker.
         ClientNav.register();
 
-        ScreenEvents.AFTER_INIT.register((client, screen, scaledWidth, scaledHeight) -> {
-            if (!(screen instanceof PlatformScreen) || !AddonClientConfig.get().showHoldRulesButton) {
-                return;
-            }
-            // Same visibility condition as MTR's own dashboard edits; the server
-            // still validates op level on save.
-            if (!MinecraftClientData.hasPermission()) {
-                return;
-            }
-            Platform platform = readPlatform(screen);
-            if (platform == null) {
-                return;
-            }
-            Screens.getButtons(screen).add(ButtonWidget.builder(
-                            Text.translatable("gui.station_announcer.hold_rules.button"),
-                            button -> client.setScreen(new HoldRuleScreen(platform, screen)))
-                    .dimensions(screen.width - 104, screen.height - 24, 100, 20)
-                    .build());
-        });
     }
 
     // -------------------------------------------- Dispatch web UI: dashboard button
 
-    /**
-     * Adds a "Dispatch" button beside MTR's "Transport System Map" button on every
-     * MTR dashboard (all transport modes share {@code DashboardScreen}). MTR's own
-     * button opens the CLIENT-side proxy webserver in multiplayer, which does not
-     * host the dispatch servlets, so this one targets the game server's synced
-     * port instead ({@link ClientDispatchInfo}). Hidden when the server reports no
-     * dispatch UI (feature off, webserver off, or server without the addon).
-     */
-    private static void registerDispatchDashboardButton() {
-        ScreenEvents.AFTER_INIT.register((client, screen, scaledWidth, scaledHeight) -> {
-            if (!(screen instanceof DashboardScreen) || !ClientDispatchInfo.isAvailable()) {
-                return;
-            }
-            // Find MTR's map button by its localized label, shrink it, and slot ours
-            // into the freed space so the bottom row keeps its layout.
-            String mapLabel = Text.translatable("gui.mtr.transport_system_map").getString();
-            ClickableWidget mapButton = null;
-            for (ClickableWidget widget : Screens.getButtons(screen)) {
-                if (widget instanceof ButtonWidget && mapLabel.equals(widget.getMessage().getString())) {
-                    mapButton = widget;
-                    break;
-                }
-            }
-            if (mapButton == null) {
-                return; // MTR layout changed — skip rather than overlap
-            }
-            int totalWidth = mapButton.getWidth();
-            int dispatchWidth = Math.min(80, totalWidth / 2);
-            if (dispatchWidth < 40) {
-                return; // row too cramped to split
-            }
-            // With enough room, carve a third slot for System Map+ ("Map+"); otherwise
-            // fall back to the original two-way split so small layouts stay usable.
-            int mapPlusWidth = Math.min(44, totalWidth / 4);
-            boolean withMapPlus = mapPlusWidth >= 34;
-            if (withMapPlus) {
-                dispatchWidth = Math.min(64, (totalWidth - mapPlusWidth) / 2);
-            }
-            mapButton.setWidth(totalWidth - dispatchWidth - 2 - (withMapPlus ? mapPlusWidth + 2 : 0));
-            Screens.getButtons(screen).add(ButtonWidget.builder(
-                            Text.translatable("gui.station_announcer.dispatch.button"),
-                            button -> Util.getOperatingSystem().open(URI.create(ClientDispatchInfo.url())))
-                    .dimensions(mapButton.getX() + mapButton.getWidth() + 2, mapButton.getY(), dispatchWidth, mapButton.getHeight())
-                    .build());
-            if (withMapPlus) {
-                Screens.getButtons(screen).add(ButtonWidget.builder(
-                                Text.translatable("gui.station_announcer.mapplus.button"),
-                                // ?player= tells the page whose live position is "you"
-                                // (usernames are [A-Za-z0-9_], safe in a query verbatim)
-                                button -> Util.getOperatingSystem().open(URI.create(
-                                        ClientDispatchInfo.url() + "map.html?player=" + client.getSession().getUsername())))
-                        .dimensions(mapButton.getX() + mapButton.getWidth() + 2 + dispatchWidth + 2, mapButton.getY(),
-                                mapPlusWidth, mapButton.getHeight())
-                        .build());
-            }
-        });
-    }
 
     // ------------------------- Feature 6: disruptions + temporary stop changes
 
@@ -316,46 +249,6 @@ public final class AddonClientInit {
                 });
     }
 
-    /**
-     * Adds a "Disruptions" button to MTR's dashboard, one row below the addon's
-     * "Dispatch" button: it splits MTR's "Resource Pack Creator" button the same
-     * way the dispatch button splits the "Transport System Map" button above it,
-     * so the two addon buttons line up on the right of the bottom two rows and
-     * MTR's own layout keeps working. {@code DashboardScreen} itself is never
-     * restructured — this is a plain {@code ScreenEvents.AFTER_INIT} injection.
-     */
-    private static void registerDisruptionsDashboardButton() {
-        ScreenEvents.AFTER_INIT.register((client, screen, scaledWidth, scaledHeight) -> {
-            if (!(screen instanceof DashboardScreen) || !AddonClientConfig.get().showDisruptionsButton) {
-                return;
-            }
-            if (!MinecraftClientData.hasPermission()) {
-                return;
-            }
-            String creatorLabel = Text.translatable("gui.mtr.resource_pack_creator").getString();
-            ClickableWidget hostButton = null;
-            for (ClickableWidget widget : Screens.getButtons(screen)) {
-                if (widget instanceof ButtonWidget && creatorLabel.equals(widget.getMessage().getString())) {
-                    hostButton = widget;
-                    break;
-                }
-            }
-            if (hostButton == null) {
-                return; // MTR layout changed — skip rather than overlap
-            }
-            int buttonWidth = Math.min(80, hostButton.getWidth() / 2);
-            if (buttonWidth < 40) {
-                return; // row too cramped to split
-            }
-            hostButton.setWidth(hostButton.getWidth() - buttonWidth - 2);
-            Screens.getButtons(screen).add(ButtonWidget.builder(
-                            Text.translatable("gui.station_announcer.disruptions.button"),
-                            button -> client.setScreen(new DisruptionsScreen(screen)))
-                    .dimensions(hostButton.getX() + hostButton.getWidth() + 2, hostButton.getY(),
-                            buttonWidth, hostButton.getHeight())
-                    .build());
-        });
-    }
 
     // ------------------------------- Depot groups + line tools (dashboard button)
 
@@ -373,46 +266,6 @@ public final class AddonClientInit {
                 });
     }
 
-    /**
-     * Adds a "Tools…" button to MTR's dashboard for the addon's line/depot tools
-     * (duplicate a line, depot groups). It splits MTR's own Options button the same way
-     * the addon's "Dispatch" and "Disruptions" buttons split the two map rows beside it,
-     * so MTR's layout keeps working and {@code DashboardScreen} is never restructured.
-     * One button, not two, because those two rows are the only splittable space left.
-     */
-    private static void registerToolsDashboardButton() {
-        ScreenEvents.AFTER_INIT.register((client, screen, scaledWidth, scaledHeight) -> {
-            if (!(screen instanceof DashboardScreen) || !AddonClientConfig.get().showToolsButton) {
-                return;
-            }
-            if (!MinecraftClientData.hasPermission()) {
-                return;
-            }
-            // "Options..." is a vanilla key, so the label is always resolvable.
-            String optionsLabel = Text.translatable("menu.options").getString();
-            ClickableWidget hostButton = null;
-            for (ClickableWidget widget : Screens.getButtons(screen)) {
-                if (widget instanceof ButtonWidget && optionsLabel.equals(widget.getMessage().getString())) {
-                    hostButton = widget;
-                    break;
-                }
-            }
-            if (hostButton == null) {
-                return; // MTR layout changed — skip rather than overlap
-            }
-            int buttonWidth = Math.min(52, hostButton.getWidth() / 2);
-            if (buttonWidth < 34) {
-                return; // row too cramped to split
-            }
-            hostButton.setWidth(hostButton.getWidth() - buttonWidth - 2);
-            Screens.getButtons(screen).add(ButtonWidget.builder(
-                            Text.translatable("gui.station_announcer.tools.button"),
-                            button -> client.setScreen(new DispatchToolsScreen(screen)))
-                    .dimensions(hostButton.getX() + hostButton.getWidth() + 2, hostButton.getY(),
-                            buttonWidth, hostButton.getHeight())
-                    .build());
-        });
-    }
 
     // ------------------------------------------- station accessibility
 
@@ -509,13 +362,14 @@ public final class AddonClientInit {
     }
 
     /**
-     * "Announcement…" button on MTR's Edit Route screen — right where the stock
-     * "Disable Next Station Announcements" checkbox lives, since the template
-     * feature generalises it. The Route rides the screen's protected
-     * {@code EditNameColorScreenBase.data} field, read reflectively like
-     * {@link #readPlatform}.
+     * MTR's Edit Route screen is replaced by our {@link RouteSettingsScreen} (stops,
+     * route fields, line / route style, next-station template, on-board PA) the same way
+     * the platform screen is: swapped in {@code AFTER_INIT}, one tick later; "MTR screen"
+     * re-opens the original with a one-shot bypass. Config {@code replaceRouteScreen} off =
+     * MTR's screen with a single "Route settings…" button. (Replaces the old
+     * Announcement… / Train PA… / Line style… corner buttons.)
      */
-    private static void registerRouteAnnouncementButton() {
+    private static void registerRouteScreen() {
         ScreenEvents.AFTER_INIT.register((client, screen, scaledWidth, scaledHeight) -> {
             if (!(screen instanceof org.mtr.mod.screen.EditRouteScreen)) {
                 return;
@@ -527,11 +381,17 @@ public final class AddonClientInit {
             if (route == null) {
                 return;
             }
-            long routeId = route.getId();
-            String display = route.getName().split("\\|")[0];
-            Screens.getButtons(screen).add(ButtonWidget.builder(
-                            Text.translatable("gui.station_announcer.route_announcement.button"),
-                            button -> client.setScreen(new RouteAnnouncementScreen(routeId, display, screen)))
+            if (AddonClientConfig.get().replaceRouteScreen && !RouteSettingsScreen.consumeBypass()) {
+                Screen previous = readPreviousScreen(screen);
+                client.send(() -> {
+                    if (client.currentScreen == screen) {
+                        client.setScreen(new RouteSettingsScreen(route, previous, screen));
+                    }
+                });
+                return;
+            }
+            Screens.getButtons(screen).add(ButtonWidget.builder(Text.literal("Route settings…"),
+                            button -> client.setScreen(new RouteSettingsScreen(route, screen, null)))
                     .dimensions(screen.width - 124, screen.height - 24, 120, 20)
                     .build());
         });
@@ -569,6 +429,7 @@ public final class AddonClientInit {
                         return;
                     }
                     Map<Long, Map<Long, Long>> overrides = new HashMap<>(Math.max(1, platformCount));
+                    Map<Long, Map<Long, Byte>> sources = new HashMap<>(Math.max(1, platformCount));
                     for (int i = 0; i < platformCount; i++) {
                         long platformId = buf.readLong();
                         int routeCount = buf.readVarInt();
@@ -576,41 +437,20 @@ public final class AddonClientInit {
                             return;
                         }
                         Map<Long, Long> byRoute = new HashMap<>(Math.max(1, routeCount));
+                        Map<Long, Byte> bySource = new HashMap<>(Math.max(1, routeCount));
                         for (int j = 0; j < routeCount; j++) {
                             long routeId = buf.readLong();
                             long millis = buf.readVarInt();
                             byRoute.put(routeId, millis);
+                            bySource.put(routeId, buf.readByte());
                         }
                         overrides.put(platformId, byRoute);
+                        sources.put(platformId, bySource);
                     }
-                    client.execute(() -> ClientDwellOverrides.replace(overrides));
+                    client.execute(() -> ClientDwellOverrides.replace(overrides, sources));
                 });
     }
 
-    /**
-     * The "Per-route dwell…" button on MTR's {@code PlatformScreen}, one slot
-     * above Feature 1's "Hold rules…" button. Registered as its own
-     * {@code AFTER_INIT} callback so Feature 1's stays untouched.
-     */
-    private static void registerRouteDwellButton() {
-        ScreenEvents.AFTER_INIT.register((client, screen, scaledWidth, scaledHeight) -> {
-            if (!(screen instanceof PlatformScreen) || !AddonClientConfig.get().showRouteDwellButton) {
-                return;
-            }
-            if (!MinecraftClientData.hasPermission()) {
-                return;
-            }
-            Platform platform = readPlatform(screen);
-            if (platform == null) {
-                return;
-            }
-            Screens.getButtons(screen).add(ButtonWidget.builder(
-                            Text.translatable("gui.station_announcer.route_dwell.button"),
-                            button -> client.setScreen(new RouteDwellScreen(platform, screen)))
-                    .dimensions(screen.width - 104, screen.height - 48, 100, 20)
-                    .build());
-        });
-    }
 
     // ------------------------------------------ Feature 5: platform groups
 
@@ -641,31 +481,6 @@ public final class AddonClientInit {
                 });
     }
 
-    /**
-     * The "Platform group…" button on MTR's {@code PlatformScreen}, one slot
-     * above Feature 2's "Per-route dwell…" button. The platform screen (not
-     * {@code EditRouteScreen}) is the entry point — see
-     * {@link PlatformGroupScreen}'s javadoc for the documented decision.
-     */
-    private static void registerPlatformGroupButton() {
-        ScreenEvents.AFTER_INIT.register((client, screen, scaledWidth, scaledHeight) -> {
-            if (!(screen instanceof PlatformScreen) || !AddonClientConfig.get().showPlatformGroupButton) {
-                return;
-            }
-            if (!MinecraftClientData.hasPermission()) {
-                return;
-            }
-            Platform platform = readPlatform(screen);
-            if (platform == null) {
-                return;
-            }
-            Screens.getButtons(screen).add(ButtonWidget.builder(
-                            Text.translatable("gui.station_announcer.platform_groups.button"),
-                            button -> client.setScreen(new PlatformGroupScreen(platform, screen)))
-                    .dimensions(screen.width - 104, screen.height - 72, 100, 20)
-                    .build());
-        });
-    }
 
     // -------------------------------------------- Feature 3: lift door sides
 
@@ -717,6 +532,67 @@ public final class AddonClientInit {
                     .dimensions(screen.width - 104, screen.height - 24, 100, 20)
                     .build());
         });
+    }
+
+    // ------------------------------------------------------ platform screen
+
+    /**
+     * MTR's {@code PlatformScreen} (number + one dwell slider) is replaced by our
+     * {@link PlatformSettingsScreen}, which also carries per-route dwell, the hold rule,
+     * platform groups and the schedule check. MTR opens its screen from three places
+     * (brush on a platform, dashboard list, station edit), so the swap happens in
+     * {@code AFTER_INIT}, deferred one tick so MTR's own {@code setScreen} finishes first.
+     * The replaced screen object is handed over: "MTR screen" in ours re-opens it (with a
+     * one-shot bypass), and closing ours returns to MTR's own previous screen.
+     * Off in the client config ({@code replacePlatformScreen}) = MTR's screen with one
+     * "Platform settings…" button instead.
+     */
+    private static void registerPlatformScreen() {
+        ScreenEvents.AFTER_INIT.register((client, screen, scaledWidth, scaledHeight) -> {
+            if (!(screen instanceof PlatformScreen)) {
+                return;
+            }
+            // Same visibility condition as MTR's own dashboard edits; the server still
+            // validates op level on save.
+            if (!MinecraftClientData.hasPermission()) {
+                return;
+            }
+            Platform platform = readPlatform(screen);
+            if (platform == null) {
+                return;
+            }
+            if (AddonClientConfig.get().replacePlatformScreen && !PlatformSettingsScreen.consumeBypass()) {
+                Screen previous = readPreviousScreen(screen);
+                client.send(() -> {
+                    if (client.currentScreen == screen) {
+                        client.setScreen(new PlatformSettingsScreen(platform, previous, screen));
+                    }
+                });
+                return;
+            }
+            Screens.getButtons(screen).add(ButtonWidget.builder(
+                            Text.translatable("gui.station_announcer.platform_settings.button"),
+                            button -> client.setScreen(new PlatformSettingsScreen(platform, screen, null)))
+                    .dimensions(screen.width - 124, screen.height - 24, 120, 20)
+                    .build());
+        });
+    }
+
+    /** MTR's {@code MTRScreenBase.previousScreen} (a mapping holder around a vanilla screen), or null. */
+    private static Screen readPreviousScreen(Screen screen) {
+        try {
+            Field field = org.mtr.mod.screen.MTRScreenBase.class.getDeclaredField("previousScreen");
+            field.setAccessible(true);
+            Object holder = field.get(screen);
+            if (holder == null) {
+                return null;
+            }
+            Object data = holder.getClass().getField("data").get(holder);
+            return data instanceof Screen vanilla ? vanilla : null;
+        } catch (Exception e) {
+            StationAnnouncer.LOGGER.warn("Could not read PlatformScreen's previous screen", e);
+            return null;
+        }
     }
 
     private static Lift readLift(Screen screen) {

@@ -263,6 +263,8 @@ public final class MtrStationDecor {
     public static void register() {
         // {station} in PA announcements: a snapshot of MTR's station areas.
         PaStationNames.register();
+        // Train-timed PA announcements + the {access} / train tokens.
+        PaTrains.register();
 
         // The turnstile keeps a per-player fare cooldown map; drop it when the
         // server stops (mainly for singleplayer, where the JVM outlives worlds).

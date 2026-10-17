@@ -125,7 +125,7 @@ public class TurnstileHeetBlock extends Block implements BlockEntityProvider, Fa
     }
 
     /** The lane_lower (data) cell of the group this cell belongs to. */
-    static BlockPos lanePos(BlockState state, BlockPos pos) {
+    public static BlockPos lanePos(BlockState state, BlockPos pos) {
         Part part = state.get(PART);
         BlockPos p = part.lane() ? pos : pos.offset(toComb(state).getOpposite());
         return part.lower() ? p : p.down();

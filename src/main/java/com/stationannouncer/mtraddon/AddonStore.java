@@ -70,6 +70,16 @@ public final class AddonStore {
 
     /** Feature 2: platform id → (route id → dwell millis). */
     private static final Map<Long, LinkedHashMap<Long, Long>> dwellOverrides = new LinkedHashMap<>();
+    /**
+     * Who set each override (platform id → route id → {@code DWELL_SOURCE_*}), so the
+     * platform screen can tag Interlining's holds. Absent = set before sources were
+     * recorded ({@link #DWELL_SOURCE_UNKNOWN}). Saved beside the overrides as
+     * {@code dwellOverrideSources}; older builds simply ignore that key.
+     */
+    private static final Map<Long, LinkedHashMap<Long, Byte>> dwellSources = new LinkedHashMap<>();
+    public static final byte DWELL_SOURCE_UNKNOWN = 0;
+    public static final byte DWELL_SOURCE_MANUAL = 1;
+    public static final byte DWELL_SOURCE_INTERLINE = 2;
     /** Feature 3: lift id → configured door sides. */
     private static final Map<Long, LiftDoorSides> liftDoors = new LinkedHashMap<>();
     /** Feature 5: {@code "<routeId>:<stopIndex>"} → member platform ids. */
@@ -119,6 +129,7 @@ public final class AddonStore {
             dataPath = path;
             holdRules.clear();
             dwellOverrides.clear();
+            dwellSources.clear();
             announcementTemplates.clear();
             accessibility.clear();
             liftDoors.clear();
@@ -141,6 +152,7 @@ public final class AddonStore {
                     JsonObject root = JsonParser.parseString(Files.readString(path)).getAsJsonObject();
                     readHoldRules(root.getAsJsonObject("holdRules"));
                     readDwellOverrides(root.getAsJsonObject("dwellOverrides"));
+                    readDwellSources(root.getAsJsonObject("dwellOverrideSources"));
                     readAnnouncementTemplates(root.getAsJsonObject("announcementTemplates"));
                     readAccessibility(root.getAsJsonObject("accessibility"));
                     readLiftDoors(root.getAsJsonObject("liftDoors"));
@@ -237,17 +249,52 @@ public final class AddonStore {
      * the platform's entry entirely.
      */
     public static void setDwellOverrides(long platformId, Map<Long, Long> routeToMillis) {
+        setDwellOverrides(platformId, routeToMillis, null);
+    }
+
+    /**
+     * As {@link #setDwellOverrides(long, Map)}, also recording who set each route's
+     * override. {@code routeToSource} null (or a route missing from it) keeps the
+     * route's previous source.
+     */
+    public static void setDwellOverrides(long platformId, Map<Long, Long> routeToMillis, Map<Long, Byte> routeToSource) {
         synchronized (LOCK) {
             if (routeToMillis.isEmpty()) {
+                dwellSources.remove(platformId);
                 if (dwellOverrides.remove(platformId) == null) {
                     return;
                 }
             } else {
                 dwellOverrides.put(platformId, new LinkedHashMap<>(routeToMillis));
+                LinkedHashMap<Long, Byte> previous = dwellSources.getOrDefault(platformId, new LinkedHashMap<>());
+                LinkedHashMap<Long, Byte> sources = new LinkedHashMap<>();
+                for (Long routeId : routeToMillis.keySet()) {
+                    Byte source = routeToSource == null ? null : routeToSource.get(routeId);
+                    if (source == null || source == DWELL_SOURCE_UNKNOWN) {
+                        source = previous.get(routeId);
+                    }
+                    if (source != null && source != DWELL_SOURCE_UNKNOWN) {
+                        sources.put(routeId, source);
+                    }
+                }
+                if (sources.isEmpty()) {
+                    dwellSources.remove(platformId);
+                } else {
+                    dwellSources.put(platformId, sources);
+                }
             }
         }
         publishDwell();
         markDirty();
+    }
+
+    /** Who set a route's override at a platform ({@code DWELL_SOURCE_*}). */
+    public static byte dwellSource(long platformId, long routeId) {
+        synchronized (LOCK) {
+            LinkedHashMap<Long, Byte> byRoute = dwellSources.get(platformId);
+            Byte source = byRoute == null ? null : byRoute.get(routeId);
+            return source == null ? DWELL_SOURCE_UNKNOWN : source;
+        }
     }
 
     // ------------------------------------------------- accessibility
@@ -922,6 +969,36 @@ public final class AddonStore {
         }
     }
 
+    private static void readDwellSources(JsonObject sourcesJson) {
+        if (sourcesJson == null) {
+            return;
+        }
+        for (Map.Entry<String, JsonElement> entry : sourcesJson.entrySet()) {
+            try {
+                long platformId = Long.parseLong(entry.getKey());
+                LinkedHashMap<Long, Long> overrides = dwellOverrides.get(platformId);
+                if (overrides == null) {
+                    continue;
+                }
+                LinkedHashMap<Long, Byte> byRoute = new LinkedHashMap<>();
+                for (Map.Entry<String, JsonElement> routeEntry : entry.getValue().getAsJsonObject().entrySet()) {
+                    long routeId = Long.parseLong(routeEntry.getKey());
+                    String value = routeEntry.getValue().getAsString();
+                    byte source = "interline".equals(value) ? DWELL_SOURCE_INTERLINE
+                            : "manual".equals(value) ? DWELL_SOURCE_MANUAL : DWELL_SOURCE_UNKNOWN;
+                    if (source != DWELL_SOURCE_UNKNOWN && overrides.containsKey(routeId)) {
+                        byRoute.put(routeId, source);
+                    }
+                }
+                if (!byRoute.isEmpty()) {
+                    dwellSources.put(platformId, byRoute);
+                }
+            } catch (Exception e) {
+                StationAnnouncer.LOGGER.warn("Skipping malformed dwell override source '{}'", entry.getKey(), e);
+            }
+        }
+    }
+
     private static void readDwellOverrides(JsonObject overridesJson) {
         if (overridesJson == null) {
             return;
@@ -1187,6 +1264,14 @@ public final class AddonStore {
                 overridesJson.add(Long.toString(platformId), byRouteJson);
             });
             root.add("dwellOverrides", overridesJson);
+            JsonObject sourcesJson = new JsonObject();
+            dwellSources.forEach((platformId, byRoute) -> {
+                JsonObject byRouteJson = new JsonObject();
+                byRoute.forEach((routeId, source) -> byRouteJson.addProperty(Long.toString(routeId),
+                        source == DWELL_SOURCE_INTERLINE ? "interline" : "manual"));
+                sourcesJson.add(Long.toString(platformId), byRouteJson);
+            });
+            root.add("dwellOverrideSources", sourcesJson);
             JsonObject templatesJson = new JsonObject();
             announcementTemplates.forEach((routeId, template) ->
                     templatesJson.addProperty(Long.toString(routeId), template));

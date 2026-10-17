@@ -131,7 +131,34 @@ public final class LineStyles {
         }
     }
 
+    /**
+     * One ROUTE's departures from its line's style (null = same as the line): an express
+     * variant's diamond or "4X", a shuttle's black lettering. Keyed by {@link #routeKey}
+     * (the whole route name), so every bullet drawn from a route name — signs, PIDS,
+     * Map+ — picks it up; a bare line name never matches one.
+     */
+    public record RouteStyle(Shape shape, String label, TextColor text) {
+        public static final RouteStyle NONE = new RouteStyle(null, null, null);
+
+        public RouteStyle {
+            label = label == null ? null : cleanLabel(label);
+            if (label != null && label.isEmpty()) {
+                label = null;
+            }
+        }
+
+        public boolean isEmpty() {
+            return shape == null && label == null && text == null;
+        }
+
+        public Style over(Style line) {
+            return isEmpty() ? line : new Style(shape != null ? shape : line.shape(),
+                    label != null ? label : line.label(), text != null ? text : line.text());
+        }
+    }
+
     public static final Identifier UPDATE_LINE_STYLE_C2S = StationAnnouncer.id("update_line_style");
+    public static final Identifier UPDATE_ROUTE_STYLE_C2S = StationAnnouncer.id("update_route_style");
     public static final Identifier LINE_STYLES_S2C = StationAnnouncer.id("line_styles");
     public static final int MAX_LINE_LENGTH = 128;
     /** Bullet text: NYC uses one or two characters; three still fit ("FS", "42", "SIR"). */
@@ -140,6 +167,7 @@ public final class LineStyles {
 
     private static final Gson GSON = new GsonBuilder().setPrettyPrinting().create();
     private static volatile Map<String, Style> styles = Map.of();
+    private static volatile Map<String, RouteStyle> routeStyles = Map.of();
     private static Path path;
 
     private LineStyles() {
@@ -158,6 +186,15 @@ public final class LineStyles {
         int bar = line.indexOf('|');
         String first = (bar < 0 ? line : line.substring(0, bar)).trim();
         return first.isEmpty() ? line.trim() : first;
+    }
+
+    /**
+     * The per-route key: the WHOLE route name, trimmed. Not the part before {@code ||}:
+     * on Baker City that part is the line ("Line 4||North Limited"), so it would file one
+     * route's override under every route of the line.
+     */
+    public static String routeKey(String routeName) {
+        return routeName == null ? "" : routeName.trim();
     }
 
     /** Bullet text as stored: trimmed, no line breaks, at most {@value #MAX_LABEL_LENGTH} characters. */
@@ -180,7 +217,9 @@ public final class LineStyles {
     /** Server side (any thread): the style of a route's or line's bullet. */
     public static Style styleFor(String routeOrLineName) {
         Map<String, Style> current = styles;
-        return current.isEmpty() ? Style.DEFAULT : current.getOrDefault(lineKey(routeOrLineName), Style.DEFAULT);
+        Style line = current.isEmpty() ? Style.DEFAULT : current.getOrDefault(lineKey(routeOrLineName), Style.DEFAULT);
+        Map<String, RouteStyle> routes = routeStyles;
+        return routes.isEmpty() ? line : routes.getOrDefault(routeKey(routeOrLineName), RouteStyle.NONE).over(line);
     }
 
     /** Server side (any thread): the shape of a route's or line's bullet. */
@@ -197,6 +236,29 @@ public final class LineStyles {
         buf.writeByte(style.text().ordinal());
     }
 
+    /** A route override: presence mask (1 shape, 2 label, 4 text), then the present fields. */
+    public static void writeRouteStyle(PacketByteBuf buf, RouteStyle style) {
+        int mask = (style.shape() != null ? 1 : 0) | (style.label() != null ? 2 : 0) | (style.text() != null ? 4 : 0);
+        buf.writeByte(mask);
+        if (style.shape() != null) {
+            buf.writeByte(style.shape().ordinal());
+        }
+        if (style.label() != null) {
+            buf.writeString(style.label(), MAX_LABEL_LENGTH * 4);
+        }
+        if (style.text() != null) {
+            buf.writeByte(style.text().ordinal());
+        }
+    }
+
+    public static RouteStyle readRouteStyle(PacketByteBuf buf) {
+        int mask = buf.readByte();
+        Shape shape = (mask & 1) != 0 ? Shape.byOrdinal(buf.readByte()) : null;
+        String label = (mask & 2) != 0 ? buf.readString(MAX_LABEL_LENGTH * 4) : null;
+        TextColor text = (mask & 4) != 0 ? TextColor.byOrdinal(buf.readByte()) : null;
+        return new RouteStyle(shape, label, text);
+    }
+
     public static Style readStyle(PacketByteBuf buf) {
         Shape shape = Shape.byOrdinal(buf.readByte());
         String label = buf.readString(MAX_LABEL_LENGTH * 4);
@@ -208,9 +270,11 @@ public final class LineStyles {
         ServerLifecycleEvents.SERVER_STARTED.register(LineStyles::load);
         ServerLifecycleEvents.SERVER_STOPPED.register(server -> {
             styles = Map.of();
+            routeStyles = Map.of();
             path = null;
         });
         ServerPlayConnectionEvents.JOIN.register((handler, sender, server) -> syncTo(sender));
+        registerRouteStyles();
         ServerPlayNetworking.registerGlobalReceiver(UPDATE_LINE_STYLE_C2S, (server, player, handler, buf, responseSender) -> {
             String line = lineKey(buf.readString(MAX_LINE_LENGTH));
             Style style = readStyle(buf);
@@ -233,6 +297,29 @@ public final class LineStyles {
         });
     }
 
+    private static void registerRouteStyles() {
+        ServerPlayNetworking.registerGlobalReceiver(UPDATE_ROUTE_STYLE_C2S, (server, player, handler, buf, responseSender) -> {
+            String key = routeKey(buf.readString(MAX_LINE_LENGTH));
+            RouteStyle style = readRouteStyle(buf);
+            server.execute(() -> {
+                if (key.isEmpty() || !player.hasPermissionLevel(AddonServerConfig.get().editPermissionLevel)) {
+                    return;
+                }
+                Map<String, RouteStyle> next = new HashMap<>(routeStyles);
+                if (style.isEmpty()) {
+                    next.remove(key);
+                } else if (next.size() < MAX_ENTRIES || next.containsKey(key)) {
+                    next.put(key, style);
+                }
+                routeStyles = Map.copyOf(next);
+                save();
+                for (ServerPlayerEntity online : server.getPlayerManager().getPlayerList()) {
+                    ServerPlayNetworking.send(online, LINE_STYLES_S2C, buildSync());
+                }
+            });
+        });
+    }
+
     private static void syncTo(PacketSender sender) {
         sender.sendPacket(LINE_STYLES_S2C, buildSync());
     }
@@ -245,6 +332,12 @@ public final class LineStyles {
             buf.writeString(line, MAX_LINE_LENGTH);
             writeStyle(buf, style);
         });
+        Map<String, RouteStyle> routes = routeStyles;
+        buf.writeVarInt(routes.size());
+        routes.forEach((key, style) -> {
+            buf.writeString(key, MAX_LINE_LENGTH);
+            writeRouteStyle(buf, style);
+        });
         return buf;
     }
 
@@ -254,6 +347,7 @@ public final class LineStyles {
         path = server.getSavePath(WorldSavePath.ROOT)
                 .resolve("station-announcer-addon").resolve("line_styles.json").normalize();
         Map<String, Style> loaded = new HashMap<>();
+        Map<String, RouteStyle> loadedRoutes = new HashMap<>();
         try {
             if (Files.exists(path)) {
                 JsonObject root = JsonParser.parseString(Files.readString(path)).getAsJsonObject();
@@ -287,11 +381,29 @@ public final class LineStyles {
                         }
                     }
                 }
+                JsonObject routes = root.getAsJsonObject("routes");
+                if (routes != null) {
+                    for (Map.Entry<String, JsonElement> entry : routes.entrySet()) {
+                        String key = routeKey(entry.getKey());
+                        if (key.isEmpty() || !entry.getValue().isJsonObject()) {
+                            continue;
+                        }
+                        JsonObject json = entry.getValue().getAsJsonObject();
+                        RouteStyle style = new RouteStyle(
+                                json.has("shape") ? Shape.byId(string(json, "shape").toLowerCase(Locale.ROOT)) : null,
+                                json.has("label") ? string(json, "label") : null,
+                                json.has("text") ? TextColor.byId(string(json, "text").toLowerCase(Locale.ROOT)) : null);
+                        if (!style.isEmpty()) {
+                            loadedRoutes.put(key, style);
+                        }
+                    }
+                }
             }
         } catch (Exception e) {
             StationAnnouncer.LOGGER.warn("Could not read {}, all bullets are plain circles", path, e);
         }
         styles = Map.copyOf(loaded);
+        routeStyles = Map.copyOf(loadedRoutes);
     }
 
     private static String string(JsonObject json, String key) {
@@ -321,6 +433,22 @@ public final class LineStyles {
         JsonObject root = new JsonObject();
         root.add("bulletShapes", shapes);
         root.add("lines", lines);
+        JsonObject routes = new JsonObject();
+        routeStyles.entrySet().stream().sorted(Map.Entry.comparingByKey()).forEach(entry -> {
+            RouteStyle style = entry.getValue();
+            JsonObject json = new JsonObject();
+            if (style.shape() != null) {
+                json.addProperty("shape", style.shape().id);
+            }
+            if (style.label() != null) {
+                json.addProperty("label", style.label());
+            }
+            if (style.text() != null) {
+                json.addProperty("text", style.text().id);
+            }
+            routes.add(entry.getKey(), json);
+        });
+        root.add("routes", routes);
         try {
             Files.createDirectories(file.getParent());
             Files.writeString(file, GSON.toJson(root));

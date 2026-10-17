@@ -1,0 +1,1831 @@
+{
+  "multipart": [
+    {
+      "when": {
+        "up": "true",
+        "north": "false",
+        "east": "false",
+        "south": "false",
+        "west": "false"
+      },
+      "apply": [
+        {
+          "model": "station_announcer:block/grime/cobweb_scrap_0_ceiling",
+          "weight": 7
+        },
+        {
+          "model": "station_announcer:block/grime/cobweb_scrap_0_ceiling",
+          "weight": 2,
+          "y": 90
+        },
+        {
+          "model": "station_announcer:block/grime/cobweb_scrap_0_ceiling",
+          "weight": 2,
+          "y": 180
+        },
+        {
+          "model": "station_announcer:block/grime/cobweb_scrap_0_ceiling",
+          "weight": 2,
+          "y": 270
+        },
+        {
+          "model": "station_announcer:block/grime/cobweb_scrap_0_ceiling_m",
+          "weight": 2
+        },
+        {
+          "model": "station_announcer:block/grime/cobweb_scrap_0_ceiling_m",
+          "weight": 2,
+          "y": 90
+        },
+        {
+          "model": "station_announcer:block/grime/cobweb_scrap_0_ceiling_m",
+          "weight": 2,
+          "y": 180
+        },
+        {
+          "model": "station_announcer:block/grime/cobweb_scrap_0_ceiling_m",
+          "weight": 2,
+          "y": 270
+        },
+        {
+          "model": "station_announcer:block/grime/cobweb_scrap_1_ceiling",
+          "weight": 2
+        },
+        {
+          "model": "station_announcer:block/grime/cobweb_scrap_1_ceiling",
+          "weight": 2,
+          "y": 90
+        },
+        {
+          "model": "station_announcer:block/grime/cobweb_scrap_1_ceiling",
+          "weight": 2,
+          "y": 180
+        },
+        {
+          "model": "station_announcer:block/grime/cobweb_scrap_1_ceiling",
+          "weight": 2,
+          "y": 270
+        },
+        {
+          "model": "station_announcer:block/grime/cobweb_scrap_1_ceiling_m",
+          "weight": 2
+        },
+        {
+          "model": "station_announcer:block/grime/cobweb_scrap_1_ceiling_m",
+          "weight": 2,
+          "y": 90
+        },
+        {
+          "model": "station_announcer:block/grime/cobweb_scrap_1_ceiling_m",
+          "weight": 2,
+          "y": 180
+        },
+        {
+          "model": "station_announcer:block/grime/cobweb_scrap_1_ceiling_m",
+          "weight": 2,
+          "y": 270
+        },
+        {
+          "model": "station_announcer:block/grime/cobweb_scrap_2_ceiling",
+          "weight": 2
+        },
+        {
+          "model": "station_announcer:block/grime/cobweb_scrap_2_ceiling",
+          "weight": 2,
+          "y": 90
+        },
+        {
+          "model": "station_announcer:block/grime/cobweb_scrap_2_ceiling",
+          "weight": 2,
+          "y": 180
+        },
+        {
+          "model": "station_announcer:block/grime/cobweb_scrap_2_ceiling",
+          "weight": 2,
+          "y": 270
+        },
+        {
+          "model": "station_announcer:block/grime/cobweb_scrap_2_ceiling_m",
+          "weight": 2
+        },
+        {
+          "model": "station_announcer:block/grime/cobweb_scrap_2_ceiling_m",
+          "weight": 2,
+          "y": 90
+        },
+        {
+          "model": "station_announcer:block/grime/cobweb_scrap_2_ceiling_m",
+          "weight": 2,
+          "y": 180
+        },
+        {
+          "model": "station_announcer:block/grime/cobweb_scrap_2_ceiling_m",
+          "weight": 2,
+          "y": 270
+        },
+        {
+          "model": "station_announcer:block/grime/cobweb_corner_0_ceiling",
+          "weight": 2
+        },
+        {
+          "model": "station_announcer:block/grime/cobweb_corner_0_ceiling",
+          "weight": 2,
+          "y": 90
+        },
+        {
+          "model": "station_announcer:block/grime/cobweb_corner_0_ceiling",
+          "weight": 2,
+          "y": 180
+        },
+        {
+          "model": "station_announcer:block/grime/cobweb_corner_0_ceiling",
+          "weight": 2,
+          "y": 270
+        },
+        {
+          "model": "station_announcer:block/grime/cobweb_corner_1_ceiling",
+          "weight": 2
+        },
+        {
+          "model": "station_announcer:block/grime/cobweb_corner_1_ceiling",
+          "weight": 2,
+          "y": 90
+        },
+        {
+          "model": "station_announcer:block/grime/cobweb_corner_1_ceiling",
+          "weight": 2,
+          "y": 180
+        },
+        {
+          "model": "station_announcer:block/grime/cobweb_corner_1_ceiling",
+          "weight": 2,
+          "y": 270
+        },
+        {
+          "model": "station_announcer:block/grime/cobweb_corner_2_ceiling",
+          "weight": 2
+        },
+        {
+          "model": "station_announcer:block/grime/cobweb_corner_2_ceiling",
+          "weight": 2,
+          "y": 90
+        },
+        {
+          "model": "station_announcer:block/grime/cobweb_corner_2_ceiling",
+          "weight": 2,
+          "y": 180
+        },
+        {
+          "model": "station_announcer:block/grime/cobweb_corner_2_ceiling",
+          "weight": 2,
+          "y": 270
+        },
+        {
+          "model": "station_announcer:block/grime/cobweb_corner_3_ceiling",
+          "weight": 2
+        },
+        {
+          "model": "station_announcer:block/grime/cobweb_corner_3_ceiling",
+          "weight": 2,
+          "y": 90
+        },
+        {
+          "model": "station_announcer:block/grime/cobweb_corner_3_ceiling",
+          "weight": 2,
+          "y": 180
+        },
+        {
+          "model": "station_announcer:block/grime/cobweb_corner_3_ceiling",
+          "weight": 2,
+          "y": 270
+        }
+      ]
+    },
+    {
+      "when": {
+        "up": "true",
+        "north": "true",
+        "east": "false",
+        "south": "false",
+        "west": "false"
+      },
+      "apply": [
+        {
+          "model": "station_announcer:block/grime/cobweb_edge_0_ceiling",
+          "weight": 7
+        },
+        {
+          "model": "station_announcer:block/grime/cobweb_edge_0_ceiling_m",
+          "weight": 2
+        },
+        {
+          "model": "station_announcer:block/grime/cobweb_edge_1_ceiling",
+          "weight": 2
+        },
+        {
+          "model": "station_announcer:block/grime/cobweb_edge_1_ceiling_m",
+          "weight": 2
+        },
+        {
+          "model": "station_announcer:block/grime/cobweb_edge_2_ceiling",
+          "weight": 2
+        },
+        {
+          "model": "station_announcer:block/grime/cobweb_edge_2_ceiling_m",
+          "weight": 2
+        }
+      ]
+    },
+    {
+      "when": {
+        "up": "true",
+        "north": "false",
+        "east": "true",
+        "south": "false",
+        "west": "false"
+      },
+      "apply": [
+        {
+          "model": "station_announcer:block/grime/cobweb_edge_0_ceiling",
+          "weight": 7,
+          "y": 90
+        },
+        {
+          "model": "station_announcer:block/grime/cobweb_edge_0_ceiling_m",
+          "weight": 2,
+          "y": 90
+        },
+        {
+          "model": "station_announcer:block/grime/cobweb_edge_1_ceiling",
+          "weight": 2,
+          "y": 90
+        },
+        {
+          "model": "station_announcer:block/grime/cobweb_edge_1_ceiling_m",
+          "weight": 2,
+          "y": 90
+        },
+        {
+          "model": "station_announcer:block/grime/cobweb_edge_2_ceiling",
+          "weight": 2,
+          "y": 90
+        },
+        {
+          "model": "station_announcer:block/grime/cobweb_edge_2_ceiling_m",
+          "weight": 2,
+          "y": 90
+        }
+      ]
+    },
+    {
+      "when": {
+        "up": "true",
+        "north": "true",
+        "east": "true",
+        "south": "false",
+        "west": "false"
+      },
+      "apply": [
+        {
+          "model": "station_announcer:block/grime/cobweb_corner_0_ceiling",
+          "weight": 7,
+          "y": 90
+        },
+        {
+          "model": "station_announcer:block/grime/cobweb_corner_0_ceiling_m",
+          "weight": 2
+        },
+        {
+          "model": "station_announcer:block/grime/cobweb_corner_1_ceiling",
+          "weight": 2,
+          "y": 90
+        },
+        {
+          "model": "station_announcer:block/grime/cobweb_corner_1_ceiling_m",
+          "weight": 2
+        },
+        {
+          "model": "station_announcer:block/grime/cobweb_corner_2_ceiling",
+          "weight": 2,
+          "y": 90
+        },
+        {
+          "model": "station_announcer:block/grime/cobweb_corner_2_ceiling_m",
+          "weight": 2
+        },
+        {
+          "model": "station_announcer:block/grime/cobweb_corner_3_ceiling",
+          "weight": 2,
+          "y": 90
+        },
+        {
+          "model": "station_announcer:block/grime/cobweb_corner_3_ceiling_m",
+          "weight": 2
+        }
+      ]
+    },
+    {
+      "when": {
+        "up": "true",
+        "north": "false",
+        "east": "false",
+        "south": "true",
+        "west": "false"
+      },
+      "apply": [
+        {
+          "model": "station_announcer:block/grime/cobweb_edge_0_ceiling",
+          "weight": 7,
+          "y": 180
+        },
+        {
+          "model": "station_announcer:block/grime/cobweb_edge_0_ceiling_m",
+          "weight": 2,
+          "y": 180
+        },
+        {
+          "model": "station_announcer:block/grime/cobweb_edge_1_ceiling",
+          "weight": 2,
+          "y": 180
+        },
+        {
+          "model": "station_announcer:block/grime/cobweb_edge_1_ceiling_m",
+          "weight": 2,
+          "y": 180
+        },
+        {
+          "model": "station_announcer:block/grime/cobweb_edge_2_ceiling",
+          "weight": 2,
+          "y": 180
+        },
+        {
+          "model": "station_announcer:block/grime/cobweb_edge_2_ceiling_m",
+          "weight": 2,
+          "y": 180
+        }
+      ]
+    },
+    {
+      "when": {
+        "up": "true",
+        "north": "true",
+        "east": "false",
+        "south": "true",
+        "west": "false"
+      },
+      "apply": [
+        {
+          "model": "station_announcer:block/grime/cobweb_edge_0_ceiling",
+          "weight": 7
+        },
+        {
+          "model": "station_announcer:block/grime/cobweb_edge_0_ceiling_m",
+          "weight": 2
+        },
+        {
+          "model": "station_announcer:block/grime/cobweb_edge_1_ceiling",
+          "weight": 2
+        },
+        {
+          "model": "station_announcer:block/grime/cobweb_edge_1_ceiling_m",
+          "weight": 2
+        },
+        {
+          "model": "station_announcer:block/grime/cobweb_edge_2_ceiling",
+          "weight": 2
+        },
+        {
+          "model": "station_announcer:block/grime/cobweb_edge_2_ceiling_m",
+          "weight": 2
+        }
+      ]
+    },
+    {
+      "when": {
+        "up": "true",
+        "north": "false",
+        "east": "true",
+        "south": "true",
+        "west": "false"
+      },
+      "apply": [
+        {
+          "model": "station_announcer:block/grime/cobweb_corner_0_ceiling",
+          "weight": 7,
+          "y": 180
+        },
+        {
+          "model": "station_announcer:block/grime/cobweb_corner_0_ceiling_m",
+          "weight": 2,
+          "y": 90
+        },
+        {
+          "model": "station_announcer:block/grime/cobweb_corner_1_ceiling",
+          "weight": 2,
+          "y": 180
+        },
+        {
+          "model": "station_announcer:block/grime/cobweb_corner_1_ceiling_m",
+          "weight": 2,
+          "y": 90
+        },
+        {
+          "model": "station_announcer:block/grime/cobweb_corner_2_ceiling",
+          "weight": 2,
+          "y": 180
+        },
+        {
+          "model": "station_announcer:block/grime/cobweb_corner_2_ceiling_m",
+          "weight": 2,
+          "y": 90
+        },
+        {
+          "model": "station_announcer:block/grime/cobweb_corner_3_ceiling",
+          "weight": 2,
+          "y": 180
+        },
+        {
+          "model": "station_announcer:block/grime/cobweb_corner_3_ceiling_m",
+          "weight": 2,
+          "y": 90
+        }
+      ]
+    },
+    {
+      "when": {
+        "up": "true",
+        "north": "true",
+        "east": "true",
+        "south": "true",
+        "west": "false"
+      },
+      "apply": [
+        {
+          "model": "station_announcer:block/grime/cobweb_corner_0_ceiling",
+          "weight": 7,
+          "y": 90
+        },
+        {
+          "model": "station_announcer:block/grime/cobweb_corner_0_ceiling_m",
+          "weight": 2
+        },
+        {
+          "model": "station_announcer:block/grime/cobweb_corner_1_ceiling",
+          "weight": 2,
+          "y": 90
+        },
+        {
+          "model": "station_announcer:block/grime/cobweb_corner_1_ceiling_m",
+          "weight": 2
+        },
+        {
+          "model": "station_announcer:block/grime/cobweb_corner_2_ceiling",
+          "weight": 2,
+          "y": 90
+        },
+        {
+          "model": "station_announcer:block/grime/cobweb_corner_2_ceiling_m",
+          "weight": 2
+        },
+        {
+          "model": "station_announcer:block/grime/cobweb_corner_3_ceiling",
+          "weight": 2,
+          "y": 90
+        },
+        {
+          "model": "station_announcer:block/grime/cobweb_corner_3_ceiling_m",
+          "weight": 2
+        }
+      ]
+    },
+    {
+      "when": {
+        "up": "true",
+        "north": "false",
+        "east": "false",
+        "south": "false",
+        "west": "true"
+      },
+      "apply": [
+        {
+          "model": "station_announcer:block/grime/cobweb_edge_0_ceiling",
+          "weight": 7,
+          "y": 270
+        },
+        {
+          "model": "station_announcer:block/grime/cobweb_edge_0_ceiling_m",
+          "weight": 2,
+          "y": 270
+        },
+        {
+          "model": "station_announcer:block/grime/cobweb_edge_1_ceiling",
+          "weight": 2,
+          "y": 270
+        },
+        {
+          "model": "station_announcer:block/grime/cobweb_edge_1_ceiling_m",
+          "weight": 2,
+          "y": 270
+        },
+        {
+          "model": "station_announcer:block/grime/cobweb_edge_2_ceiling",
+          "weight": 2,
+          "y": 270
+        },
+        {
+          "model": "station_announcer:block/grime/cobweb_edge_2_ceiling_m",
+          "weight": 2,
+          "y": 270
+        }
+      ]
+    },
+    {
+      "when": {
+        "up": "true",
+        "north": "true",
+        "east": "false",
+        "south": "false",
+        "west": "true"
+      },
+      "apply": [
+        {
+          "model": "station_announcer:block/grime/cobweb_corner_0_ceiling",
+          "weight": 7
+        },
+        {
+          "model": "station_announcer:block/grime/cobweb_corner_0_ceiling_m",
+          "weight": 2,
+          "y": 270
+        },
+        {
+          "model": "station_announcer:block/grime/cobweb_corner_1_ceiling",
+          "weight": 2
+        },
+        {
+          "model": "station_announcer:block/grime/cobweb_corner_1_ceiling_m",
+          "weight": 2,
+          "y": 270
+        },
+        {
+          "model": "station_announcer:block/grime/cobweb_corner_2_ceiling",
+          "weight": 2
+        },
+        {
+          "model": "station_announcer:block/grime/cobweb_corner_2_ceiling_m",
+          "weight": 2,
+          "y": 270
+        },
+        {
+          "model": "station_announcer:block/grime/cobweb_corner_3_ceiling",
+          "weight": 2
+        },
+        {
+          "model": "station_announcer:block/grime/cobweb_corner_3_ceiling_m",
+          "weight": 2,
+          "y": 270
+        }
+      ]
+    },
+    {
+      "when": {
+        "up": "true",
+        "north": "false",
+        "east": "true",
+        "south": "false",
+        "west": "true"
+      },
+      "apply": [
+        {
+          "model": "station_announcer:block/grime/cobweb_edge_0_ceiling",
+          "weight": 7,
+          "y": 90
+        },
+        {
+          "model": "station_announcer:block/grime/cobweb_edge_0_ceiling_m",
+          "weight": 2,
+          "y": 90
+        },
+        {
+          "model": "station_announcer:block/grime/cobweb_edge_1_ceiling",
+          "weight": 2,
+          "y": 90
+        },
+        {
+          "model": "station_announcer:block/grime/cobweb_edge_1_ceiling_m",
+          "weight": 2,
+          "y": 90
+        },
+        {
+          "model": "station_announcer:block/grime/cobweb_edge_2_ceiling",
+          "weight": 2,
+          "y": 90
+        },
+        {
+          "model": "station_announcer:block/grime/cobweb_edge_2_ceiling_m",
+          "weight": 2,
+          "y": 90
+        }
+      ]
+    },
+    {
+      "when": {
+        "up": "true",
+        "north": "true",
+        "east": "true",
+        "south": "false",
+        "west": "true"
+      },
+      "apply": [
+        {
+          "model": "station_announcer:block/grime/cobweb_corner_0_ceiling",
+          "weight": 7,
+          "y": 90
+        },
+        {
+          "model": "station_announcer:block/grime/cobweb_corner_0_ceiling_m",
+          "weight": 2
+        },
+        {
+          "model": "station_announcer:block/grime/cobweb_corner_1_ceiling",
+          "weight": 2,
+          "y": 90
+        },
+        {
+          "model": "station_announcer:block/grime/cobweb_corner_1_ceiling_m",
+          "weight": 2
+        },
+        {
+          "model": "station_announcer:block/grime/cobweb_corner_2_ceiling",
+          "weight": 2,
+          "y": 90
+        },
+        {
+          "model": "station_announcer:block/grime/cobweb_corner_2_ceiling_m",
+          "weight": 2
+        },
+        {
+          "model": "station_announcer:block/grime/cobweb_corner_3_ceiling",
+          "weight": 2,
+          "y": 90
+        },
+        {
+          "model": "station_announcer:block/grime/cobweb_corner_3_ceiling_m",
+          "weight": 2
+        }
+      ]
+    },
+    {
+      "when": {
+        "up": "true",
+        "north": "false",
+        "east": "false",
+        "south": "true",
+        "west": "true"
+      },
+      "apply": [
+        {
+          "model": "station_announcer:block/grime/cobweb_corner_0_ceiling",
+          "weight": 7,
+          "y": 270
+        },
+        {
+          "model": "station_announcer:block/grime/cobweb_corner_0_ceiling_m",
+          "weight": 2,
+          "y": 180
+        },
+        {
+          "model": "station_announcer:block/grime/cobweb_corner_1_ceiling",
+          "weight": 2,
+          "y": 270
+        },
+        {
+          "model": "station_announcer:block/grime/cobweb_corner_1_ceiling_m",
+          "weight": 2,
+          "y": 180
+        },
+        {
+          "model": "station_announcer:block/grime/cobweb_corner_2_ceiling",
+          "weight": 2,
+          "y": 270
+        },
+        {
+          "model": "station_announcer:block/grime/cobweb_corner_2_ceiling_m",
+          "weight": 2,
+          "y": 180
+        },
+        {
+          "model": "station_announcer:block/grime/cobweb_corner_3_ceiling",
+          "weight": 2,
+          "y": 270
+        },
+        {
+          "model": "station_announcer:block/grime/cobweb_corner_3_ceiling_m",
+          "weight": 2,
+          "y": 180
+        }
+      ]
+    },
+    {
+      "when": {
+        "up": "true",
+        "north": "true",
+        "east": "false",
+        "south": "true",
+        "west": "true"
+      },
+      "apply": [
+        {
+          "model": "station_announcer:block/grime/cobweb_corner_0_ceiling",
+          "weight": 7,
+          "y": 270
+        },
+        {
+          "model": "station_announcer:block/grime/cobweb_corner_0_ceiling_m",
+          "weight": 2,
+          "y": 180
+        },
+        {
+          "model": "station_announcer:block/grime/cobweb_corner_1_ceiling",
+          "weight": 2,
+          "y": 270
+        },
+        {
+          "model": "station_announcer:block/grime/cobweb_corner_1_ceiling_m",
+          "weight": 2,
+          "y": 180
+        },
+        {
+          "model": "station_announcer:block/grime/cobweb_corner_2_ceiling",
+          "weight": 2,
+          "y": 270
+        },
+        {
+          "model": "station_announcer:block/grime/cobweb_corner_2_ceiling_m",
+          "weight": 2,
+          "y": 180
+        },
+        {
+          "model": "station_announcer:block/grime/cobweb_corner_3_ceiling",
+          "weight": 2,
+          "y": 270
+        },
+        {
+          "model": "station_announcer:block/grime/cobweb_corner_3_ceiling_m",
+          "weight": 2,
+          "y": 180
+        }
+      ]
+    },
+    {
+      "when": {
+        "up": "true",
+        "north": "false",
+        "east": "true",
+        "south": "true",
+        "west": "true"
+      },
+      "apply": [
+        {
+          "model": "station_announcer:block/grime/cobweb_corner_0_ceiling",
+          "weight": 7,
+          "y": 180
+        },
+        {
+          "model": "station_announcer:block/grime/cobweb_corner_0_ceiling_m",
+          "weight": 2,
+          "y": 90
+        },
+        {
+          "model": "station_announcer:block/grime/cobweb_corner_1_ceiling",
+          "weight": 2,
+          "y": 180
+        },
+        {
+          "model": "station_announcer:block/grime/cobweb_corner_1_ceiling_m",
+          "weight": 2,
+          "y": 90
+        },
+        {
+          "model": "station_announcer:block/grime/cobweb_corner_2_ceiling",
+          "weight": 2,
+          "y": 180
+        },
+        {
+          "model": "station_announcer:block/grime/cobweb_corner_2_ceiling_m",
+          "weight": 2,
+          "y": 90
+        },
+        {
+          "model": "station_announcer:block/grime/cobweb_corner_3_ceiling",
+          "weight": 2,
+          "y": 180
+        },
+        {
+          "model": "station_announcer:block/grime/cobweb_corner_3_ceiling_m",
+          "weight": 2,
+          "y": 90
+        }
+      ]
+    },
+    {
+      "when": {
+        "up": "true",
+        "north": "true",
+        "east": "true",
+        "south": "true",
+        "west": "true"
+      },
+      "apply": [
+        {
+          "model": "station_announcer:block/grime/cobweb_corner_0_ceiling",
+          "weight": 7,
+          "y": 90
+        },
+        {
+          "model": "station_announcer:block/grime/cobweb_corner_0_ceiling_m",
+          "weight": 2
+        },
+        {
+          "model": "station_announcer:block/grime/cobweb_corner_1_ceiling",
+          "weight": 2,
+          "y": 90
+        },
+        {
+          "model": "station_announcer:block/grime/cobweb_corner_1_ceiling_m",
+          "weight": 2
+        },
+        {
+          "model": "station_announcer:block/grime/cobweb_corner_2_ceiling",
+          "weight": 2,
+          "y": 90
+        },
+        {
+          "model": "station_announcer:block/grime/cobweb_corner_2_ceiling_m",
+          "weight": 2
+        },
+        {
+          "model": "station_announcer:block/grime/cobweb_corner_3_ceiling",
+          "weight": 2,
+          "y": 90
+        },
+        {
+          "model": "station_announcer:block/grime/cobweb_corner_3_ceiling_m",
+          "weight": 2
+        }
+      ]
+    },
+    {
+      "when": {
+        "north": "true",
+        "west": "true"
+      },
+      "apply": [
+        {
+          "model": "station_announcer:block/grime/cobweb_corner_0_wall",
+          "weight": 3
+        },
+        {
+          "model": "station_announcer:block/grime/cobweb_corner_1_wall",
+          "weight": 2
+        },
+        {
+          "model": "station_announcer:block/grime/cobweb_corner_2_wall",
+          "weight": 2
+        },
+        {
+          "model": "station_announcer:block/grime/cobweb_corner_3_wall",
+          "weight": 2
+        }
+      ]
+    },
+    {
+      "when": {
+        "north": "true",
+        "west": "false",
+        "east": "true"
+      },
+      "apply": [
+        {
+          "model": "station_announcer:block/grime/cobweb_corner_0_wall_m",
+          "weight": 3
+        },
+        {
+          "model": "station_announcer:block/grime/cobweb_corner_1_wall_m",
+          "weight": 2
+        },
+        {
+          "model": "station_announcer:block/grime/cobweb_corner_2_wall_m",
+          "weight": 2
+        },
+        {
+          "model": "station_announcer:block/grime/cobweb_corner_3_wall_m",
+          "weight": 2
+        }
+      ]
+    },
+    {
+      "when": {
+        "north": "true",
+        "west": "false",
+        "east": "false",
+        "up": "true"
+      },
+      "apply": [
+        {
+          "model": "station_announcer:block/grime/cobweb_sheet_0_sheet",
+          "weight": 7
+        },
+        {
+          "model": "station_announcer:block/grime/cobweb_sheet_0_sheet_m",
+          "weight": 6
+        },
+        {
+          "model": "station_announcer:block/grime/cobweb_sheet_1_sheet",
+          "weight": 6
+        },
+        {
+          "model": "station_announcer:block/grime/cobweb_sheet_1_sheet_m",
+          "weight": 6
+        },
+        {
+          "model": "station_announcer:block/grime/cobweb_sheet_2_sheet",
+          "weight": 6
+        },
+        {
+          "model": "station_announcer:block/grime/cobweb_sheet_2_sheet_m",
+          "weight": 6
+        },
+        {
+          "model": "station_announcer:block/grime/cobweb_corner_0_wall",
+          "weight": 2
+        },
+        {
+          "model": "station_announcer:block/grime/cobweb_corner_1_wall",
+          "weight": 2
+        },
+        {
+          "model": "station_announcer:block/grime/cobweb_corner_2_wall",
+          "weight": 2
+        },
+        {
+          "model": "station_announcer:block/grime/cobweb_corner_3_wall",
+          "weight": 2
+        },
+        {
+          "model": "station_announcer:block/grime/cobweb_corner_0_wall_m",
+          "weight": 2
+        },
+        {
+          "model": "station_announcer:block/grime/cobweb_corner_1_wall_m",
+          "weight": 2
+        },
+        {
+          "model": "station_announcer:block/grime/cobweb_corner_2_wall_m",
+          "weight": 2
+        },
+        {
+          "model": "station_announcer:block/grime/cobweb_corner_3_wall_m",
+          "weight": 2
+        }
+      ]
+    },
+    {
+      "when": {
+        "north": "true",
+        "west": "false",
+        "east": "false",
+        "up": "false"
+      },
+      "apply": [
+        {
+          "model": "station_announcer:block/grime/cobweb_corner_0_wall",
+          "weight": 3
+        },
+        {
+          "model": "station_announcer:block/grime/cobweb_corner_1_wall",
+          "weight": 2
+        },
+        {
+          "model": "station_announcer:block/grime/cobweb_corner_2_wall",
+          "weight": 2
+        },
+        {
+          "model": "station_announcer:block/grime/cobweb_corner_3_wall",
+          "weight": 2
+        },
+        {
+          "model": "station_announcer:block/grime/cobweb_corner_0_wall_m",
+          "weight": 2
+        },
+        {
+          "model": "station_announcer:block/grime/cobweb_corner_1_wall_m",
+          "weight": 2
+        },
+        {
+          "model": "station_announcer:block/grime/cobweb_corner_2_wall_m",
+          "weight": 2
+        },
+        {
+          "model": "station_announcer:block/grime/cobweb_corner_3_wall_m",
+          "weight": 2
+        },
+        {
+          "model": "station_announcer:block/grime/cobweb_edge_0_wall",
+          "weight": 2
+        },
+        {
+          "model": "station_announcer:block/grime/cobweb_edge_0_wall_m",
+          "weight": 2
+        },
+        {
+          "model": "station_announcer:block/grime/cobweb_edge_1_wall",
+          "weight": 2
+        },
+        {
+          "model": "station_announcer:block/grime/cobweb_edge_1_wall_m",
+          "weight": 2
+        },
+        {
+          "model": "station_announcer:block/grime/cobweb_edge_2_wall",
+          "weight": 2
+        },
+        {
+          "model": "station_announcer:block/grime/cobweb_edge_2_wall_m",
+          "weight": 2
+        }
+      ]
+    },
+    {
+      "when": {
+        "east": "true",
+        "north": "true"
+      },
+      "apply": [
+        {
+          "model": "station_announcer:block/grime/cobweb_corner_0_wall",
+          "weight": 4,
+          "y": 90
+        },
+        {
+          "model": "station_announcer:block/grime/cobweb_corner_1_wall",
+          "weight": 2,
+          "y": 90
+        },
+        {
+          "model": "station_announcer:block/grime/cobweb_corner_2_wall",
+          "weight": 2,
+          "y": 90
+        },
+        {
+          "model": "station_announcer:block/grime/cobweb_corner_3_wall",
+          "weight": 2,
+          "y": 90
+        }
+      ]
+    },
+    {
+      "when": {
+        "east": "true",
+        "north": "false",
+        "south": "true"
+      },
+      "apply": [
+        {
+          "model": "station_announcer:block/grime/cobweb_corner_0_wall_m",
+          "weight": 4,
+          "y": 90
+        },
+        {
+          "model": "station_announcer:block/grime/cobweb_corner_1_wall_m",
+          "weight": 2,
+          "y": 90
+        },
+        {
+          "model": "station_announcer:block/grime/cobweb_corner_2_wall_m",
+          "weight": 2,
+          "y": 90
+        },
+        {
+          "model": "station_announcer:block/grime/cobweb_corner_3_wall_m",
+          "weight": 2,
+          "y": 90
+        }
+      ]
+    },
+    {
+      "when": {
+        "east": "true",
+        "north": "false",
+        "south": "false",
+        "up": "true"
+      },
+      "apply": [
+        {
+          "model": "station_announcer:block/grime/cobweb_sheet_0_sheet",
+          "weight": 8,
+          "y": 90
+        },
+        {
+          "model": "station_announcer:block/grime/cobweb_sheet_0_sheet_m",
+          "weight": 6,
+          "y": 90
+        },
+        {
+          "model": "station_announcer:block/grime/cobweb_sheet_1_sheet",
+          "weight": 6,
+          "y": 90
+        },
+        {
+          "model": "station_announcer:block/grime/cobweb_sheet_1_sheet_m",
+          "weight": 6,
+          "y": 90
+        },
+        {
+          "model": "station_announcer:block/grime/cobweb_sheet_2_sheet",
+          "weight": 6,
+          "y": 90
+        },
+        {
+          "model": "station_announcer:block/grime/cobweb_sheet_2_sheet_m",
+          "weight": 6,
+          "y": 90
+        },
+        {
+          "model": "station_announcer:block/grime/cobweb_corner_0_wall",
+          "weight": 2,
+          "y": 90
+        },
+        {
+          "model": "station_announcer:block/grime/cobweb_corner_1_wall",
+          "weight": 2,
+          "y": 90
+        },
+        {
+          "model": "station_announcer:block/grime/cobweb_corner_2_wall",
+          "weight": 2,
+          "y": 90
+        },
+        {
+          "model": "station_announcer:block/grime/cobweb_corner_3_wall",
+          "weight": 2,
+          "y": 90
+        },
+        {
+          "model": "station_announcer:block/grime/cobweb_corner_0_wall_m",
+          "weight": 2,
+          "y": 90
+        },
+        {
+          "model": "station_announcer:block/grime/cobweb_corner_1_wall_m",
+          "weight": 2,
+          "y": 90
+        },
+        {
+          "model": "station_announcer:block/grime/cobweb_corner_2_wall_m",
+          "weight": 2,
+          "y": 90
+        },
+        {
+          "model": "station_announcer:block/grime/cobweb_corner_3_wall_m",
+          "weight": 2,
+          "y": 90
+        }
+      ]
+    },
+    {
+      "when": {
+        "east": "true",
+        "north": "false",
+        "south": "false",
+        "up": "false"
+      },
+      "apply": [
+        {
+          "model": "station_announcer:block/grime/cobweb_corner_0_wall",
+          "weight": 4,
+          "y": 90
+        },
+        {
+          "model": "station_announcer:block/grime/cobweb_corner_1_wall",
+          "weight": 2,
+          "y": 90
+        },
+        {
+          "model": "station_announcer:block/grime/cobweb_corner_2_wall",
+          "weight": 2,
+          "y": 90
+        },
+        {
+          "model": "station_announcer:block/grime/cobweb_corner_3_wall",
+          "weight": 2,
+          "y": 90
+        },
+        {
+          "model": "station_announcer:block/grime/cobweb_corner_0_wall_m",
+          "weight": 2,
+          "y": 90
+        },
+        {
+          "model": "station_announcer:block/grime/cobweb_corner_1_wall_m",
+          "weight": 2,
+          "y": 90
+        },
+        {
+          "model": "station_announcer:block/grime/cobweb_corner_2_wall_m",
+          "weight": 2,
+          "y": 90
+        },
+        {
+          "model": "station_announcer:block/grime/cobweb_corner_3_wall_m",
+          "weight": 2,
+          "y": 90
+        },
+        {
+          "model": "station_announcer:block/grime/cobweb_edge_0_wall",
+          "weight": 2,
+          "y": 90
+        },
+        {
+          "model": "station_announcer:block/grime/cobweb_edge_0_wall_m",
+          "weight": 2,
+          "y": 90
+        },
+        {
+          "model": "station_announcer:block/grime/cobweb_edge_1_wall",
+          "weight": 2,
+          "y": 90
+        },
+        {
+          "model": "station_announcer:block/grime/cobweb_edge_1_wall_m",
+          "weight": 2,
+          "y": 90
+        },
+        {
+          "model": "station_announcer:block/grime/cobweb_edge_2_wall",
+          "weight": 2,
+          "y": 90
+        },
+        {
+          "model": "station_announcer:block/grime/cobweb_edge_2_wall_m",
+          "weight": 2,
+          "y": 90
+        }
+      ]
+    },
+    {
+      "when": {
+        "south": "true",
+        "east": "true"
+      },
+      "apply": [
+        {
+          "model": "station_announcer:block/grime/cobweb_corner_0_wall",
+          "weight": 5,
+          "y": 180
+        },
+        {
+          "model": "station_announcer:block/grime/cobweb_corner_1_wall",
+          "weight": 2,
+          "y": 180
+        },
+        {
+          "model": "station_announcer:block/grime/cobweb_corner_2_wall",
+          "weight": 2,
+          "y": 180
+        },
+        {
+          "model": "station_announcer:block/grime/cobweb_corner_3_wall",
+          "weight": 2,
+          "y": 180
+        }
+      ]
+    },
+    {
+      "when": {
+        "south": "true",
+        "east": "false",
+        "west": "true"
+      },
+      "apply": [
+        {
+          "model": "station_announcer:block/grime/cobweb_corner_0_wall_m",
+          "weight": 5,
+          "y": 180
+        },
+        {
+          "model": "station_announcer:block/grime/cobweb_corner_1_wall_m",
+          "weight": 2,
+          "y": 180
+        },
+        {
+          "model": "station_announcer:block/grime/cobweb_corner_2_wall_m",
+          "weight": 2,
+          "y": 180
+        },
+        {
+          "model": "station_announcer:block/grime/cobweb_corner_3_wall_m",
+          "weight": 2,
+          "y": 180
+        }
+      ]
+    },
+    {
+      "when": {
+        "south": "true",
+        "east": "false",
+        "west": "false",
+        "up": "true"
+      },
+      "apply": [
+        {
+          "model": "station_announcer:block/grime/cobweb_sheet_0_sheet",
+          "weight": 9,
+          "y": 180
+        },
+        {
+          "model": "station_announcer:block/grime/cobweb_sheet_0_sheet_m",
+          "weight": 6,
+          "y": 180
+        },
+        {
+          "model": "station_announcer:block/grime/cobweb_sheet_1_sheet",
+          "weight": 6,
+          "y": 180
+        },
+        {
+          "model": "station_announcer:block/grime/cobweb_sheet_1_sheet_m",
+          "weight": 6,
+          "y": 180
+        },
+        {
+          "model": "station_announcer:block/grime/cobweb_sheet_2_sheet",
+          "weight": 6,
+          "y": 180
+        },
+        {
+          "model": "station_announcer:block/grime/cobweb_sheet_2_sheet_m",
+          "weight": 6,
+          "y": 180
+        },
+        {
+          "model": "station_announcer:block/grime/cobweb_corner_0_wall",
+          "weight": 2,
+          "y": 180
+        },
+        {
+          "model": "station_announcer:block/grime/cobweb_corner_1_wall",
+          "weight": 2,
+          "y": 180
+        },
+        {
+          "model": "station_announcer:block/grime/cobweb_corner_2_wall",
+          "weight": 2,
+          "y": 180
+        },
+        {
+          "model": "station_announcer:block/grime/cobweb_corner_3_wall",
+          "weight": 2,
+          "y": 180
+        },
+        {
+          "model": "station_announcer:block/grime/cobweb_corner_0_wall_m",
+          "weight": 2,
+          "y": 180
+        },
+        {
+          "model": "station_announcer:block/grime/cobweb_corner_1_wall_m",
+          "weight": 2,
+          "y": 180
+        },
+        {
+          "model": "station_announcer:block/grime/cobweb_corner_2_wall_m",
+          "weight": 2,
+          "y": 180
+        },
+        {
+          "model": "station_announcer:block/grime/cobweb_corner_3_wall_m",
+          "weight": 2,
+          "y": 180
+        }
+      ]
+    },
+    {
+      "when": {
+        "south": "true",
+        "east": "false",
+        "west": "false",
+        "up": "false"
+      },
+      "apply": [
+        {
+          "model": "station_announcer:block/grime/cobweb_corner_0_wall",
+          "weight": 5,
+          "y": 180
+        },
+        {
+          "model": "station_announcer:block/grime/cobweb_corner_1_wall",
+          "weight": 2,
+          "y": 180
+        },
+        {
+          "model": "station_announcer:block/grime/cobweb_corner_2_wall",
+          "weight": 2,
+          "y": 180
+        },
+        {
+          "model": "station_announcer:block/grime/cobweb_corner_3_wall",
+          "weight": 2,
+          "y": 180
+        },
+        {
+          "model": "station_announcer:block/grime/cobweb_corner_0_wall_m",
+          "weight": 2,
+          "y": 180
+        },
+        {
+          "model": "station_announcer:block/grime/cobweb_corner_1_wall_m",
+          "weight": 2,
+          "y": 180
+        },
+        {
+          "model": "station_announcer:block/grime/cobweb_corner_2_wall_m",
+          "weight": 2,
+          "y": 180
+        },
+        {
+          "model": "station_announcer:block/grime/cobweb_corner_3_wall_m",
+          "weight": 2,
+          "y": 180
+        },
+        {
+          "model": "station_announcer:block/grime/cobweb_edge_0_wall",
+          "weight": 2,
+          "y": 180
+        },
+        {
+          "model": "station_announcer:block/grime/cobweb_edge_0_wall_m",
+          "weight": 2,
+          "y": 180
+        },
+        {
+          "model": "station_announcer:block/grime/cobweb_edge_1_wall",
+          "weight": 2,
+          "y": 180
+        },
+        {
+          "model": "station_announcer:block/grime/cobweb_edge_1_wall_m",
+          "weight": 2,
+          "y": 180
+        },
+        {
+          "model": "station_announcer:block/grime/cobweb_edge_2_wall",
+          "weight": 2,
+          "y": 180
+        },
+        {
+          "model": "station_announcer:block/grime/cobweb_edge_2_wall_m",
+          "weight": 2,
+          "y": 180
+        }
+      ]
+    },
+    {
+      "when": {
+        "west": "true",
+        "south": "true"
+      },
+      "apply": [
+        {
+          "model": "station_announcer:block/grime/cobweb_corner_0_wall",
+          "weight": 6,
+          "y": 270
+        },
+        {
+          "model": "station_announcer:block/grime/cobweb_corner_1_wall",
+          "weight": 2,
+          "y": 270
+        },
+        {
+          "model": "station_announcer:block/grime/cobweb_corner_2_wall",
+          "weight": 2,
+          "y": 270
+        },
+        {
+          "model": "station_announcer:block/grime/cobweb_corner_3_wall",
+          "weight": 2,
+          "y": 270
+        }
+      ]
+    },
+    {
+      "when": {
+        "west": "true",
+        "south": "false",
+        "north": "true"
+      },
+      "apply": [
+        {
+          "model": "station_announcer:block/grime/cobweb_corner_0_wall_m",
+          "weight": 6,
+          "y": 270
+        },
+        {
+          "model": "station_announcer:block/grime/cobweb_corner_1_wall_m",
+          "weight": 2,
+          "y": 270
+        },
+        {
+          "model": "station_announcer:block/grime/cobweb_corner_2_wall_m",
+          "weight": 2,
+          "y": 270
+        },
+        {
+          "model": "station_announcer:block/grime/cobweb_corner_3_wall_m",
+          "weight": 2,
+          "y": 270
+        }
+      ]
+    },
+    {
+      "when": {
+        "west": "true",
+        "south": "false",
+        "north": "false",
+        "up": "true"
+      },
+      "apply": [
+        {
+          "model": "station_announcer:block/grime/cobweb_sheet_0_sheet",
+          "weight": 10,
+          "y": 270
+        },
+        {
+          "model": "station_announcer:block/grime/cobweb_sheet_0_sheet_m",
+          "weight": 6,
+          "y": 270
+        },
+        {
+          "model": "station_announcer:block/grime/cobweb_sheet_1_sheet",
+          "weight": 6,
+          "y": 270
+        },
+        {
+          "model": "station_announcer:block/grime/cobweb_sheet_1_sheet_m",
+          "weight": 6,
+          "y": 270
+        },
+        {
+          "model": "station_announcer:block/grime/cobweb_sheet_2_sheet",
+          "weight": 6,
+          "y": 270
+        },
+        {
+          "model": "station_announcer:block/grime/cobweb_sheet_2_sheet_m",
+          "weight": 6,
+          "y": 270
+        },
+        {
+          "model": "station_announcer:block/grime/cobweb_corner_0_wall",
+          "weight": 2,
+          "y": 270
+        },
+        {
+          "model": "station_announcer:block/grime/cobweb_corner_1_wall",
+          "weight": 2,
+          "y": 270
+        },
+        {
+          "model": "station_announcer:block/grime/cobweb_corner_2_wall",
+          "weight": 2,
+          "y": 270
+        },
+        {
+          "model": "station_announcer:block/grime/cobweb_corner_3_wall",
+          "weight": 2,
+          "y": 270
+        },
+        {
+          "model": "station_announcer:block/grime/cobweb_corner_0_wall_m",
+          "weight": 2,
+          "y": 270
+        },
+        {
+          "model": "station_announcer:block/grime/cobweb_corner_1_wall_m",
+          "weight": 2,
+          "y": 270
+        },
+        {
+          "model": "station_announcer:block/grime/cobweb_corner_2_wall_m",
+          "weight": 2,
+          "y": 270
+        },
+        {
+          "model": "station_announcer:block/grime/cobweb_corner_3_wall_m",
+          "weight": 2,
+          "y": 270
+        }
+      ]
+    },
+    {
+      "when": {
+        "west": "true",
+        "south": "false",
+        "north": "false",
+        "up": "false"
+      },
+      "apply": [
+        {
+          "model": "station_announcer:block/grime/cobweb_corner_0_wall",
+          "weight": 6,
+          "y": 270
+        },
+        {
+          "model": "station_announcer:block/grime/cobweb_corner_1_wall",
+          "weight": 2,
+          "y": 270
+        },
+        {
+          "model": "station_announcer:block/grime/cobweb_corner_2_wall",
+          "weight": 2,
+          "y": 270
+        },
+        {
+          "model": "station_announcer:block/grime/cobweb_corner_3_wall",
+          "weight": 2,
+          "y": 270
+        },
+        {
+          "model": "station_announcer:block/grime/cobweb_corner_0_wall_m",
+          "weight": 2,
+          "y": 270
+        },
+        {
+          "model": "station_announcer:block/grime/cobweb_corner_1_wall_m",
+          "weight": 2,
+          "y": 270
+        },
+        {
+          "model": "station_announcer:block/grime/cobweb_corner_2_wall_m",
+          "weight": 2,
+          "y": 270
+        },
+        {
+          "model": "station_announcer:block/grime/cobweb_corner_3_wall_m",
+          "weight": 2,
+          "y": 270
+        },
+        {
+          "model": "station_announcer:block/grime/cobweb_edge_0_wall",
+          "weight": 2,
+          "y": 270
+        },
+        {
+          "model": "station_announcer:block/grime/cobweb_edge_0_wall_m",
+          "weight": 2,
+          "y": 270
+        },
+        {
+          "model": "station_announcer:block/grime/cobweb_edge_1_wall",
+          "weight": 2,
+          "y": 270
+        },
+        {
+          "model": "station_announcer:block/grime/cobweb_edge_1_wall_m",
+          "weight": 2,
+          "y": 270
+        },
+        {
+          "model": "station_announcer:block/grime/cobweb_edge_2_wall",
+          "weight": 2,
+          "y": 270
+        },
+        {
+          "model": "station_announcer:block/grime/cobweb_edge_2_wall_m",
+          "weight": 2,
+          "y": 270
+        }
+      ]
+    },
+    {
+      "when": {
+        "down": "true"
+      },
+      "apply": [
+        {
+          "model": "station_announcer:block/grime/cobweb_scrap_0_floor",
+          "weight": 8
+        },
+        {
+          "model": "station_announcer:block/grime/cobweb_scrap_0_floor",
+          "weight": 2,
+          "y": 90
+        },
+        {
+          "model": "station_announcer:block/grime/cobweb_scrap_0_floor",
+          "weight": 2,
+          "y": 180
+        },
+        {
+          "model": "station_announcer:block/grime/cobweb_scrap_0_floor",
+          "weight": 2,
+          "y": 270
+        },
+        {
+          "model": "station_announcer:block/grime/cobweb_scrap_0_floor_m",
+          "weight": 2
+        },
+        {
+          "model": "station_announcer:block/grime/cobweb_scrap_0_floor_m",
+          "weight": 2,
+          "y": 90
+        },
+        {
+          "model": "station_announcer:block/grime/cobweb_scrap_0_floor_m",
+          "weight": 2,
+          "y": 180
+        },
+        {
+          "model": "station_announcer:block/grime/cobweb_scrap_0_floor_m",
+          "weight": 2,
+          "y": 270
+        },
+        {
+          "model": "station_announcer:block/grime/cobweb_scrap_1_floor",
+          "weight": 2
+        },
+        {
+          "model": "station_announcer:block/grime/cobweb_scrap_1_floor",
+          "weight": 2,
+          "y": 90
+        },
+        {
+          "model": "station_announcer:block/grime/cobweb_scrap_1_floor",
+          "weight": 2,
+          "y": 180
+        },
+        {
+          "model": "station_announcer:block/grime/cobweb_scrap_1_floor",
+          "weight": 2,
+          "y": 270
+        },
+        {
+          "model": "station_announcer:block/grime/cobweb_scrap_1_floor_m",
+          "weight": 2
+        },
+        {
+          "model": "station_announcer:block/grime/cobweb_scrap_1_floor_m",
+          "weight": 2,
+          "y": 90
+        },
+        {
+          "model": "station_announcer:block/grime/cobweb_scrap_1_floor_m",
+          "weight": 2,
+          "y": 180
+        },
+        {
+          "model": "station_announcer:block/grime/cobweb_scrap_1_floor_m",
+          "weight": 2,
+          "y": 270
+        },
+        {
+          "model": "station_announcer:block/grime/cobweb_scrap_2_floor",
+          "weight": 2
+        },
+        {
+          "model": "station_announcer:block/grime/cobweb_scrap_2_floor",
+          "weight": 2,
+          "y": 90
+        },
+        {
+          "model": "station_announcer:block/grime/cobweb_scrap_2_floor",
+          "weight": 2,
+          "y": 180
+        },
+        {
+          "model": "station_announcer:block/grime/cobweb_scrap_2_floor",
+          "weight": 2,
+          "y": 270
+        },
+        {
+          "model": "station_announcer:block/grime/cobweb_scrap_2_floor_m",
+          "weight": 2
+        },
+        {
+          "model": "station_announcer:block/grime/cobweb_scrap_2_floor_m",
+          "weight": 2,
+          "y": 90
+        },
+        {
+          "model": "station_announcer:block/grime/cobweb_scrap_2_floor_m",
+          "weight": 2,
+          "y": 180
+        },
+        {
+          "model": "station_announcer:block/grime/cobweb_scrap_2_floor_m",
+          "weight": 2,
+          "y": 270
+        }
+      ]
+    }
+  ]
+}

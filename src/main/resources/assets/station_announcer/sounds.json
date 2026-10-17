@@ -286,5 +286,47 @@
     "sounds": [
       "station_announcer:gap_filler_bang"
     ]
+  },
+  "crew_buzzer": {
+    "subtitle": "subtitles.station_announcer.crew_buzzer",
+    "sounds": [
+      "station_announcer:crew_buzzer"
+    ]
+  },
+  "crew_vigilance_warn": {
+    "subtitle": "subtitles.station_announcer.crew_vigilance_warn",
+    "sounds": [
+      "station_announcer:crew_vigilance_warn"
+    ]
+  },
+  "crew_vigilance_trip": {
+    "subtitle": "subtitles.station_announcer.crew_vigilance_trip",
+    "sounds": [
+      "station_announcer:crew_vigilance_trip"
+    ]
+  },
+  "horn_nyc": {
+    "subtitle": "subtitles.station_announcer.horn_nyc",
+    "sounds": [
+      "station_announcer:horn_nyc"
+    ]
+  },
+  "horn_lirr": {
+    "subtitle": "subtitles.station_announcer.horn_lirr",
+    "sounds": [
+      "station_announcer:horn_lirr"
+    ]
+  },
+  "horn_euro": {
+    "subtitle": "subtitles.station_announcer.horn_euro",
+    "sounds": [
+      "station_announcer:horn_euro"
+    ]
+  },
+  "horn_steam": {
+    "subtitle": "subtitles.station_announcer.horn_steam",
+    "sounds": [
+      "station_announcer:horn_steam"
+    ]
   }
 }

@@ -86,6 +86,8 @@ public final class LayoutSolver {
     static final int MAX_OPENINGS = 8;
     static final double OPENING_CLUSTER = 10;
     static final double OPENING_NEAR_EXIT = 8;
+    /** A removed suggestion keeps every candidate this close (x/z, within 6 blocks of height) out. */
+    static final double DISMISSED_RADIUS = 12;
     static final int MAX_PATH_POINTS = 160;
     static final double STREET_BAND = 2.0;
     /** Inside the MTR area, a street opening is at least this much walking from the platforms (at-grade stations). */
@@ -1572,6 +1574,11 @@ public final class LayoutSolver {
             }
             for (LayoutInput.Exit exit : in.exits) {
                 near |= Math.hypot(exit.x() + 0.5 - x, exit.z() + 0.5 - z) < OPENING_NEAR_EXIT;
+            }
+            // removed by a player: that way out still exists, it just is not suggested
+            for (int[] gone : in.dismissedOpenings) {
+                near |= Math.hypot(gone[0] + 0.5 - x, gone[2] + 0.5 - z) < DISMISSED_RADIUS
+                        && Math.abs(gone[1] - h[node]) <= 6;
             }
             if (!near) {
                 chosen.add(candidate);

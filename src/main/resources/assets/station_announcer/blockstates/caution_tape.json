@@ -1,0 +1,360 @@
+{
+  "multipart": [
+    {
+      "when": {
+        "axis": "x"
+      },
+      "apply": {
+        "model": "station_announcer:block/construction/caution_tape_core"
+      }
+    },
+    {
+      "when": {
+        "axis": "x",
+        "double": "true"
+      },
+      "apply": {
+        "model": "station_announcer:block/construction/caution_tape_core_low"
+      }
+    },
+    {
+      "when": {
+        "axis": "x",
+        "left": "none"
+      },
+      "apply": {
+        "model": "station_announcer:block/construction/caution_tape_left_none"
+      }
+    },
+    {
+      "when": {
+        "axis": "x",
+        "left": "none",
+        "double": "true"
+      },
+      "apply": {
+        "model": "station_announcer:block/construction/caution_tape_left_none_low"
+      }
+    },
+    {
+      "when": {
+        "axis": "x",
+        "left": "tape"
+      },
+      "apply": {
+        "model": "station_announcer:block/construction/caution_tape_left_tape"
+      }
+    },
+    {
+      "when": {
+        "axis": "x",
+        "left": "tape",
+        "double": "true"
+      },
+      "apply": {
+        "model": "station_announcer:block/construction/caution_tape_left_tape_low"
+      }
+    },
+    {
+      "when": {
+        "axis": "x",
+        "left": "wall"
+      },
+      "apply": {
+        "model": "station_announcer:block/construction/caution_tape_left_wall"
+      }
+    },
+    {
+      "when": {
+        "axis": "x",
+        "left": "wall",
+        "double": "true"
+      },
+      "apply": {
+        "model": "station_announcer:block/construction/caution_tape_left_wall_low"
+      }
+    },
+    {
+      "when": {
+        "axis": "x",
+        "left": "post"
+      },
+      "apply": {
+        "model": "station_announcer:block/construction/caution_tape_left_post"
+      }
+    },
+    {
+      "when": {
+        "axis": "x",
+        "left": "post",
+        "double": "true"
+      },
+      "apply": {
+        "model": "station_announcer:block/construction/caution_tape_left_post_low"
+      }
+    },
+    {
+      "when": {
+        "axis": "x",
+        "right": "none"
+      },
+      "apply": {
+        "model": "station_announcer:block/construction/caution_tape_right_none"
+      }
+    },
+    {
+      "when": {
+        "axis": "x",
+        "right": "none",
+        "double": "true"
+      },
+      "apply": {
+        "model": "station_announcer:block/construction/caution_tape_right_none_low"
+      }
+    },
+    {
+      "when": {
+        "axis": "x",
+        "right": "tape"
+      },
+      "apply": {
+        "model": "station_announcer:block/construction/caution_tape_right_tape"
+      }
+    },
+    {
+      "when": {
+        "axis": "x",
+        "right": "tape",
+        "double": "true"
+      },
+      "apply": {
+        "model": "station_announcer:block/construction/caution_tape_right_tape_low"
+      }
+    },
+    {
+      "when": {
+        "axis": "x",
+        "right": "wall"
+      },
+      "apply": {
+        "model": "station_announcer:block/construction/caution_tape_right_wall"
+      }
+    },
+    {
+      "when": {
+        "axis": "x",
+        "right": "wall",
+        "double": "true"
+      },
+      "apply": {
+        "model": "station_announcer:block/construction/caution_tape_right_wall_low"
+      }
+    },
+    {
+      "when": {
+        "axis": "x",
+        "right": "post"
+      },
+      "apply": {
+        "model": "station_announcer:block/construction/caution_tape_right_post"
+      }
+    },
+    {
+      "when": {
+        "axis": "x",
+        "right": "post",
+        "double": "true"
+      },
+      "apply": {
+        "model": "station_announcer:block/construction/caution_tape_right_post_low"
+      }
+    },
+    {
+      "when": {
+        "axis": "z"
+      },
+      "apply": {
+        "model": "station_announcer:block/construction/caution_tape_core",
+        "y": 90
+      }
+    },
+    {
+      "when": {
+        "axis": "z",
+        "double": "true"
+      },
+      "apply": {
+        "model": "station_announcer:block/construction/caution_tape_core_low",
+        "y": 90
+      }
+    },
+    {
+      "when": {
+        "axis": "z",
+        "left": "none"
+      },
+      "apply": {
+        "model": "station_announcer:block/construction/caution_tape_left_none",
+        "y": 90
+      }
+    },
+    {
+      "when": {
+        "axis": "z",
+        "left": "none",
+        "double": "true"
+      },
+      "apply": {
+        "model": "station_announcer:block/construction/caution_tape_left_none_low",
+        "y": 90
+      }
+    },
+    {
+      "when": {
+        "axis": "z",
+        "left": "tape"
+      },
+      "apply": {
+        "model": "station_announcer:block/construction/caution_tape_left_tape",
+        "y": 90
+      }
+    },
+    {
+      "when": {
+        "axis": "z",
+        "left": "tape",
+        "double": "true"
+      },
+      "apply": {
+        "model": "station_announcer:block/construction/caution_tape_left_tape_low",
+        "y": 90
+      }
+    },
+    {
+      "when": {
+        "axis": "z",
+        "left": "wall"
+      },
+      "apply": {
+        "model": "station_announcer:block/construction/caution_tape_left_wall",
+        "y": 90
+      }
+    },
+    {
+      "when": {
+        "axis": "z",
+        "left": "wall",
+        "double": "true"
+      },
+      "apply": {
+        "model": "station_announcer:block/construction/caution_tape_left_wall_low",
+        "y": 90
+      }
+    },
+    {
+      "when": {
+        "axis": "z",
+        "left": "post"
+      },
+      "apply": {
+        "model": "station_announcer:block/construction/caution_tape_left_post",
+        "y": 90
+      }
+    },
+    {
+      "when": {
+        "axis": "z",
+        "left": "post",
+        "double": "true"
+      },
+      "apply": {
+        "model": "station_announcer:block/construction/caution_tape_left_post_low",
+        "y": 90
+      }
+    },
+    {
+      "when": {
+        "axis": "z",
+        "right": "none"
+      },
+      "apply": {
+        "model": "station_announcer:block/construction/caution_tape_right_none",
+        "y": 90
+      }
+    },
+    {
+      "when": {
+        "axis": "z",
+        "right": "none",
+        "double": "true"
+      },
+      "apply": {
+        "model": "station_announcer:block/construction/caution_tape_right_none_low",
+        "y": 90
+      }
+    },
+    {
+      "when": {
+        "axis": "z",
+        "right": "tape"
+      },
+      "apply": {
+        "model": "station_announcer:block/construction/caution_tape_right_tape",
+        "y": 90
+      }
+    },
+    {
+      "when": {
+        "axis": "z",
+        "right": "tape",
+        "double": "true"
+      },
+      "apply": {
+        "model": "station_announcer:block/construction/caution_tape_right_tape_low",
+        "y": 90
+      }
+    },
+    {
+      "when": {
+        "axis": "z",
+        "right": "wall"
+      },
+      "apply": {
+        "model": "station_announcer:block/construction/caution_tape_right_wall",
+        "y": 90
+      }
+    },
+    {
+      "when": {
+        "axis": "z",
+        "right": "wall",
+        "double": "true"
+      },
+      "apply": {
+        "model": "station_announcer:block/construction/caution_tape_right_wall_low",
+        "y": 90
+      }
+    },
+    {
+      "when": {
+        "axis": "z",
+        "right": "post"
+      },
+      "apply": {
+        "model": "station_announcer:block/construction/caution_tape_right_post",
+        "y": 90
+      }
+    },
+    {
+      "when": {
+        "axis": "z",
+        "right": "post",
+        "double": "true"
+      },
+      "apply": {
+        "model": "station_announcer:block/construction/caution_tape_right_post_low",
+        "y": 90
+      }
+    }
+  ]
+}

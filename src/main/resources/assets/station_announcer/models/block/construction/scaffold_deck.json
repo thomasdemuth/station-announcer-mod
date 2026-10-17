@@ -1,0 +1,285 @@
+{
+ "parent": "minecraft:block/block",
+ "textures": {
+  "tube": "station_announcer:block/construction/scaf_tube",
+  "clamp": "station_announcer:block/construction/scaf_clamp",
+  "cap": "station_announcer:block/construction/scaf_cap",
+  "plate": "station_announcer:block/construction/scaf_plate",
+  "plank": "station_announcer:block/construction/scaf_plank",
+  "particle": "station_announcer:block/construction/scaf_plank"
+ },
+ "elements": [
+  {
+   "from": [
+    0.3,
+    15.0,
+    0.9
+   ],
+   "to": [
+    15.7,
+    16.0,
+    4.3
+   ],
+   "faces": {
+    "north": {
+     "texture": "#plank",
+     "uv": [
+      0.3,
+      0.0,
+      15.7,
+      1.0
+     ]
+    },
+    "south": {
+     "texture": "#plank",
+     "uv": [
+      0.3,
+      0.0,
+      15.7,
+      1.0
+     ]
+    },
+    "east": {
+     "texture": "#plank",
+     "uv": [
+      11.7,
+      0.0,
+      15.1,
+      1.0
+     ]
+    },
+    "west": {
+     "texture": "#plank",
+     "uv": [
+      0.9,
+      0.0,
+      4.3,
+      1.0
+     ]
+    },
+    "up": {
+     "texture": "#plank",
+     "uv": [
+      0,
+      0,
+      16,
+      3.4
+     ]
+    },
+    "down": {
+     "texture": "#plank",
+     "uv": [
+      0,
+      0,
+      16,
+      3.4
+     ]
+    }
+   }
+  },
+  {
+   "from": [
+    0.3,
+    15.0,
+    4.5
+   ],
+   "to": [
+    15.7,
+    16.0,
+    7.9
+   ],
+   "faces": {
+    "north": {
+     "texture": "#plank",
+     "uv": [
+      0.3,
+      0.0,
+      15.7,
+      1.0
+     ]
+    },
+    "south": {
+     "texture": "#plank",
+     "uv": [
+      0.3,
+      0.0,
+      15.7,
+      1.0
+     ]
+    },
+    "east": {
+     "texture": "#plank",
+     "uv": [
+      8.1,
+      0.0,
+      11.5,
+      1.0
+     ]
+    },
+    "west": {
+     "texture": "#plank",
+     "uv": [
+      4.5,
+      0.0,
+      7.9,
+      1.0
+     ]
+    },
+    "up": {
+     "texture": "#plank",
+     "uv": [
+      0,
+      4,
+      16,
+      7.4
+     ]
+    },
+    "down": {
+     "texture": "#plank",
+     "uv": [
+      0,
+      4,
+      16,
+      7.4
+     ]
+    }
+   }
+  },
+  {
+   "from": [
+    0.3,
+    15.0,
+    8.1
+   ],
+   "to": [
+    15.7,
+    16.0,
+    11.5
+   ],
+   "faces": {
+    "north": {
+     "texture": "#plank",
+     "uv": [
+      0.3,
+      0.0,
+      15.7,
+      1.0
+     ]
+    },
+    "south": {
+     "texture": "#plank",
+     "uv": [
+      0.3,
+      0.0,
+      15.7,
+      1.0
+     ]
+    },
+    "east": {
+     "texture": "#plank",
+     "uv": [
+      4.5,
+      0.0,
+      7.9,
+      1.0
+     ]
+    },
+    "west": {
+     "texture": "#plank",
+     "uv": [
+      8.1,
+      0.0,
+      11.5,
+      1.0
+     ]
+    },
+    "up": {
+     "texture": "#plank",
+     "uv": [
+      0,
+      8,
+      16,
+      11.4
+     ]
+    },
+    "down": {
+     "texture": "#plank",
+     "uv": [
+      0,
+      8,
+      16,
+      11.4
+     ]
+    }
+   }
+  },
+  {
+   "from": [
+    0.3,
+    15.0,
+    11.7
+   ],
+   "to": [
+    15.7,
+    16.0,
+    15.1
+   ],
+   "faces": {
+    "north": {
+     "texture": "#plank",
+     "uv": [
+      0.3,
+      0.0,
+      15.7,
+      1.0
+     ]
+    },
+    "south": {
+     "texture": "#plank",
+     "uv": [
+      0.3,
+      0.0,
+      15.7,
+      1.0
+     ]
+    },
+    "east": {
+     "texture": "#plank",
+     "uv": [
+      0.9,
+      0.0,
+      4.3,
+      1.0
+     ]
+    },
+    "west": {
+     "texture": "#plank",
+     "uv": [
+      11.7,
+      0.0,
+      15.1,
+      1.0
+     ]
+    },
+    "up": {
+     "texture": "#plank",
+     "uv": [
+      0,
+      12,
+      16,
+      15.4
+     ]
+    },
+    "down": {
+     "texture": "#plank",
+     "uv": [
+      0,
+      12,
+      16,
+      15.4
+     ]
+    }
+   }
+  }
+ ]
+}

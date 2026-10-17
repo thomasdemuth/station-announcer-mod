@@ -1,0 +1,129 @@
+{
+  "textures": {
+    "piece_newspaper": "station_announcer:block/litter/piece_newspaper",
+    "particle": "station_announcer:block/litter/piece_newspaper"
+  },
+  "elements": [
+    {
+      "from": [
+        9.4,
+        0.041,
+        5.45
+      ],
+      "to": [
+        14.6,
+        0.221,
+        9.1
+      ],
+      "faces": {
+        "west": {
+          "uv": [
+            0.25,
+            0.25,
+            4.0,
+            0.5
+          ],
+          "texture": "#piece_newspaper"
+        },
+        "east": {
+          "uv": [
+            0.25,
+            0.25,
+            4.0,
+            0.5
+          ],
+          "texture": "#piece_newspaper"
+        },
+        "south": {
+          "uv": [
+            4.5,
+            0.25,
+            9.75,
+            0.5
+          ],
+          "texture": "#piece_newspaper"
+        },
+        "up": {
+          "uv": [
+            10.25,
+            0.25,
+            14.0,
+            5.5
+          ],
+          "texture": "#piece_newspaper",
+          "rotation": 270
+        }
+      }
+    },
+    {
+      "from": [
+        9.5,
+        0.041,
+        2.1
+      ],
+      "to": [
+        14.5,
+        0.201,
+        5.5
+      ],
+      "faces": {
+        "west": {
+          "uv": [
+            0.25,
+            1.0,
+            3.75,
+            1.25
+          ],
+          "texture": "#piece_newspaper"
+        },
+        "east": {
+          "uv": [
+            0.25,
+            1.0,
+            3.75,
+            1.25
+          ],
+          "texture": "#piece_newspaper"
+        },
+        "north": {
+          "uv": [
+            4.25,
+            1.0,
+            9.25,
+            1.25
+          ],
+          "texture": "#piece_newspaper"
+        },
+        "up": {
+          "uv": [
+            0.25,
+            1.75,
+            3.75,
+            6.75
+          ],
+          "texture": "#piece_newspaper",
+          "rotation": 270
+        },
+        "down": {
+          "uv": [
+            4.25,
+            1.75,
+            7.75,
+            6.75
+          ],
+          "texture": "#piece_newspaper",
+          "rotation": 90
+        }
+      },
+      "rotation": {
+        "axis": "x",
+        "angle": 22.5,
+        "origin": [
+          12.0,
+          0.211,
+          5.5
+        ]
+      }
+    }
+  ]
+}

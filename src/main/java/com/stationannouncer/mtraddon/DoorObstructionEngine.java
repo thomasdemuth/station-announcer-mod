@@ -18,6 +18,10 @@ import java.util.concurrent.ThreadLocalRandom;
  * doors" when a train tries to close them at a platform, delaying departure for
  * a few seconds while the doors bounce back open.
  *
+ * <p><b>Crewed trains only</b> (Thomas, 2026-10-05): nothing is rolled unless a
+ * player holding a driver or guard key rides the vehicle, so unattended
+ * automatic service never loses time to this feature.</p>
+ *
  * <p>Two trigger paths, both intercepted by
  * {@link com.stationannouncer.mixin.VehicleMixin}:</p>
  * <ul>
@@ -126,6 +130,12 @@ public final class DoorObstructionEngine {
         // Manual trains roll on the driver's door-close, not here — otherwise one
         // departure could be rolled by both paths.
         if (vehicleExtraData.getIsCurrentlyManual()) {
+            return false;
+        }
+
+        // Only crewed trains get obstructions (Thomas, 2026-10-05): an automatic
+        // train with nobody aboard holding a key keeps its timetable untouched.
+        if (!hasCrew(vehicleExtraData)) {
             return false;
         }
 
@@ -238,6 +248,22 @@ public final class DoorObstructionEngine {
         // existing writeVehiclePositions -> checkForUpdate -> client.update flow.
         ((VehicleExtraDataAccessor) (Object) vehicleExtraData).stationAnnouncer$openDoors();
         OBSTRUCTED.put(vehicleId, System.currentTimeMillis() + remainingMillis);
+    }
+
+    /**
+     * True when a player holding any valid MTR key (driver OR guard) rides this
+     * vehicle. MTR's client sends {@code isDriver = holding a valid key for the
+     * depot}, whatever the key can do, so this one flag means "driving or
+     * crewing". A few riders at most, and only called once per departure attempt.
+     */
+    private static boolean hasCrew(VehicleExtraData vehicleExtraData) {
+        boolean[] crewed = {false};
+        vehicleExtraData.iterateRidingEntities(ridingEntity -> {
+            if (ridingEntity.isDriver()) {
+                crewed[0] = true;
+            }
+        });
+        return crewed[0];
     }
 
     /** Same stopped-at-a-platform test as the hold engine; returns 0 when not at one. */

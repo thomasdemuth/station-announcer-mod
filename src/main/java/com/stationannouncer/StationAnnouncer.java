@@ -47,6 +47,8 @@ public class StationAnnouncer implements ModInitializer {
             com.stationannouncer.mtr.MtrStationDecor.register();
             com.stationannouncer.mtr.EsiKit.register();
             com.stationannouncer.mtraddon.AddonInit.register();
+            // Lived-in stations: failing lights, grime, litter, construction props.
+            com.stationannouncer.atmosphere.Atmosphere.register();
             LOGGER.info("MTR detected — NYC PIDS, Pillar Creators and station decor enabled");
         }
 

@@ -103,8 +103,10 @@ class SystemTtsBackend {
                 command.add("-v");
                 command.add(voiceName);
             }
-            // "say" reads embedded [[volm x]] commands (0..1) for volume control.
-            command.add(String.format(Locale.ROOT, "[[volm %.2f]] %s", volume, text));
+            // "say" reads embedded [[volm x]] commands (0..1) for volume control. Players
+            // type the text, so "[[" in it is broken up: their own [[volm 1]] must not
+            // override the listener's volume.
+            command.add(String.format(Locale.ROOT, "[[volm %.2f]] %s", volume, text.replace("[[", "[ [")));
         } else if (os.contains("win")) {
             int percent = Math.round(volume * 100);
             String selectVoice = voiceName.isEmpty()
@@ -127,6 +129,9 @@ class SystemTtsBackend {
             }
             command.add("-a");
             command.add(String.valueOf(Math.round(volume * 200))); // espeak amplitude 0..200
+            // End of options: announcement text is typed by players, and text starting
+            // with '-' (e.g. "-f/proc/self/environ") must be spoken, never parsed as a flag.
+            command.add("--");
             command.add(text);
         } else {
             return null;

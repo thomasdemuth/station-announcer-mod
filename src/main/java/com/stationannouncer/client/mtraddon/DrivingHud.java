@@ -70,7 +70,9 @@ import java.util.List;
  * before the section hides.</p>
  *
  * <p>All state is static, touched only on the client thread, and cleared on
- * disconnect.</p>
+ * disconnect. The path walk, next-stop and signal-aspect helpers are public: the
+ * cab HUD ({@code client.mtraddon.cab.CabData}) builds on them, and this panel is
+ * only drawn when the HUD style is "classic".</p>
  */
 @Environment(EnvType.CLIENT)
 public final class DrivingHud {
@@ -163,11 +165,11 @@ public final class DrivingHud {
     private static void tick(MinecraftClient client) {
         if (settingsKey != null) {
             while (settingsKey.wasPressed()) {
-                client.setScreen(new DrivingHudScreen(client.currentScreen));
+                client.setScreen(new com.stationannouncer.client.mtraddon.cab.CabSettingsScreen(client.currentScreen));
             }
         }
         AddonClientConfig config = AddonClientConfig.get();
-        if (!config.hudEnabled || client.player == null) {
+        if (!config.hudEnabled || client.player == null || !config.isClassicHud()) {
             if (snapshot != null) {
                 clear();
             }
@@ -189,7 +191,7 @@ public final class DrivingHud {
 
     /** The driven vehicle, found exactly like {@code DrivingGuiRenderer}'s visibility condition. */
     @Nullable
-    private static VehicleExtension findDrivenVehicle() {
+    public static VehicleExtension findDrivenVehicle() {
         for (VehicleExtension vehicle : MinecraftClientData.getInstance().vehicles) {
             if (VehicleRidingMovement.isRiding(vehicle.getId())
                     && VehicleRidingMovement.getValidHoldingKey(vehicle.vehicleExtraData.getDepotId()) != null) {
@@ -280,7 +282,7 @@ public final class DrivingHud {
      * found regardless of the configured lookahead), bounded by one full extra
      * loop / {@link #MAX_WALK_SEGMENTS} / {@link #MAX_WALK_DISTANCE}.
      */
-    private static List<WalkEntry> buildWalk(VehicleExtraData extra, ObjectImmutableList<PathData> path,
+    public static List<WalkEntry> buildWalk(VehicleExtraData extra, ObjectImmutableList<PathData> path,
                                              int headIndex, double railProgress, int lookahead) {
         int repeatIndex1 = 0;
         int repeatIndex2 = 0;
@@ -336,7 +338,7 @@ public final class DrivingHud {
         return walk;
     }
 
-    private static boolean isPlatformDwell(PathData pathData, long sidingId) {
+    public static boolean isPlatformDwell(PathData pathData, long sidingId) {
         return pathData.getDwellTime() > 0 && pathData.getSavedRailBaseId() != 0
                 && pathData.getSavedRailBaseId() != sidingId;
     }
@@ -350,7 +352,7 @@ public final class DrivingHud {
      * is still the next stop until the head passes its end.
      */
     @Nullable
-    private static NextStop findNextStop(VehicleExtraData extra, ObjectImmutableList<PathData> path,
+    public static NextStop findNextStop(VehicleExtraData extra, ObjectImmutableList<PathData> path,
                                          int headIndex, double railProgress, List<WalkEntry> walk) {
         long sidingId = extra.getSidingId();
         if (headIndex >= 0 && headIndex < path.size()) {
@@ -406,7 +408,7 @@ public final class DrivingHud {
      * the stretch where the head is already on the platform segment. Falls
      * back to MTR's label, then the bare platform name.
      */
-    private static String stopName(VehicleExtraData extra, long platformId) {
+    public static String stopName(VehicleExtraData extra, long platformId) {
         Platform platform = MinecraftClientData.getInstance().platformIdMap.get(platformId);
         if (platform != null) {
             Station station = platform.area;
@@ -639,9 +641,9 @@ public final class DrivingHud {
         }
     }
 
-    private static final int ASPECT_CLEAR = 0;
-    private static final int ASPECT_CAUTION = 1;
-    private static final int ASPECT_OCCUPIED = 2;
+    public static final int ASPECT_CLEAR = 0;
+    public static final int ASPECT_CAUTION = 1;
+    public static final int ASPECT_OCCUPIED = 2;
 
     /**
      * Aspect estimate for one signalled segment, from the same client maps
@@ -652,7 +654,7 @@ public final class DrivingHud {
      * guard). Like the wayside signals, a block our own reservation holds
      * still reads occupied.
      */
-    private static int aspectOf(MinecraftClientData data, PathData pathData,
+    public static int aspectOf(MinecraftClientData data, PathData pathData,
                                 IntAVLTreeSet signalColors, boolean beyondSelfZone) {
         String forwardId = pathData.getHexId(false);
         String reverseId = pathData.getHexId(true);
@@ -755,7 +757,7 @@ public final class DrivingHud {
     }
 
     /** MTR names can be "English|Other Language" — display the first part. */
-    private static String firstLang(String raw) {
+    public static String firstLang(String raw) {
         if (raw == null) {
             return "";
         }
@@ -765,7 +767,7 @@ public final class DrivingHud {
 
     // ------------------------------------------------------------ reflection
 
-    private static double readRailProgress(VehicleExtension vehicle) {
+    public static double readRailProgress(VehicleExtension vehicle) {
         try {
             if (railProgressField == null) {
                 if (railProgressLookupFailed) {
@@ -823,7 +825,7 @@ public final class DrivingHud {
     }
 
     /** One path segment ahead of the head: {@code distance} is from the head to its start. */
-    private record WalkEntry(PathData pathData, double distance, boolean wrapped) {
+    public record WalkEntry(PathData pathData, double distance, boolean wrapped) {
     }
 
     /**
@@ -831,6 +833,6 @@ public final class DrivingHud {
      * point, absolute end distance on the path (only meaningful when not
      * {@code wrapped}), and whether it lies past a repeat wrap.
      */
-    private record NextStop(long platformId, double distance, double endDistance, boolean wrapped) {
+    public record NextStop(long platformId, double distance, double endDistance, boolean wrapped) {
     }
 }

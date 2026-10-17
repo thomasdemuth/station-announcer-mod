@@ -142,7 +142,7 @@ public class TurnstileBlock extends TurnstileBaseBlock implements BlockEntityPro
     // ------------------------------------------------------ block entity --
 
     /** The data cell: the lower half. */
-    private static BlockPos lanePos(BlockState state, BlockPos pos) {
+    public static BlockPos lanePos(BlockState state, BlockPos pos) {
         return state.get(HALF) == DoubleBlockHalf.UPPER ? pos.down() : pos;
     }
 

@@ -113,8 +113,15 @@ public class FareMachineBlock extends FacingDecorBlock {
 
     @Override
     public ActionResult onUse(BlockState state, World world, BlockPos pos, PlayerEntity player, Hand hand, BlockHitResult hit) {
+        if (player.getStackInHand(hand).getItem() instanceof com.stationannouncer.atmosphere.MaintenanceToolItem) {
+            return ActionResult.PASS; // the tool bags / unbags the machine
+        }
         if (world.isClient) {
             return ActionResult.SUCCESS;
+        }
+        if (com.stationannouncer.atmosphere.OutOfService.isOut(world, pos)) {
+            com.stationannouncer.atmosphere.OutOfService.refuse(world, pos, player);
+            return ActionResult.CONSUME;
         }
         if (FARE_HANDLER != null && world instanceof ServerWorld serverWorld
                 && player instanceof ServerPlayerEntity serverPlayer) {

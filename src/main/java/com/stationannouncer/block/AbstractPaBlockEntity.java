@@ -3,6 +3,7 @@ package com.stationannouncer.block;
 import com.stationannouncer.AnnouncerRegistry;
 import com.stationannouncer.net.AnnouncerNetworking;
 import com.stationannouncer.pa.PaText;
+import com.stationannouncer.pa.TrainAnnouncements;
 import net.minecraft.block.BlockState;
 import net.minecraft.block.entity.BlockEntity;
 import net.minecraft.block.entity.BlockEntityType;
@@ -42,6 +43,9 @@ public abstract class AbstractPaBlockEntity extends BlockEntity {
     /** Optional sound event id replacing the built-in chime ("" = default). */
     protected String chimeSound = "";
 
+    /** Announcements timed to trains at MTR platforms (see {@code mtr/PaTrains}). */
+    protected TrainAnnouncements trains = TrainAnnouncements.EMPTY;
+
     /** Ticks until a pending (delayed) announcement fires; <= 0 means idle. Not persisted. */
     protected int pendingTicks = 0;
 
@@ -64,6 +68,9 @@ public abstract class AbstractPaBlockEntity extends BlockEntity {
         nbt.putBoolean("ShowChat", showChat);
         nbt.putBoolean("PlayChime", playChime);
         nbt.putString("ChimeSound", chimeSound);
+        if (trains != TrainAnnouncements.EMPTY) {
+            nbt.put("Trains", trains.toNbt());
+        }
     }
 
     @Override
@@ -76,6 +83,7 @@ public abstract class AbstractPaBlockEntity extends BlockEntity {
         setShowChat(!nbt.contains("ShowChat") || nbt.getBoolean("ShowChat"));
         setPlayChime(!nbt.contains("PlayChime") || nbt.getBoolean("PlayChime"));
         setChimeSound(nbt.getString("ChimeSound"));
+        trains = nbt.contains("Trains") ? TrainAnnouncements.fromNbt(nbt.getCompound("Trains")) : TrainAnnouncements.EMPTY;
     }
 
     // ----------------------------------------------------------- client sync
@@ -167,7 +175,12 @@ public abstract class AbstractPaBlockEntity extends BlockEntity {
      * each client. Capped to what the announce packet carries.
      */
     protected final String prepare(ServerWorld world, String message) {
-        String filled = PaText.fillServer(world, pos, message.trim());
+        return prepare(world, message, null);
+    }
+
+    /** {@link #prepare} with a particular train's details for the train tokens. */
+    protected final String prepare(ServerWorld world, String message, @Nullable PaText.Train train) {
+        String filled = PaText.fillServer(world, pos, message.trim(), train);
         return filled.length() > MAX_TEXT_LENGTH ? filled.substring(0, MAX_TEXT_LENGTH) : filled;
     }
 
@@ -196,6 +209,9 @@ public abstract class AbstractPaBlockEntity extends BlockEntity {
             return;
         }
         message = prepare(serverWorld, message);
+        if (message.isBlank()) {
+            return; // e.g. only {access} at a station that was never scanned
+        }
         // Displays are updated even when no speaker ends up in range: the
         // screens should show what the PA is saying regardless of audio reach.
         onFired(serverWorld, message);
@@ -250,10 +266,23 @@ public abstract class AbstractPaBlockEntity extends BlockEntity {
      * the two by making {@code fire()} delegate here.</p>
      */
     public final void announceExternal(String message) {
+        announceExternal(message, null, false);
+    }
+
+    /**
+     * {@link #announceExternal(String)} for a train-timed announcement: the train
+     * tokens come from {@code train}, and {@code queued} asks each client to wait
+     * for whatever it is playing instead of cutting it off (a train's arrival and
+     * doors-open messages must not chop each other).
+     */
+    public final void announceExternal(String message, @Nullable PaText.Train train, boolean queued) {
         if (!(world instanceof ServerWorld serverWorld) || message == null || message.isBlank()) {
             return;
         }
-        String announcement = prepare(serverWorld, PaText.stripDisabled(message.trim()));
+        String announcement = prepare(serverWorld, PaText.stripDisabled(message.trim()), train);
+        if (announcement.isBlank()) {
+            return; // e.g. only {access} at a station that was never scanned
+        }
         // Displays first, exactly like fire(): screens show what the PA is saying
         // even when no speaker ends up in range.
         onFired(serverWorld, announcement);
@@ -282,7 +311,7 @@ public abstract class AbstractPaBlockEntity extends BlockEntity {
             }
             if (best != null) {
                 AnnouncerNetworking.sendAnnouncement(player, announcement, bestVolume, best.pos(),
-                        showChat, playChime, chimeSound);
+                        showChat, playChime, chimeSound, queued);
             }
         }
     }
@@ -300,6 +329,16 @@ public abstract class AbstractPaBlockEntity extends BlockEntity {
     }
 
     // ------------------------------------------------------------ accessors
+
+    public TrainAnnouncements getTrains() {
+        return trains;
+    }
+
+    /** From the editor's Trains tab: persists and syncs. */
+    public void applyTrains(TrainAnnouncements value) {
+        trains = value == null ? TrainAnnouncements.EMPTY : value;
+        sync();
+    }
 
     public String getText() {
         return text;

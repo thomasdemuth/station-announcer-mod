@@ -1,0 +1,124 @@
+{
+  "variants": {
+    "count=1": [
+      {
+        "model": "station_announcer:block/construction/traffic_cone_1_a",
+        "weight": 3
+      },
+      {
+        "model": "station_announcer:block/construction/traffic_cone_1_a",
+        "y": 90,
+        "weight": 3
+      },
+      {
+        "model": "station_announcer:block/construction/traffic_cone_1_a",
+        "y": 180,
+        "weight": 3
+      },
+      {
+        "model": "station_announcer:block/construction/traffic_cone_1_a",
+        "y": 270,
+        "weight": 3
+      },
+      {
+        "model": "station_announcer:block/construction/traffic_cone_1_b",
+        "weight": 2
+      },
+      {
+        "model": "station_announcer:block/construction/traffic_cone_1_b",
+        "y": 90,
+        "weight": 2
+      },
+      {
+        "model": "station_announcer:block/construction/traffic_cone_1_b",
+        "y": 180,
+        "weight": 2
+      },
+      {
+        "model": "station_announcer:block/construction/traffic_cone_1_b",
+        "y": 270,
+        "weight": 2
+      }
+    ],
+    "count=2": [
+      {
+        "model": "station_announcer:block/construction/traffic_cone_2_a",
+        "weight": 3
+      },
+      {
+        "model": "station_announcer:block/construction/traffic_cone_2_a",
+        "y": 90,
+        "weight": 3
+      },
+      {
+        "model": "station_announcer:block/construction/traffic_cone_2_a",
+        "y": 180,
+        "weight": 3
+      },
+      {
+        "model": "station_announcer:block/construction/traffic_cone_2_a",
+        "y": 270,
+        "weight": 3
+      },
+      {
+        "model": "station_announcer:block/construction/traffic_cone_2_b",
+        "weight": 2
+      },
+      {
+        "model": "station_announcer:block/construction/traffic_cone_2_b",
+        "y": 90,
+        "weight": 2
+      },
+      {
+        "model": "station_announcer:block/construction/traffic_cone_2_b",
+        "y": 180,
+        "weight": 2
+      },
+      {
+        "model": "station_announcer:block/construction/traffic_cone_2_b",
+        "y": 270,
+        "weight": 2
+      }
+    ],
+    "count=3": [
+      {
+        "model": "station_announcer:block/construction/traffic_cone_3_a",
+        "weight": 3
+      },
+      {
+        "model": "station_announcer:block/construction/traffic_cone_3_a",
+        "y": 90,
+        "weight": 3
+      },
+      {
+        "model": "station_announcer:block/construction/traffic_cone_3_a",
+        "y": 180,
+        "weight": 3
+      },
+      {
+        "model": "station_announcer:block/construction/traffic_cone_3_a",
+        "y": 270,
+        "weight": 3
+      },
+      {
+        "model": "station_announcer:block/construction/traffic_cone_3_b",
+        "weight": 2
+      },
+      {
+        "model": "station_announcer:block/construction/traffic_cone_3_b",
+        "y": 90,
+        "weight": 2
+      },
+      {
+        "model": "station_announcer:block/construction/traffic_cone_3_b",
+        "y": 180,
+        "weight": 2
+      },
+      {
+        "model": "station_announcer:block/construction/traffic_cone_3_b",
+        "y": 270,
+        "weight": 2
+      }
+    ]
+  }
+}

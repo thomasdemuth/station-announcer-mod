@@ -1,0 +1,175 @@
+{
+ "parent": "minecraft:block/block",
+ "textures": {
+  "ply": "station_announcer:block/construction/shed_ply",
+  "top": "station_announcer:block/construction/shed_top",
+  "steel": "station_announcer:block/construction/shed_steel",
+  "particle": "station_announcer:block/construction/shed_steel"
+ },
+ "elements": [
+  {
+   "from": [
+    0,
+    0.6,
+    3.6
+   ],
+   "to": [
+    16,
+    3.4,
+    4.4
+   ],
+   "faces": {
+    "north": {
+     "texture": "#steel",
+     "uv": [
+      0,
+      12.6,
+      16,
+      15.4
+     ]
+    },
+    "south": {
+     "texture": "#steel",
+     "uv": [
+      0,
+      12.6,
+      16,
+      15.4
+     ]
+    }
+   }
+  },
+  {
+   "from": [
+    0,
+    0.0,
+    2.7
+   ],
+   "to": [
+    16,
+    0.6,
+    5.3
+   ],
+   "faces": {
+    "north": {
+     "texture": "#steel",
+     "uv": [
+      0,
+      14.4,
+      16,
+      15.0
+     ]
+    },
+    "south": {
+     "texture": "#steel",
+     "uv": [
+      0,
+      14.4,
+      16,
+      15.0
+     ]
+    },
+    "up": {
+     "texture": "#steel",
+     "uv": [
+      0,
+      2.7,
+      16,
+      5.3
+     ]
+    },
+    "down": {
+     "texture": "#steel",
+     "uv": [
+      0,
+      10.7,
+      16,
+      13.3
+     ]
+    }
+   }
+  },
+  {
+   "from": [
+    0,
+    0.6,
+    11.6
+   ],
+   "to": [
+    16,
+    3.4,
+    12.4
+   ],
+   "faces": {
+    "north": {
+     "texture": "#steel",
+     "uv": [
+      0,
+      12.6,
+      16,
+      15.4
+     ]
+    },
+    "south": {
+     "texture": "#steel",
+     "uv": [
+      0,
+      12.6,
+      16,
+      15.4
+     ]
+    }
+   }
+  },
+  {
+   "from": [
+    0,
+    0.0,
+    10.7
+   ],
+   "to": [
+    16,
+    0.6,
+    13.3
+   ],
+   "faces": {
+    "north": {
+     "texture": "#steel",
+     "uv": [
+      0,
+      14.4,
+      16,
+      15.0
+     ]
+    },
+    "south": {
+     "texture": "#steel",
+     "uv": [
+      0,
+      14.4,
+      16,
+      15.0
+     ]
+    },
+    "up": {
+     "texture": "#steel",
+     "uv": [
+      0,
+      10.7,
+      16,
+      13.3
+     ]
+    },
+    "down": {
+     "texture": "#steel",
+     "uv": [
+      0,
+      2.7,
+      16,
+      5.3
+     ]
+    }
+   }
+  }
+ ]
+}

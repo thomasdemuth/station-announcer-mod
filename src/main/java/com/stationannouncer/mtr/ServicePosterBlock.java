@@ -112,8 +112,9 @@ public class ServicePosterBlock extends Block implements BlockEntityProvider {
     /** Right-click either half: choose which poster hangs here. */
     @Override
     public ActionResult onUse(BlockState state, World world, BlockPos pos, PlayerEntity player, Hand hand, BlockHitResult hit) {
-        if (hand != Hand.MAIN_HAND) {
-            return ActionResult.PASS;
+        if (hand != Hand.MAIN_HAND
+                || player.getStackInHand(hand).getItem() instanceof com.stationannouncer.atmosphere.MaintenanceToolItem) {
+            return ActionResult.PASS; // the tool ages / restores the poster
         }
         if (world.isClient) {
             BlockPos dataPos = state.get(HALF) == DoubleBlockHalf.LOWER ? pos : pos.down();

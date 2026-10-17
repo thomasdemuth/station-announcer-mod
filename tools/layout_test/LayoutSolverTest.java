@@ -40,11 +40,7 @@ public class LayoutSolverTest {
             in.minX = minX;
             in.minY = minY;
             in.minZ = minZ;
-            in.sizeX = sx;
-            in.sizeY = sy;
-            in.sizeZ = sz;
-            in.cells = new CellInfo[sx * sy * sz];
-            java.util.Arrays.fill(in.cells, AIR);
+            in.allocate(sx, sy, sz);
             in.surface = new int[sx * sz];
             java.util.Arrays.fill(in.surface, Integer.MIN_VALUE);
             in.areaMinX = Long.MIN_VALUE / 4;
@@ -58,7 +54,7 @@ public class LayoutSolverTest {
             if (lx < 0 || ly < 0 || lz < 0 || lx >= in.sizeX || ly >= in.sizeY || lz >= in.sizeZ) {
                 return;
             }
-            in.cells[((ly * in.sizeZ) + lz) * in.sizeX + lx] = cell;
+            in.set(lx, ly, lz, cell);
         }
 
         void fill(int x0, int y0, int z0, int x1, int y1, int z1, CellInfo cell) {
@@ -77,7 +73,7 @@ public class LayoutSolverTest {
                 for (int lz = 0; lz < in.sizeZ; lz++) {
                     int top = Integer.MIN_VALUE;
                     for (int ly = in.sizeY - 1; ly >= 0; ly--) {
-                        if (in.cells[((ly * in.sizeZ) + lz) * in.sizeX + lx] != AIR) {
+                        if (in.cell(lx, ly, lz) != AIR) {
                             top = in.minY + ly + 1;
                             break;
                         }
@@ -212,6 +208,16 @@ public class LayoutSolverTest {
                 && openings.stream().anyMatch(o -> o.x() > 28 && o.x() < 33 && Math.abs(o.y() - 70) < 0.6),
                 openings.stream().map(o -> o.x() + "," + o.y() + "," + o.z()).toList());
         check("...and it links to the platform", link(r2, openings.isEmpty() ? "" : openings.get(0).id(), "platform:1") != null, r2.links.size());
+        // a player removes that suggestion: a rescan must not suggest it (or a neighbour of it) again
+        World w2b = subway(false);
+        for (LayoutResult.Anchor o : openings) {
+            w2b.in.dismissedOpenings.add(new int[]{(int) Math.floor(o.x()), (int) Math.floor(o.y() + 0.01), (int) Math.floor(o.z())});
+        }
+        LayoutResult r2b = w2b.solve();
+        List<LayoutResult.Anchor> left = r2b.anchors.stream().filter(x -> x.kind().equals("opening")).toList();
+        check("a removed suggestion stays gone after a rescan", left.stream().noneMatch(o ->
+                        openings.stream().anyMatch(g -> Math.hypot(g.x() - o.x(), g.z() - o.z()) < 12)),
+                left.stream().map(o -> o.x() + "," + o.y() + "," + o.z()).toList());
 
         // ---- 3. add a lift: step-free alternative and a step-free platform
         World w3 = subway(true);

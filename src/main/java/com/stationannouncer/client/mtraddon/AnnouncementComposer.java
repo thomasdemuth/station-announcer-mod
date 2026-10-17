@@ -80,7 +80,10 @@ public final class AnnouncementComposer {
             return;
         }
         ObjectArrayList<org.mtr.mapping.holder.MutableText> chat = new ObjectArrayList<>();
-        chat.add(org.mtr.mapping.mapper.TextHelper.literal(rendered));
+        // The crew's cab HUD shows the stops itself; chat lines would sit over its drive panel.
+        if (!com.stationannouncer.client.mtraddon.cab.CabHud.replacesMtrOverlay()) {
+            chat.add(org.mtr.mapping.mapper.TextHelper.literal(rendered));
+        }
         org.mtr.mod.client.IDrawing.narrateOrAnnounce(rendered, chat);
     }
 

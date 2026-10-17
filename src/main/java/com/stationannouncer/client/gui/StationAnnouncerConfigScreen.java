@@ -50,12 +50,13 @@ public class StationAnnouncerConfigScreen extends Screen {
     private String backend;
     private String voice;
     private String chimeCategory;
-    private boolean holdRules;
-    private boolean routeDwell;
+    private boolean platformScreen;
+    private boolean routeScreen;
+    private boolean dashboardFolders;
     private boolean liftDoors;
-    private boolean platformGroups;
     private boolean disruptions;
     private boolean tools;
+    private boolean offlineMaps;
 
     private int announcementsY;
     private int dispatchY;
@@ -71,12 +72,13 @@ public class StationAnnouncerConfigScreen extends Screen {
         this.voice = client.voice == null ? "" : client.voice;
         this.chimeCategory = client.chimeCategory == null ? "master" : client.chimeCategory;
         AddonClientConfig addon = AddonClientConfig.get();
-        this.holdRules = addon.showHoldRulesButton;
-        this.routeDwell = addon.showRouteDwellButton;
+        this.platformScreen = addon.replacePlatformScreen;
+        this.routeScreen = addon.replaceRouteScreen;
+        this.dashboardFolders = addon.dashboardFolders;
         this.liftDoors = addon.showLiftDoorSidesButton;
-        this.platformGroups = addon.showPlatformGroupButton;
         this.disruptions = addon.showDisruptionsButton;
         this.tools = addon.showToolsButton;
+        this.offlineMaps = addon.offlineMapCopies;
     }
 
     // ------------------------------------------------------------------ layout
@@ -85,7 +87,7 @@ public class StationAnnouncerConfigScreen extends Screen {
     protected void init() {
         int left = (width - PANEL_WIDTH) / 2;
         int half = (PANEL_WIDTH - GAP) / 2;
-        int content = HEADING + 4 * ROW + HEADING + 3 * ROW + ROW + 8 + WIDGET_HEIGHT;
+        int content = HEADING + 4 * ROW + HEADING + 4 * ROW + ROW + 8 + WIDGET_HEIGHT;
         int y = Math.max(30, (height - content) / 2);
 
         announcementsY = y;
@@ -136,12 +138,11 @@ public class StationAnnouncerConfigScreen extends Screen {
 
         dispatchY = y;
         y += HEADING;
-        addDrawableChild(onOff("hold_rules", holdRules, left, y, half, value -> holdRules = value));
-        addDrawableChild(onOff("route_dwell", routeDwell, left + half + GAP, y, half, value -> routeDwell = value));
+        addDrawableChild(onOff("platform_screen", platformScreen, left, y, half, value -> platformScreen = value));
+        addDrawableChild(onOff("route_screen", routeScreen, left + half + GAP, y, half, value -> routeScreen = value));
         y += ROW;
         addDrawableChild(onOff("lift_doors", liftDoors, left, y, half, value -> liftDoors = value));
-        addDrawableChild(onOff("platform_groups", platformGroups, left + half + GAP, y, half,
-                value -> platformGroups = value));
+        addDrawableChild(onOff("dashboard_folders", dashboardFolders, left + half + GAP, y, half, value -> dashboardFolders = value));
         y += ROW;
         addDrawableChild(onOff("disruptions", disruptions, left, y, half, value -> disruptions = value));
         addDrawableChild(onOff("tools", tools, left + half + GAP, y, half, value -> tools = value));
@@ -157,6 +158,21 @@ public class StationAnnouncerConfigScreen extends Screen {
         addDrawableChild(ButtonWidget.builder(Text.translatable("gui.station_announcer.config.keys"),
                         button -> MinecraftClient.getInstance().setScreen(
                                 new KeybindsScreen(this, MinecraftClient.getInstance().options)))
+                .dimensions(left + half + GAP, y, half, WIDGET_HEIGHT).build());
+        y += ROW;
+        // Map+ offline copies: the switch, and where they are
+        addDrawableChild(onOff("offline_maps", offlineMaps, left, y, half, value -> offlineMaps = value));
+        addDrawableChild(ButtonWidget.builder(Text.translatable("gui.station_announcer.config.offline_maps.open"),
+                        button -> {
+                            java.nio.file.Path folder = com.stationannouncer.client.mtraddon.OfflineMapSaver.folder();
+                            try {
+                                java.nio.file.Files.createDirectories(folder);
+                            } catch (java.io.IOException ignored) {
+                                // the OS opener will say it is missing
+                            }
+                            net.minecraft.util.Util.getOperatingSystem().open(folder.toFile());
+                        })
+                .tooltip(Tooltip.of(Text.translatable("gui.station_announcer.config.offline_maps.open.tip")))
                 .dimensions(left + half + GAP, y, half, WIDGET_HEIGHT).build());
         y += ROW + 8;
 
@@ -190,12 +206,13 @@ public class StationAnnouncerConfigScreen extends Screen {
         ClientConfig.persist();
 
         AddonClientConfig addon = AddonClientConfig.get();
-        addon.showHoldRulesButton = holdRules;
-        addon.showRouteDwellButton = routeDwell;
+        addon.replacePlatformScreen = platformScreen;
+        addon.replaceRouteScreen = routeScreen;
+        addon.dashboardFolders = dashboardFolders;
         addon.showLiftDoorSidesButton = liftDoors;
-        addon.showPlatformGroupButton = platformGroups;
         addon.showDisruptionsButton = disruptions;
         addon.showToolsButton = tools;
+        addon.offlineMapCopies = offlineMaps;
         AddonClientConfig.persist();
     }
 

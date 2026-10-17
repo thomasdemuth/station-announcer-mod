@@ -1,0 +1,144 @@
+{
+  "textures": {
+    "piece_receipt": "station_announcer:block/litter/piece_receipt",
+    "particle": "station_announcer:block/litter/piece_receipt"
+  },
+  "elements": [
+    {
+      "from": [
+        3.28,
+        0.063,
+        8.76
+      ],
+      "to": [
+        4.72,
+        0.159,
+        11.94
+      ],
+      "faces": {
+        "north": {
+          "uv": [
+            0.25,
+            0.25,
+            1.5,
+            0.5
+          ],
+          "texture": "#piece_receipt"
+        },
+        "south": {
+          "uv": [
+            0.25,
+            0.25,
+            1.5,
+            0.5
+          ],
+          "texture": "#piece_receipt"
+        },
+        "east": {
+          "uv": [
+            2.0,
+            0.25,
+            4.75,
+            0.5
+          ],
+          "texture": "#piece_receipt"
+        },
+        "west": {
+          "uv": [
+            2.0,
+            0.25,
+            4.75,
+            0.5
+          ],
+          "texture": "#piece_receipt"
+        },
+        "up": {
+          "uv": [
+            5.25,
+            0.25,
+            6.5,
+            3.0
+          ],
+          "texture": "#piece_receipt"
+        }
+      }
+    },
+    {
+      "from": [
+        3.28,
+        0.063,
+        11.88
+      ],
+      "to": [
+        4.72,
+        0.159,
+        13.32
+      ],
+      "faces": {
+        "north": {
+          "uv": [
+            0.25,
+            0.25,
+            1.5,
+            0.5
+          ],
+          "texture": "#piece_receipt"
+        },
+        "south": {
+          "uv": [
+            0.25,
+            0.25,
+            1.5,
+            0.5
+          ],
+          "texture": "#piece_receipt"
+        },
+        "east": {
+          "uv": [
+            0.25,
+            0.25,
+            1.5,
+            0.5
+          ],
+          "texture": "#piece_receipt"
+        },
+        "west": {
+          "uv": [
+            0.25,
+            0.25,
+            1.5,
+            0.5
+          ],
+          "texture": "#piece_receipt"
+        },
+        "up": {
+          "uv": [
+            7.0,
+            0.25,
+            8.25,
+            1.5
+          ],
+          "texture": "#piece_receipt"
+        },
+        "down": {
+          "uv": [
+            7.0,
+            0.25,
+            8.25,
+            1.5
+          ],
+          "texture": "#piece_receipt"
+        }
+      },
+      "rotation": {
+        "axis": "x",
+        "angle": -45,
+        "origin": [
+          4.0,
+          0.111,
+          11.88
+        ]
+      }
+    }
+  ]
+}

@@ -27,7 +27,8 @@
     ]
   },
   "mixins": [
-    "station_announcer.mixins.json"
+    "station_announcer.mixins.json",
+    "station_announcer.atmosphere.mixins.json"
   ],
   "depends": {
     "fabricloader": ">=0.15.0",

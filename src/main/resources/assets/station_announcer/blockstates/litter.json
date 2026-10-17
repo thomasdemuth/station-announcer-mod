@@ -1,0 +1,1565 @@
+{
+  "multipart": [
+    {
+      "apply": [
+        {
+          "model": "station_announcer:block/litter/cup_s0_0_0",
+          "weight": 4
+        },
+        {
+          "model": "station_announcer:block/litter/cup_s0_0_1",
+          "weight": 4
+        },
+        {
+          "model": "station_announcer:block/litter/cup_s0_0_2",
+          "weight": 4
+        },
+        {
+          "model": "station_announcer:block/litter/cup_s0_0_3",
+          "weight": 4
+        },
+        {
+          "model": "station_announcer:block/litter/cup_s0_1_0",
+          "weight": 4
+        },
+        {
+          "model": "station_announcer:block/litter/cup_s0_1_1",
+          "weight": 4
+        },
+        {
+          "model": "station_announcer:block/litter/cup_s0_1_2",
+          "weight": 4
+        },
+        {
+          "model": "station_announcer:block/litter/cup_s0_1_3",
+          "weight": 4
+        },
+        {
+          "model": "station_announcer:block/litter/can_red_s0_0_0",
+          "weight": 3
+        },
+        {
+          "model": "station_announcer:block/litter/can_red_s0_0_1",
+          "weight": 3
+        },
+        {
+          "model": "station_announcer:block/litter/can_red_s0_0_2",
+          "weight": 3
+        },
+        {
+          "model": "station_announcer:block/litter/can_red_s0_0_3",
+          "weight": 3
+        },
+        {
+          "model": "station_announcer:block/litter/can_red_s0_1_0",
+          "weight": 3
+        },
+        {
+          "model": "station_announcer:block/litter/can_red_s0_1_1",
+          "weight": 3
+        },
+        {
+          "model": "station_announcer:block/litter/can_red_s0_1_2",
+          "weight": 3
+        },
+        {
+          "model": "station_announcer:block/litter/can_red_s0_1_3",
+          "weight": 3
+        },
+        {
+          "model": "station_announcer:block/litter/can_silver_s0_0_0",
+          "weight": 2
+        },
+        {
+          "model": "station_announcer:block/litter/can_silver_s0_0_1",
+          "weight": 2
+        },
+        {
+          "model": "station_announcer:block/litter/can_silver_s0_0_2",
+          "weight": 2
+        },
+        {
+          "model": "station_announcer:block/litter/can_silver_s0_0_3",
+          "weight": 2
+        },
+        {
+          "model": "station_announcer:block/litter/can_silver_s0_1_0",
+          "weight": 2
+        },
+        {
+          "model": "station_announcer:block/litter/can_silver_s0_1_1",
+          "weight": 2
+        },
+        {
+          "model": "station_announcer:block/litter/can_silver_s0_1_2",
+          "weight": 2
+        },
+        {
+          "model": "station_announcer:block/litter/can_silver_s0_1_3",
+          "weight": 2
+        },
+        {
+          "model": "station_announcer:block/litter/newspaper_s0_0_0",
+          "weight": 3
+        },
+        {
+          "model": "station_announcer:block/litter/newspaper_s0_0_1",
+          "weight": 3
+        },
+        {
+          "model": "station_announcer:block/litter/newspaper_s0_0_2",
+          "weight": 3
+        },
+        {
+          "model": "station_announcer:block/litter/newspaper_s0_0_3",
+          "weight": 3
+        },
+        {
+          "model": "station_announcer:block/litter/newspaper_s0_1_0",
+          "weight": 3
+        },
+        {
+          "model": "station_announcer:block/litter/newspaper_s0_1_1",
+          "weight": 3
+        },
+        {
+          "model": "station_announcer:block/litter/newspaper_s0_1_2",
+          "weight": 3
+        },
+        {
+          "model": "station_announcer:block/litter/newspaper_s0_1_3",
+          "weight": 3
+        },
+        {
+          "model": "station_announcer:block/litter/metrocard_s0_0_0",
+          "weight": 2
+        },
+        {
+          "model": "station_announcer:block/litter/metrocard_s0_0_1",
+          "weight": 2
+        },
+        {
+          "model": "station_announcer:block/litter/metrocard_s0_0_2",
+          "weight": 2
+        },
+        {
+          "model": "station_announcer:block/litter/metrocard_s0_0_3",
+          "weight": 2
+        },
+        {
+          "model": "station_announcer:block/litter/metrocard_s0_1_0",
+          "weight": 2
+        },
+        {
+          "model": "station_announcer:block/litter/metrocard_s0_1_1",
+          "weight": 2
+        },
+        {
+          "model": "station_announcer:block/litter/metrocard_s0_1_2",
+          "weight": 2
+        },
+        {
+          "model": "station_announcer:block/litter/metrocard_s0_1_3",
+          "weight": 2
+        },
+        {
+          "model": "station_announcer:block/litter/chips_s0_0_0",
+          "weight": 2
+        },
+        {
+          "model": "station_announcer:block/litter/chips_s0_0_1",
+          "weight": 2
+        },
+        {
+          "model": "station_announcer:block/litter/chips_s0_0_2",
+          "weight": 2
+        },
+        {
+          "model": "station_announcer:block/litter/chips_s0_0_3",
+          "weight": 2
+        },
+        {
+          "model": "station_announcer:block/litter/chips_s0_1_0",
+          "weight": 2
+        },
+        {
+          "model": "station_announcer:block/litter/chips_s0_1_1",
+          "weight": 2
+        },
+        {
+          "model": "station_announcer:block/litter/chips_s0_1_2",
+          "weight": 2
+        },
+        {
+          "model": "station_announcer:block/litter/chips_s0_1_3",
+          "weight": 2
+        },
+        {
+          "model": "station_announcer:block/litter/candy_s0_0_0",
+          "weight": 2
+        },
+        {
+          "model": "station_announcer:block/litter/candy_s0_0_1",
+          "weight": 2
+        },
+        {
+          "model": "station_announcer:block/litter/candy_s0_0_2",
+          "weight": 2
+        },
+        {
+          "model": "station_announcer:block/litter/candy_s0_0_3",
+          "weight": 2
+        },
+        {
+          "model": "station_announcer:block/litter/candy_s0_1_0",
+          "weight": 2
+        },
+        {
+          "model": "station_announcer:block/litter/candy_s0_1_1",
+          "weight": 2
+        },
+        {
+          "model": "station_announcer:block/litter/candy_s0_1_2",
+          "weight": 2
+        },
+        {
+          "model": "station_announcer:block/litter/candy_s0_1_3",
+          "weight": 2
+        },
+        {
+          "model": "station_announcer:block/litter/butts_s0_0_0",
+          "weight": 3
+        },
+        {
+          "model": "station_announcer:block/litter/butts_s0_0_1",
+          "weight": 3
+        },
+        {
+          "model": "station_announcer:block/litter/butts_s0_0_2",
+          "weight": 3
+        },
+        {
+          "model": "station_announcer:block/litter/butts_s0_0_3",
+          "weight": 3
+        },
+        {
+          "model": "station_announcer:block/litter/butts_s0_1_0",
+          "weight": 3
+        },
+        {
+          "model": "station_announcer:block/litter/butts_s0_1_1",
+          "weight": 3
+        },
+        {
+          "model": "station_announcer:block/litter/butts_s0_1_2",
+          "weight": 3
+        },
+        {
+          "model": "station_announcer:block/litter/butts_s0_1_3",
+          "weight": 3
+        },
+        {
+          "model": "station_announcer:block/litter/receipt_s0_0_0",
+          "weight": 3
+        },
+        {
+          "model": "station_announcer:block/litter/receipt_s0_0_1",
+          "weight": 3
+        },
+        {
+          "model": "station_announcer:block/litter/receipt_s0_0_2",
+          "weight": 3
+        },
+        {
+          "model": "station_announcer:block/litter/receipt_s0_0_3",
+          "weight": 3
+        },
+        {
+          "model": "station_announcer:block/litter/receipt_s0_1_0",
+          "weight": 3
+        },
+        {
+          "model": "station_announcer:block/litter/receipt_s0_1_1",
+          "weight": 3
+        },
+        {
+          "model": "station_announcer:block/litter/receipt_s0_1_2",
+          "weight": 3
+        },
+        {
+          "model": "station_announcer:block/litter/receipt_s0_1_3",
+          "weight": 3
+        },
+        {
+          "model": "station_announcer:block/litter/bottle_s0_0_0",
+          "weight": 2
+        },
+        {
+          "model": "station_announcer:block/litter/bottle_s0_0_1",
+          "weight": 2
+        },
+        {
+          "model": "station_announcer:block/litter/bottle_s0_0_2",
+          "weight": 2
+        },
+        {
+          "model": "station_announcer:block/litter/bottle_s0_0_3",
+          "weight": 2
+        },
+        {
+          "model": "station_announcer:block/litter/bottle_s0_1_0",
+          "weight": 2
+        },
+        {
+          "model": "station_announcer:block/litter/bottle_s0_1_1",
+          "weight": 2
+        },
+        {
+          "model": "station_announcer:block/litter/bottle_s0_1_2",
+          "weight": 2
+        },
+        {
+          "model": "station_announcer:block/litter/bottle_s0_1_3",
+          "weight": 2
+        },
+        {
+          "model": "station_announcer:block/litter/crust_s0_0_0",
+          "weight": 1
+        },
+        {
+          "model": "station_announcer:block/litter/crust_s0_0_1",
+          "weight": 1
+        },
+        {
+          "model": "station_announcer:block/litter/crust_s0_0_2",
+          "weight": 1
+        },
+        {
+          "model": "station_announcer:block/litter/crust_s0_0_3",
+          "weight": 1
+        },
+        {
+          "model": "station_announcer:block/litter/crust_s0_1_0",
+          "weight": 1
+        },
+        {
+          "model": "station_announcer:block/litter/crust_s0_1_1",
+          "weight": 1
+        },
+        {
+          "model": "station_announcer:block/litter/crust_s0_1_2",
+          "weight": 1
+        },
+        {
+          "model": "station_announcer:block/litter/crust_s0_1_3",
+          "weight": 1
+        },
+        {
+          "model": "station_announcer:block/litter/plastic_bag_s0_0_0",
+          "weight": 2
+        },
+        {
+          "model": "station_announcer:block/litter/plastic_bag_s0_0_1",
+          "weight": 2
+        },
+        {
+          "model": "station_announcer:block/litter/plastic_bag_s0_0_2",
+          "weight": 2
+        },
+        {
+          "model": "station_announcer:block/litter/plastic_bag_s0_0_3",
+          "weight": 2
+        },
+        {
+          "model": "station_announcer:block/litter/plastic_bag_s0_1_0",
+          "weight": 2
+        },
+        {
+          "model": "station_announcer:block/litter/plastic_bag_s0_1_1",
+          "weight": 2
+        },
+        {
+          "model": "station_announcer:block/litter/plastic_bag_s0_1_2",
+          "weight": 2
+        },
+        {
+          "model": "station_announcer:block/litter/plastic_bag_s0_1_3",
+          "weight": 2
+        }
+      ]
+    },
+    {
+      "when": {
+        "count": "2|3|4"
+      },
+      "apply": [
+        {
+          "model": "station_announcer:block/litter/cup_s1_0_0",
+          "weight": 5
+        },
+        {
+          "model": "station_announcer:block/litter/cup_s1_0_1",
+          "weight": 4
+        },
+        {
+          "model": "station_announcer:block/litter/cup_s1_0_2",
+          "weight": 4
+        },
+        {
+          "model": "station_announcer:block/litter/cup_s1_0_3",
+          "weight": 4
+        },
+        {
+          "model": "station_announcer:block/litter/cup_s1_1_0",
+          "weight": 4
+        },
+        {
+          "model": "station_announcer:block/litter/cup_s1_1_1",
+          "weight": 4
+        },
+        {
+          "model": "station_announcer:block/litter/cup_s1_1_2",
+          "weight": 4
+        },
+        {
+          "model": "station_announcer:block/litter/cup_s1_1_3",
+          "weight": 4
+        },
+        {
+          "model": "station_announcer:block/litter/can_red_s1_0_0",
+          "weight": 3
+        },
+        {
+          "model": "station_announcer:block/litter/can_red_s1_0_1",
+          "weight": 3
+        },
+        {
+          "model": "station_announcer:block/litter/can_red_s1_0_2",
+          "weight": 3
+        },
+        {
+          "model": "station_announcer:block/litter/can_red_s1_0_3",
+          "weight": 3
+        },
+        {
+          "model": "station_announcer:block/litter/can_red_s1_1_0",
+          "weight": 3
+        },
+        {
+          "model": "station_announcer:block/litter/can_red_s1_1_1",
+          "weight": 3
+        },
+        {
+          "model": "station_announcer:block/litter/can_red_s1_1_2",
+          "weight": 3
+        },
+        {
+          "model": "station_announcer:block/litter/can_red_s1_1_3",
+          "weight": 3
+        },
+        {
+          "model": "station_announcer:block/litter/can_silver_s1_0_0",
+          "weight": 2
+        },
+        {
+          "model": "station_announcer:block/litter/can_silver_s1_0_1",
+          "weight": 2
+        },
+        {
+          "model": "station_announcer:block/litter/can_silver_s1_0_2",
+          "weight": 2
+        },
+        {
+          "model": "station_announcer:block/litter/can_silver_s1_0_3",
+          "weight": 2
+        },
+        {
+          "model": "station_announcer:block/litter/can_silver_s1_1_0",
+          "weight": 2
+        },
+        {
+          "model": "station_announcer:block/litter/can_silver_s1_1_1",
+          "weight": 2
+        },
+        {
+          "model": "station_announcer:block/litter/can_silver_s1_1_2",
+          "weight": 2
+        },
+        {
+          "model": "station_announcer:block/litter/can_silver_s1_1_3",
+          "weight": 2
+        },
+        {
+          "model": "station_announcer:block/litter/newspaper_s1_0_0",
+          "weight": 3
+        },
+        {
+          "model": "station_announcer:block/litter/newspaper_s1_0_1",
+          "weight": 3
+        },
+        {
+          "model": "station_announcer:block/litter/newspaper_s1_0_2",
+          "weight": 3
+        },
+        {
+          "model": "station_announcer:block/litter/newspaper_s1_0_3",
+          "weight": 3
+        },
+        {
+          "model": "station_announcer:block/litter/newspaper_s1_1_0",
+          "weight": 3
+        },
+        {
+          "model": "station_announcer:block/litter/newspaper_s1_1_1",
+          "weight": 3
+        },
+        {
+          "model": "station_announcer:block/litter/newspaper_s1_1_2",
+          "weight": 3
+        },
+        {
+          "model": "station_announcer:block/litter/newspaper_s1_1_3",
+          "weight": 3
+        },
+        {
+          "model": "station_announcer:block/litter/metrocard_s1_0_0",
+          "weight": 2
+        },
+        {
+          "model": "station_announcer:block/litter/metrocard_s1_0_1",
+          "weight": 2
+        },
+        {
+          "model": "station_announcer:block/litter/metrocard_s1_0_2",
+          "weight": 2
+        },
+        {
+          "model": "station_announcer:block/litter/metrocard_s1_0_3",
+          "weight": 2
+        },
+        {
+          "model": "station_announcer:block/litter/metrocard_s1_1_0",
+          "weight": 2
+        },
+        {
+          "model": "station_announcer:block/litter/metrocard_s1_1_1",
+          "weight": 2
+        },
+        {
+          "model": "station_announcer:block/litter/metrocard_s1_1_2",
+          "weight": 2
+        },
+        {
+          "model": "station_announcer:block/litter/metrocard_s1_1_3",
+          "weight": 2
+        },
+        {
+          "model": "station_announcer:block/litter/chips_s1_0_0",
+          "weight": 2
+        },
+        {
+          "model": "station_announcer:block/litter/chips_s1_0_1",
+          "weight": 2
+        },
+        {
+          "model": "station_announcer:block/litter/chips_s1_0_2",
+          "weight": 2
+        },
+        {
+          "model": "station_announcer:block/litter/chips_s1_0_3",
+          "weight": 2
+        },
+        {
+          "model": "station_announcer:block/litter/chips_s1_1_0",
+          "weight": 2
+        },
+        {
+          "model": "station_announcer:block/litter/chips_s1_1_1",
+          "weight": 2
+        },
+        {
+          "model": "station_announcer:block/litter/chips_s1_1_2",
+          "weight": 2
+        },
+        {
+          "model": "station_announcer:block/litter/chips_s1_1_3",
+          "weight": 2
+        },
+        {
+          "model": "station_announcer:block/litter/candy_s1_0_0",
+          "weight": 2
+        },
+        {
+          "model": "station_announcer:block/litter/candy_s1_0_1",
+          "weight": 2
+        },
+        {
+          "model": "station_announcer:block/litter/candy_s1_0_2",
+          "weight": 2
+        },
+        {
+          "model": "station_announcer:block/litter/candy_s1_0_3",
+          "weight": 2
+        },
+        {
+          "model": "station_announcer:block/litter/candy_s1_1_0",
+          "weight": 2
+        },
+        {
+          "model": "station_announcer:block/litter/candy_s1_1_1",
+          "weight": 2
+        },
+        {
+          "model": "station_announcer:block/litter/candy_s1_1_2",
+          "weight": 2
+        },
+        {
+          "model": "station_announcer:block/litter/candy_s1_1_3",
+          "weight": 2
+        },
+        {
+          "model": "station_announcer:block/litter/butts_s1_0_0",
+          "weight": 3
+        },
+        {
+          "model": "station_announcer:block/litter/butts_s1_0_1",
+          "weight": 3
+        },
+        {
+          "model": "station_announcer:block/litter/butts_s1_0_2",
+          "weight": 3
+        },
+        {
+          "model": "station_announcer:block/litter/butts_s1_0_3",
+          "weight": 3
+        },
+        {
+          "model": "station_announcer:block/litter/butts_s1_1_0",
+          "weight": 3
+        },
+        {
+          "model": "station_announcer:block/litter/butts_s1_1_1",
+          "weight": 3
+        },
+        {
+          "model": "station_announcer:block/litter/butts_s1_1_2",
+          "weight": 3
+        },
+        {
+          "model": "station_announcer:block/litter/butts_s1_1_3",
+          "weight": 3
+        },
+        {
+          "model": "station_announcer:block/litter/receipt_s1_0_0",
+          "weight": 3
+        },
+        {
+          "model": "station_announcer:block/litter/receipt_s1_0_1",
+          "weight": 3
+        },
+        {
+          "model": "station_announcer:block/litter/receipt_s1_0_2",
+          "weight": 3
+        },
+        {
+          "model": "station_announcer:block/litter/receipt_s1_0_3",
+          "weight": 3
+        },
+        {
+          "model": "station_announcer:block/litter/receipt_s1_1_0",
+          "weight": 3
+        },
+        {
+          "model": "station_announcer:block/litter/receipt_s1_1_1",
+          "weight": 3
+        },
+        {
+          "model": "station_announcer:block/litter/receipt_s1_1_2",
+          "weight": 3
+        },
+        {
+          "model": "station_announcer:block/litter/receipt_s1_1_3",
+          "weight": 3
+        },
+        {
+          "model": "station_announcer:block/litter/bottle_s1_0_0",
+          "weight": 2
+        },
+        {
+          "model": "station_announcer:block/litter/bottle_s1_0_1",
+          "weight": 2
+        },
+        {
+          "model": "station_announcer:block/litter/bottle_s1_0_2",
+          "weight": 2
+        },
+        {
+          "model": "station_announcer:block/litter/bottle_s1_0_3",
+          "weight": 2
+        },
+        {
+          "model": "station_announcer:block/litter/bottle_s1_1_0",
+          "weight": 2
+        },
+        {
+          "model": "station_announcer:block/litter/bottle_s1_1_1",
+          "weight": 2
+        },
+        {
+          "model": "station_announcer:block/litter/bottle_s1_1_2",
+          "weight": 2
+        },
+        {
+          "model": "station_announcer:block/litter/bottle_s1_1_3",
+          "weight": 2
+        },
+        {
+          "model": "station_announcer:block/litter/crust_s1_0_0",
+          "weight": 1
+        },
+        {
+          "model": "station_announcer:block/litter/crust_s1_0_1",
+          "weight": 1
+        },
+        {
+          "model": "station_announcer:block/litter/crust_s1_0_2",
+          "weight": 1
+        },
+        {
+          "model": "station_announcer:block/litter/crust_s1_0_3",
+          "weight": 1
+        },
+        {
+          "model": "station_announcer:block/litter/crust_s1_1_0",
+          "weight": 1
+        },
+        {
+          "model": "station_announcer:block/litter/crust_s1_1_1",
+          "weight": 1
+        },
+        {
+          "model": "station_announcer:block/litter/crust_s1_1_2",
+          "weight": 1
+        },
+        {
+          "model": "station_announcer:block/litter/crust_s1_1_3",
+          "weight": 1
+        },
+        {
+          "model": "station_announcer:block/litter/plastic_bag_s1_0_0",
+          "weight": 2
+        },
+        {
+          "model": "station_announcer:block/litter/plastic_bag_s1_0_1",
+          "weight": 2
+        },
+        {
+          "model": "station_announcer:block/litter/plastic_bag_s1_0_2",
+          "weight": 2
+        },
+        {
+          "model": "station_announcer:block/litter/plastic_bag_s1_0_3",
+          "weight": 2
+        },
+        {
+          "model": "station_announcer:block/litter/plastic_bag_s1_1_0",
+          "weight": 2
+        },
+        {
+          "model": "station_announcer:block/litter/plastic_bag_s1_1_1",
+          "weight": 2
+        },
+        {
+          "model": "station_announcer:block/litter/plastic_bag_s1_1_2",
+          "weight": 2
+        },
+        {
+          "model": "station_announcer:block/litter/plastic_bag_s1_1_3",
+          "weight": 2
+        }
+      ]
+    },
+    {
+      "when": {
+        "count": "3|4"
+      },
+      "apply": [
+        {
+          "model": "station_announcer:block/litter/cup_s2_0_0",
+          "weight": 7
+        },
+        {
+          "model": "station_announcer:block/litter/cup_s2_0_1",
+          "weight": 4
+        },
+        {
+          "model": "station_announcer:block/litter/cup_s2_0_2",
+          "weight": 4
+        },
+        {
+          "model": "station_announcer:block/litter/cup_s2_0_3",
+          "weight": 4
+        },
+        {
+          "model": "station_announcer:block/litter/cup_s2_1_0",
+          "weight": 4
+        },
+        {
+          "model": "station_announcer:block/litter/cup_s2_1_1",
+          "weight": 4
+        },
+        {
+          "model": "station_announcer:block/litter/cup_s2_1_2",
+          "weight": 4
+        },
+        {
+          "model": "station_announcer:block/litter/cup_s2_1_3",
+          "weight": 4
+        },
+        {
+          "model": "station_announcer:block/litter/can_red_s2_0_0",
+          "weight": 3
+        },
+        {
+          "model": "station_announcer:block/litter/can_red_s2_0_1",
+          "weight": 3
+        },
+        {
+          "model": "station_announcer:block/litter/can_red_s2_0_2",
+          "weight": 3
+        },
+        {
+          "model": "station_announcer:block/litter/can_red_s2_0_3",
+          "weight": 3
+        },
+        {
+          "model": "station_announcer:block/litter/can_red_s2_1_0",
+          "weight": 3
+        },
+        {
+          "model": "station_announcer:block/litter/can_red_s2_1_1",
+          "weight": 3
+        },
+        {
+          "model": "station_announcer:block/litter/can_red_s2_1_2",
+          "weight": 3
+        },
+        {
+          "model": "station_announcer:block/litter/can_red_s2_1_3",
+          "weight": 3
+        },
+        {
+          "model": "station_announcer:block/litter/can_silver_s2_0_0",
+          "weight": 2
+        },
+        {
+          "model": "station_announcer:block/litter/can_silver_s2_0_1",
+          "weight": 2
+        },
+        {
+          "model": "station_announcer:block/litter/can_silver_s2_0_2",
+          "weight": 2
+        },
+        {
+          "model": "station_announcer:block/litter/can_silver_s2_0_3",
+          "weight": 2
+        },
+        {
+          "model": "station_announcer:block/litter/can_silver_s2_1_0",
+          "weight": 2
+        },
+        {
+          "model": "station_announcer:block/litter/can_silver_s2_1_1",
+          "weight": 2
+        },
+        {
+          "model": "station_announcer:block/litter/can_silver_s2_1_2",
+          "weight": 2
+        },
+        {
+          "model": "station_announcer:block/litter/can_silver_s2_1_3",
+          "weight": 2
+        },
+        {
+          "model": "station_announcer:block/litter/newspaper_s2_0_0",
+          "weight": 3
+        },
+        {
+          "model": "station_announcer:block/litter/newspaper_s2_0_1",
+          "weight": 3
+        },
+        {
+          "model": "station_announcer:block/litter/newspaper_s2_0_2",
+          "weight": 3
+        },
+        {
+          "model": "station_announcer:block/litter/newspaper_s2_0_3",
+          "weight": 3
+        },
+        {
+          "model": "station_announcer:block/litter/newspaper_s2_1_0",
+          "weight": 3
+        },
+        {
+          "model": "station_announcer:block/litter/newspaper_s2_1_1",
+          "weight": 3
+        },
+        {
+          "model": "station_announcer:block/litter/newspaper_s2_1_2",
+          "weight": 3
+        },
+        {
+          "model": "station_announcer:block/litter/newspaper_s2_1_3",
+          "weight": 3
+        },
+        {
+          "model": "station_announcer:block/litter/metrocard_s2_0_0",
+          "weight": 2
+        },
+        {
+          "model": "station_announcer:block/litter/metrocard_s2_0_1",
+          "weight": 2
+        },
+        {
+          "model": "station_announcer:block/litter/metrocard_s2_0_2",
+          "weight": 2
+        },
+        {
+          "model": "station_announcer:block/litter/metrocard_s2_0_3",
+          "weight": 2
+        },
+        {
+          "model": "station_announcer:block/litter/metrocard_s2_1_0",
+          "weight": 2
+        },
+        {
+          "model": "station_announcer:block/litter/metrocard_s2_1_1",
+          "weight": 2
+        },
+        {
+          "model": "station_announcer:block/litter/metrocard_s2_1_2",
+          "weight": 2
+        },
+        {
+          "model": "station_announcer:block/litter/metrocard_s2_1_3",
+          "weight": 2
+        },
+        {
+          "model": "station_announcer:block/litter/chips_s2_0_0",
+          "weight": 2
+        },
+        {
+          "model": "station_announcer:block/litter/chips_s2_0_1",
+          "weight": 2
+        },
+        {
+          "model": "station_announcer:block/litter/chips_s2_0_2",
+          "weight": 2
+        },
+        {
+          "model": "station_announcer:block/litter/chips_s2_0_3",
+          "weight": 2
+        },
+        {
+          "model": "station_announcer:block/litter/chips_s2_1_0",
+          "weight": 2
+        },
+        {
+          "model": "station_announcer:block/litter/chips_s2_1_1",
+          "weight": 2
+        },
+        {
+          "model": "station_announcer:block/litter/chips_s2_1_2",
+          "weight": 2
+        },
+        {
+          "model": "station_announcer:block/litter/chips_s2_1_3",
+          "weight": 2
+        },
+        {
+          "model": "station_announcer:block/litter/candy_s2_0_0",
+          "weight": 2
+        },
+        {
+          "model": "station_announcer:block/litter/candy_s2_0_1",
+          "weight": 2
+        },
+        {
+          "model": "station_announcer:block/litter/candy_s2_0_2",
+          "weight": 2
+        },
+        {
+          "model": "station_announcer:block/litter/candy_s2_0_3",
+          "weight": 2
+        },
+        {
+          "model": "station_announcer:block/litter/candy_s2_1_0",
+          "weight": 2
+        },
+        {
+          "model": "station_announcer:block/litter/candy_s2_1_1",
+          "weight": 2
+        },
+        {
+          "model": "station_announcer:block/litter/candy_s2_1_2",
+          "weight": 2
+        },
+        {
+          "model": "station_announcer:block/litter/candy_s2_1_3",
+          "weight": 2
+        },
+        {
+          "model": "station_announcer:block/litter/butts_s2_0_0",
+          "weight": 3
+        },
+        {
+          "model": "station_announcer:block/litter/butts_s2_0_1",
+          "weight": 3
+        },
+        {
+          "model": "station_announcer:block/litter/butts_s2_0_2",
+          "weight": 3
+        },
+        {
+          "model": "station_announcer:block/litter/butts_s2_0_3",
+          "weight": 3
+        },
+        {
+          "model": "station_announcer:block/litter/butts_s2_1_0",
+          "weight": 3
+        },
+        {
+          "model": "station_announcer:block/litter/butts_s2_1_1",
+          "weight": 3
+        },
+        {
+          "model": "station_announcer:block/litter/butts_s2_1_2",
+          "weight": 3
+        },
+        {
+          "model": "station_announcer:block/litter/butts_s2_1_3",
+          "weight": 3
+        },
+        {
+          "model": "station_announcer:block/litter/receipt_s2_0_0",
+          "weight": 3
+        },
+        {
+          "model": "station_announcer:block/litter/receipt_s2_0_1",
+          "weight": 3
+        },
+        {
+          "model": "station_announcer:block/litter/receipt_s2_0_2",
+          "weight": 3
+        },
+        {
+          "model": "station_announcer:block/litter/receipt_s2_0_3",
+          "weight": 3
+        },
+        {
+          "model": "station_announcer:block/litter/receipt_s2_1_0",
+          "weight": 3
+        },
+        {
+          "model": "station_announcer:block/litter/receipt_s2_1_1",
+          "weight": 3
+        },
+        {
+          "model": "station_announcer:block/litter/receipt_s2_1_2",
+          "weight": 3
+        },
+        {
+          "model": "station_announcer:block/litter/receipt_s2_1_3",
+          "weight": 3
+        },
+        {
+          "model": "station_announcer:block/litter/bottle_s2_0_0",
+          "weight": 2
+        },
+        {
+          "model": "station_announcer:block/litter/bottle_s2_0_1",
+          "weight": 2
+        },
+        {
+          "model": "station_announcer:block/litter/bottle_s2_0_2",
+          "weight": 2
+        },
+        {
+          "model": "station_announcer:block/litter/bottle_s2_0_3",
+          "weight": 2
+        },
+        {
+          "model": "station_announcer:block/litter/bottle_s2_1_0",
+          "weight": 2
+        },
+        {
+          "model": "station_announcer:block/litter/bottle_s2_1_1",
+          "weight": 2
+        },
+        {
+          "model": "station_announcer:block/litter/bottle_s2_1_2",
+          "weight": 2
+        },
+        {
+          "model": "station_announcer:block/litter/bottle_s2_1_3",
+          "weight": 2
+        },
+        {
+          "model": "station_announcer:block/litter/crust_s2_0_0",
+          "weight": 1
+        },
+        {
+          "model": "station_announcer:block/litter/crust_s2_0_1",
+          "weight": 1
+        },
+        {
+          "model": "station_announcer:block/litter/crust_s2_0_2",
+          "weight": 1
+        },
+        {
+          "model": "station_announcer:block/litter/crust_s2_0_3",
+          "weight": 1
+        },
+        {
+          "model": "station_announcer:block/litter/crust_s2_1_0",
+          "weight": 1
+        },
+        {
+          "model": "station_announcer:block/litter/crust_s2_1_1",
+          "weight": 1
+        },
+        {
+          "model": "station_announcer:block/litter/crust_s2_1_2",
+          "weight": 1
+        },
+        {
+          "model": "station_announcer:block/litter/crust_s2_1_3",
+          "weight": 1
+        },
+        {
+          "model": "station_announcer:block/litter/plastic_bag_s2_0_0",
+          "weight": 2
+        },
+        {
+          "model": "station_announcer:block/litter/plastic_bag_s2_0_1",
+          "weight": 2
+        },
+        {
+          "model": "station_announcer:block/litter/plastic_bag_s2_0_2",
+          "weight": 2
+        },
+        {
+          "model": "station_announcer:block/litter/plastic_bag_s2_0_3",
+          "weight": 2
+        },
+        {
+          "model": "station_announcer:block/litter/plastic_bag_s2_1_0",
+          "weight": 2
+        },
+        {
+          "model": "station_announcer:block/litter/plastic_bag_s2_1_1",
+          "weight": 2
+        },
+        {
+          "model": "station_announcer:block/litter/plastic_bag_s2_1_2",
+          "weight": 2
+        },
+        {
+          "model": "station_announcer:block/litter/plastic_bag_s2_1_3",
+          "weight": 2
+        }
+      ]
+    },
+    {
+      "when": {
+        "count": "4"
+      },
+      "apply": [
+        {
+          "model": "station_announcer:block/litter/cup_s3_0_0",
+          "weight": 11
+        },
+        {
+          "model": "station_announcer:block/litter/cup_s3_0_1",
+          "weight": 4
+        },
+        {
+          "model": "station_announcer:block/litter/cup_s3_0_2",
+          "weight": 4
+        },
+        {
+          "model": "station_announcer:block/litter/cup_s3_0_3",
+          "weight": 4
+        },
+        {
+          "model": "station_announcer:block/litter/cup_s3_1_0",
+          "weight": 4
+        },
+        {
+          "model": "station_announcer:block/litter/cup_s3_1_1",
+          "weight": 4
+        },
+        {
+          "model": "station_announcer:block/litter/cup_s3_1_2",
+          "weight": 4
+        },
+        {
+          "model": "station_announcer:block/litter/cup_s3_1_3",
+          "weight": 4
+        },
+        {
+          "model": "station_announcer:block/litter/can_red_s3_0_0",
+          "weight": 3
+        },
+        {
+          "model": "station_announcer:block/litter/can_red_s3_0_1",
+          "weight": 3
+        },
+        {
+          "model": "station_announcer:block/litter/can_red_s3_0_2",
+          "weight": 3
+        },
+        {
+          "model": "station_announcer:block/litter/can_red_s3_0_3",
+          "weight": 3
+        },
+        {
+          "model": "station_announcer:block/litter/can_red_s3_1_0",
+          "weight": 3
+        },
+        {
+          "model": "station_announcer:block/litter/can_red_s3_1_1",
+          "weight": 3
+        },
+        {
+          "model": "station_announcer:block/litter/can_red_s3_1_2",
+          "weight": 3
+        },
+        {
+          "model": "station_announcer:block/litter/can_red_s3_1_3",
+          "weight": 3
+        },
+        {
+          "model": "station_announcer:block/litter/can_silver_s3_0_0",
+          "weight": 2
+        },
+        {
+          "model": "station_announcer:block/litter/can_silver_s3_0_1",
+          "weight": 2
+        },
+        {
+          "model": "station_announcer:block/litter/can_silver_s3_0_2",
+          "weight": 2
+        },
+        {
+          "model": "station_announcer:block/litter/can_silver_s3_0_3",
+          "weight": 2
+        },
+        {
+          "model": "station_announcer:block/litter/can_silver_s3_1_0",
+          "weight": 2
+        },
+        {
+          "model": "station_announcer:block/litter/can_silver_s3_1_1",
+          "weight": 2
+        },
+        {
+          "model": "station_announcer:block/litter/can_silver_s3_1_2",
+          "weight": 2
+        },
+        {
+          "model": "station_announcer:block/litter/can_silver_s3_1_3",
+          "weight": 2
+        },
+        {
+          "model": "station_announcer:block/litter/newspaper_s3_0_0",
+          "weight": 3
+        },
+        {
+          "model": "station_announcer:block/litter/newspaper_s3_0_1",
+          "weight": 3
+        },
+        {
+          "model": "station_announcer:block/litter/newspaper_s3_0_2",
+          "weight": 3
+        },
+        {
+          "model": "station_announcer:block/litter/newspaper_s3_0_3",
+          "weight": 3
+        },
+        {
+          "model": "station_announcer:block/litter/newspaper_s3_1_0",
+          "weight": 3
+        },
+        {
+          "model": "station_announcer:block/litter/newspaper_s3_1_1",
+          "weight": 3
+        },
+        {
+          "model": "station_announcer:block/litter/newspaper_s3_1_2",
+          "weight": 3
+        },
+        {
+          "model": "station_announcer:block/litter/newspaper_s3_1_3",
+          "weight": 3
+        },
+        {
+          "model": "station_announcer:block/litter/metrocard_s3_0_0",
+          "weight": 2
+        },
+        {
+          "model": "station_announcer:block/litter/metrocard_s3_0_1",
+          "weight": 2
+        },
+        {
+          "model": "station_announcer:block/litter/metrocard_s3_0_2",
+          "weight": 2
+        },
+        {
+          "model": "station_announcer:block/litter/metrocard_s3_0_3",
+          "weight": 2
+        },
+        {
+          "model": "station_announcer:block/litter/metrocard_s3_1_0",
+          "weight": 2
+        },
+        {
+          "model": "station_announcer:block/litter/metrocard_s3_1_1",
+          "weight": 2
+        },
+        {
+          "model": "station_announcer:block/litter/metrocard_s3_1_2",
+          "weight": 2
+        },
+        {
+          "model": "station_announcer:block/litter/metrocard_s3_1_3",
+          "weight": 2
+        },
+        {
+          "model": "station_announcer:block/litter/chips_s3_0_0",
+          "weight": 2
+        },
+        {
+          "model": "station_announcer:block/litter/chips_s3_0_1",
+          "weight": 2
+        },
+        {
+          "model": "station_announcer:block/litter/chips_s3_0_2",
+          "weight": 2
+        },
+        {
+          "model": "station_announcer:block/litter/chips_s3_0_3",
+          "weight": 2
+        },
+        {
+          "model": "station_announcer:block/litter/chips_s3_1_0",
+          "weight": 2
+        },
+        {
+          "model": "station_announcer:block/litter/chips_s3_1_1",
+          "weight": 2
+        },
+        {
+          "model": "station_announcer:block/litter/chips_s3_1_2",
+          "weight": 2
+        },
+        {
+          "model": "station_announcer:block/litter/chips_s3_1_3",
+          "weight": 2
+        },
+        {
+          "model": "station_announcer:block/litter/candy_s3_0_0",
+          "weight": 2
+        },
+        {
+          "model": "station_announcer:block/litter/candy_s3_0_1",
+          "weight": 2
+        },
+        {
+          "model": "station_announcer:block/litter/candy_s3_0_2",
+          "weight": 2
+        },
+        {
+          "model": "station_announcer:block/litter/candy_s3_0_3",
+          "weight": 2
+        },
+        {
+          "model": "station_announcer:block/litter/candy_s3_1_0",
+          "weight": 2
+        },
+        {
+          "model": "station_announcer:block/litter/candy_s3_1_1",
+          "weight": 2
+        },
+        {
+          "model": "station_announcer:block/litter/candy_s3_1_2",
+          "weight": 2
+        },
+        {
+          "model": "station_announcer:block/litter/candy_s3_1_3",
+          "weight": 2
+        },
+        {
+          "model": "station_announcer:block/litter/butts_s3_0_0",
+          "weight": 3
+        },
+        {
+          "model": "station_announcer:block/litter/butts_s3_0_1",
+          "weight": 3
+        },
+        {
+          "model": "station_announcer:block/litter/butts_s3_0_2",
+          "weight": 3
+        },
+        {
+          "model": "station_announcer:block/litter/butts_s3_0_3",
+          "weight": 3
+        },
+        {
+          "model": "station_announcer:block/litter/butts_s3_1_0",
+          "weight": 3
+        },
+        {
+          "model": "station_announcer:block/litter/butts_s3_1_1",
+          "weight": 3
+        },
+        {
+          "model": "station_announcer:block/litter/butts_s3_1_2",
+          "weight": 3
+        },
+        {
+          "model": "station_announcer:block/litter/butts_s3_1_3",
+          "weight": 3
+        },
+        {
+          "model": "station_announcer:block/litter/receipt_s3_0_0",
+          "weight": 3
+        },
+        {
+          "model": "station_announcer:block/litter/receipt_s3_0_1",
+          "weight": 3
+        },
+        {
+          "model": "station_announcer:block/litter/receipt_s3_0_2",
+          "weight": 3
+        },
+        {
+          "model": "station_announcer:block/litter/receipt_s3_0_3",
+          "weight": 3
+        },
+        {
+          "model": "station_announcer:block/litter/receipt_s3_1_0",
+          "weight": 3
+        },
+        {
+          "model": "station_announcer:block/litter/receipt_s3_1_1",
+          "weight": 3
+        },
+        {
+          "model": "station_announcer:block/litter/receipt_s3_1_2",
+          "weight": 3
+        },
+        {
+          "model": "station_announcer:block/litter/receipt_s3_1_3",
+          "weight": 3
+        },
+        {
+          "model": "station_announcer:block/litter/bottle_s3_0_0",
+          "weight": 2
+        },
+        {
+          "model": "station_announcer:block/litter/bottle_s3_0_1",
+          "weight": 2
+        },
+        {
+          "model": "station_announcer:block/litter/bottle_s3_0_2",
+          "weight": 2
+        },
+        {
+          "model": "station_announcer:block/litter/bottle_s3_0_3",
+          "weight": 2
+        },
+        {
+          "model": "station_announcer:block/litter/bottle_s3_1_0",
+          "weight": 2
+        },
+        {
+          "model": "station_announcer:block/litter/bottle_s3_1_1",
+          "weight": 2
+        },
+        {
+          "model": "station_announcer:block/litter/bottle_s3_1_2",
+          "weight": 2
+        },
+        {
+          "model": "station_announcer:block/litter/bottle_s3_1_3",
+          "weight": 2
+        },
+        {
+          "model": "station_announcer:block/litter/crust_s3_0_0",
+          "weight": 1
+        },
+        {
+          "model": "station_announcer:block/litter/crust_s3_0_1",
+          "weight": 1
+        },
+        {
+          "model": "station_announcer:block/litter/crust_s3_0_2",
+          "weight": 1
+        },
+        {
+          "model": "station_announcer:block/litter/crust_s3_0_3",
+          "weight": 1
+        },
+        {
+          "model": "station_announcer:block/litter/crust_s3_1_0",
+          "weight": 1
+        },
+        {
+          "model": "station_announcer:block/litter/crust_s3_1_1",
+          "weight": 1
+        },
+        {
+          "model": "station_announcer:block/litter/crust_s3_1_2",
+          "weight": 1
+        },
+        {
+          "model": "station_announcer:block/litter/crust_s3_1_3",
+          "weight": 1
+        },
+        {
+          "model": "station_announcer:block/litter/plastic_bag_s3_0_0",
+          "weight": 2
+        },
+        {
+          "model": "station_announcer:block/litter/plastic_bag_s3_0_1",
+          "weight": 2
+        },
+        {
+          "model": "station_announcer:block/litter/plastic_bag_s3_0_2",
+          "weight": 2
+        },
+        {
+          "model": "station_announcer:block/litter/plastic_bag_s3_0_3",
+          "weight": 2
+        },
+        {
+          "model": "station_announcer:block/litter/plastic_bag_s3_1_0",
+          "weight": 2
+        },
+        {
+          "model": "station_announcer:block/litter/plastic_bag_s3_1_1",
+          "weight": 2
+        },
+        {
+          "model": "station_announcer:block/litter/plastic_bag_s3_1_2",
+          "weight": 2
+        },
+        {
+          "model": "station_announcer:block/litter/plastic_bag_s3_1_3",
+          "weight": 2
+        }
+      ]
+    }
+  ]
+}

@@ -906,10 +906,13 @@ public class ExitMarkerScreen extends Screen {
                 openings.add(element.getAsJsonObject());
             }
         }
-        if (!openings.isEmpty()) {
+        int removed = entry.removedOpenings();
+        if (!openings.isEmpty() || removed > 0) {
             cy += 5;
             FlatUi.heading(c, textRenderer, Text.translatable("gui.station_announcer.layout.openings").getString(), x, cy);
             cy += 11;
+            String removeLabel = Text.translatable("gui.station_announcer.layout.opening_remove").getString();
+            int removeW = textRenderer.getWidth(removeLabel) + 10;
             for (com.google.gson.JsonObject opening : openings) {
                 com.google.gson.JsonArray pos = opening.getAsJsonArray("pos");
                 double ox = pos.get(0).getAsDouble();
@@ -918,8 +921,36 @@ public class ExitMarkerScreen extends Screen {
                 long away = Math.round(Math.sqrt(marker.getPos().getSquaredDistance(ox, oy, oz)));
                 String text = Text.translatable("gui.station_announcer.layout.opening_row",
                         (int) Math.floor(ox), (int) Math.floor(oy), (int) Math.floor(oz), away).getString();
-                c.drawText(textRenderer, text, x, cy, 0xFFF0A020, false);
-                cy += 11;
+                int textRight = canScan ? right - removeW - 4 : right;
+                c.drawText(textRenderer, textRenderer.trimToWidth(text, textRight - x), x, cy, 0xFFF0A020, false);
+                if (canScan) {
+                    // a suggestion that is not a real way out: removed for good (rescans skip it)
+                    int bxr = right - removeW;
+                    FlatUi.button(c, textRenderer, removeLabel, bxr, cy - 2, removeW, 12, mx, my, FlatUi.ButtonStyle.GHOST);
+                    if (cy - 2 >= layoutViewTop && cy + 10 <= layoutViewTop + layoutViewHeight) {
+                        int fx = (int) Math.floor(ox);
+                        int fy = (int) Math.floor(oy + 0.01);
+                        int fz = (int) Math.floor(oz);
+                        // the status line above turns to "Queued / Scanning" while the station rescans
+                        hits.add(new Hit(bxr, cy - 2, removeW, 12, () -> ClientLayouts.dismissOpening(stationId, fx, fy, fz)));
+                    }
+                }
+                cy += 13;
+            }
+            if (removed > 0) {
+                String note = Text.translatable("gui.station_announcer.layout.openings_removed", removed).getString();
+                c.drawText(textRenderer, textRenderer.trimToWidth(note, right - x), x, cy, FlatUi.TEXT_FAINT, false);
+                if (canScan) {
+                    String restore = Text.translatable("gui.station_announcer.layout.openings_restore").getString();
+                    int rw = textRenderer.getWidth(restore) + 10;
+                    int rx = right - rw;
+                    FlatUi.button(c, textRenderer, restore, rx, cy - 2, rw, 12, mx, my, FlatUi.ButtonStyle.FLAT);
+                    if (cy - 2 >= layoutViewTop && cy + 10 <= layoutViewTop + layoutViewHeight) {
+                        hits.add(new Hit(rx, cy - 2, rw, 12, () -> ClientLayouts.request(
+                                com.stationannouncer.wayfinding.layout.LayoutScanner.ACTION_RESTORE_OPENINGS, stationId)));
+                    }
+                }
+                cy += 13;
             }
         }
 

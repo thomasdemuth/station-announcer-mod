@@ -1,0 +1,28 @@
+{
+  "variants": {
+    "hanging=true": {
+      "model": "station_announcer:block/construction/caged_work_lamp_hanging"
+    },
+    "hanging=false": [
+      {
+        "model": "station_announcer:block/construction/caged_work_lamp_lying",
+        "weight": 1
+      },
+      {
+        "model": "station_announcer:block/construction/caged_work_lamp_lying",
+        "y": 90,
+        "weight": 1
+      },
+      {
+        "model": "station_announcer:block/construction/caged_work_lamp_lying",
+        "y": 180,
+        "weight": 1
+      },
+      {
+        "model": "station_announcer:block/construction/caged_work_lamp_lying",
+        "y": 270,
+        "weight": 1
+      }
+    ]
+  }
+}

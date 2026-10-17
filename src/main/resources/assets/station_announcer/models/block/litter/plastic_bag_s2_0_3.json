@@ -1,0 +1,275 @@
+{
+  "textures": {
+    "piece_plastic_bag": "station_announcer:block/litter/piece_plastic_bag",
+    "particle": "station_announcer:block/litter/piece_plastic_bag"
+  },
+  "elements": [
+    {
+      "from": [
+        9.81,
+        0.041,
+        2.88
+      ],
+      "to": [
+        13.06,
+        1.991,
+        6.78
+      ],
+      "faces": {
+        "west": {
+          "uv": [
+            0.25,
+            0.25,
+            3.25,
+            1.75
+          ],
+          "texture": "#piece_plastic_bag"
+        },
+        "east": {
+          "uv": [
+            3.75,
+            0.25,
+            6.75,
+            1.75
+          ],
+          "texture": "#piece_plastic_bag"
+        },
+        "north": {
+          "uv": [
+            7.25,
+            0.25,
+            9.75,
+            1.75
+          ],
+          "texture": "#piece_plastic_bag"
+        },
+        "south": {
+          "uv": [
+            10.25,
+            0.25,
+            12.75,
+            1.75
+          ],
+          "texture": "#piece_plastic_bag"
+        },
+        "up": {
+          "uv": [
+            0.25,
+            2.25,
+            3.25,
+            4.75
+          ],
+          "texture": "#piece_plastic_bag",
+          "rotation": 270
+        }
+      }
+    },
+    {
+      "from": [
+        10.33,
+        0.041,
+        3.4
+      ],
+      "to": [
+        12.54,
+        2.771,
+        5.87
+      ],
+      "faces": {
+        "west": {
+          "uv": [
+            13.25,
+            0.25,
+            15.25,
+            2.25
+          ],
+          "texture": "#piece_plastic_bag"
+        },
+        "east": {
+          "uv": [
+            3.75,
+            2.25,
+            5.75,
+            4.25
+          ],
+          "texture": "#piece_plastic_bag"
+        },
+        "north": {
+          "uv": [
+            6.25,
+            2.25,
+            8.0,
+            4.25
+          ],
+          "texture": "#piece_plastic_bag"
+        },
+        "south": {
+          "uv": [
+            8.5,
+            2.25,
+            10.25,
+            4.25
+          ],
+          "texture": "#piece_plastic_bag"
+        },
+        "up": {
+          "uv": [
+            10.75,
+            2.25,
+            12.75,
+            4.0
+          ],
+          "texture": "#piece_plastic_bag",
+          "rotation": 270
+        }
+      },
+      "rotation": {
+        "axis": "y",
+        "angle": 22.5,
+        "origin": [
+          11.5,
+          0.041,
+          4.7
+        ]
+      }
+    },
+    {
+      "from": [
+        10.525,
+        0.431,
+        2.685
+      ],
+      "to": [
+        11.175,
+        1.926,
+        3.075
+      ],
+      "faces": {
+        "west": {
+          "uv": [
+            13.25,
+            2.75,
+            13.5,
+            4.0
+          ],
+          "texture": "#piece_plastic_bag"
+        },
+        "east": {
+          "uv": [
+            14.0,
+            2.75,
+            14.25,
+            4.0
+          ],
+          "texture": "#piece_plastic_bag"
+        },
+        "north": {
+          "uv": [
+            14.75,
+            2.75,
+            15.25,
+            4.0
+          ],
+          "texture": "#piece_plastic_bag"
+        },
+        "south": {
+          "uv": [
+            10.75,
+            4.5,
+            11.25,
+            5.75
+          ],
+          "texture": "#piece_plastic_bag"
+        },
+        "up": {
+          "uv": [
+            11.75,
+            4.5,
+            12.0,
+            5.0
+          ],
+          "texture": "#piece_plastic_bag",
+          "rotation": 270
+        }
+      },
+      "rotation": {
+        "axis": "x",
+        "angle": -22.5,
+        "origin": [
+          11.5,
+          0.431,
+          3.01
+        ]
+      }
+    },
+    {
+      "from": [
+        11.76,
+        0.431,
+        2.685
+      ],
+      "to": [
+        12.41,
+        1.796,
+        3.075
+      ],
+      "faces": {
+        "west": {
+          "uv": [
+            12.5,
+            4.5,
+            12.75,
+            5.5
+          ],
+          "texture": "#piece_plastic_bag"
+        },
+        "east": {
+          "uv": [
+            13.25,
+            4.5,
+            13.5,
+            5.5
+          ],
+          "texture": "#piece_plastic_bag"
+        },
+        "north": {
+          "uv": [
+            14.0,
+            4.5,
+            14.5,
+            5.5
+          ],
+          "texture": "#piece_plastic_bag"
+        },
+        "south": {
+          "uv": [
+            15.0,
+            4.5,
+            15.5,
+            5.5
+          ],
+          "texture": "#piece_plastic_bag"
+        },
+        "up": {
+          "uv": [
+            11.75,
+            4.5,
+            12.0,
+            5.0
+          ],
+          "texture": "#piece_plastic_bag",
+          "rotation": 270
+        }
+      },
+      "rotation": {
+        "axis": "x",
+        "angle": -45,
+        "origin": [
+          11.5,
+          0.431,
+          3.01
+        ]
+      }
+    }
+  ]
+}

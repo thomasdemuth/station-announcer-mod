@@ -41,13 +41,11 @@ import java.nio.file.StandardCopyOption;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.HashMap;
-import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
-import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Consumer;
@@ -84,8 +82,11 @@ import java.util.stream.Stream;
  *
  * <p>Tiles are {@value #TILE_SAMPLES} samples square at one sample per {@value #SCALE}
  * blocks, on a per-dimension grid whose origin is fixed forever by the first scan
- * (growth toward -x/-z gives negative tile indices). The automatic pass draws only the
- * tiles the index does not have; {@code /dispatch basemap scan} is a full refresh.</p>
+ * (growth toward -x/-z gives negative tile indices). The automatic pass draws the tiles
+ * the index does not have AND redraws every tile whose chunks were saved after the tile
+ * was drawn (the region headers carry each chunk's last-write time, the index each tile's
+ * draw time) — at launch, every {@code dispatch.basemapRefreshMinutes} after that, and
+ * when Map+'s Refresh asks. {@code /dispatch basemap scan} is a full refresh.</p>
  */
 public final class BasemapScanner {
     /** Blocks per sample. The frontend reads this from satmeta; never assume it there. */
@@ -147,6 +148,10 @@ public final class BasemapScanner {
     /** Dimensions the once-per-launch auto pass still has to check. Server thread only. */
     private static final ArrayDeque<String> AUTO_QUEUE = new ArrayDeque<>();
     private static volatile boolean autoActive;
+    /** The pass running now is a periodic / on-demand one: "nothing changed" goes to debug, not the log. */
+    private static volatile boolean quietPass;
+    /** When Map+ last asked for a refresh (rate limit for the unauthenticated endpoint). */
+    private static volatile long lastWebRefresh;
 
     private BasemapScanner() {
     }
@@ -218,6 +223,14 @@ public final class BasemapScanner {
      * every tile with chunks under it is redrawn and the stale tiles are wiped first.
      */
     public static int startScan(ServerCommandSource source, int marginBlocks) {
+        return startScan(source, marginBlocks, false);
+    }
+
+    /**
+     * {@code incremental}: {@code /dispatch basemap update} — draw the missing tiles and
+     * redraw the ones whose chunks were saved since they were drawn, keeping the rest.
+     */
+    public static int startScan(ServerCommandSource source, int marginBlocks, boolean incremental) {
         MinecraftServer minecraftServer = server;
         if (minecraftServer == null) {
             source.sendError(Text.literal("The basemap scanner is not ready yet."));
@@ -252,7 +265,7 @@ public final class BasemapScanner {
             }
             tell(source, Text.literal("Reading the region files of " + dimension + "…")
                     .formatted(Formatting.GRAY), false);
-            enumerateThen(world, dimension, chunks -> beginScan(source, world, dimension, chunks, margin, false));
+            enumerateThen(world, dimension, chunks -> beginScan(source, world, dimension, chunks, margin, incremental));
         });
         return 1;
     }
@@ -262,10 +275,19 @@ public final class BasemapScanner {
      * checked and the tiles its index lacks are drawn. Cached tiles cost nothing.
      */
     public static void autoScan() {
+        autoScan(false);
+    }
+
+    /**
+     * The automatic pass over every simulated dimension; {@code quiet} for the periodic
+     * one, which says nothing in the log unless a tile actually changed. Server thread.
+     */
+    public static void autoScan(boolean quiet) {
         MinecraftServer minecraftServer = server;
         if (minecraftServer == null || autoActive) {
             return;
         }
+        quietPass = quiet;
         ObjectImmutableList<Simulator> simulators = MtrSimulators.get();
         if (simulators == null || simulators.isEmpty()) {
             StationAnnouncer.LOGGER.info("Basemap auto-scan: MTR has no running simulations, nothing to check");
@@ -278,6 +300,37 @@ public final class BasemapScanner {
         autoActive = true;
     }
 
+    /**
+     * Map+'s Refresh: redraw the changed tiles of one dimension now. Any thread; at most
+     * once every 20 s, and only while nothing else is scanning.
+     *
+     * @return what the page can tell its user
+     */
+    public static String requestRefresh(String dimension) {
+        MinecraftServer minecraftServer = server;
+        if (minecraftServer == null || dimension == null) {
+            return "unavailable";
+        }
+        long now = System.currentTimeMillis();
+        if (!isIdle()) {
+            return "busy";
+        }
+        if (now - lastWebRefresh < 20_000) {
+            return "recent";
+        }
+        lastWebRefresh = now;
+        minecraftServer.execute(() -> {
+            if (!isIdle()) {
+                return;
+            }
+            AUTO_QUEUE.clear();
+            AUTO_QUEUE.add(dimension);
+            quietPass = true;
+            autoActive = true;
+        });
+        return "started";
+    }
+
     /** Server thread, one dimension per call, only while nothing else is running. */
     private static void pumpAuto() {
         MinecraftServer minecraftServer = server;
@@ -285,7 +338,7 @@ public final class BasemapScanner {
         if (minecraftServer == null || dimension == null) {
             autoActive = false;
             AUTO_QUEUE.clear();
-            if (minecraftServer != null) {
+            if (minecraftServer != null && !quietPass) {
                 StationAnnouncer.LOGGER.info("Basemap auto-scan pass finished");
             }
             return;
@@ -298,7 +351,9 @@ public final class BasemapScanner {
         }
         measure(minecraftServer, simulator, any -> {
             if (!any) {
-                StationAnnouncer.LOGGER.info("Basemap auto-scan: no rails or stations in {} yet, skipping", dimension);
+                if (!quietPass) {
+                    StationAnnouncer.LOGGER.info("Basemap auto-scan: no rails or stations in {} yet, skipping", dimension);
+                }
                 return;
             }
             enumerateThen(world, dimension, chunks -> beginScan(null, world, dimension, chunks, AUTO_MARGIN, true));
@@ -423,21 +478,27 @@ public final class BasemapScanner {
                     + " far from everything else."), true);
             return;
         }
-        // The tile diff: an incremental pass keeps what the index lists; a full refresh
-        // wants every tile of the box. Either way a tile with NO chunk under it is never
-        // sampled, written or indexed.
+        // The tile diff: an incremental pass keeps what the index lists unless a chunk under
+        // the tile was saved since it was drawn; a full refresh wants every tile of the box.
+        // Either way a tile with NO chunk under it is never sampled, written or indexed.
         List<int[]> wanted = new ArrayList<>();
         int skippedEmpty = 0;
+        int changed = 0;
         for (long tz = tileZ0; tz <= tileZ1; tz++) {
             for (long tx = tileX0; tx <= tileX1; tx++) {
-                if (incremental && reuse && cached.has((int) tx, (int) tz)) {
-                    continue;
-                }
                 long blockX = originX + tx * TILE_BLOCKS;
                 long blockZ = originZ + tz * TILE_BLOCKS;
                 int chunkX0 = (int) (blockX >> 4);
                 int chunkZ0 = (int) (blockZ >> 4);
-                if (!chunks.anyIn(chunkX0, chunkZ0, chunkX0 + TILE_CHUNKS - 1, chunkZ0 + TILE_CHUNKS - 1)) {
+                int chunkX1 = chunkX0 + TILE_CHUNKS - 1;
+                int chunkZ1 = chunkZ0 + TILE_CHUNKS - 1;
+                if (incremental && reuse && cached.has((int) tx, (int) tz)) {
+                    // >= : a chunk saved in the very second the tile was drawn may have been missed
+                    if (chunks.newestIn(chunkX0, chunkZ0, chunkX1, chunkZ1) < cached.drawnAt((int) tx, (int) tz)) {
+                        continue;
+                    }
+                    changed++;
+                } else if (!chunks.anyIn(chunkX0, chunkZ0, chunkX1, chunkZ1)) {
                     skippedEmpty++;
                     continue;
                 }
@@ -445,8 +506,13 @@ public final class BasemapScanner {
             }
         }
         if (wanted.isEmpty()) {
-            tell(source, Text.literal("The basemap for " + dimension + " already covers the generated world ("
-                    + (cached == null ? 0 : cached.tiles().size()) + " tiles) — nothing to scan."), false);
+            Text text = Text.literal("The basemap for " + dimension + " is up to date ("
+                    + (cached == null ? 0 : cached.tiles().size()) + " tiles) — nothing to scan.");
+            if (source == null && quietPass) {
+                StationAnnouncer.LOGGER.debug("Basemap auto-scan: {}", text.getString());
+            } else {
+                tell(source, text, false);
+            }
             return;
         }
         long bboxMinX = neededLowX;
@@ -462,8 +528,9 @@ public final class BasemapScanner {
         Scan scan = new Scan(world, dimension, source, incremental, chunks, (int) originX, (int) originZ,
                 wanted, new long[]{bboxMinX, bboxMinZ, bboxMaxX, bboxMaxZ});
         active = scan;
-        int keptTiles = incremental && reuse ? cached.tiles().size() : 0;
+        int keptTiles = incremental && reuse ? cached.tiles().size() - changed : 0;
         tell(source, Text.literal("Basemap scan started: " + wanted.size() + " tile(s) to draw"
+                + (changed > 0 ? " (" + changed + " changed since drawn)" : "")
                 + (keptTiles > 0 ? " (" + keptTiles + " kept)" : "")
                 + (skippedEmpty > 0 ? ", " + skippedEmpty + " empty tile(s) skipped" : "")
                 + " over " + chunks.count() + " chunk(s) on disk ("
@@ -489,12 +556,14 @@ public final class BasemapScanner {
                     return;
                 }
                 int[] tile = scan.tiles.get(i);
+                // stamped BEFORE reading: a chunk saved while we draw is redrawn next pass
+                int drawnAt = (int) (System.currentTimeMillis() / 1000L);
                 renderTile(scan, tile[0], tile[1]);
                 if (scan.cancelled) {
                     return;
                 }
                 writeTile(scan, tile[0], tile[1]);
-                batch.add(tile);
+                batch.add(new int[]{tile[0], tile[1], drawnAt});
                 scan.tilesDone = i + 1;
                 if (batch.size() >= FLUSH_TILES) {
                     publish(scan, batch, false);
@@ -1098,10 +1167,12 @@ public final class BasemapScanner {
             }
         } else {
             for (int[] tile : entry.tiles()) {
-                org.mtr.libraries.com.google.gson.JsonArray pair = new org.mtr.libraries.com.google.gson.JsonArray(2);
-                pair.add(tile[0]);
-                pair.add(tile[1]);
-                tiles.add(pair);
+                // [tx, tz, drawnAt]: the page refetches a tile only when its drawnAt moves
+                org.mtr.libraries.com.google.gson.JsonArray triple = new org.mtr.libraries.com.google.gson.JsonArray(3);
+                triple.add(tile[0]);
+                triple.add(tile[1]);
+                triple.add(tile.length > 2 ? tile[2] : (int) (entry.scannedAt() / 1000L));
+                tiles.add(triple);
             }
             for (long bound : entry.bbox()) {
                 bbox.add(bound);
@@ -1185,11 +1256,14 @@ public final class BasemapScanner {
                     }
                     List<int[]> tiles = new ArrayList<>();
                     com.google.gson.JsonArray tilesJson = value.getAsJsonArray("tiles");
+                    // tiles from before per-tile times count as drawn at the index's last write
+                    int indexSeconds = (int) (scannedAt / 1000L);
                     if (tilesJson != null) {
                         for (com.google.gson.JsonElement element : tilesJson) {
                             com.google.gson.JsonArray pair = element.getAsJsonArray();
-                            if (pair.size() == 2) {
-                                tiles.add(new int[]{pair.get(0).getAsInt(), pair.get(1).getAsInt()});
+                            if (pair.size() >= 2) {
+                                tiles.add(new int[]{pair.get(0).getAsInt(), pair.get(1).getAsInt(),
+                                        pair.size() >= 3 ? pair.get(2).getAsInt() : indexSeconds});
                             }
                         }
                     }
@@ -1216,9 +1290,10 @@ public final class BasemapScanner {
         value.addProperty("originZ", entry.originZ());
         com.google.gson.JsonArray tiles = new com.google.gson.JsonArray(entry.tiles().size());
         for (int[] tile : entry.tiles()) {
-            com.google.gson.JsonArray pair = new com.google.gson.JsonArray(2);
+            com.google.gson.JsonArray pair = new com.google.gson.JsonArray(3);
             pair.add(tile[0]);
             pair.add(tile[1]);
+            pair.add(tile.length > 2 ? tile[2] : (int) (entry.scannedAt() / 1000L));
             tiles.add(pair);
         }
         value.add("tiles", tiles);
@@ -1252,20 +1327,26 @@ public final class BasemapScanner {
 
     private static Satellite make(String dimension, long scannedAt, int scale, int tileSamples,
                                   int originX, int originZ, List<int[]> tiles, long[] bbox) {
-        Set<Long> keys = new HashSet<>(Math.max(16, tiles.size() * 2));
+        Map<Long, Integer> keys = new HashMap<>(Math.max(16, tiles.size() * 2));
         for (int[] tile : tiles) {
-            keys.add(key(tile[0], tile[1]));
+            keys.put(key(tile[0], tile[1]), tile.length > 2 ? tile[2] : (int) (scannedAt / 1000L));
         }
-        return new Satellite(dimension, scannedAt, scale, tileSamples, originX, originZ, tiles, bbox, Set.copyOf(keys));
+        return new Satellite(dimension, scannedAt, scale, tileSamples, originX, originZ, tiles, bbox, Map.copyOf(keys));
     }
 
     // ---------------------------------------------------------------- records
 
     /** One dimension's tile index. Immutable once published; build it through {@link #make}. */
     private record Satellite(String dimension, long scannedAt, int scale, int tileSamples,
-                             int originX, int originZ, List<int[]> tiles, long[] bbox, Set<Long> keys) {
+                             int originX, int originZ, List<int[]> tiles, long[] bbox, Map<Long, Integer> keys) {
         boolean has(int tx, int tz) {
-            return keys.contains(key(tx, tz));
+            return keys.containsKey(key(tx, tz));
+        }
+
+        /** Epoch seconds the tile was drawn (0 when unknown — always redrawn). */
+        int drawnAt(int tx, int tz) {
+            Integer at = keys.get(key(tx, tz));
+            return at == null ? 0 : at;
         }
     }
 

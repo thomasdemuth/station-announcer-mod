@@ -93,7 +93,8 @@ public final class DispatchApiServlet extends ServletBase {
         if (unavailable(response) || handleAnalytics(request, response) || handleAlerts(request, response)
                 || handleSatTile(request, response) || handleNav(request, response)
                 || handleInterlineSuggest(request, response) || handleInterlineApply(request, response)
-                || handleStationScan(request, response)) {
+                || handleStationScan(request, response) || handleBasemapRefresh(request, response)
+                || handleOffline(request, response)) {
             return;
         }
         super.doGet(request, response);
@@ -108,7 +109,8 @@ public final class DispatchApiServlet extends ServletBase {
         if (unavailable(response) || handleAnalytics(request, response) || handleAlerts(request, response)
                 || handleSatTile(request, response) || handleNav(request, response)
                 || handleInterlineSuggest(request, response) || handleInterlineApply(request, response)
-                || handleStationScan(request, response)) {
+                || handleStationScan(request, response) || handleBasemapRefresh(request, response)
+                || handleOffline(request, response)) {
             return;
         }
         super.doPost(request, response);
@@ -164,6 +166,86 @@ public final class DispatchApiServlet extends ServletBase {
             // Client went away mid-reply; nothing to clean up for a sync response.
         }
         return true;
+    }
+
+    /**
+     * {@code basemaprefresh?dimension=N} — Map+'s Refresh button: redraw that dimension's
+     * basemap tiles whose chunks were saved since they were drawn. Read-only world work on
+     * the scanner's own thread, rate-limited inside {@link BasemapScanner#requestRefresh},
+     * so it needs no pairing. Replies {@code {"ok":true,"basemap":"started|recent|busy|unavailable"}}.
+     */
+    private boolean handleBasemapRefresh(HttpServletRequest request, HttpServletResponse response) {
+        if (!"basemaprefresh".equals(firstSegment(request))) {
+            return false;
+        }
+        int dimensionIndex = intParameter(request, "dimension", 0);
+        JsonObject reply = new JsonObject();
+        if (dimensionIndex < 0 || dimensionIndex >= simulators.size()) {
+            reply.addProperty("ok", false);
+            reply.addProperty("error", "invalid dimension");
+        } else {
+            reply.addProperty("ok", true);
+            reply.addProperty("basemap", AddonServerConfig.get().dispatch.autoScan
+                    ? BasemapScanner.requestRefresh(simulators.get(dimensionIndex).dimension) : "off");
+        }
+        DispatchStaticServlet.sendText(response, 200, "application/json;charset=utf-8", reply.toString());
+        return true;
+    }
+
+    /**
+     * {@code offline[?satellite=1][&download=1]} — Map+ as one self-contained HTML file
+     * ({@link DispatchOfflineMap}). Each dimension's network + map data is taken on its own
+     * simulator thread through the same 30 s caches the page uses.
+     */
+    private boolean handleOffline(HttpServletRequest request, HttpServletResponse response) {
+        if (!"offline".equals(firstSegment(request))) {
+            return false;
+        }
+        try {
+            List<DispatchOfflineMap.Dimension> dimensions = new ArrayList<>();
+            for (Simulator simulator : simulators) {
+                CompletableFuture<DispatchOfflineMap.Dimension> future = new CompletableFuture<>();
+                simulator.run(() -> {
+                    try {
+                        future.complete(new DispatchOfflineMap.Dimension(simulator.dimension,
+                                cached(networkResponses, simulator, DispatchNetwork::build, false),
+                                cached(mapDataResponses, simulator, DispatchMapData::build, false)));
+                    } catch (Throwable throwable) {
+                        future.completeExceptionally(throwable);
+                    }
+                });
+                dimensions.add(future.get(30, TimeUnit.SECONDS));
+            }
+            DispatchOfflineMap.send(request, response, dimensions,
+                    "1".equals(request.getParameter("satellite")), "1".equals(request.getParameter("download")));
+        } catch (Throwable throwable) {
+            StationAnnouncer.LOGGER.warn("Map+ offline copy failed ({})", throwable.toString());
+            DispatchStaticServlet.sendText(response, 503, "text/plain;charset=utf-8",
+                    "The map could not be built right now — try again in a moment.");
+        }
+        return true;
+    }
+
+    /** When each dimension's caches were last rebuilt on request ({@code fresh=1}). */
+    private final ConcurrentHashMap<String, Long> lastFresh = new ConcurrentHashMap<>();
+
+    /**
+     * A per-dimension cached payload. {@code fresh} (Map+'s Refresh, {@code ?fresh=1})
+     * rebuilds it now instead of serving up to 30 s old data — at most once every 2 s per
+     * dimension, so a held-down button cannot make the simulator rebuild in a loop.
+     * Simulator thread.
+     */
+    private JsonObject cached(ConcurrentHashMap<String, CachedResponse> cache, Simulator simulator,
+                              java.util.function.Function<Simulator, JsonObject> builder, boolean fresh) {
+        if (fresh) {
+            long now = System.currentTimeMillis();
+            Long last = lastFresh.get(simulator.dimension + "|" + System.identityHashCode(cache));
+            if (last == null || now - last > 2_000) {
+                lastFresh.put(simulator.dimension + "|" + System.identityHashCode(cache), now);
+                cache.remove(simulator.dimension);
+            }
+        }
+        return cache.computeIfAbsent(simulator.dimension, key -> new CachedResponse(builder, 30_000)).get(simulator);
     }
 
     // ------------------------------------------------------------ nav endpoints
@@ -1042,10 +1124,9 @@ public final class DispatchApiServlet extends ServletBase {
     @Override
     protected void getContent(String endpoint, String data, Object2ObjectAVLTreeMap<String, String> parameters,
                               JsonReader jsonReader, Simulator simulator, Consumer<JsonObject> sendResponse) {
+        boolean fresh = "1".equals(parameters.get("fresh"));
         if ("network".equals(endpoint)) {
-            sendResponse.accept(networkResponses
-                    .computeIfAbsent(simulator.dimension, key -> new CachedResponse(DispatchNetwork::build, 30_000))
-                    .get(simulator));
+            sendResponse.accept(cached(networkResponses, simulator, DispatchNetwork::build, fresh));
         } else if ("stringline".equals(endpoint)) {
             // Axis (route/station geometry) is cached like the network payload; the
             // departure rows are filtered fresh per request from the published
@@ -1064,9 +1145,7 @@ public final class DispatchApiServlet extends ServletBase {
         } else if ("mapdata".equals(endpoint)) {
             // System Map+ payload: route geometry chains + leg durations + station
             // platform clustering + headways. Same 30 s per-dimension cache as network.
-            sendResponse.accept(mapDataResponses
-                    .computeIfAbsent(simulator.dimension, key -> new CachedResponse(DispatchMapData::build, 30_000))
-                    .get(simulator));
+            sendResponse.accept(cached(mapDataResponses, simulator, DispatchMapData::build, fresh));
         } else if ("interline".equals(endpoint)) {
             // Interline sections, depots, delays and headways. Built fresh each time on
             // this simulator thread (it reads the sidings' stop times) and cached for the

@@ -29,21 +29,28 @@ import java.util.stream.Stream;
  * handed them to {@code world.getChunk}, which FINISHED generating them (and wrote a
  * fresh proto ring around each), so every launch grew the world and rescanned it.</p>
  *
+ * <p>The second 4 KiB of the header is a table of 1024 timestamps — when each chunk was
+ * last WRITTEN, in epoch seconds. {@link #newestIn} reads it so the basemap can redraw
+ * just the tiles whose chunks were saved after the tile was drawn.</p>
+ *
  * <p>Immutable once built; safe to share across threads.</p>
  */
 public final class ChunkIndex {
-    private static final ChunkIndex EMPTY = new ChunkIndex(Map.of(), 0, 0, -1, -1, 0);
+    private static final ChunkIndex EMPTY = new ChunkIndex(Map.of(), Map.of(), 0, 0, -1, -1, 0);
 
     private final Map<Long, long[]> regions;
+    /** Region key → last-write epoch seconds per chunk ({@code localZ * 32 + localX}); 0 = unknown. */
+    private final Map<Long, int[]> stamps;
     private final int minChunkX;
     private final int minChunkZ;
     private final int maxChunkX;
     private final int maxChunkZ;
     private final int count;
 
-    private ChunkIndex(Map<Long, long[]> regions, int minChunkX, int minChunkZ,
+    private ChunkIndex(Map<Long, long[]> regions, Map<Long, int[]> stamps, int minChunkX, int minChunkZ,
                        int maxChunkX, int maxChunkZ, int count) {
         this.regions = regions;
+        this.stamps = stamps;
         this.minChunkX = minChunkX;
         this.minChunkZ = minChunkZ;
         this.maxChunkX = maxChunkX;
@@ -126,6 +133,42 @@ public final class ChunkIndex {
         return false;
     }
 
+    /**
+     * The newest last-write time (epoch seconds) of any chunk in this inclusive chunk
+     * rectangle, or 0 when none is known. Any thread.
+     */
+    public int newestIn(int chunkX0, int chunkZ0, int chunkX1, int chunkZ1) {
+        if (count == 0 || chunkX1 < minChunkX || chunkX0 > maxChunkX
+                || chunkZ1 < minChunkZ || chunkZ0 > maxChunkZ) {
+            return 0;
+        }
+        int x0 = Math.max(chunkX0, minChunkX);
+        int z0 = Math.max(chunkZ0, minChunkZ);
+        int x1 = Math.min(chunkX1, maxChunkX);
+        int z1 = Math.min(chunkZ1, maxChunkZ);
+        int newest = 0;
+        for (int regionZ = z0 >> 5; regionZ <= (z1 >> 5); regionZ++) {
+            int baseZ = regionZ << 5;
+            int localZ0 = Math.max(z0, baseZ) - baseZ;
+            int localZ1 = Math.min(z1, baseZ + 31) - baseZ;
+            for (int regionX = x0 >> 5; regionX <= (x1 >> 5); regionX++) {
+                int[] times = stamps.get(regionKey(regionX, regionZ));
+                if (times == null) {
+                    continue;
+                }
+                int baseX = regionX << 5;
+                int localX0 = Math.max(x0, baseX) - baseX;
+                int localX1 = Math.min(x1, baseX + 31) - baseX;
+                for (int localZ = localZ0; localZ <= localZ1; localZ++) {
+                    for (int localX = localX0; localX <= localX1; localX++) {
+                        newest = Math.max(newest, times[(localZ << 5) | localX]);
+                    }
+                }
+            }
+        }
+        return newest;
+    }
+
     private static long regionKey(int regionX, int regionZ) {
         return (((long) regionX) << 32) | (regionZ & 0xFFFFFFFFL);
     }
@@ -147,12 +190,13 @@ public final class ChunkIndex {
             return EMPTY;
         }
         Map<Long, long[]> regions = new HashMap<>();
+        Map<Long, int[]> stamps = new HashMap<>();
         int minChunkX = Integer.MAX_VALUE;
         int minChunkZ = Integer.MAX_VALUE;
         int maxChunkX = Integer.MIN_VALUE;
         int maxChunkZ = Integer.MIN_VALUE;
         int count = 0;
-        byte[] header = new byte[4096];
+        byte[] header = new byte[8192];
         List<Path> files;
         try (Stream<Path> stream = Files.list(regionDir)) {
             files = stream.toList();
@@ -181,6 +225,7 @@ public final class ChunkIndex {
                 continue;
             }
             long[] bits = new long[32];
+            int[] times = new int[1024];
             int present = 0;
             for (int i = 0; i < 1024; i++) {
                 int at = i << 2;
@@ -192,6 +237,9 @@ public final class ChunkIndex {
                 int localX = i & 31;
                 int localZ = i >> 5;
                 bits[localZ] |= 1L << localX;
+                int t = 4096 + at;
+                times[i] = ((header[t] & 0xFF) << 24) | ((header[t + 1] & 0xFF) << 16)
+                        | ((header[t + 2] & 0xFF) << 8) | (header[t + 3] & 0xFF);
                 present++;
                 int chunkX = (regionX << 5) + localX;
                 int chunkZ = (regionZ << 5) + localZ;
@@ -202,16 +250,21 @@ public final class ChunkIndex {
             }
             if (present > 0) {
                 regions.put(regionKey(regionX, regionZ), bits);
+                stamps.put(regionKey(regionX, regionZ), times);
                 count += present;
             }
         }
         if (count == 0) {
             return EMPTY;
         }
-        return new ChunkIndex(Map.copyOf(regions), minChunkX, minChunkZ, maxChunkX, maxChunkZ, count);
+        return new ChunkIndex(Map.copyOf(regions), Map.copyOf(stamps), minChunkX, minChunkZ, maxChunkX, maxChunkZ, count);
     }
 
-    /** Reads exactly the 4 KiB locations table; a short or unreadable file is skipped. */
+    /**
+     * Reads the 8 KiB header: locations, then timestamps. A file shorter than the locations
+     * table is skipped; one with locations but no timestamps (never written by vanilla) keeps
+     * zeros for the times.
+     */
     private static boolean readHeader(Path file, byte[] header) {
         try (InputStream in = Files.newInputStream(file)) {
             int read = 0;
@@ -222,9 +275,13 @@ public final class ChunkIndex {
                 }
                 read += got;
             }
-            // An empty (0-byte) region file is ordinary; anything shorter than a full
-            // header has no chunks we can name.
-            return read >= header.length;
+            // An empty (0-byte) region file is ordinary; anything shorter than the
+            // locations table has no chunks we can name.
+            if (read < 4096) {
+                return false;
+            }
+            java.util.Arrays.fill(header, read, header.length, (byte) 0);
+            return true;
         } catch (IOException e) {
             StationAnnouncer.LOGGER.warn("Could not read the header of {}", file, e);
             return false;

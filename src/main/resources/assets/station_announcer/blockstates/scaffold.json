@@ -1,0 +1,182 @@
+{
+  "multipart": [
+    {
+      "apply": {
+        "model": "station_announcer:block/construction/scaffold_std_nw"
+      }
+    },
+    {
+      "when": {
+        "east": "false"
+      },
+      "apply": {
+        "model": "station_announcer:block/construction/scaffold_std_ne"
+      }
+    },
+    {
+      "when": {
+        "south": "false"
+      },
+      "apply": {
+        "model": "station_announcer:block/construction/scaffold_std_sw"
+      }
+    },
+    {
+      "when": {
+        "east": "false",
+        "south": "false"
+      },
+      "apply": {
+        "model": "station_announcer:block/construction/scaffold_std_se"
+      }
+    },
+    {
+      "when": {
+        "up": "false"
+      },
+      "apply": {
+        "model": "station_announcer:block/construction/scaffold_cap_nw"
+      }
+    },
+    {
+      "when": {
+        "up": "false",
+        "east": "false"
+      },
+      "apply": {
+        "model": "station_announcer:block/construction/scaffold_cap_ne"
+      }
+    },
+    {
+      "when": {
+        "up": "false",
+        "south": "false"
+      },
+      "apply": {
+        "model": "station_announcer:block/construction/scaffold_cap_sw"
+      }
+    },
+    {
+      "when": {
+        "up": "false",
+        "east": "false",
+        "south": "false"
+      },
+      "apply": {
+        "model": "station_announcer:block/construction/scaffold_cap_se"
+      }
+    },
+    {
+      "when": {
+        "down": "false"
+      },
+      "apply": {
+        "model": "station_announcer:block/construction/scaffold_base_nw"
+      }
+    },
+    {
+      "when": {
+        "down": "false",
+        "east": "false"
+      },
+      "apply": {
+        "model": "station_announcer:block/construction/scaffold_base_ne"
+      }
+    },
+    {
+      "when": {
+        "down": "false",
+        "south": "false"
+      },
+      "apply": {
+        "model": "station_announcer:block/construction/scaffold_base_sw"
+      }
+    },
+    {
+      "when": {
+        "down": "false",
+        "east": "false",
+        "south": "false"
+      },
+      "apply": {
+        "model": "station_announcer:block/construction/scaffold_base_se"
+      }
+    },
+    {
+      "apply": {
+        "model": "station_announcer:block/construction/scaffold_ledger_n"
+      }
+    },
+    {
+      "apply": {
+        "model": "station_announcer:block/construction/scaffold_transom_w"
+      }
+    },
+    {
+      "when": {
+        "south": "false"
+      },
+      "apply": {
+        "model": "station_announcer:block/construction/scaffold_ledger_s"
+      }
+    },
+    {
+      "when": {
+        "east": "false"
+      },
+      "apply": {
+        "model": "station_announcer:block/construction/scaffold_transom_e"
+      }
+    },
+    {
+      "when": {
+        "facing": "north"
+      },
+      "apply": {
+        "model": "station_announcer:block/construction/scaffold_brace"
+      }
+    },
+    {
+      "when": {
+        "facing": "east"
+      },
+      "apply": {
+        "model": "station_announcer:block/construction/scaffold_brace",
+        "y": 90
+      }
+    },
+    {
+      "when": {
+        "facing": "south"
+      },
+      "apply": {
+        "model": "station_announcer:block/construction/scaffold_brace",
+        "y": 180
+      }
+    },
+    {
+      "when": {
+        "facing": "west"
+      },
+      "apply": {
+        "model": "station_announcer:block/construction/scaffold_brace",
+        "y": 270
+      }
+    },
+    {
+      "when": {
+        "OR": [
+          {
+            "up": "false"
+          },
+          {
+            "deck": "true"
+          }
+        ]
+      },
+      "apply": {
+        "model": "station_announcer:block/construction/scaffold_deck"
+      }
+    }
+  ]
+}

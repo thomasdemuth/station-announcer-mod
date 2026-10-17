@@ -47,6 +47,9 @@ public class StationAnnouncerClient implements ClientModInitializer {
 
     /** The chime currently playing, kept so a newer announcement can cut it off. */
     private static SoundInstance currentChime;
+    /** Wall-clock estimate of when the PA audio playing now ends (for queued announcements). */
+    private static long busyUntil;
+    private static final long QUEUE_GAP_MILLIS = 700;
 
     @Override
     public void onInitializeClient() {
@@ -162,6 +165,9 @@ public class StationAnnouncerClient implements ClientModInitializer {
                                     // Dev-only: F3+T without a keyboard, so a headless rig can
                                     // pick up regenerated models/textures copied into build/resources.
                                     client.reloadResources();
+                                } else if (cmd.startsWith("#atmo-")) {
+                                    // Dev-only: atmosphere screens (#atmo-maint, #atmo-weather, #atmo-close).
+                                    com.stationannouncer.client.atmosphere.AtmosphereClient.devHook(client, cmd);
                                 } else if (cmd.startsWith("#sign-")) {
                                     // Dev-only: the MTA sign editor / loader (#sign-editor x y z,
                                     // #sign-load x y z <json file>, #sign-close).
@@ -186,6 +192,20 @@ public class StationAnnouncerClient implements ClientModInitializer {
                                         }
                                         client.setScreen(screen);
                                     }
+                                } else if (cmd.startsWith("#retexture ") || cmd.startsWith("#break ")) {
+                                    // Dev-only: #retexture x y z material (whole run, like the picker)
+                                    // / #break x y z (a player's left click: client prediction + packet).
+                                    String[] a = cmd.split("\\s+");
+                                    BlockPos p = new BlockPos(Integer.parseInt(a[1]), Integer.parseInt(a[2]), Integer.parseInt(a[3]));
+                                    if (cmd.startsWith("#break ")) {
+                                        client.interactionManager.attackBlock(p, net.minecraft.util.math.Direction.UP);
+                                    } else {
+                                        net.minecraft.network.PacketByteBuf buf = net.fabricmc.fabric.api.networking.v1.PacketByteBufs.create();
+                                        buf.writeBlockPos(p);
+                                        buf.writeString(a[4]);
+                                        buf.writeBoolean(true);
+                                        ClientPlayNetworking.send(com.stationannouncer.material.MaterialBlocks.SET_BLOCK_MATERIAL_C2S, buf);
+                                    }
                                 } else if (cmd.equals("#material-picker")) {
                                     // Dev-only: the ramp/stairs texture picker for the held item.
                                     client.setScreen(com.stationannouncer.client.material.MaterialPickerScreen.forHand(
@@ -200,6 +220,14 @@ public class StationAnnouncerClient implements ClientModInitializer {
                                     // (#interline [sections N | depots N | groups | suggest DIR [target]
                                     // | apply | delay N DURATION]) — see InterlineScreen.devHook.
                                     com.stationannouncer.client.mtraddon.InterlineScreen.devHook(client, cmd);
+                                } else if (cmd.startsWith("#cab-")) {
+                                    // Dev-only: the cab HUD with sample data (#cab-demo run|appr|plat|held|guard|off,
+                                    // #cab-detail) so the headless rig can screenshot it without riding a train.
+                                    com.stationannouncer.client.mtraddon.cab.CabDevHooks.handle(cmd);
+                                } else if (cmd.startsWith("#track-")) {
+                                    // Dev-only: the track geometry editor (#track-editor x y z
+                                    // [3d|node|piece N|tilt|height|mtr], #track-close).
+                                    com.stationannouncer.client.track.TrackEditorDevHooks.handle(cmd);
                                 } else if (cmd.startsWith("#poster-")) {
                                     // Dev-only: open the poster screens without a mouse
                                     // (#poster-list <disruptionId> / #poster-editor <posterId> /
@@ -229,6 +257,33 @@ public class StationAnnouncerClient implements ClientModInitializer {
                                         }
                                         ClientPlayNetworking.send(AnnouncerNetworking.NETWORK_EDIT_C2S, buf);
                                     }
+                                } else if (cmd.startsWith("#rail ")) {
+                                    com.stationannouncer.client.mtraddon.DashboardRail.devHook(cmd);
+                                } else if (cmd.startsWith("#press ")) {
+                                    // Dev-only: press the first button on the open screen whose label contains the text.
+                                    String part = cmd.substring(7).trim().toLowerCase(java.util.Locale.ROOT);
+                                    if (client.currentScreen != null) {
+                                        for (net.minecraft.client.gui.widget.ClickableWidget widget
+                                                : net.fabricmc.fabric.api.client.screen.v1.Screens.getButtons(client.currentScreen)) {
+                                            if (widget instanceof net.minecraft.client.gui.widget.PressableWidget pressable
+                                                    && widget.getMessage().getString().toLowerCase(java.util.Locale.ROOT).contains(part)) {
+                                                pressable.onPress();
+                                                break;
+                                            }
+                                        }
+                                    }
+                                } else if (cmd.startsWith("#lines")) {
+                                    // Dev-only: #lines open [folder] / select / tab N / new / route / move / name / save.
+                                    com.stationannouncer.client.mtraddon.LineFolderScreen.devHook(client, cmd);
+                                } else if (cmd.startsWith("#route ")) {
+                                    // Dev-only: #route open <name part> (our swap replaces MTR's screen),
+                                    // then #route tab N | stop N | scope N | own N secs | shape N | scroll PX.
+                                    com.stationannouncer.client.mtraddon.RouteSettingsScreen.devHook(client, cmd);
+                                } else if (cmd.startsWith("#platform")) {
+                                    // Dev-only: #platform open <station part> [number] opens MTR's real
+                                    // platform screen (our swap replaces it); then #platform select N|hold,
+                                    // #platform own N seconds, #platform window N — PlatformSettingsScreen.devHook.
+                                    com.stationannouncer.client.mtraddon.PlatformSettingsScreen.devHook(client, cmd);
                                 } else if (cmd.startsWith("#line-style")) {
                                     com.stationannouncer.client.mtraddon.ClientLineStyles.devHook(client, cmd);
                                 } else if (cmd.equals("#use")) {
@@ -236,6 +291,15 @@ public class StationAnnouncerClient implements ClientModInitializer {
                                     client.interactionManager.interactItem(client.player, net.minecraft.util.Hand.MAIN_HAND);
                                 } else if (cmd.equals("#pa-close")) {
                                     client.setScreen(null);
+                                } else if (cmd.startsWith("#route-pa ")) {
+                                    // Dev-only: a route's on-board train PA editor (#route-pa routeId [row]).
+                                    String[] a = cmd.split("\\s+");
+                                    com.stationannouncer.client.gui.RouteTrainScreen screen =
+                                            new com.stationannouncer.client.gui.RouteTrainScreen(Long.parseLong(a[1]), "route " + a[1], null);
+                                    client.setScreen(screen);
+                                    if (a.length > 2) {
+                                        screen.devShow(Integer.parseInt(a[2]));
+                                    }
                                 } else if (cmd.startsWith("#pa-gui ")) {
                                     // Dev-only: open a PA block's screen (control box, announcer,
                                     // speaker) without a mouse: #pa-gui x y z [card N | network | templates | chime].
@@ -281,6 +345,7 @@ public class StationAnnouncerClient implements ClientModInitializer {
         if (FabricLoader.getInstance().isModLoaded("mtr")) {
             com.stationannouncer.client.mtr.MtrPidsClient.register();
             com.stationannouncer.client.mtraddon.AddonClientInit.register();
+            com.stationannouncer.client.atmosphere.AtmosphereClient.register();
         }
 
         ClientPlayNetworking.registerGlobalReceiver(AnnouncerNetworking.ANNOUNCE_S2C,
@@ -291,7 +356,9 @@ public class StationAnnouncerClient implements ClientModInitializer {
                     boolean showChat = buf.readBoolean();
                     boolean playChime = buf.readBoolean();
                     String chimeSound = buf.readString(AbstractPaBlockEntity.MAX_CHIME_SOUND_LENGTH);
-                    client.execute(() -> handleAnnouncement(client, text, volume, pos, showChat, playChime, chimeSound));
+                    // Train-timed announcements wait their turn (written last; older servers omit it).
+                    boolean queued = buf.isReadable() && buf.readBoolean();
+                    client.execute(() -> handleAnnouncement(client, text, volume, pos, showChat, playChime, chimeSound, queued));
                 });
 
         // The control box screen's Network tab: every member's health and settings.
@@ -313,17 +380,21 @@ public class StationAnnouncerClient implements ClientModInitializer {
             if (pendingTasks == 0) {
                 return;
             }
+            // Due tasks run AFTER the walk: a queued announcement schedules its own
+            // speech, which would otherwise modify TASKS mid-iteration.
+            List<Runnable> due = new ArrayList<>();
             synchronized (TASKS) {
                 Iterator<DelayedTask> iterator = TASKS.iterator();
                 while (iterator.hasNext()) {
                     DelayedTask task = iterator.next();
                     if (--task.ticks <= 0) {
                         iterator.remove();
-                        task.action.run();
+                        due.add(task.action);
                     }
                 }
                 pendingTasks = TASKS.size();
             }
+            due.forEach(Runnable::run);
         });
 
         // Leaving a world: cancel queued speech and anything still pending.
@@ -340,11 +411,30 @@ public class StationAnnouncerClient implements ClientModInitializer {
     }
 
     private static void handleAnnouncement(MinecraftClient client, String text, float volume, BlockPos pos,
-                                           boolean showChat, boolean playChime, String chimeSound) {
+                                           boolean showChat, boolean playChime, String chimeSound, boolean queued) {
         if (client.player == null || client.world == null || text.isBlank()) {
             return;
         }
+        long now = System.currentTimeMillis();
+        if (queued && now < busyUntil) {
+            // Wait for what is playing (by estimate) instead of cutting it off; a later
+            // ordinary announcement still interrupts everything, this one included.
+            int ticks = (int) Math.max(1, (busyUntil - now + 49) / 50);
+            busyUntil += estimateMillis(text, playChime, chimeSound) + QUEUE_GAP_MILLIS;
+            schedule(ticks, () -> present(client, text, volume, showChat, playChime, chimeSound));
+            return;
+        }
         interruptPlayback(client);
+        busyUntil = now + estimateMillis(text, playChime, chimeSound);
+        present(client, text, volume, showChat, playChime, chimeSound);
+    }
+
+    /** Chat line, chime and voice for one announcement (whatever it interrupts is already stopped). */
+    private static void present(MinecraftClient client, String text, float volume, boolean showChat,
+                                boolean playChime, String chimeSound) {
+        if (client.player == null || client.world == null) {
+            return;
+        }
         ClientConfig config = ClientConfig.get();
         // The client half of PaText: the clock, then "{shown|spoken}" split into
         // what chat shows and what the voice says.
@@ -371,18 +461,29 @@ public class StationAnnouncerClient implements ClientModInitializer {
         if (client.player == null) {
             return;
         }
-        String text = PaText.stripDisabled(raw);
+        String text = PaText.fillTrain(PaText.stripDisabled(raw), PaText.SAMPLE);
         if (text.contains(PaText.STATION)) {
             text = PaText.fill(text, PaText.clientStationAt(stationPos), null);
         }
         text = PaText.fill(text, null, PaText.clock());
         interruptPlayback(client);
+        busyUntil = System.currentTimeMillis() + estimateMillis(text, playChime, chimeSound);
         play(client, PaText.spoken(text), Math.max(volume, TtsManager.AUDIBLE_THRESHOLD), playChime, chimeSound);
     }
 
     /** Stops whatever PA audio is playing on this client (an editor's ■). */
     public static void stopPreview() {
         interruptPlayback(MinecraftClient.getInstance());
+    }
+
+    /**
+     * Rough length of an announcement: the chime's lead plus ~0.42 s a word. Only used
+     * to line up queued train announcements — TTS backends do not report when they finish.
+     */
+    private static long estimateMillis(String text, boolean playChime, String chimeSound) {
+        int words = PaText.spoken(text).split("\\s+").length;
+        long chime = playChime && ClientConfig.get().enableChime ? ModContent.chimeLeadTicks(chimeSound) * 50L : 0;
+        return chime + 600 + words * 420L;
     }
 
     private static void play(MinecraftClient client, String spoken, float volume, boolean playChime, String chimeSound) {
@@ -419,9 +520,10 @@ public class StationAnnouncerClient implements ClientModInitializer {
      */
     private static void interruptPlayback(MinecraftClient client) {
         synchronized (TASKS) {
-            TASKS.clear(); // pending "speak after chime" actions
+            TASKS.clear(); // pending "speak after chime" actions, queued announcements
             pendingTasks = 0;
         }
+        busyUntil = 0;
         TtsManager.stop();
         if (currentChime != null) {
             client.getSoundManager().stop(currentChime);

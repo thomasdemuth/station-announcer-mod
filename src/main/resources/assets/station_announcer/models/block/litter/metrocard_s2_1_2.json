@@ -1,0 +1,68 @@
+{
+  "textures": {
+    "piece_metrocard": "station_announcer:block/litter/piece_metrocard",
+    "particle": "station_announcer:block/litter/piece_metrocard"
+  },
+  "elements": [
+    {
+      "from": [
+        10.245,
+        0.041,
+        4.395
+      ],
+      "to": [
+        13.755,
+        0.197,
+        6.605
+      ],
+      "faces": {
+        "south": {
+          "uv": [
+            0.25,
+            0.25,
+            3.0,
+            0.5
+          ],
+          "texture": "#piece_metrocard"
+        },
+        "north": {
+          "uv": [
+            0.25,
+            0.25,
+            3.0,
+            0.5
+          ],
+          "texture": "#piece_metrocard"
+        },
+        "west": {
+          "uv": [
+            3.5,
+            0.25,
+            5.25,
+            0.5
+          ],
+          "texture": "#piece_metrocard"
+        },
+        "east": {
+          "uv": [
+            3.5,
+            0.25,
+            5.25,
+            0.5
+          ],
+          "texture": "#piece_metrocard"
+        },
+        "up": {
+          "uv": [
+            5.75,
+            0.25,
+            8.5,
+            2.0
+          ],
+          "texture": "#piece_metrocard",
+          "rotation": 180
+        }
+      }
+    }
+  ]
+}

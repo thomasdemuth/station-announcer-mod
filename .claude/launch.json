@@ -16,6 +16,14 @@
 				"tools/nextmap_mock_server.mjs"
 			],
 			"port": 8792
+		},
+		{
+			"name": "hud-mock",
+			"runtimeExecutable": "node",
+			"runtimeArgs": [
+				"tools/hud_mock_server.mjs"
+			],
+			"port": 8793
 		}
 	]
 }

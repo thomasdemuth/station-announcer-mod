@@ -202,6 +202,7 @@ public class SignEditScreen extends Screen {
     private static final int SEG_SPACER = 7;
     private static final int SEG_WHEELCHAIR = 8;
     private static final int SEG_PLACE = 9;
+    private static final int SEG_WEAR = 10;
     private static final int TOGGLE_FRONT = 1;
     private static final int TOGGLE_AUTO = 2;
     private static final int TOGGLE_UPPER = 3;
@@ -651,6 +652,7 @@ public class SignEditScreen extends Screen {
         d.panelDx = source.panelDx;
         d.panelDy = source.panelDy;
         d.panelScale = source.panelScale;
+        d.panelWear = source.panelWear;
         templateMenuOpen = false;
         select(-1, -1);
     }
@@ -939,6 +941,7 @@ public class SignEditScreen extends Screen {
     private void segment(int which, int chosen) {
         switch (which) {
             case SEG_STYLE -> draft().style = SignSpec.Style.byOrdinal(chosen);
+            case SEG_WEAR -> draft().panelWear = Math.max(0, Math.min(SignSpec.Panel.MAX_WEAR, chosen));
             case SEG_BACK -> {
                 backMode = SignFaces.BackMode.byOrdinal(chosen);
                 if (backMode != SignFaces.BackMode.OWN && editingBack) {
@@ -1691,6 +1694,7 @@ public class SignEditScreen extends Screen {
             FlatUi.heading(c, textRenderer, "Sign", x, y);
             y += 12;
             y = segmentedField(c, mx, my, "Style", new String[]{"Black", "1970 white", "Plain"}, draft().style.ordinal(), x, y, w, SEG_STYLE);
+            y = segmentedField(c, mx, my, "Wear", new String[]{"New", "Weathered", "Worn", "Tagged"}, draft().panelWear, x, y, w, SEG_WEAR);
             y = toggleField(c, mx, my, "Front face", frontOn ? "Shown" : "Hidden", frontOn, x, y, w, TOGGLE_FRONT);
             if (doubleSided) {
                 y = segmentedField(c, mx, my, "Back face", new String[]{"Same", "Own", "Blank"}, backMode.ordinal(), x, y, w, SEG_BACK);

@@ -7,9 +7,11 @@ import com.stationannouncer.block.ControlBoxBlockEntity;
 import com.stationannouncer.client.StationAnnouncerClient;
 import com.stationannouncer.client.mtraddon.FlatUi;
 import com.stationannouncer.client.mtraddon.FlatUi.TextBox;
+import com.stationannouncer.client.mtr.PaPlatformList;
 import com.stationannouncer.client.render.LinkLineRenderer;
 import com.stationannouncer.net.AnnouncerNetworking;
 import com.stationannouncer.pa.PaText;
+import com.stationannouncer.pa.TrainAnnouncements;
 import net.fabricmc.api.EnvType;
 import net.fabricmc.api.Environment;
 import net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking;
@@ -43,6 +45,10 @@ import java.util.Locale;
  *       ({@code {Bklyn|Brooklyn}}). The announcer has exactly one card.</li>
  *   <li><b>Settings</b> (right): order, chat, chime (with preview), delay,
  *       automatic playback (box) or volume and radius (announcer), tag.</li>
+ *   <li><b>Trains</b>: announcements timed to trains at MTR platforms (before
+ *       arrival, doors open, doors closing, after departure), each with its own
+ *       timing, repeats and text with train tokens; platforms near the block (and
+ *       a box's speakers) or picked.</li>
  *   <li><b>Network</b> (box only): every linked speaker and display with its
  *       live health from the server, per-speaker volume/radius, unlink one,
  *       Apply to all, Unlink all — all held until Save.</li>
@@ -89,6 +95,8 @@ public class PaSourceScreen extends FlatPaScreen {
     private static final int H_TPL_SCOPE = 27;
     private static final int H_TPL_RESTORE = 28;
     private static final int H_SWALLOW = 29;
+    private static final int H_TR_AUTO = 30;
+    private static final int H_TR_PLATFORM = 31;
 
     // slider keys
     private static final int S_DELAY = 1;
@@ -100,6 +108,10 @@ public class PaSourceScreen extends FlatPaScreen {
     private static final int S_ALL_RADIUS = 7;
     private static final int S_ROW_VOLUME = 8;
     private static final int S_ROW_RADIUS = 9;
+
+    private static final int TAB_SETTINGS = 0;
+    private static final int TAB_TRAINS = 1;
+    private static final int TAB_NETWORK = 2;
 
     private static final int TOGGLE_CHAT = 0;
     private static final int TOGGLE_CHIME = 1;
@@ -164,13 +176,22 @@ public class PaSourceScreen extends FlatPaScreen {
     private int volume;
     private int radius;
 
-    private int tab; // 0 settings, 1 network
+    private int tab; // TAB_SETTINGS / TAB_TRAINS / TAB_NETWORK (box only)
     private final List<Row> rows = new ArrayList<>();
     private boolean networkLoaded;
     private boolean networkDirty;
     private int selectedRow = -1;
     private int allVolume = 100;
     private int allRadius = 16;
+
+    // Trains tab (held until Save, like everything else)
+    private boolean trainAuto;
+    private final List<Long> trainPlatforms = new ArrayList<>();
+    private boolean trainsDirty; // platform choice changed
+    private final TrainRowsEditor trainRowsEditor;
+    /** Client-side guesses, computed when the tab is first shown. */
+    private List<PaPlatformList.Option> autoFound;
+    private List<PaPlatformList.Option> nearby;
 
     private Popup popup = Popup.NONE;
     private int templateScope; // 0 whole box, 1 selected message
@@ -217,6 +238,11 @@ public class PaSourceScreen extends FlatPaScreen {
         tagBox.load(source.getAnnouncerTag());
         templateName = new TextBox(client.textRenderer, PaTemplates.MAX_NAME, false);
         templateName.placeholder = "Template name";
+        TrainAnnouncements trains = source.getTrains();
+        trainAuto = trains.autoPlatforms;
+        trainPlatforms.addAll(trains.platforms);
+        trainRowsEditor = new TrainRowsEditor(this, false, trains.rows, this::previewText,
+                text -> StationAnnouncerClient.previewLocally(text, source.getPos(), 1.0f, playChime, chimeSound));
 
         if (box != null) {
             for (String raw : ControlBoxBlockEntity.splitAll(source.getText())) {
@@ -284,7 +310,14 @@ public class PaSourceScreen extends FlatPaScreen {
     public void devShow(String what, String arg) {
         switch (what) {
             case "card" -> select(Integer.parseInt(arg));
-            case "network" -> tab = 1;
+            case "network" -> tab = box != null ? TAB_NETWORK : TAB_SETTINGS;
+            case "trains" -> {
+                tab = TAB_TRAINS;
+                if (arg != null && !arg.isEmpty()) {
+                    trainRowsEditor.select(Integer.parseInt(arg));
+                    rightScroll = 100_000; // clamped on draw: show the open editor
+                }
+            }
             case "templates" -> openPopup(Popup.TEMPLATES);
             case "chime" -> openPopup(Popup.CHIME);
             default -> {
@@ -469,10 +502,14 @@ public class PaSourceScreen extends FlatPaScreen {
         int tx = edX;
         tx += tokenButton(c, mx, my, "+ {station}", tx, y, 0) + 3;
         tx += tokenButton(c, mx, my, "+ {time}", tx, y, 1) + 3;
+        if (tx + textWidth("+ {access}") + 8 + 3 + textWidth("Say as…") + 8 <= edX + edW) {
+            tx += tokenButton(c, mx, my, "+ {access}", tx, y, 3) + 3;
+        }
         tokenButton(c, mx, my, "Say as…", tx, y, 2);
         y += 14;
         if (showReads) {
-            c.drawText(textRenderer, trim("Reads: " + reads, edW), edX, y + 1, FlatUi.TEXT_FAINT, false);
+            String readsLabel = PaText.usesTrainTokens(m.text) || m.text.contains(PaText.ACCESS) ? "Sample: " : "Reads: ";
+            c.drawText(textRenderer, trim(readsLabel + reads, edW), edX, y + 1, FlatUi.TEXT_FAINT, false);
             y += 10;
         }
         if (showSays) {
@@ -483,7 +520,7 @@ public class PaSourceScreen extends FlatPaScreen {
     }
 
     private String previewText(String raw) {
-        String text = raw;
+        String text = PaText.fillTrain(raw, PaText.SAMPLE);
         if (text.contains(PaText.STATION)) {
             text = PaText.fill(text, PaText.clientStationAt(source.getPos()), null);
         }
@@ -522,19 +559,30 @@ public class PaSourceScreen extends FlatPaScreen {
         int x = rightX + 6;
         int w = rightW - 12;
         int top = rightY + 6;
-        if (box != null) {
-            String[] labels = {"Settings", "Network · " + rows.size()};
-            FlatUi.segmented(c, textRenderer, labels, tab, x, top, w, 14, mx, my);
-            int half = w / 2;
-            hit(x, top, half, 14, H_TAB, 0);
-            hit(x + half, top, w - half, 14, H_TAB, 1);
-            top += 20;
+        String[] labels = box != null
+                ? new String[]{"Settings", "Trains · " + trainRowsEditor.rows.size(), "Network · " + rows.size()}
+                : new String[]{"Settings", "Trains · " + trainRowsEditor.rows.size()};
+        for (String label : labels) {
+            if (textWidth(label) + 6 > w / labels.length) { // narrow pane: drop the counts
+                labels = box != null ? new String[]{"Settings", "Trains", "Network"} : new String[]{"Settings", "Trains"};
+                break;
+            }
         }
+        FlatUi.segmented(c, textRenderer, labels, tab, x, top, w, 14, mx, my);
+        for (int i = 0; i < labels.length; i++) {
+            int cx = x + w * i / labels.length;
+            hit(cx, top, x + w * (i + 1) / labels.length - cx, 14, H_TAB, i);
+        }
+        top += 20;
         int viewH = rightY + rightH - 2 - top;
         rightScroll = MathHelper.clamp(rightScroll, 0, Math.max(0, rightContent - viewH));
         beginClip(c, rightX + 1, top, rightW - 2, viewH);
         int y = top - rightScroll;
-        y = tab == 0 || box == null ? drawSettings(c, mx, my, x, y, w) : drawNetwork(c, mx, my, x, y, w);
+        y = switch (tab) {
+            case TAB_TRAINS -> drawTrains(c, mx, my, x, y, w);
+            case TAB_NETWORK -> box != null ? drawNetwork(c, mx, my, x, y, w) : drawSettings(c, mx, my, x, y, w);
+            default -> drawSettings(c, mx, my, x, y, w);
+        };
         rightContent = y + rightScroll - top;
         endClip(c);
         FlatUi.scrollThumb(c, rightX + rightW, top, viewH, rightContent, rightScroll);
@@ -711,6 +759,82 @@ public class PaSourceScreen extends FlatPaScreen {
         return y + 4;
     }
 
+    // ------------------------------------------------------------- trains tab
+
+    private void ensurePlatformLists() {
+        if (autoFound != null) {
+            return;
+        }
+        List<BlockPos> points = new ArrayList<>();
+        points.add(source.getPos());
+        if (box != null) {
+            points.addAll(box.getSpeakers());
+        }
+        autoFound = PaPlatformList.near(points, 16, false);
+        nearby = PaPlatformList.near(List.of(source.getPos()), 48, true);
+    }
+
+    private int drawTrains(DrawContext c, int mx, int my, int x, int y, int w) {
+        ensurePlatformLists();
+        FlatUi.heading(c, textRenderer, "Platforms", x, y);
+        y += 11;
+        FlatUi.segmented(c, textRenderer, new String[]{"Nearby", "Pick"}, trainAuto ? 0 : 1, x, y, w, 13, mx, my);
+        hit(x, y, w / 2, 13, H_TR_AUTO, 0);
+        hit(x + w / 2, y, w - w / 2, 13, H_TR_AUTO, 1);
+        y += 16;
+        if (trainAuto) {
+            String where = box != null ? "Within 16 m of this box or its speakers" : "Within 16 m of this block";
+            c.drawText(textRenderer, trim(where + ":", w), x, y, FlatUi.TEXT_FAINT, false);
+            y += 10;
+            if (autoFound.isEmpty()) {
+                c.drawText(textRenderer, trim("No platform found — pick one instead", w), x, y, 0xFFE0B341, false);
+                y += 10;
+            }
+            for (int i = 0; i < autoFound.size() && i < 8; i++) {
+                PaPlatformList.Option o = autoFound.get(i);
+                c.drawText(textRenderer, trim("• " + o.label() + " · " + o.distance() + " m", w), x, y, FlatUi.TEXT_DIM, false);
+                y += 10;
+            }
+        } else {
+            List<PaPlatformList.Option> options = pickOptions();
+            if (options.isEmpty()) {
+                c.drawText(textRenderer, trim("No platforms within 48 m", w), x, y, FlatUi.TEXT_FAINT, false);
+                y += 10;
+            }
+            for (int i = 0; i < options.size(); i++) {
+                PaPlatformList.Option o = options.get(i);
+                boolean on = trainPlatforms.contains(o.id());
+                boolean hovered = FlatUi.inside(mx, my, x, y, w, 12);
+                FlatUi.rect(c, x, y + 2, 8, 8, on ? FlatUi.OK : FlatUi.INPUT);
+                FlatUi.outline(c, x, y + 2, 8, 8, hovered ? FlatUi.TEXT : on ? FlatUi.OK : FlatUi.BORDER_STRONG);
+                String label = o.label() + (o.distance() == Integer.MAX_VALUE ? "" : " · " + o.distance() + " m");
+                c.drawText(textRenderer, trim(label, w - 12), x + 12, y + 2, on ? FlatUi.TEXT : FlatUi.TEXT_DIM, false);
+                hit(x, y, w, 12, H_TR_PLATFORM, i);
+                y += 12;
+            }
+        }
+        y += 6;
+        FlatUi.heading(c, textRenderer, "Announcements", x, y);
+        y += 11;
+        return trainRowsEditor.draw(c, mx, my, x, y, w);
+    }
+
+    /** The Pick list: chosen platforms the client cannot see nearby first, then everything near. */
+    private List<PaPlatformList.Option> pickOptions() {
+        List<PaPlatformList.Option> out = new ArrayList<>();
+        for (long id : trainPlatforms) {
+            if (nearby.stream().noneMatch(o -> o.id() == id)) {
+                out.add(new PaPlatformList.Option(id, PaPlatformList.label(id), Integer.MAX_VALUE));
+            }
+        }
+        out.addAll(nearby);
+        return out.size() > 16 ? out.subList(0, 16) : out;
+    }
+
+    private TrainAnnouncements currentTrains() {
+        return new TrainAnnouncements(trainAuto, trainPlatforms, trainRowsEditor.rows);
+    }
+
     private String stateWord(Row row) {
         return switch (row.state) {
             case ControlBoxBlockEntity.MEMBER_OK -> "OK";
@@ -873,12 +997,17 @@ public class PaSourceScreen extends FlatPaScreen {
         if (id != H_TPL_DELETE) {
             pendingDelete = null;
         }
+        if (id >= TrainRowsEditor.BASE && trainRowsEditor.onHit(id, arg)) {
+            return;
+        }
         switch (id) {
             case 0, H_BACKDROP -> {
                 if (popup != Popup.NONE) {
                     popup = Popup.NONE;
                 } else if (id == 0 && FlatUi.inside(mx, my, leftX, leftY, leftW, leftH) && box != null) {
                     select(-1); // empty space in the list: deselect
+                } else if (id == 0 && tab == TAB_TRAINS && FlatUi.inside(mx, my, rightX, rightY, rightW, rightH)) {
+                    trainRowsEditor.select(-1);
                 }
             }
             case H_CARD -> select(arg);
@@ -964,6 +1093,25 @@ public class PaSourceScreen extends FlatPaScreen {
             case H_TPL_SCOPE -> templateScope = arg;
             case H_TPL_SAVE -> saveTemplate();
             case H_TPL_RESTORE -> PaTemplates.restoreBuiltIns();
+            case H_TR_AUTO -> {
+                trainAuto = arg == 0;
+                trainsDirty = true;
+            }
+            case H_TR_PLATFORM -> {
+                List<PaPlatformList.Option> options = pickOptions();
+                if (arg < options.size()) {
+                    long platformId = options.get(arg).id();
+                    if (!trainPlatforms.remove(platformId)) {
+                        if (trainPlatforms.size() >= TrainAnnouncements.MAX_PLATFORMS) {
+                            toast("At most " + TrainAnnouncements.MAX_PLATFORMS + " platforms", true);
+                        } else {
+                            trainPlatforms.add(platformId);
+                        }
+                    }
+                    trainsDirty = true;
+                }
+            }
+
             default -> {
             }
         }
@@ -971,6 +1119,9 @@ public class PaSourceScreen extends FlatPaScreen {
 
     @Override
     protected void onSlider(int key, int value) {
+        if (key >= TrainRowsEditor.BASE && trainRowsEditor.onSlider(key, value)) {
+            return;
+        }
         switch (key) {
             case S_DELAY -> delaySeconds = value;
             case S_AUTO_MIN -> {
@@ -1012,7 +1163,7 @@ public class PaSourceScreen extends FlatPaScreen {
             addMessage(selected + 1, ""); // Enter = next announcement
             return true;
         }
-        if (focused == editor || focused == tagBox) {
+        if (focused == editor || focused == tagBox || trainRowsEditor.owns(focused)) {
             focus(null);
             return true;
         }
@@ -1048,6 +1199,9 @@ public class PaSourceScreen extends FlatPaScreen {
             return true;
         }
         if (focused == editor && editor.mouseScrolled(mx, my, vertical)) {
+            return true;
+        }
+        if (trainRowsEditor.owns(focused) && trainRowsEditor.editor.mouseScrolled(mx, my, vertical)) {
             return true;
         }
         if (FlatUi.inside(mx, my, leftX, leftY, leftW, leftH)) {
@@ -1104,6 +1258,7 @@ public class PaSourceScreen extends FlatPaScreen {
         switch (which) {
             case 0 -> editor.insertToken(PaText.STATION);
             case 1 -> editor.insertToken(PaText.TIME);
+            case 3 -> editor.insertToken(PaText.ACCESS);
             default -> {
                 String word = editor.getSelectedText().replaceAll("[{}|]", "").trim();
                 if (word.isEmpty()) {
@@ -1265,6 +1420,12 @@ public class PaSourceScreen extends FlatPaScreen {
             buf.writeBoolean(playChime);
             buf.writeString(chimeSound.trim(), AbstractPaBlockEntity.MAX_CHIME_SOUND_LENGTH);
             ClientPlayNetworking.send(AnnouncerNetworking.UPDATE_ANNOUNCER_C2S, buf);
+        }
+        if (trainsDirty || trainRowsEditor.dirty) {
+            PacketByteBuf trainBuf = PacketByteBufs.create();
+            trainBuf.writeBlockPos(source.getPos());
+            currentTrains().write(trainBuf);
+            ClientPlayNetworking.send(AnnouncerNetworking.UPDATE_TRAIN_PA_C2S, trainBuf);
         }
         close();
     }

@@ -103,6 +103,16 @@ public final class DispatchStaticServlet extends HttpServlet {
         }
     }
 
+    /** A frontend file as UTF-8 text ({@code map.js}, …), or null when the jar lacks it. */
+    static String resourceText(String name) {
+        try {
+            byte[] bytes = readResource(BASE + "/" + name);
+            return bytes == null ? null : new String(bytes, StandardCharsets.UTF_8);
+        } catch (IOException e) {
+            return null;
+        }
+    }
+
     /** Shared helper for tiny synchronous JSON/text replies from the dispatch servlets. */
     static void sendText(HttpServletResponse response, int status, String contentType, String body) {
         try {

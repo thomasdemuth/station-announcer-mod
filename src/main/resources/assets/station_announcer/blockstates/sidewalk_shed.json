@@ -1,0 +1,58 @@
+{
+  "multipart": [
+    {
+      "apply": {
+        "model": "station_announcer:block/construction/sidewalk_shed_deck"
+      }
+    },
+    {
+      "when": {
+        "axis": "x"
+      },
+      "apply": {
+        "model": "station_announcer:block/construction/sidewalk_shed_beams"
+      }
+    },
+    {
+      "when": {
+        "axis": "z"
+      },
+      "apply": {
+        "model": "station_announcer:block/construction/sidewalk_shed_beams",
+        "y": 90
+      }
+    },
+    {
+      "when": {
+        "north": "false"
+      },
+      "apply": {
+        "model": "station_announcer:block/construction/sidewalk_shed_parapet_n"
+      }
+    },
+    {
+      "when": {
+        "south": "false"
+      },
+      "apply": {
+        "model": "station_announcer:block/construction/sidewalk_shed_parapet_s"
+      }
+    },
+    {
+      "when": {
+        "west": "false"
+      },
+      "apply": {
+        "model": "station_announcer:block/construction/sidewalk_shed_parapet_w"
+      }
+    },
+    {
+      "when": {
+        "east": "false"
+      },
+      "apply": {
+        "model": "station_announcer:block/construction/sidewalk_shed_parapet_e"
+      }
+    }
+  ]
+}

@@ -316,6 +316,27 @@
     "station_announcer:ramp_handrail_double",
     "station_announcer:ramp_handrail_floating",
     "station_announcer:ramp_railing_glass",
-    "station_announcer:ramp_railing_pickets"
+    "station_announcer:ramp_railing_pickets",
+    "station_announcer:grime_water_stain",
+    "station_announcer:grime_rust_streak",
+    "station_announcer:grime_efflorescence",
+    "station_announcer:trash_can",
+    "station_announcer:subway_tile_wall_cracked",
+    "station_announcer:subway_tile_wall_missing",
+    "station_announcer:subway_tile_wall_patched",
+    "station_announcer:subway_tile_wall_stained",
+    "station_announcer:platform_tile_floor_cracked",
+    "station_announcer:platform_concrete_floor_1_cracked",
+    "station_announcer:platform_concrete_floor_2_cracked",
+    "station_announcer:platform_concrete_floor_3_cracked",
+    "station_announcer:platform_concrete_floor_4_cracked",
+    "station_announcer:traffic_cone",
+    "station_announcer:wet_floor_sign",
+    "station_announcer:plastic_barrier",
+    "station_announcer:scaffold",
+    "station_announcer:sidewalk_shed_post",
+    "station_announcer:sidewalk_shed_light",
+    "station_announcer:work_light",
+    "station_announcer:caged_work_lamp"
   ]
 }

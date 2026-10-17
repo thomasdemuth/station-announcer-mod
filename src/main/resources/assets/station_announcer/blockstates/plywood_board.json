@@ -1,0 +1,161 @@
+{
+  "variants": {
+    "facing=north,variant=plain": [
+      {
+        "model": "station_announcer:block/construction/plywood_board_plain_a",
+        "weight": 1
+      },
+      {
+        "model": "station_announcer:block/construction/plywood_board_plain_b",
+        "weight": 1
+      },
+      {
+        "model": "station_announcer:block/construction/plywood_board_plain_c",
+        "weight": 1
+      }
+    ],
+    "facing=north,variant=post_no_bills": [
+      {
+        "model": "station_announcer:block/construction/plywood_board_post_no_bills_a",
+        "weight": 1
+      },
+      {
+        "model": "station_announcer:block/construction/plywood_board_post_no_bills_b",
+        "weight": 1
+      }
+    ],
+    "facing=north,variant=no_trespassing": [
+      {
+        "model": "station_announcer:block/construction/plywood_board_no_trespassing_a",
+        "weight": 1
+      },
+      {
+        "model": "station_announcer:block/construction/plywood_board_no_trespassing_b",
+        "weight": 1
+      }
+    ],
+    "facing=east,variant=plain": [
+      {
+        "model": "station_announcer:block/construction/plywood_board_plain_a",
+        "y": 90,
+        "weight": 1
+      },
+      {
+        "model": "station_announcer:block/construction/plywood_board_plain_b",
+        "y": 90,
+        "weight": 1
+      },
+      {
+        "model": "station_announcer:block/construction/plywood_board_plain_c",
+        "y": 90,
+        "weight": 1
+      }
+    ],
+    "facing=east,variant=post_no_bills": [
+      {
+        "model": "station_announcer:block/construction/plywood_board_post_no_bills_a",
+        "y": 90,
+        "weight": 1
+      },
+      {
+        "model": "station_announcer:block/construction/plywood_board_post_no_bills_b",
+        "y": 90,
+        "weight": 1
+      }
+    ],
+    "facing=east,variant=no_trespassing": [
+      {
+        "model": "station_announcer:block/construction/plywood_board_no_trespassing_a",
+        "y": 90,
+        "weight": 1
+      },
+      {
+        "model": "station_announcer:block/construction/plywood_board_no_trespassing_b",
+        "y": 90,
+        "weight": 1
+      }
+    ],
+    "facing=south,variant=plain": [
+      {
+        "model": "station_announcer:block/construction/plywood_board_plain_a",
+        "y": 180,
+        "weight": 1
+      },
+      {
+        "model": "station_announcer:block/construction/plywood_board_plain_b",
+        "y": 180,
+        "weight": 1
+      },
+      {
+        "model": "station_announcer:block/construction/plywood_board_plain_c",
+        "y": 180,
+        "weight": 1
+      }
+    ],
+    "facing=south,variant=post_no_bills": [
+      {
+        "model": "station_announcer:block/construction/plywood_board_post_no_bills_a",
+        "y": 180,
+        "weight": 1
+      },
+      {
+        "model": "station_announcer:block/construction/plywood_board_post_no_bills_b",
+        "y": 180,
+        "weight": 1
+      }
+    ],
+    "facing=south,variant=no_trespassing": [
+      {
+        "model": "station_announcer:block/construction/plywood_board_no_trespassing_a",
+        "y": 180,
+        "weight": 1
+      },
+      {
+        "model": "station_announcer:block/construction/plywood_board_no_trespassing_b",
+        "y": 180,
+        "weight": 1
+      }
+    ],
+    "facing=west,variant=plain": [
+      {
+        "model": "station_announcer:block/construction/plywood_board_plain_a",
+        "y": 270,
+        "weight": 1
+      },
+      {
+        "model": "station_announcer:block/construction/plywood_board_plain_b",
+        "y": 270,
+        "weight": 1
+      },
+      {
+        "model": "station_announcer:block/construction/plywood_board_plain_c",
+        "y": 270,
+        "weight": 1
+      }
+    ],
+    "facing=west,variant=post_no_bills": [
+      {
+        "model": "station_announcer:block/construction/plywood_board_post_no_bills_a",
+        "y": 270,
+        "weight": 1
+      },
+      {
+        "model": "station_announcer:block/construction/plywood_board_post_no_bills_b",
+        "y": 270,
+        "weight": 1
+      }
+    ],
+    "facing=west,variant=no_trespassing": [
+      {
+        "model": "station_announcer:block/construction/plywood_board_no_trespassing_a",
+        "y": 270,
+        "weight": 1
+      },
+      {
+        "model": "station_announcer:block/construction/plywood_board_no_trespassing_b",
+        "y": 270,
+        "weight": 1
+      }
+    ]
+  }
+}

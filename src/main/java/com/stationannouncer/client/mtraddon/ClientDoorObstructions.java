@@ -25,6 +25,11 @@ public final class ClientDoorObstructions {
         return !obstructed.isEmpty() && obstructed.contains(vehicleId);
     }
 
+    /** How many trains have something stuck in their doors right now. */
+    public static int count() {
+        return obstructed.size();
+    }
+
     static void replace(Set<Long> newObstructed) {
         obstructed = newObstructed;
     }

@@ -1,0 +1,1543 @@
+{
+  "multipart": [
+    {
+      "when": {
+        "down": "true",
+        "north": "false",
+        "east": "false",
+        "south": "false",
+        "west": "false"
+      },
+      "apply": [
+        {
+          "model": "station_announcer:block/grime/dust_blotch_0_floor",
+          "weight": 8
+        },
+        {
+          "model": "station_announcer:block/grime/dust_blotch_0_floor",
+          "weight": 2,
+          "y": 90
+        },
+        {
+          "model": "station_announcer:block/grime/dust_blotch_0_floor",
+          "weight": 2,
+          "y": 180
+        },
+        {
+          "model": "station_announcer:block/grime/dust_blotch_0_floor",
+          "weight": 2,
+          "y": 270
+        },
+        {
+          "model": "station_announcer:block/grime/dust_blotch_0_floor_m",
+          "weight": 2
+        },
+        {
+          "model": "station_announcer:block/grime/dust_blotch_0_floor_m",
+          "weight": 2,
+          "y": 90
+        },
+        {
+          "model": "station_announcer:block/grime/dust_blotch_0_floor_m",
+          "weight": 2,
+          "y": 180
+        },
+        {
+          "model": "station_announcer:block/grime/dust_blotch_0_floor_m",
+          "weight": 2,
+          "y": 270
+        },
+        {
+          "model": "station_announcer:block/grime/dust_blotch_1_floor",
+          "weight": 2
+        },
+        {
+          "model": "station_announcer:block/grime/dust_blotch_1_floor",
+          "weight": 2,
+          "y": 90
+        },
+        {
+          "model": "station_announcer:block/grime/dust_blotch_1_floor",
+          "weight": 2,
+          "y": 180
+        },
+        {
+          "model": "station_announcer:block/grime/dust_blotch_1_floor",
+          "weight": 2,
+          "y": 270
+        },
+        {
+          "model": "station_announcer:block/grime/dust_blotch_1_floor_m",
+          "weight": 2
+        },
+        {
+          "model": "station_announcer:block/grime/dust_blotch_1_floor_m",
+          "weight": 2,
+          "y": 90
+        },
+        {
+          "model": "station_announcer:block/grime/dust_blotch_1_floor_m",
+          "weight": 2,
+          "y": 180
+        },
+        {
+          "model": "station_announcer:block/grime/dust_blotch_1_floor_m",
+          "weight": 2,
+          "y": 270
+        },
+        {
+          "model": "station_announcer:block/grime/dust_blotch_2_floor",
+          "weight": 2
+        },
+        {
+          "model": "station_announcer:block/grime/dust_blotch_2_floor",
+          "weight": 2,
+          "y": 90
+        },
+        {
+          "model": "station_announcer:block/grime/dust_blotch_2_floor",
+          "weight": 2,
+          "y": 180
+        },
+        {
+          "model": "station_announcer:block/grime/dust_blotch_2_floor",
+          "weight": 2,
+          "y": 270
+        },
+        {
+          "model": "station_announcer:block/grime/dust_blotch_2_floor_m",
+          "weight": 2
+        },
+        {
+          "model": "station_announcer:block/grime/dust_blotch_2_floor_m",
+          "weight": 2,
+          "y": 90
+        },
+        {
+          "model": "station_announcer:block/grime/dust_blotch_2_floor_m",
+          "weight": 2,
+          "y": 180
+        },
+        {
+          "model": "station_announcer:block/grime/dust_blotch_2_floor_m",
+          "weight": 2,
+          "y": 270
+        },
+        {
+          "model": "station_announcer:block/grime/dust_blotch_3_floor",
+          "weight": 2
+        },
+        {
+          "model": "station_announcer:block/grime/dust_blotch_3_floor",
+          "weight": 2,
+          "y": 90
+        },
+        {
+          "model": "station_announcer:block/grime/dust_blotch_3_floor",
+          "weight": 2,
+          "y": 180
+        },
+        {
+          "model": "station_announcer:block/grime/dust_blotch_3_floor",
+          "weight": 2,
+          "y": 270
+        },
+        {
+          "model": "station_announcer:block/grime/dust_blotch_3_floor_m",
+          "weight": 2
+        },
+        {
+          "model": "station_announcer:block/grime/dust_blotch_3_floor_m",
+          "weight": 2,
+          "y": 90
+        },
+        {
+          "model": "station_announcer:block/grime/dust_blotch_3_floor_m",
+          "weight": 2,
+          "y": 180
+        },
+        {
+          "model": "station_announcer:block/grime/dust_blotch_3_floor_m",
+          "weight": 2,
+          "y": 270
+        },
+        {
+          "model": "station_announcer:block/grime/dust_blotch_4_floor",
+          "weight": 2
+        },
+        {
+          "model": "station_announcer:block/grime/dust_blotch_4_floor",
+          "weight": 2,
+          "y": 90
+        },
+        {
+          "model": "station_announcer:block/grime/dust_blotch_4_floor",
+          "weight": 2,
+          "y": 180
+        },
+        {
+          "model": "station_announcer:block/grime/dust_blotch_4_floor",
+          "weight": 2,
+          "y": 270
+        },
+        {
+          "model": "station_announcer:block/grime/dust_blotch_4_floor_m",
+          "weight": 2
+        },
+        {
+          "model": "station_announcer:block/grime/dust_blotch_4_floor_m",
+          "weight": 2,
+          "y": 90
+        },
+        {
+          "model": "station_announcer:block/grime/dust_blotch_4_floor_m",
+          "weight": 2,
+          "y": 180
+        },
+        {
+          "model": "station_announcer:block/grime/dust_blotch_4_floor_m",
+          "weight": 2,
+          "y": 270
+        },
+        {
+          "model": "station_announcer:block/grime/dust_blotch_5_floor",
+          "weight": 2
+        },
+        {
+          "model": "station_announcer:block/grime/dust_blotch_5_floor",
+          "weight": 2,
+          "y": 90
+        },
+        {
+          "model": "station_announcer:block/grime/dust_blotch_5_floor",
+          "weight": 2,
+          "y": 180
+        },
+        {
+          "model": "station_announcer:block/grime/dust_blotch_5_floor",
+          "weight": 2,
+          "y": 270
+        },
+        {
+          "model": "station_announcer:block/grime/dust_blotch_5_floor_m",
+          "weight": 2
+        },
+        {
+          "model": "station_announcer:block/grime/dust_blotch_5_floor_m",
+          "weight": 2,
+          "y": 90
+        },
+        {
+          "model": "station_announcer:block/grime/dust_blotch_5_floor_m",
+          "weight": 2,
+          "y": 180
+        },
+        {
+          "model": "station_announcer:block/grime/dust_blotch_5_floor_m",
+          "weight": 2,
+          "y": 270
+        }
+      ]
+    },
+    {
+      "when": {
+        "down": "true",
+        "north": "true",
+        "east": "false",
+        "south": "false",
+        "west": "false"
+      },
+      "apply": [
+        {
+          "model": "station_announcer:block/grime/dust_edge_0_floor",
+          "weight": 12
+        },
+        {
+          "model": "station_announcer:block/grime/dust_edge_0_floor_m",
+          "weight": 6
+        },
+        {
+          "model": "station_announcer:block/grime/dust_edge_1_floor",
+          "weight": 6
+        },
+        {
+          "model": "station_announcer:block/grime/dust_edge_1_floor_m",
+          "weight": 6
+        },
+        {
+          "model": "station_announcer:block/grime/dust_edge_2_floor",
+          "weight": 6
+        },
+        {
+          "model": "station_announcer:block/grime/dust_edge_2_floor_m",
+          "weight": 6
+        },
+        {
+          "model": "station_announcer:block/grime/dust_edge_3_floor",
+          "weight": 6
+        },
+        {
+          "model": "station_announcer:block/grime/dust_edge_3_floor_m",
+          "weight": 6
+        }
+      ]
+    },
+    {
+      "when": {
+        "down": "true",
+        "north": "false",
+        "east": "true",
+        "south": "false",
+        "west": "false"
+      },
+      "apply": [
+        {
+          "model": "station_announcer:block/grime/dust_edge_0_floor",
+          "weight": 12,
+          "y": 90
+        },
+        {
+          "model": "station_announcer:block/grime/dust_edge_0_floor_m",
+          "weight": 6,
+          "y": 90
+        },
+        {
+          "model": "station_announcer:block/grime/dust_edge_1_floor",
+          "weight": 6,
+          "y": 90
+        },
+        {
+          "model": "station_announcer:block/grime/dust_edge_1_floor_m",
+          "weight": 6,
+          "y": 90
+        },
+        {
+          "model": "station_announcer:block/grime/dust_edge_2_floor",
+          "weight": 6,
+          "y": 90
+        },
+        {
+          "model": "station_announcer:block/grime/dust_edge_2_floor_m",
+          "weight": 6,
+          "y": 90
+        },
+        {
+          "model": "station_announcer:block/grime/dust_edge_3_floor",
+          "weight": 6,
+          "y": 90
+        },
+        {
+          "model": "station_announcer:block/grime/dust_edge_3_floor_m",
+          "weight": 6,
+          "y": 90
+        }
+      ]
+    },
+    {
+      "when": {
+        "down": "true",
+        "north": "true",
+        "east": "true",
+        "south": "false",
+        "west": "false"
+      },
+      "apply": [
+        {
+          "model": "station_announcer:block/grime/dust_corner_0_floor",
+          "weight": 12,
+          "y": 90
+        },
+        {
+          "model": "station_announcer:block/grime/dust_corner_0_floor_m",
+          "weight": 6
+        },
+        {
+          "model": "station_announcer:block/grime/dust_corner_1_floor",
+          "weight": 6,
+          "y": 90
+        },
+        {
+          "model": "station_announcer:block/grime/dust_corner_1_floor_m",
+          "weight": 6
+        },
+        {
+          "model": "station_announcer:block/grime/dust_corner_2_floor",
+          "weight": 6,
+          "y": 90
+        },
+        {
+          "model": "station_announcer:block/grime/dust_corner_2_floor_m",
+          "weight": 6
+        }
+      ]
+    },
+    {
+      "when": {
+        "down": "true",
+        "north": "false",
+        "east": "false",
+        "south": "true",
+        "west": "false"
+      },
+      "apply": [
+        {
+          "model": "station_announcer:block/grime/dust_edge_0_floor",
+          "weight": 12,
+          "y": 180
+        },
+        {
+          "model": "station_announcer:block/grime/dust_edge_0_floor_m",
+          "weight": 6,
+          "y": 180
+        },
+        {
+          "model": "station_announcer:block/grime/dust_edge_1_floor",
+          "weight": 6,
+          "y": 180
+        },
+        {
+          "model": "station_announcer:block/grime/dust_edge_1_floor_m",
+          "weight": 6,
+          "y": 180
+        },
+        {
+          "model": "station_announcer:block/grime/dust_edge_2_floor",
+          "weight": 6,
+          "y": 180
+        },
+        {
+          "model": "station_announcer:block/grime/dust_edge_2_floor_m",
+          "weight": 6,
+          "y": 180
+        },
+        {
+          "model": "station_announcer:block/grime/dust_edge_3_floor",
+          "weight": 6,
+          "y": 180
+        },
+        {
+          "model": "station_announcer:block/grime/dust_edge_3_floor_m",
+          "weight": 6,
+          "y": 180
+        }
+      ]
+    },
+    {
+      "when": {
+        "down": "true",
+        "north": "true",
+        "east": "false",
+        "south": "true",
+        "west": "false"
+      },
+      "apply": [
+        {
+          "model": "station_announcer:block/grime/dust_opposite_0_floor",
+          "weight": 8
+        },
+        {
+          "model": "station_announcer:block/grime/dust_opposite_0_floor",
+          "weight": 2,
+          "y": 180
+        },
+        {
+          "model": "station_announcer:block/grime/dust_opposite_0_floor_m",
+          "weight": 2
+        },
+        {
+          "model": "station_announcer:block/grime/dust_opposite_0_floor_m",
+          "weight": 2,
+          "y": 180
+        },
+        {
+          "model": "station_announcer:block/grime/dust_opposite_1_floor",
+          "weight": 2
+        },
+        {
+          "model": "station_announcer:block/grime/dust_opposite_1_floor",
+          "weight": 2,
+          "y": 180
+        },
+        {
+          "model": "station_announcer:block/grime/dust_opposite_1_floor_m",
+          "weight": 2
+        },
+        {
+          "model": "station_announcer:block/grime/dust_opposite_1_floor_m",
+          "weight": 2,
+          "y": 180
+        }
+      ]
+    },
+    {
+      "when": {
+        "down": "true",
+        "north": "false",
+        "east": "true",
+        "south": "true",
+        "west": "false"
+      },
+      "apply": [
+        {
+          "model": "station_announcer:block/grime/dust_corner_0_floor",
+          "weight": 12,
+          "y": 180
+        },
+        {
+          "model": "station_announcer:block/grime/dust_corner_0_floor_m",
+          "weight": 6,
+          "y": 90
+        },
+        {
+          "model": "station_announcer:block/grime/dust_corner_1_floor",
+          "weight": 6,
+          "y": 180
+        },
+        {
+          "model": "station_announcer:block/grime/dust_corner_1_floor_m",
+          "weight": 6,
+          "y": 90
+        },
+        {
+          "model": "station_announcer:block/grime/dust_corner_2_floor",
+          "weight": 6,
+          "y": 180
+        },
+        {
+          "model": "station_announcer:block/grime/dust_corner_2_floor_m",
+          "weight": 6,
+          "y": 90
+        }
+      ]
+    },
+    {
+      "when": {
+        "down": "true",
+        "north": "true",
+        "east": "true",
+        "south": "true",
+        "west": "false"
+      },
+      "apply": [
+        {
+          "model": "station_announcer:block/grime/dust_three_0_floor",
+          "weight": 8,
+          "y": 180
+        },
+        {
+          "model": "station_announcer:block/grime/dust_three_0_floor_m",
+          "weight": 2
+        },
+        {
+          "model": "station_announcer:block/grime/dust_three_1_floor",
+          "weight": 2,
+          "y": 180
+        },
+        {
+          "model": "station_announcer:block/grime/dust_three_1_floor_m",
+          "weight": 2
+        }
+      ]
+    },
+    {
+      "when": {
+        "down": "true",
+        "north": "false",
+        "east": "false",
+        "south": "false",
+        "west": "true"
+      },
+      "apply": [
+        {
+          "model": "station_announcer:block/grime/dust_edge_0_floor",
+          "weight": 12,
+          "y": 270
+        },
+        {
+          "model": "station_announcer:block/grime/dust_edge_0_floor_m",
+          "weight": 6,
+          "y": 270
+        },
+        {
+          "model": "station_announcer:block/grime/dust_edge_1_floor",
+          "weight": 6,
+          "y": 270
+        },
+        {
+          "model": "station_announcer:block/grime/dust_edge_1_floor_m",
+          "weight": 6,
+          "y": 270
+        },
+        {
+          "model": "station_announcer:block/grime/dust_edge_2_floor",
+          "weight": 6,
+          "y": 270
+        },
+        {
+          "model": "station_announcer:block/grime/dust_edge_2_floor_m",
+          "weight": 6,
+          "y": 270
+        },
+        {
+          "model": "station_announcer:block/grime/dust_edge_3_floor",
+          "weight": 6,
+          "y": 270
+        },
+        {
+          "model": "station_announcer:block/grime/dust_edge_3_floor_m",
+          "weight": 6,
+          "y": 270
+        }
+      ]
+    },
+    {
+      "when": {
+        "down": "true",
+        "north": "true",
+        "east": "false",
+        "south": "false",
+        "west": "true"
+      },
+      "apply": [
+        {
+          "model": "station_announcer:block/grime/dust_corner_0_floor",
+          "weight": 12
+        },
+        {
+          "model": "station_announcer:block/grime/dust_corner_0_floor_m",
+          "weight": 6,
+          "y": 270
+        },
+        {
+          "model": "station_announcer:block/grime/dust_corner_1_floor",
+          "weight": 6
+        },
+        {
+          "model": "station_announcer:block/grime/dust_corner_1_floor_m",
+          "weight": 6,
+          "y": 270
+        },
+        {
+          "model": "station_announcer:block/grime/dust_corner_2_floor",
+          "weight": 6
+        },
+        {
+          "model": "station_announcer:block/grime/dust_corner_2_floor_m",
+          "weight": 6,
+          "y": 270
+        }
+      ]
+    },
+    {
+      "when": {
+        "down": "true",
+        "north": "false",
+        "east": "true",
+        "south": "false",
+        "west": "true"
+      },
+      "apply": [
+        {
+          "model": "station_announcer:block/grime/dust_opposite_0_floor",
+          "weight": 8,
+          "y": 90
+        },
+        {
+          "model": "station_announcer:block/grime/dust_opposite_0_floor",
+          "weight": 2,
+          "y": 270
+        },
+        {
+          "model": "station_announcer:block/grime/dust_opposite_0_floor_m",
+          "weight": 2,
+          "y": 90
+        },
+        {
+          "model": "station_announcer:block/grime/dust_opposite_0_floor_m",
+          "weight": 2,
+          "y": 270
+        },
+        {
+          "model": "station_announcer:block/grime/dust_opposite_1_floor",
+          "weight": 2,
+          "y": 90
+        },
+        {
+          "model": "station_announcer:block/grime/dust_opposite_1_floor",
+          "weight": 2,
+          "y": 270
+        },
+        {
+          "model": "station_announcer:block/grime/dust_opposite_1_floor_m",
+          "weight": 2,
+          "y": 90
+        },
+        {
+          "model": "station_announcer:block/grime/dust_opposite_1_floor_m",
+          "weight": 2,
+          "y": 270
+        }
+      ]
+    },
+    {
+      "when": {
+        "down": "true",
+        "north": "true",
+        "east": "true",
+        "south": "false",
+        "west": "true"
+      },
+      "apply": [
+        {
+          "model": "station_announcer:block/grime/dust_three_0_floor",
+          "weight": 8,
+          "y": 90
+        },
+        {
+          "model": "station_announcer:block/grime/dust_three_0_floor_m",
+          "weight": 2,
+          "y": 270
+        },
+        {
+          "model": "station_announcer:block/grime/dust_three_1_floor",
+          "weight": 2,
+          "y": 90
+        },
+        {
+          "model": "station_announcer:block/grime/dust_three_1_floor_m",
+          "weight": 2,
+          "y": 270
+        }
+      ]
+    },
+    {
+      "when": {
+        "down": "true",
+        "north": "false",
+        "east": "false",
+        "south": "true",
+        "west": "true"
+      },
+      "apply": [
+        {
+          "model": "station_announcer:block/grime/dust_corner_0_floor",
+          "weight": 12,
+          "y": 270
+        },
+        {
+          "model": "station_announcer:block/grime/dust_corner_0_floor_m",
+          "weight": 6,
+          "y": 180
+        },
+        {
+          "model": "station_announcer:block/grime/dust_corner_1_floor",
+          "weight": 6,
+          "y": 270
+        },
+        {
+          "model": "station_announcer:block/grime/dust_corner_1_floor_m",
+          "weight": 6,
+          "y": 180
+        },
+        {
+          "model": "station_announcer:block/grime/dust_corner_2_floor",
+          "weight": 6,
+          "y": 270
+        },
+        {
+          "model": "station_announcer:block/grime/dust_corner_2_floor_m",
+          "weight": 6,
+          "y": 180
+        }
+      ]
+    },
+    {
+      "when": {
+        "down": "true",
+        "north": "true",
+        "east": "false",
+        "south": "true",
+        "west": "true"
+      },
+      "apply": [
+        {
+          "model": "station_announcer:block/grime/dust_three_0_floor",
+          "weight": 8
+        },
+        {
+          "model": "station_announcer:block/grime/dust_three_0_floor_m",
+          "weight": 2,
+          "y": 180
+        },
+        {
+          "model": "station_announcer:block/grime/dust_three_1_floor",
+          "weight": 2
+        },
+        {
+          "model": "station_announcer:block/grime/dust_three_1_floor_m",
+          "weight": 2,
+          "y": 180
+        }
+      ]
+    },
+    {
+      "when": {
+        "down": "true",
+        "north": "false",
+        "east": "true",
+        "south": "true",
+        "west": "true"
+      },
+      "apply": [
+        {
+          "model": "station_announcer:block/grime/dust_three_0_floor",
+          "weight": 8,
+          "y": 270
+        },
+        {
+          "model": "station_announcer:block/grime/dust_three_0_floor_m",
+          "weight": 2,
+          "y": 90
+        },
+        {
+          "model": "station_announcer:block/grime/dust_three_1_floor",
+          "weight": 2,
+          "y": 270
+        },
+        {
+          "model": "station_announcer:block/grime/dust_three_1_floor_m",
+          "weight": 2,
+          "y": 90
+        }
+      ]
+    },
+    {
+      "when": {
+        "down": "true",
+        "north": "true",
+        "east": "true",
+        "south": "true",
+        "west": "true"
+      },
+      "apply": [
+        {
+          "model": "station_announcer:block/grime/dust_ring_0_floor",
+          "weight": 8
+        },
+        {
+          "model": "station_announcer:block/grime/dust_ring_0_floor",
+          "weight": 2,
+          "y": 90
+        },
+        {
+          "model": "station_announcer:block/grime/dust_ring_0_floor",
+          "weight": 2,
+          "y": 180
+        },
+        {
+          "model": "station_announcer:block/grime/dust_ring_0_floor",
+          "weight": 2,
+          "y": 270
+        },
+        {
+          "model": "station_announcer:block/grime/dust_ring_0_floor_m",
+          "weight": 2
+        },
+        {
+          "model": "station_announcer:block/grime/dust_ring_0_floor_m",
+          "weight": 2,
+          "y": 90
+        },
+        {
+          "model": "station_announcer:block/grime/dust_ring_0_floor_m",
+          "weight": 2,
+          "y": 180
+        },
+        {
+          "model": "station_announcer:block/grime/dust_ring_0_floor_m",
+          "weight": 2,
+          "y": 270
+        },
+        {
+          "model": "station_announcer:block/grime/dust_ring_1_floor",
+          "weight": 2
+        },
+        {
+          "model": "station_announcer:block/grime/dust_ring_1_floor",
+          "weight": 2,
+          "y": 90
+        },
+        {
+          "model": "station_announcer:block/grime/dust_ring_1_floor",
+          "weight": 2,
+          "y": 180
+        },
+        {
+          "model": "station_announcer:block/grime/dust_ring_1_floor",
+          "weight": 2,
+          "y": 270
+        },
+        {
+          "model": "station_announcer:block/grime/dust_ring_1_floor_m",
+          "weight": 2
+        },
+        {
+          "model": "station_announcer:block/grime/dust_ring_1_floor_m",
+          "weight": 2,
+          "y": 90
+        },
+        {
+          "model": "station_announcer:block/grime/dust_ring_1_floor_m",
+          "weight": 2,
+          "y": 180
+        },
+        {
+          "model": "station_announcer:block/grime/dust_ring_1_floor_m",
+          "weight": 2,
+          "y": 270
+        }
+      ]
+    },
+    {
+      "when": {
+        "north": "true",
+        "down": "true"
+      },
+      "apply": [
+        {
+          "model": "station_announcer:block/grime/dust_wallbase_0_wall",
+          "weight": 3
+        },
+        {
+          "model": "station_announcer:block/grime/dust_wallbase_0_wall_m",
+          "weight": 2
+        },
+        {
+          "model": "station_announcer:block/grime/dust_wallbase_1_wall",
+          "weight": 2
+        },
+        {
+          "model": "station_announcer:block/grime/dust_wallbase_1_wall_m",
+          "weight": 2
+        },
+        {
+          "model": "station_announcer:block/grime/dust_wallbase_2_wall",
+          "weight": 2
+        },
+        {
+          "model": "station_announcer:block/grime/dust_wallbase_2_wall_m",
+          "weight": 2
+        },
+        {
+          "model": "station_announcer:block/grime/dust_wallbase_3_wall",
+          "weight": 2
+        },
+        {
+          "model": "station_announcer:block/grime/dust_wallbase_3_wall_m",
+          "weight": 2
+        }
+      ]
+    },
+    {
+      "when": {
+        "north": "true",
+        "down": "false"
+      },
+      "apply": [
+        {
+          "model": "station_announcer:block/grime/dust_smudge_0_wall",
+          "weight": 3
+        },
+        {
+          "model": "station_announcer:block/grime/dust_smudge_0_wall_m",
+          "weight": 2
+        },
+        {
+          "model": "station_announcer:block/grime/dust_smudge_1_wall",
+          "weight": 2
+        },
+        {
+          "model": "station_announcer:block/grime/dust_smudge_1_wall_m",
+          "weight": 2
+        },
+        {
+          "model": "station_announcer:block/grime/dust_smudge_2_wall",
+          "weight": 2
+        },
+        {
+          "model": "station_announcer:block/grime/dust_smudge_2_wall_m",
+          "weight": 2
+        },
+        {
+          "model": "station_announcer:block/grime/dust_smudge_3_wall",
+          "weight": 2
+        },
+        {
+          "model": "station_announcer:block/grime/dust_smudge_3_wall_m",
+          "weight": 2
+        },
+        {
+          "model": "station_announcer:block/grime/dust_smudge_4_wall",
+          "weight": 2
+        },
+        {
+          "model": "station_announcer:block/grime/dust_smudge_4_wall_m",
+          "weight": 2
+        }
+      ]
+    },
+    {
+      "when": {
+        "east": "true",
+        "down": "true"
+      },
+      "apply": [
+        {
+          "model": "station_announcer:block/grime/dust_wallbase_0_wall",
+          "weight": 4,
+          "y": 90
+        },
+        {
+          "model": "station_announcer:block/grime/dust_wallbase_0_wall_m",
+          "weight": 2,
+          "y": 90
+        },
+        {
+          "model": "station_announcer:block/grime/dust_wallbase_1_wall",
+          "weight": 2,
+          "y": 90
+        },
+        {
+          "model": "station_announcer:block/grime/dust_wallbase_1_wall_m",
+          "weight": 2,
+          "y": 90
+        },
+        {
+          "model": "station_announcer:block/grime/dust_wallbase_2_wall",
+          "weight": 2,
+          "y": 90
+        },
+        {
+          "model": "station_announcer:block/grime/dust_wallbase_2_wall_m",
+          "weight": 2,
+          "y": 90
+        },
+        {
+          "model": "station_announcer:block/grime/dust_wallbase_3_wall",
+          "weight": 2,
+          "y": 90
+        },
+        {
+          "model": "station_announcer:block/grime/dust_wallbase_3_wall_m",
+          "weight": 2,
+          "y": 90
+        }
+      ]
+    },
+    {
+      "when": {
+        "east": "true",
+        "down": "false"
+      },
+      "apply": [
+        {
+          "model": "station_announcer:block/grime/dust_smudge_0_wall",
+          "weight": 4,
+          "y": 90
+        },
+        {
+          "model": "station_announcer:block/grime/dust_smudge_0_wall_m",
+          "weight": 2,
+          "y": 90
+        },
+        {
+          "model": "station_announcer:block/grime/dust_smudge_1_wall",
+          "weight": 2,
+          "y": 90
+        },
+        {
+          "model": "station_announcer:block/grime/dust_smudge_1_wall_m",
+          "weight": 2,
+          "y": 90
+        },
+        {
+          "model": "station_announcer:block/grime/dust_smudge_2_wall",
+          "weight": 2,
+          "y": 90
+        },
+        {
+          "model": "station_announcer:block/grime/dust_smudge_2_wall_m",
+          "weight": 2,
+          "y": 90
+        },
+        {
+          "model": "station_announcer:block/grime/dust_smudge_3_wall",
+          "weight": 2,
+          "y": 90
+        },
+        {
+          "model": "station_announcer:block/grime/dust_smudge_3_wall_m",
+          "weight": 2,
+          "y": 90
+        },
+        {
+          "model": "station_announcer:block/grime/dust_smudge_4_wall",
+          "weight": 2,
+          "y": 90
+        },
+        {
+          "model": "station_announcer:block/grime/dust_smudge_4_wall_m",
+          "weight": 2,
+          "y": 90
+        }
+      ]
+    },
+    {
+      "when": {
+        "south": "true",
+        "down": "true"
+      },
+      "apply": [
+        {
+          "model": "station_announcer:block/grime/dust_wallbase_0_wall",
+          "weight": 5,
+          "y": 180
+        },
+        {
+          "model": "station_announcer:block/grime/dust_wallbase_0_wall_m",
+          "weight": 2,
+          "y": 180
+        },
+        {
+          "model": "station_announcer:block/grime/dust_wallbase_1_wall",
+          "weight": 2,
+          "y": 180
+        },
+        {
+          "model": "station_announcer:block/grime/dust_wallbase_1_wall_m",
+          "weight": 2,
+          "y": 180
+        },
+        {
+          "model": "station_announcer:block/grime/dust_wallbase_2_wall",
+          "weight": 2,
+          "y": 180
+        },
+        {
+          "model": "station_announcer:block/grime/dust_wallbase_2_wall_m",
+          "weight": 2,
+          "y": 180
+        },
+        {
+          "model": "station_announcer:block/grime/dust_wallbase_3_wall",
+          "weight": 2,
+          "y": 180
+        },
+        {
+          "model": "station_announcer:block/grime/dust_wallbase_3_wall_m",
+          "weight": 2,
+          "y": 180
+        }
+      ]
+    },
+    {
+      "when": {
+        "south": "true",
+        "down": "false"
+      },
+      "apply": [
+        {
+          "model": "station_announcer:block/grime/dust_smudge_0_wall",
+          "weight": 5,
+          "y": 180
+        },
+        {
+          "model": "station_announcer:block/grime/dust_smudge_0_wall_m",
+          "weight": 2,
+          "y": 180
+        },
+        {
+          "model": "station_announcer:block/grime/dust_smudge_1_wall",
+          "weight": 2,
+          "y": 180
+        },
+        {
+          "model": "station_announcer:block/grime/dust_smudge_1_wall_m",
+          "weight": 2,
+          "y": 180
+        },
+        {
+          "model": "station_announcer:block/grime/dust_smudge_2_wall",
+          "weight": 2,
+          "y": 180
+        },
+        {
+          "model": "station_announcer:block/grime/dust_smudge_2_wall_m",
+          "weight": 2,
+          "y": 180
+        },
+        {
+          "model": "station_announcer:block/grime/dust_smudge_3_wall",
+          "weight": 2,
+          "y": 180
+        },
+        {
+          "model": "station_announcer:block/grime/dust_smudge_3_wall_m",
+          "weight": 2,
+          "y": 180
+        },
+        {
+          "model": "station_announcer:block/grime/dust_smudge_4_wall",
+          "weight": 2,
+          "y": 180
+        },
+        {
+          "model": "station_announcer:block/grime/dust_smudge_4_wall_m",
+          "weight": 2,
+          "y": 180
+        }
+      ]
+    },
+    {
+      "when": {
+        "west": "true",
+        "down": "true"
+      },
+      "apply": [
+        {
+          "model": "station_announcer:block/grime/dust_wallbase_0_wall",
+          "weight": 6,
+          "y": 270
+        },
+        {
+          "model": "station_announcer:block/grime/dust_wallbase_0_wall_m",
+          "weight": 2,
+          "y": 270
+        },
+        {
+          "model": "station_announcer:block/grime/dust_wallbase_1_wall",
+          "weight": 2,
+          "y": 270
+        },
+        {
+          "model": "station_announcer:block/grime/dust_wallbase_1_wall_m",
+          "weight": 2,
+          "y": 270
+        },
+        {
+          "model": "station_announcer:block/grime/dust_wallbase_2_wall",
+          "weight": 2,
+          "y": 270
+        },
+        {
+          "model": "station_announcer:block/grime/dust_wallbase_2_wall_m",
+          "weight": 2,
+          "y": 270
+        },
+        {
+          "model": "station_announcer:block/grime/dust_wallbase_3_wall",
+          "weight": 2,
+          "y": 270
+        },
+        {
+          "model": "station_announcer:block/grime/dust_wallbase_3_wall_m",
+          "weight": 2,
+          "y": 270
+        }
+      ]
+    },
+    {
+      "when": {
+        "west": "true",
+        "down": "false"
+      },
+      "apply": [
+        {
+          "model": "station_announcer:block/grime/dust_smudge_0_wall",
+          "weight": 6,
+          "y": 270
+        },
+        {
+          "model": "station_announcer:block/grime/dust_smudge_0_wall_m",
+          "weight": 2,
+          "y": 270
+        },
+        {
+          "model": "station_announcer:block/grime/dust_smudge_1_wall",
+          "weight": 2,
+          "y": 270
+        },
+        {
+          "model": "station_announcer:block/grime/dust_smudge_1_wall_m",
+          "weight": 2,
+          "y": 270
+        },
+        {
+          "model": "station_announcer:block/grime/dust_smudge_2_wall",
+          "weight": 2,
+          "y": 270
+        },
+        {
+          "model": "station_announcer:block/grime/dust_smudge_2_wall_m",
+          "weight": 2,
+          "y": 270
+        },
+        {
+          "model": "station_announcer:block/grime/dust_smudge_3_wall",
+          "weight": 2,
+          "y": 270
+        },
+        {
+          "model": "station_announcer:block/grime/dust_smudge_3_wall_m",
+          "weight": 2,
+          "y": 270
+        },
+        {
+          "model": "station_announcer:block/grime/dust_smudge_4_wall",
+          "weight": 2,
+          "y": 270
+        },
+        {
+          "model": "station_announcer:block/grime/dust_smudge_4_wall_m",
+          "weight": 2,
+          "y": 270
+        }
+      ]
+    },
+    {
+      "when": {
+        "up": "true"
+      },
+      "apply": [
+        {
+          "model": "station_announcer:block/grime/dust_blotch_0_ceiling",
+          "weight": 7
+        },
+        {
+          "model": "station_announcer:block/grime/dust_blotch_0_ceiling",
+          "weight": 2,
+          "y": 90
+        },
+        {
+          "model": "station_announcer:block/grime/dust_blotch_0_ceiling",
+          "weight": 2,
+          "y": 180
+        },
+        {
+          "model": "station_announcer:block/grime/dust_blotch_0_ceiling",
+          "weight": 2,
+          "y": 270
+        },
+        {
+          "model": "station_announcer:block/grime/dust_blotch_0_ceiling_m",
+          "weight": 2
+        },
+        {
+          "model": "station_announcer:block/grime/dust_blotch_0_ceiling_m",
+          "weight": 2,
+          "y": 90
+        },
+        {
+          "model": "station_announcer:block/grime/dust_blotch_0_ceiling_m",
+          "weight": 2,
+          "y": 180
+        },
+        {
+          "model": "station_announcer:block/grime/dust_blotch_0_ceiling_m",
+          "weight": 2,
+          "y": 270
+        },
+        {
+          "model": "station_announcer:block/grime/dust_blotch_1_ceiling",
+          "weight": 2
+        },
+        {
+          "model": "station_announcer:block/grime/dust_blotch_1_ceiling",
+          "weight": 2,
+          "y": 90
+        },
+        {
+          "model": "station_announcer:block/grime/dust_blotch_1_ceiling",
+          "weight": 2,
+          "y": 180
+        },
+        {
+          "model": "station_announcer:block/grime/dust_blotch_1_ceiling",
+          "weight": 2,
+          "y": 270
+        },
+        {
+          "model": "station_announcer:block/grime/dust_blotch_1_ceiling_m",
+          "weight": 2
+        },
+        {
+          "model": "station_announcer:block/grime/dust_blotch_1_ceiling_m",
+          "weight": 2,
+          "y": 90
+        },
+        {
+          "model": "station_announcer:block/grime/dust_blotch_1_ceiling_m",
+          "weight": 2,
+          "y": 180
+        },
+        {
+          "model": "station_announcer:block/grime/dust_blotch_1_ceiling_m",
+          "weight": 2,
+          "y": 270
+        },
+        {
+          "model": "station_announcer:block/grime/dust_blotch_2_ceiling",
+          "weight": 2
+        },
+        {
+          "model": "station_announcer:block/grime/dust_blotch_2_ceiling",
+          "weight": 2,
+          "y": 90
+        },
+        {
+          "model": "station_announcer:block/grime/dust_blotch_2_ceiling",
+          "weight": 2,
+          "y": 180
+        },
+        {
+          "model": "station_announcer:block/grime/dust_blotch_2_ceiling",
+          "weight": 2,
+          "y": 270
+        },
+        {
+          "model": "station_announcer:block/grime/dust_blotch_2_ceiling_m",
+          "weight": 2
+        },
+        {
+          "model": "station_announcer:block/grime/dust_blotch_2_ceiling_m",
+          "weight": 2,
+          "y": 90
+        },
+        {
+          "model": "station_announcer:block/grime/dust_blotch_2_ceiling_m",
+          "weight": 2,
+          "y": 180
+        },
+        {
+          "model": "station_announcer:block/grime/dust_blotch_2_ceiling_m",
+          "weight": 2,
+          "y": 270
+        },
+        {
+          "model": "station_announcer:block/grime/dust_blotch_3_ceiling",
+          "weight": 2
+        },
+        {
+          "model": "station_announcer:block/grime/dust_blotch_3_ceiling",
+          "weight": 2,
+          "y": 90
+        },
+        {
+          "model": "station_announcer:block/grime/dust_blotch_3_ceiling",
+          "weight": 2,
+          "y": 180
+        },
+        {
+          "model": "station_announcer:block/grime/dust_blotch_3_ceiling",
+          "weight": 2,
+          "y": 270
+        },
+        {
+          "model": "station_announcer:block/grime/dust_blotch_3_ceiling_m",
+          "weight": 2
+        },
+        {
+          "model": "station_announcer:block/grime/dust_blotch_3_ceiling_m",
+          "weight": 2,
+          "y": 90
+        },
+        {
+          "model": "station_announcer:block/grime/dust_blotch_3_ceiling_m",
+          "weight": 2,
+          "y": 180
+        },
+        {
+          "model": "station_announcer:block/grime/dust_blotch_3_ceiling_m",
+          "weight": 2,
+          "y": 270
+        },
+        {
+          "model": "station_announcer:block/grime/dust_blotch_4_ceiling",
+          "weight": 2
+        },
+        {
+          "model": "station_announcer:block/grime/dust_blotch_4_ceiling",
+          "weight": 2,
+          "y": 90
+        },
+        {
+          "model": "station_announcer:block/grime/dust_blotch_4_ceiling",
+          "weight": 2,
+          "y": 180
+        },
+        {
+          "model": "station_announcer:block/grime/dust_blotch_4_ceiling",
+          "weight": 2,
+          "y": 270
+        },
+        {
+          "model": "station_announcer:block/grime/dust_blotch_4_ceiling_m",
+          "weight": 2
+        },
+        {
+          "model": "station_announcer:block/grime/dust_blotch_4_ceiling_m",
+          "weight": 2,
+          "y": 90
+        },
+        {
+          "model": "station_announcer:block/grime/dust_blotch_4_ceiling_m",
+          "weight": 2,
+          "y": 180
+        },
+        {
+          "model": "station_announcer:block/grime/dust_blotch_4_ceiling_m",
+          "weight": 2,
+          "y": 270
+        },
+        {
+          "model": "station_announcer:block/grime/dust_blotch_5_ceiling",
+          "weight": 2
+        },
+        {
+          "model": "station_announcer:block/grime/dust_blotch_5_ceiling",
+          "weight": 2,
+          "y": 90
+        },
+        {
+          "model": "station_announcer:block/grime/dust_blotch_5_ceiling",
+          "weight": 2,
+          "y": 180
+        },
+        {
+          "model": "station_announcer:block/grime/dust_blotch_5_ceiling",
+          "weight": 2,
+          "y": 270
+        },
+        {
+          "model": "station_announcer:block/grime/dust_blotch_5_ceiling_m",
+          "weight": 2
+        },
+        {
+          "model": "station_announcer:block/grime/dust_blotch_5_ceiling_m",
+          "weight": 2,
+          "y": 90
+        },
+        {
+          "model": "station_announcer:block/grime/dust_blotch_5_ceiling_m",
+          "weight": 2,
+          "y": 180
+        },
+        {
+          "model": "station_announcer:block/grime/dust_blotch_5_ceiling_m",
+          "weight": 2,
+          "y": 270
+        }
+      ]
+    }
+  ]
+}

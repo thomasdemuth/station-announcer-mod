@@ -102,4 +102,10 @@ public class CurvedPlatformEdgeBlock extends Block implements PlatformHelper {
     public VoxelShape getOutlineShape(BlockState state, BlockView world, BlockPos pos, ShapeContext context) {
         return shapes[state.get(TRACK_SIDE).getHorizontal()][state.get(CUT_A)][state.get(CUT_B)];
     }
+
+    @Override
+    public net.minecraft.block.BlockState onBreak(net.minecraft.world.World world, net.minecraft.util.math.BlockPos pos, net.minecraft.block.BlockState state, net.minecraft.entity.player.PlayerEntity player) {
+        com.stationannouncer.material.MaterialBlocks.clientRemesh(world, pos);
+        return super.onBreak(world, pos, state, player);
+    }
 }

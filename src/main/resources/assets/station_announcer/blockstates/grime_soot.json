@@ -1,0 +1,690 @@
+{
+  "multipart": [
+    {
+      "when": {
+        "down": "true"
+      },
+      "apply": [
+        {
+          "model": "station_announcer:block/grime/soot_floor_0_floor",
+          "weight": 8
+        },
+        {
+          "model": "station_announcer:block/grime/soot_floor_0_floor",
+          "weight": 2,
+          "y": 90
+        },
+        {
+          "model": "station_announcer:block/grime/soot_floor_0_floor",
+          "weight": 2,
+          "y": 180
+        },
+        {
+          "model": "station_announcer:block/grime/soot_floor_0_floor",
+          "weight": 2,
+          "y": 270
+        },
+        {
+          "model": "station_announcer:block/grime/soot_floor_0_floor_m",
+          "weight": 2
+        },
+        {
+          "model": "station_announcer:block/grime/soot_floor_0_floor_m",
+          "weight": 2,
+          "y": 90
+        },
+        {
+          "model": "station_announcer:block/grime/soot_floor_0_floor_m",
+          "weight": 2,
+          "y": 180
+        },
+        {
+          "model": "station_announcer:block/grime/soot_floor_0_floor_m",
+          "weight": 2,
+          "y": 270
+        },
+        {
+          "model": "station_announcer:block/grime/soot_floor_1_floor",
+          "weight": 2
+        },
+        {
+          "model": "station_announcer:block/grime/soot_floor_1_floor",
+          "weight": 2,
+          "y": 90
+        },
+        {
+          "model": "station_announcer:block/grime/soot_floor_1_floor",
+          "weight": 2,
+          "y": 180
+        },
+        {
+          "model": "station_announcer:block/grime/soot_floor_1_floor",
+          "weight": 2,
+          "y": 270
+        },
+        {
+          "model": "station_announcer:block/grime/soot_floor_1_floor_m",
+          "weight": 2
+        },
+        {
+          "model": "station_announcer:block/grime/soot_floor_1_floor_m",
+          "weight": 2,
+          "y": 90
+        },
+        {
+          "model": "station_announcer:block/grime/soot_floor_1_floor_m",
+          "weight": 2,
+          "y": 180
+        },
+        {
+          "model": "station_announcer:block/grime/soot_floor_1_floor_m",
+          "weight": 2,
+          "y": 270
+        },
+        {
+          "model": "station_announcer:block/grime/soot_floor_2_floor",
+          "weight": 2
+        },
+        {
+          "model": "station_announcer:block/grime/soot_floor_2_floor",
+          "weight": 2,
+          "y": 90
+        },
+        {
+          "model": "station_announcer:block/grime/soot_floor_2_floor",
+          "weight": 2,
+          "y": 180
+        },
+        {
+          "model": "station_announcer:block/grime/soot_floor_2_floor",
+          "weight": 2,
+          "y": 270
+        },
+        {
+          "model": "station_announcer:block/grime/soot_floor_2_floor_m",
+          "weight": 2
+        },
+        {
+          "model": "station_announcer:block/grime/soot_floor_2_floor_m",
+          "weight": 2,
+          "y": 90
+        },
+        {
+          "model": "station_announcer:block/grime/soot_floor_2_floor_m",
+          "weight": 2,
+          "y": 180
+        },
+        {
+          "model": "station_announcer:block/grime/soot_floor_2_floor_m",
+          "weight": 2,
+          "y": 270
+        },
+        {
+          "model": "station_announcer:block/grime/soot_floor_3_floor",
+          "weight": 2
+        },
+        {
+          "model": "station_announcer:block/grime/soot_floor_3_floor",
+          "weight": 2,
+          "y": 90
+        },
+        {
+          "model": "station_announcer:block/grime/soot_floor_3_floor",
+          "weight": 2,
+          "y": 180
+        },
+        {
+          "model": "station_announcer:block/grime/soot_floor_3_floor",
+          "weight": 2,
+          "y": 270
+        },
+        {
+          "model": "station_announcer:block/grime/soot_floor_3_floor_m",
+          "weight": 2
+        },
+        {
+          "model": "station_announcer:block/grime/soot_floor_3_floor_m",
+          "weight": 2,
+          "y": 90
+        },
+        {
+          "model": "station_announcer:block/grime/soot_floor_3_floor_m",
+          "weight": 2,
+          "y": 180
+        },
+        {
+          "model": "station_announcer:block/grime/soot_floor_3_floor_m",
+          "weight": 2,
+          "y": 270
+        }
+      ]
+    },
+    {
+      "when": {
+        "north": "true",
+        "up": "true"
+      },
+      "apply": [
+        {
+          "model": "station_announcer:block/grime/soot_topband_0_wall",
+          "weight": 3
+        },
+        {
+          "model": "station_announcer:block/grime/soot_topband_0_wall_m",
+          "weight": 2
+        },
+        {
+          "model": "station_announcer:block/grime/soot_topband_1_wall",
+          "weight": 2
+        },
+        {
+          "model": "station_announcer:block/grime/soot_topband_1_wall_m",
+          "weight": 2
+        },
+        {
+          "model": "station_announcer:block/grime/soot_topband_2_wall",
+          "weight": 2
+        },
+        {
+          "model": "station_announcer:block/grime/soot_topband_2_wall_m",
+          "weight": 2
+        }
+      ]
+    },
+    {
+      "when": {
+        "north": "true",
+        "up": "false"
+      },
+      "apply": [
+        {
+          "model": "station_announcer:block/grime/soot_wall_0_wall",
+          "weight": 3
+        },
+        {
+          "model": "station_announcer:block/grime/soot_wall_0_wall_m",
+          "weight": 2
+        },
+        {
+          "model": "station_announcer:block/grime/soot_wall_1_wall",
+          "weight": 2
+        },
+        {
+          "model": "station_announcer:block/grime/soot_wall_1_wall_m",
+          "weight": 2
+        },
+        {
+          "model": "station_announcer:block/grime/soot_wall_2_wall",
+          "weight": 2
+        },
+        {
+          "model": "station_announcer:block/grime/soot_wall_2_wall_m",
+          "weight": 2
+        },
+        {
+          "model": "station_announcer:block/grime/soot_wall_3_wall",
+          "weight": 2
+        },
+        {
+          "model": "station_announcer:block/grime/soot_wall_3_wall_m",
+          "weight": 2
+        }
+      ]
+    },
+    {
+      "when": {
+        "east": "true",
+        "up": "true"
+      },
+      "apply": [
+        {
+          "model": "station_announcer:block/grime/soot_topband_0_wall",
+          "weight": 4,
+          "y": 90
+        },
+        {
+          "model": "station_announcer:block/grime/soot_topband_0_wall_m",
+          "weight": 2,
+          "y": 90
+        },
+        {
+          "model": "station_announcer:block/grime/soot_topband_1_wall",
+          "weight": 2,
+          "y": 90
+        },
+        {
+          "model": "station_announcer:block/grime/soot_topband_1_wall_m",
+          "weight": 2,
+          "y": 90
+        },
+        {
+          "model": "station_announcer:block/grime/soot_topband_2_wall",
+          "weight": 2,
+          "y": 90
+        },
+        {
+          "model": "station_announcer:block/grime/soot_topband_2_wall_m",
+          "weight": 2,
+          "y": 90
+        }
+      ]
+    },
+    {
+      "when": {
+        "east": "true",
+        "up": "false"
+      },
+      "apply": [
+        {
+          "model": "station_announcer:block/grime/soot_wall_0_wall",
+          "weight": 4,
+          "y": 90
+        },
+        {
+          "model": "station_announcer:block/grime/soot_wall_0_wall_m",
+          "weight": 2,
+          "y": 90
+        },
+        {
+          "model": "station_announcer:block/grime/soot_wall_1_wall",
+          "weight": 2,
+          "y": 90
+        },
+        {
+          "model": "station_announcer:block/grime/soot_wall_1_wall_m",
+          "weight": 2,
+          "y": 90
+        },
+        {
+          "model": "station_announcer:block/grime/soot_wall_2_wall",
+          "weight": 2,
+          "y": 90
+        },
+        {
+          "model": "station_announcer:block/grime/soot_wall_2_wall_m",
+          "weight": 2,
+          "y": 90
+        },
+        {
+          "model": "station_announcer:block/grime/soot_wall_3_wall",
+          "weight": 2,
+          "y": 90
+        },
+        {
+          "model": "station_announcer:block/grime/soot_wall_3_wall_m",
+          "weight": 2,
+          "y": 90
+        }
+      ]
+    },
+    {
+      "when": {
+        "south": "true",
+        "up": "true"
+      },
+      "apply": [
+        {
+          "model": "station_announcer:block/grime/soot_topband_0_wall",
+          "weight": 5,
+          "y": 180
+        },
+        {
+          "model": "station_announcer:block/grime/soot_topband_0_wall_m",
+          "weight": 2,
+          "y": 180
+        },
+        {
+          "model": "station_announcer:block/grime/soot_topband_1_wall",
+          "weight": 2,
+          "y": 180
+        },
+        {
+          "model": "station_announcer:block/grime/soot_topband_1_wall_m",
+          "weight": 2,
+          "y": 180
+        },
+        {
+          "model": "station_announcer:block/grime/soot_topband_2_wall",
+          "weight": 2,
+          "y": 180
+        },
+        {
+          "model": "station_announcer:block/grime/soot_topband_2_wall_m",
+          "weight": 2,
+          "y": 180
+        }
+      ]
+    },
+    {
+      "when": {
+        "south": "true",
+        "up": "false"
+      },
+      "apply": [
+        {
+          "model": "station_announcer:block/grime/soot_wall_0_wall",
+          "weight": 5,
+          "y": 180
+        },
+        {
+          "model": "station_announcer:block/grime/soot_wall_0_wall_m",
+          "weight": 2,
+          "y": 180
+        },
+        {
+          "model": "station_announcer:block/grime/soot_wall_1_wall",
+          "weight": 2,
+          "y": 180
+        },
+        {
+          "model": "station_announcer:block/grime/soot_wall_1_wall_m",
+          "weight": 2,
+          "y": 180
+        },
+        {
+          "model": "station_announcer:block/grime/soot_wall_2_wall",
+          "weight": 2,
+          "y": 180
+        },
+        {
+          "model": "station_announcer:block/grime/soot_wall_2_wall_m",
+          "weight": 2,
+          "y": 180
+        },
+        {
+          "model": "station_announcer:block/grime/soot_wall_3_wall",
+          "weight": 2,
+          "y": 180
+        },
+        {
+          "model": "station_announcer:block/grime/soot_wall_3_wall_m",
+          "weight": 2,
+          "y": 180
+        }
+      ]
+    },
+    {
+      "when": {
+        "west": "true",
+        "up": "true"
+      },
+      "apply": [
+        {
+          "model": "station_announcer:block/grime/soot_topband_0_wall",
+          "weight": 6,
+          "y": 270
+        },
+        {
+          "model": "station_announcer:block/grime/soot_topband_0_wall_m",
+          "weight": 2,
+          "y": 270
+        },
+        {
+          "model": "station_announcer:block/grime/soot_topband_1_wall",
+          "weight": 2,
+          "y": 270
+        },
+        {
+          "model": "station_announcer:block/grime/soot_topband_1_wall_m",
+          "weight": 2,
+          "y": 270
+        },
+        {
+          "model": "station_announcer:block/grime/soot_topband_2_wall",
+          "weight": 2,
+          "y": 270
+        },
+        {
+          "model": "station_announcer:block/grime/soot_topband_2_wall_m",
+          "weight": 2,
+          "y": 270
+        }
+      ]
+    },
+    {
+      "when": {
+        "west": "true",
+        "up": "false"
+      },
+      "apply": [
+        {
+          "model": "station_announcer:block/grime/soot_wall_0_wall",
+          "weight": 6,
+          "y": 270
+        },
+        {
+          "model": "station_announcer:block/grime/soot_wall_0_wall_m",
+          "weight": 2,
+          "y": 270
+        },
+        {
+          "model": "station_announcer:block/grime/soot_wall_1_wall",
+          "weight": 2,
+          "y": 270
+        },
+        {
+          "model": "station_announcer:block/grime/soot_wall_1_wall_m",
+          "weight": 2,
+          "y": 270
+        },
+        {
+          "model": "station_announcer:block/grime/soot_wall_2_wall",
+          "weight": 2,
+          "y": 270
+        },
+        {
+          "model": "station_announcer:block/grime/soot_wall_2_wall_m",
+          "weight": 2,
+          "y": 270
+        },
+        {
+          "model": "station_announcer:block/grime/soot_wall_3_wall",
+          "weight": 2,
+          "y": 270
+        },
+        {
+          "model": "station_announcer:block/grime/soot_wall_3_wall_m",
+          "weight": 2,
+          "y": 270
+        }
+      ]
+    },
+    {
+      "when": {
+        "up": "true"
+      },
+      "apply": [
+        {
+          "model": "station_announcer:block/grime/soot_ceiling_0_ceiling",
+          "weight": 7
+        },
+        {
+          "model": "station_announcer:block/grime/soot_ceiling_0_ceiling",
+          "weight": 2,
+          "y": 90
+        },
+        {
+          "model": "station_announcer:block/grime/soot_ceiling_0_ceiling",
+          "weight": 2,
+          "y": 180
+        },
+        {
+          "model": "station_announcer:block/grime/soot_ceiling_0_ceiling",
+          "weight": 2,
+          "y": 270
+        },
+        {
+          "model": "station_announcer:block/grime/soot_ceiling_0_ceiling_m",
+          "weight": 2
+        },
+        {
+          "model": "station_announcer:block/grime/soot_ceiling_0_ceiling_m",
+          "weight": 2,
+          "y": 90
+        },
+        {
+          "model": "station_announcer:block/grime/soot_ceiling_0_ceiling_m",
+          "weight": 2,
+          "y": 180
+        },
+        {
+          "model": "station_announcer:block/grime/soot_ceiling_0_ceiling_m",
+          "weight": 2,
+          "y": 270
+        },
+        {
+          "model": "station_announcer:block/grime/soot_ceiling_1_ceiling",
+          "weight": 2
+        },
+        {
+          "model": "station_announcer:block/grime/soot_ceiling_1_ceiling",
+          "weight": 2,
+          "y": 90
+        },
+        {
+          "model": "station_announcer:block/grime/soot_ceiling_1_ceiling",
+          "weight": 2,
+          "y": 180
+        },
+        {
+          "model": "station_announcer:block/grime/soot_ceiling_1_ceiling",
+          "weight": 2,
+          "y": 270
+        },
+        {
+          "model": "station_announcer:block/grime/soot_ceiling_1_ceiling_m",
+          "weight": 2
+        },
+        {
+          "model": "station_announcer:block/grime/soot_ceiling_1_ceiling_m",
+          "weight": 2,
+          "y": 90
+        },
+        {
+          "model": "station_announcer:block/grime/soot_ceiling_1_ceiling_m",
+          "weight": 2,
+          "y": 180
+        },
+        {
+          "model": "station_announcer:block/grime/soot_ceiling_1_ceiling_m",
+          "weight": 2,
+          "y": 270
+        },
+        {
+          "model": "station_announcer:block/grime/soot_ceiling_2_ceiling",
+          "weight": 2
+        },
+        {
+          "model": "station_announcer:block/grime/soot_ceiling_2_ceiling",
+          "weight": 2,
+          "y": 90
+        },
+        {
+          "model": "station_announcer:block/grime/soot_ceiling_2_ceiling",
+          "weight": 2,
+          "y": 180
+        },
+        {
+          "model": "station_announcer:block/grime/soot_ceiling_2_ceiling",
+          "weight": 2,
+          "y": 270
+        },
+        {
+          "model": "station_announcer:block/grime/soot_ceiling_2_ceiling_m",
+          "weight": 2
+        },
+        {
+          "model": "station_announcer:block/grime/soot_ceiling_2_ceiling_m",
+          "weight": 2,
+          "y": 90
+        },
+        {
+          "model": "station_announcer:block/grime/soot_ceiling_2_ceiling_m",
+          "weight": 2,
+          "y": 180
+        },
+        {
+          "model": "station_announcer:block/grime/soot_ceiling_2_ceiling_m",
+          "weight": 2,
+          "y": 270
+        },
+        {
+          "model": "station_announcer:block/grime/soot_ceiling_3_ceiling",
+          "weight": 2
+        },
+        {
+          "model": "station_announcer:block/grime/soot_ceiling_3_ceiling",
+          "weight": 2,
+          "y": 90
+        },
+        {
+          "model": "station_announcer:block/grime/soot_ceiling_3_ceiling",
+          "weight": 2,
+          "y": 180
+        },
+        {
+          "model": "station_announcer:block/grime/soot_ceiling_3_ceiling",
+          "weight": 2,
+          "y": 270
+        },
+        {
+          "model": "station_announcer:block/grime/soot_ceiling_3_ceiling_m",
+          "weight": 2
+        },
+        {
+          "model": "station_announcer:block/grime/soot_ceiling_3_ceiling_m",
+          "weight": 2,
+          "y": 90
+        },
+        {
+          "model": "station_announcer:block/grime/soot_ceiling_3_ceiling_m",
+          "weight": 2,
+          "y": 180
+        },
+        {
+          "model": "station_announcer:block/grime/soot_ceiling_3_ceiling_m",
+          "weight": 2,
+          "y": 270
+        },
+        {
+          "model": "station_announcer:block/grime/soot_ceiling_4_ceiling",
+          "weight": 2
+        },
+        {
+          "model": "station_announcer:block/grime/soot_ceiling_4_ceiling",
+          "weight": 2,
+          "y": 90
+        },
+        {
+          "model": "station_announcer:block/grime/soot_ceiling_4_ceiling",
+          "weight": 2,
+          "y": 180
+        },
+        {
+          "model": "station_announcer:block/grime/soot_ceiling_4_ceiling",
+          "weight": 2,
+          "y": 270
+        },
+        {
+          "model": "station_announcer:block/grime/soot_ceiling_4_ceiling_m",
+          "weight": 2
+        },
+        {
+          "model": "station_announcer:block/grime/soot_ceiling_4_ceiling_m",
+          "weight": 2,
+          "y": 90
+        },
+        {
+          "model": "station_announcer:block/grime/soot_ceiling_4_ceiling_m",
+          "weight": 2,
+          "y": 180
+        },
+        {
+          "model": "station_announcer:block/grime/soot_ceiling_4_ceiling_m",
+          "weight": 2,
+          "y": 270
+        }
+      ]
+    }
+  ]
+}

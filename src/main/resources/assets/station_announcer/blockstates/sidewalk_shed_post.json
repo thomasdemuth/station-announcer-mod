@@ -1,0 +1,59 @@
+{
+  "multipart": [
+    {
+      "when": {
+        "axis": "x"
+      },
+      "apply": {
+        "model": "station_announcer:block/construction/sidewalk_shed_post_column"
+      }
+    },
+    {
+      "when": {
+        "axis": "x",
+        "down": "false"
+      },
+      "apply": {
+        "model": "station_announcer:block/construction/sidewalk_shed_post_base"
+      }
+    },
+    {
+      "when": {
+        "axis": "x",
+        "up": "false"
+      },
+      "apply": {
+        "model": "station_announcer:block/construction/sidewalk_shed_post_cap"
+      }
+    },
+    {
+      "when": {
+        "axis": "z"
+      },
+      "apply": {
+        "model": "station_announcer:block/construction/sidewalk_shed_post_column",
+        "y": 90
+      }
+    },
+    {
+      "when": {
+        "axis": "z",
+        "down": "false"
+      },
+      "apply": {
+        "model": "station_announcer:block/construction/sidewalk_shed_post_base",
+        "y": 90
+      }
+    },
+    {
+      "when": {
+        "axis": "z",
+        "up": "false"
+      },
+      "apply": {
+        "model": "station_announcer:block/construction/sidewalk_shed_post_cap",
+        "y": 90
+      }
+    }
+  ]
+}
