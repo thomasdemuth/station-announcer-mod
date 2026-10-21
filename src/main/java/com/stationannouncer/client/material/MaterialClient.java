@@ -36,6 +36,7 @@ public final class MaterialClient {
     private static final Identifier STAIRS_ITEM_MODEL = StationAnnouncer.id("item/material_stairs");
     private static final Identifier SLAB_ITEM_MODEL = StationAnnouncer.id("item/material_slab");
     private static final Identifier WALL_ITEM_MODEL = StationAnnouncer.id("item/material_wall");
+    private static final Identifier VERTICAL_SLAB_ITEM_MODEL = StationAnnouncer.id("item/material_vertical_slab");
     private static final Identifier FENCE_ITEM_MODEL = StationAnnouncer.id("item/material_fence");
     /** Pending re-meshes: {pos, ticks left}. */
     private static final java.util.List<long[]> REMESH = new java.util.ArrayList<>();
@@ -51,6 +52,7 @@ public final class MaterialClient {
             registerStates(context, MaterialBlocks.MATERIAL_STAIRS, MaterialGeometry.STAIRS);
             registerStates(context, MaterialBlocks.MATERIAL_SLAB, MaterialGeometry.SLAB);
             registerStates(context, MaterialBlocks.MATERIAL_MIXED_SLAB, MaterialGeometry.MIXED_SLAB);
+            registerStates(context, MaterialBlocks.MATERIAL_VERTICAL_SLAB, MaterialGeometry.VERTICAL_SLAB);
             registerStates(context, MaterialBlocks.MATERIAL_WALL, MaterialGeometry.WALL);
             registerStates(context, MaterialBlocks.MATERIAL_FENCE, MaterialGeometry.FENCE);
             for (RampRailBlock rail : RampRails.BLOCKS.values()) {
@@ -73,6 +75,9 @@ public final class MaterialClient {
                 if (SLAB_ITEM_MODEL.equals(id)) {
                     return itemModel(MaterialGeometry.SLAB_ITEM, MaterialBlocks.MATERIAL_SLAB);
                 }
+                if (VERTICAL_SLAB_ITEM_MODEL.equals(id)) {
+                    return itemModel(MaterialGeometry.VERTICAL_SLAB_ITEM, MaterialBlocks.MATERIAL_VERTICAL_SLAB);
+                }
                 if (WALL_ITEM_MODEL.equals(id)) {
                     return itemModel(MaterialGeometry.WALL_ITEM, MaterialBlocks.MATERIAL_WALL);
                 }
@@ -85,8 +90,8 @@ public final class MaterialClient {
 
         BlockRenderLayerMap.INSTANCE.putBlock(MaterialBlocks.MATERIAL_RAMP, RenderLayer.getCutoutMipped());
         BlockRenderLayerMap.INSTANCE.putBlocks(RenderLayer.getCutoutMipped(), MaterialBlocks.MATERIAL_STAIRS,
-                MaterialBlocks.MATERIAL_SLAB, MaterialBlocks.MATERIAL_MIXED_SLAB, MaterialBlocks.MATERIAL_WALL,
-                MaterialBlocks.MATERIAL_FENCE);
+                MaterialBlocks.MATERIAL_SLAB, MaterialBlocks.MATERIAL_MIXED_SLAB, MaterialBlocks.MATERIAL_VERTICAL_SLAB,
+                MaterialBlocks.MATERIAL_WALL, MaterialBlocks.MATERIAL_FENCE);
         BlockRenderLayerMap.INSTANCE.putBlock(RampRails.GLASS, RenderLayer.getTranslucent());
 
         ColorProviderRegistry.BLOCK.register((state, world, pos, tintIndex) -> {
@@ -100,7 +105,7 @@ public final class MaterialClient {
             }
             return MinecraftClient.getInstance().getBlockColors().getColor(material, world, pos, tintIndex);
         }, MaterialBlocks.MATERIAL_RAMP, MaterialBlocks.MATERIAL_STAIRS, MaterialBlocks.MATERIAL_SLAB,
-                MaterialBlocks.MATERIAL_MIXED_SLAB,
+                MaterialBlocks.MATERIAL_MIXED_SLAB, MaterialBlocks.MATERIAL_VERTICAL_SLAB,
                 MaterialBlocks.MATERIAL_WALL, MaterialBlocks.MATERIAL_FENCE);
         ColorProviderRegistry.ITEM.register((stack, tintIndex) -> {
             if (tintIndex < 0) {
@@ -109,6 +114,7 @@ public final class MaterialClient {
             BlockState material = MaterialPalette.parse(MaterialPalette.materialOf(stack));
             return material == null ? -1 : MinecraftClient.getInstance().getBlockColors().getColor(material, null, null, tintIndex);
         }, MaterialBlocks.MATERIAL_RAMP_ITEM, MaterialBlocks.MATERIAL_STAIRS_ITEM, MaterialBlocks.MATERIAL_SLAB_ITEM,
+                MaterialBlocks.MATERIAL_VERTICAL_SLAB_ITEM,
                 MaterialBlocks.MATERIAL_WALL_ITEM, MaterialBlocks.MATERIAL_FENCE_ITEM);
 
         // Re-mesh around a broken code-modelled block twice: next tick, and a second

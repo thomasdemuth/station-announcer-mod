@@ -71,6 +71,16 @@ the server crashed at boot; `MaterialWallBlock` looks shapes up on the slot-0 tw
   by item id `mtr:brush`, no MTR import) cycles up/down/N/E/S/W (sneak = back) with an action-bar line; brush on a
   single material slab flips bottom/top. Half picking (mining, per-half retexture) is `isSecondHalf` along FACING's
   axis; mining one half of a SIDEWAYS split breaks it whole (no vertical plain slab) and drops both.
+- 3.4.14 (Thomas: wanted the WOOD GRAIN turned, not the halves; plus a vertical slab): (1) `MaterialSprites` now
+  reads each face's UV turn from the material's own quad (`detectTransform`: 8 mirror/rotation candidates vs our
+  world-aligned projection) and `ShapeModel.bake(..., uvTransform)` applies it — before, a sideways log material drew
+  upright bark on every face. (2) Picker "Grain" chips Up / E–W / N–S for any material with an `axis` property
+  (writes `log[axis=x]` etc., a separate palette slot). (3) `MaterialVerticalSlabBlock` (FACING = side the half sits on,
+  waterloggable, 512 states): wall click = against that block, floor/ceiling click = nearest cell edge (player facing
+  near the centre); a second vertical slab fills the cell (same texture → plain double, other → mixed slab with that
+  FACING); brush turns it a quarter. Mixed slab side-by-side splits now mine down to a vertical slab and drop vertical
+  slabs. Server-verified (drops by orientation); the grain fix and every model NOT seen in a client. DEPLOYED to
+  both profiles, committed.
 - Verified (scratch-clone server, RCON 25582): boot clean, material walls join each other + cobblestone walls and
   keep their slot through updates (state logic identical to a vanilla control row), fence joins oak fences + solid
   blocks, double slab drops 2, mixed slab drops both halves, /fill works, slot 63 states OK. NOT verified: anything

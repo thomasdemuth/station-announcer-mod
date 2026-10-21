@@ -35,6 +35,12 @@ LANG = {
     "block.station_announcer.material_slab": "Slab (any texture)",
     "block.station_announcer.material_slab.named": "%s Slab",
     "block.station_announcer.material_mixed_slab": "Mixed Slab",
+    "block.station_announcer.material_vertical_slab": "Vertical Slab (any texture)",
+    "block.station_announcer.material_vertical_slab.named": "%s Vertical Slab",
+    "gui.station_announcer.material.grain": "Grain",
+    "gui.station_announcer.material.grain.y": "Up",
+    "gui.station_announcer.material.grain.x": "E–W",
+    "gui.station_announcer.material.grain.z": "N–S",
     "msg.station_announcer.material.mixed_facing.up": "%1$s on top, %2$s below",
     "msg.station_announcer.material.mixed_facing.down": "%1$s below, %2$s on top",
     "msg.station_announcer.material.mixed_facing.north": "%1$s on the north side, %2$s on the south",
@@ -134,6 +140,7 @@ def main():
         "material_ramp": {"pattern": ["  S", " SS", "SSS"], "key": {"S": "minecraft:smooth_stone_slab"}, "count": 6},
         "material_stairs": {"pattern": ["S  ", "SS ", "SSS"], "key": {"S": "minecraft:smooth_stone"}, "count": 4},
         "material_slab": {"pattern": ["SSS"], "key": {"S": "minecraft:smooth_stone"}, "count": 6},
+        "material_vertical_slab": {"pattern": ["S", "S", "S"], "key": {"S": "minecraft:smooth_stone"}, "count": 6},
         "material_wall": {"pattern": ["SSS", "SSS"], "key": {"S": "minecraft:smooth_stone"}, "count": 6},
         "material_fence": {"pattern": ["S|S", "S|S"], "key": {"S": "minecraft:smooth_stone", "|": "minecraft:stick"},
                            "count": 3},
@@ -158,7 +165,7 @@ def main():
                                         f"  {json.dumps(key)}: {json.dumps(value, ensure_ascii=False)}")
     shared.insert_into_tag(os.path.join(DATA, "minecraft/tags/blocks/mineable/pickaxe.json"),
                            [f"{MOD}:material_ramp", f"{MOD}:material_stairs", f"{MOD}:material_slab",
-                            f"{MOD}:material_mixed_slab", f"{MOD}:material_wall", f"{MOD}:material_fence", f"{MOD}:curved_platform_edge",
+                            f"{MOD}:material_mixed_slab", f"{MOD}:material_vertical_slab", f"{MOD}:material_wall", f"{MOD}:material_fence", f"{MOD}:curved_platform_edge",
                             f"{MOD}:curved_gap_filler", f"{MOD}:curved_gap_filler_loop"])
     # Vanilla tags so they behave like vanilla walls / fences / slabs: walls join
     # walls, the fence joins wooden fences (FenceBlock only joins fences of the

@@ -68,7 +68,12 @@ public class MaterialPickerScreen extends Screen {
 
     // hit rectangles recorded while drawing
     private final List<int[]> hits = new ArrayList<>();
-    private static final int HIT_CELL = 1, HIT_CHIP = 2, HIT_RECENT = 3, HIT_RUN = 4, HIT_APPLY = 5, HIT_CANCEL = 6;
+    private static final int HIT_CELL = 1, HIT_CHIP = 2, HIT_RECENT = 3, HIT_RUN = 4, HIT_APPLY = 5, HIT_CANCEL = 6,
+            HIT_GRAIN = 7;
+    /** Grain chips: the material's axis (logs, pillars, basalt…), in this order. */
+    private static final net.minecraft.util.math.Direction.Axis[] GRAIN =
+            {net.minecraft.util.math.Direction.Axis.Y, net.minecraft.util.math.Direction.Axis.X,
+                    net.minecraft.util.math.Direction.Axis.Z};
 
     private MaterialPickerScreen(@Nullable Hand hand, @Nullable BlockPos pos, Item previewItem, String current) {
         super(Text.translatable("gui.station_announcer.material.title"));
@@ -281,6 +286,25 @@ public class MaterialPickerScreen extends Screen {
             c.drawText(textRenderer, line, px + 5, ty, hovered != null ? FlatUi.TEXT_DIM : FlatUi.TEXT, false);
             ty += 10;
         }
+        // grain: only for materials with an axis (the chosen one, not the hovered one)
+        BlockState chosenState = MaterialPalette.parse(chosen);
+        if (chosenState != null && chosenState.contains(net.minecraft.state.property.Properties.AXIS)) {
+            ty += 2;
+            FlatUi.heading(c, textRenderer, Text.translatable("gui.station_announcer.material.grain").getString(), px + 5, ty);
+            ty += 10;
+            int gw = (previewW - 10 - 4) / 3;
+            for (int i = 0; i < GRAIN.length; i++) {
+                int gx = px + 5 + i * (gw + 2);
+                boolean on = chosenState.get(net.minecraft.state.property.Properties.AXIS) == GRAIN[i];
+                boolean hover = FlatUi.inside(mx, my, gx, ty, gw, 12);
+                FlatUi.rect(c, gx, ty, gw, 12, on ? FlatUi.ACCENT_DIM : hover ? 0xFF34343C : FlatUi.PANE_RAISED);
+                String label = Text.translatable("gui.station_announcer.material.grain." + GRAIN[i].asString()).getString();
+                c.drawText(textRenderer, textRenderer.trimToWidth(label, gw - 4),
+                        gx + Math.max(2, (gw - textRenderer.getWidth(label)) / 2), ty + 2, on ? FlatUi.TEXT : FlatUi.TEXT_DIM, false);
+                hits.add(new int[]{gx, ty, gw, 12, HIT_GRAIN, i});
+            }
+            ty += 14;
+        }
         ty += 2;
         FlatUi.heading(c, textRenderer, Text.translatable("gui.station_announcer.material.recent").getString(), px + 5, ty);
         ty += 10;
@@ -339,7 +363,7 @@ public class MaterialPickerScreen extends Screen {
                 case HIT_CELL -> {
                     if (hit[5] < filtered.size()) {
                         String material = materialFor(filtered.get(hit[5]));
-                        if (material.equals(chosen) && button == 0) {
+                        if (filtered.get(hit[5]) == blockOf(chosen) && button == 0) {
                             apply(); // clicking the chosen block again = apply
                         } else {
                             chosen = material;
@@ -349,6 +373,12 @@ public class MaterialPickerScreen extends Screen {
                 case HIT_RECENT -> chosen = recent.get(hit[5]);
                 case HIT_CHIP -> category = hit[5];
                 case HIT_RUN -> wholeRun = !wholeRun;
+                case HIT_GRAIN -> {
+                    BlockState state = MaterialPalette.parse(chosen);
+                    if (state != null && state.contains(net.minecraft.state.property.Properties.AXIS)) {
+                        chosen = MaterialPalette.stringify(state.with(net.minecraft.state.property.Properties.AXIS, GRAIN[hit[5]]));
+                    }
+                }
                 case HIT_APPLY -> apply();
                 case HIT_CANCEL -> close();
                 default -> {

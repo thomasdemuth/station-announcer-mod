@@ -1348,5 +1348,11 @@
   "msg.station_announcer.material.mixed_facing.north": "%1$s on the north side, %2$s on the south",
   "msg.station_announcer.material.mixed_facing.south": "%1$s on the south side, %2$s on the north",
   "msg.station_announcer.material.mixed_facing.east": "%1$s on the east side, %2$s on the west",
-  "msg.station_announcer.material.mixed_facing.west": "%1$s on the west side, %2$s on the east"
+  "msg.station_announcer.material.mixed_facing.west": "%1$s on the west side, %2$s on the east",
+  "block.station_announcer.material_vertical_slab": "Vertical Slab (any texture)",
+  "block.station_announcer.material_vertical_slab.named": "%s Vertical Slab",
+  "gui.station_announcer.material.grain": "Grain",
+  "gui.station_announcer.material.grain.y": "Up",
+  "gui.station_announcer.material.grain.x": "E–W",
+  "gui.station_announcer.material.grain.z": "N–S"
 }

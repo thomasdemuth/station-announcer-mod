@@ -2,6 +2,7 @@ package com.stationannouncer.client.material;
 
 import com.stationannouncer.material.MaterialMixedSlabBlock;
 import com.stationannouncer.material.MaterialPalette;
+import com.stationannouncer.material.MaterialVerticalSlabBlock;
 import com.stationannouncer.material.MaterialRampBlock;
 import net.fabricmc.api.EnvType;
 import net.fabricmc.api.Environment;
@@ -236,6 +237,22 @@ public final class MaterialGeometry {
             case EAST -> new float[]{8, 0, 0, 16, 16, 16};
         };
     }
+
+    /** A slab on its edge: the half of the cell on FACING's side. */
+    public static final ShapeModel.Geometry VERTICAL_SLAB = new ShapeModel.Geometry() {
+        @Override
+        public List<ShapeModel.Face> faces(BlockState state) {
+            float[] b = halfBox(state.get(MaterialVerticalSlabBlock.FACING));
+            return Geo.cube(b[0], b[1], b[2], b[3], b[4], b[5], MAT);
+        }
+
+        @Override
+        public @Nullable BlockState material(BlockState state) {
+            return materialOf(state);
+        }
+    };
+
+    public static final ShapeModel.Geometry VERTICAL_SLAB_ITEM = state -> Geo.cube(0, 0, 8, 16, 16, 16, MAT);
 
     public static final ShapeModel.Geometry SLAB_ITEM = state -> Geo.cube(0, 0, 0, 16, 8, 16, MAT);
 

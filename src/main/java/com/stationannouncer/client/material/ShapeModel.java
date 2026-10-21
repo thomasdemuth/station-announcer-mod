@@ -182,25 +182,33 @@ public final class ShapeModel implements UnbakedModel, BakedModel {
         for (Face face : geometry.faces(state)) {
             Sprite sprite;
             int tint = -1;
+            int uvTransform = 0;
             if (face.tex() instanceof Tex.Fixed fixed) {
                 sprite = sprites.getOrDefault(fixed.key(), particle);
             } else if (face.tex() instanceof Tex.Second && secondSprites != null) {
                 sprite = secondSprites.sprite(face.face());
                 int t = secondSprites.tint(face.face());
                 tint = t < 0 ? -1 : t + SECOND_TINT_OFFSET; // the colour provider maps it back to the second material
+                uvTransform = secondSprites.uvTransform(face.face());
             } else if (materialSprites != null) {
                 sprite = materialSprites.sprite(face.face());
                 tint = materialSprites.tint(face.face());
+                uvTransform = materialSprites.uvTransform(face.face());
             } else {
                 sprite = particle;
             }
-            bySide[face.cull() == null ? 6 : face.cull().ordinal()].add(bake(face, sprite, tint));
+            bySide[face.cull() == null ? 6 : face.cull().ordinal()].add(bake(face, sprite, tint, uvTransform));
         }
         return bySide;
     }
 
     /** One face → a BakedQuad (vertex layout: xyz floats, colour, uv floats, light, normal). */
     public static BakedQuad bake(Face face, Sprite sprite, int tint) {
+        return bake(face, sprite, tint, 0);
+    }
+
+    /** As {@link #bake(Face, Sprite, int)}, turning the projected uv by a {@link MaterialSprites#transform}. */
+    public static BakedQuad bake(Face face, Sprite sprite, int tint, int uvTransform) {
         float[] v = face.v();
         // Wind counter-clockwise seen from outside. The polygon's own normal comes from
         // Newell's method over all four vertices: a clipped polygon can put its first
@@ -231,6 +239,9 @@ public final class ShapeModel implements UnbakedModel, BakedModel {
                 w = face.uv()[src * 2 + 1];
             } else {
                 float[] projected = project(face.face(), x, y, z);
+                if (uvTransform != 0) {
+                    projected = MaterialSprites.transform(uvTransform, projected[0], projected[1]);
+                }
                 u = projected[0];
                 w = projected[1];
             }
@@ -379,7 +390,8 @@ public final class ShapeModel implements UnbakedModel, BakedModel {
                     for (Face face : owner.geometry.faces(owner.itemState)) {
                         Sprite sprite = set == null ? particle : set.sprite(face.face());
                         int tint = set == null ? -1 : set.tint(face.face());
-                        bySide[face.cull() == null ? 6 : face.cull().ordinal()].add(ShapeModel.bake(face, sprite, tint));
+                        int uvTransform = set == null ? 0 : set.uvTransform(face.face());
+                        bySide[face.cull() == null ? 6 : face.cull().ordinal()].add(ShapeModel.bake(face, sprite, tint, uvTransform));
                     }
                     Sprite itemParticle = set == null ? particle : set.sprite(Direction.NORTH);
                     return new StaticBaked(bySide, transformation, itemParticle);

@@ -341,6 +341,7 @@
     "station_announcer:material_slab",
     "station_announcer:material_wall",
     "station_announcer:material_fence",
-    "station_announcer:material_mixed_slab"
+    "station_announcer:material_mixed_slab",
+    "station_announcer:material_vertical_slab"
   ]
 }

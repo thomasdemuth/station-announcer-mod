@@ -42,6 +42,8 @@ public final class MaterialBlocks {
     /** Two different textures in one cell; made by placing a slab on a slab, no item of its own. */
     public static final MaterialMixedSlabBlock MATERIAL_MIXED_SLAB =
             new MaterialMixedSlabBlock(AbstractBlock.Settings.copy(Blocks.SMOOTH_STONE_SLAB));
+    public static final MaterialVerticalSlabBlock MATERIAL_VERTICAL_SLAB =
+            new MaterialVerticalSlabBlock(AbstractBlock.Settings.copy(Blocks.SMOOTH_STONE_SLAB));
     public static final MaterialWallBlock MATERIAL_WALL =
             new MaterialWallBlock(AbstractBlock.Settings.copy(Blocks.SMOOTH_STONE).solid());
     public static final MaterialFenceBlock MATERIAL_FENCE =
@@ -49,6 +51,7 @@ public final class MaterialBlocks {
     public static final Item MATERIAL_RAMP_ITEM = new MaterialBlockItem(MATERIAL_RAMP, new Item.Settings());
     public static final Item MATERIAL_STAIRS_ITEM = new MaterialBlockItem(MATERIAL_STAIRS, new Item.Settings());
     public static final Item MATERIAL_SLAB_ITEM = new MaterialBlockItem(MATERIAL_SLAB, new Item.Settings());
+    public static final Item MATERIAL_VERTICAL_SLAB_ITEM = new MaterialBlockItem(MATERIAL_VERTICAL_SLAB, new Item.Settings());
     public static final Item MATERIAL_WALL_ITEM = new MaterialBlockItem(MATERIAL_WALL, new Item.Settings());
     public static final Item MATERIAL_FENCE_ITEM = new MaterialBlockItem(MATERIAL_FENCE, new Item.Settings());
 
@@ -93,6 +96,7 @@ public final class MaterialBlocks {
         ModContent.DECORATION_ENTRIES.add(MATERIAL_RAMP_ITEM);
         ModContent.DECORATION_ENTRIES.add(MATERIAL_STAIRS_ITEM);
         register("material_slab", MATERIAL_SLAB, MATERIAL_SLAB_ITEM);
+        register("material_vertical_slab", MATERIAL_VERTICAL_SLAB, MATERIAL_VERTICAL_SLAB_ITEM);
         Registry.register(Registries.BLOCK, StationAnnouncer.id("material_mixed_slab"), MATERIAL_MIXED_SLAB);
         register("material_wall", MATERIAL_WALL, MATERIAL_WALL_ITEM);
         register("material_fence", MATERIAL_FENCE, MATERIAL_FENCE_ITEM);
@@ -158,7 +162,8 @@ public final class MaterialBlocks {
             BlockState updated = upper ? MaterialMixedSlabBlock.withTopSlot(state, newSlot) : MaterialPalette.withSlot(state, newSlot);
             if (state.getBlock() instanceof MaterialMixedSlabBlock) {
                 // both halves now the same texture: a plain double slab
-                updated = MaterialMixedSlabBlock.of(MaterialPalette.slot(updated), MaterialMixedSlabBlock.topSlot(updated));
+                updated = MaterialMixedSlabBlock.of(MaterialPalette.slot(updated), MaterialMixedSlabBlock.topSlot(updated),
+                        updated.get(MaterialMixedSlabBlock.FACING));
             }
             world.setBlockState(at, updated, Block.NOTIFY_ALL);
             changed++;

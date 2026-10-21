@@ -43,8 +43,8 @@ import java.util.concurrent.ConcurrentHashMap;
  * (sneak = backwards). 64 × 64 × 6 = 24,576 states.</p>
  *
  * <p>Mining takes only the half under the crosshair and leaves the other as a
- * plain material slab (a sideways split has no plain-slab equivalent, so it
- * breaks whole and drops both). Vanilla's break order (both sides) is onBreak →
+ * plain material slab (a {@link MaterialVerticalSlabBlock} for a side-by-side
+ * split; its halves drop as vertical slabs). Vanilla's break order (both sides) is onBreak →
  * remove → onBroken → (survival only) afterBreak, so onBreak decides the half
  * from a fresh raycast, onBroken puts the other half back, afterBreak drops the
  * mined one. Explosions and other non-player breaks drop both halves.</p>
@@ -85,11 +85,17 @@ public class MaterialMixedSlabBlock extends Block implements MaterialBlock {
 
     /** The state with both halves; a single double slab when they wear the same slot. */
     public static BlockState of(int bottomSlot, int topSlot) {
-        if (bottomSlot == topSlot) {
+        return of(bottomSlot, topSlot, Direction.UP);
+    }
+
+    /** Base half + second half on {@code secondSide}; a plain double slab when both wear the same slot. */
+    public static BlockState of(int baseSlot, int secondSlot, Direction secondSide) {
+        if (baseSlot == secondSlot) {
             return MaterialPalette.withSlot(MaterialBlocks.MATERIAL_SLAB.getDefaultState()
-                    .with(MaterialSlabBlock.TYPE, SlabType.DOUBLE), bottomSlot);
+                    .with(MaterialSlabBlock.TYPE, SlabType.DOUBLE), baseSlot);
         }
-        return withTopSlot(MaterialPalette.withSlot(MaterialBlocks.MATERIAL_MIXED_SLAB.getDefaultState(), bottomSlot), topSlot);
+        return withTopSlot(MaterialPalette.withSlot(MaterialBlocks.MATERIAL_MIXED_SLAB.getDefaultState(), baseSlot), secondSlot)
+                .with(FACING, secondSide);
     }
 
     /** One half as a single material slab. */
@@ -98,9 +104,12 @@ public class MaterialMixedSlabBlock extends Block implements MaterialBlock {
                 .with(MaterialSlabBlock.TYPE, top ? SlabType.TOP : SlabType.BOTTOM), slot);
     }
 
-    private static ItemStack slabStack(int slot, @Nullable World world) {
+    /** One half's item: a vertical slab for a side-by-side split, else a slab. */
+    private static ItemStack slabStack(BlockState state, int slot, @Nullable World world) {
         boolean client = world != null && world.isClient;
-        return MaterialPalette.stackWith(MaterialBlocks.MATERIAL_SLAB, MaterialPalette.materialAt(slot, client));
+        Block slab = state.get(FACING).getAxis().isHorizontal() ? MaterialBlocks.MATERIAL_VERTICAL_SLAB
+                : MaterialBlocks.MATERIAL_SLAB;
+        return MaterialPalette.stackWith(slab, MaterialPalette.materialAt(slot, client));
     }
 
     private static String key(World world, BlockPos pos) {
@@ -124,14 +133,15 @@ public class MaterialMixedSlabBlock extends Block implements MaterialBlock {
         return false;
     }
 
-    /** What stays when one half is mined: a plain slab, or null (a sideways split breaks whole). */
-    @Nullable
+    /** What stays when one half is mined: a plain slab (a vertical one for a side-by-side split). */
     private static BlockState remainder(BlockState state, boolean minedSecond) {
         Direction facing = state.get(FACING);
-        if (facing.getAxis().isHorizontal()) {
-            return null;
-        }
         int keep = minedSecond ? MaterialPalette.slot(state) : topSlot(state);
+        if (facing.getAxis().isHorizontal()) {
+            Direction keptSide = minedSecond ? facing.getOpposite() : facing;
+            return MaterialPalette.withSlot(MaterialBlocks.MATERIAL_VERTICAL_SLAB.getDefaultState()
+                    .with(MaterialVerticalSlabBlock.FACING, keptSide), keep);
+        }
         // The kept half is on top when it is the second half facing up, or the base half facing down.
         boolean keptOnTop = minedSecond ? facing == Direction.DOWN : facing == Direction.UP;
         return half(keep, keptOnTop);
@@ -188,11 +198,8 @@ public class MaterialMixedSlabBlock extends Block implements MaterialBlock {
         if (!breaking.drops() || w.isClient) {
             BREAKING.remove(key); // no afterBreak follows (creative / the client's prediction)
         }
-        // The half NOT mined stays, as a plain slab (nothing stays of a sideways split).
-        BlockState rest = remainder(state, breaking.second());
-        if (rest != null) {
-            w.setBlockState(pos, rest, Block.NOTIFY_ALL);
-        }
+        // The half NOT mined stays, as a plain (or vertical) slab.
+        w.setBlockState(pos, remainder(state, breaking.second()), Block.NOTIFY_ALL);
     }
 
     @Override
@@ -206,12 +213,7 @@ public class MaterialMixedSlabBlock extends Block implements MaterialBlock {
         player.incrementStat(net.minecraft.stat.Stats.MINED.getOrCreateStat(this));
         player.addExhaustion(0.005f);
         if (world instanceof ServerWorld) {
-            if (remainder(state, breaking.second()) == null) {
-                dropStack(world, pos, slabStack(MaterialPalette.slot(state), world));
-                dropStack(world, pos, slabStack(topSlot(state), world));
-            } else {
-                dropStack(world, pos, slabStack(breaking.second() ? topSlot(state) : MaterialPalette.slot(state), world));
-            }
+            dropStack(world, pos, slabStack(state, breaking.second() ? topSlot(state) : MaterialPalette.slot(state), world));
         }
     }
 
@@ -219,11 +221,11 @@ public class MaterialMixedSlabBlock extends Block implements MaterialBlock {
     public List<ItemStack> getDroppedStacks(BlockState state, LootContextParameterSet.Builder builder) {
         // Non-player breaks (explosions, /setblock destroy): both halves.
         World world = builder.getWorld();
-        return List.of(slabStack(MaterialPalette.slot(state), world), slabStack(topSlot(state), world));
+        return List.of(slabStack(state, MaterialPalette.slot(state), world), slabStack(state, topSlot(state), world));
     }
 
     @Override
     public ItemStack getPickStack(WorldView world, BlockPos pos, BlockState state) {
-        return slabStack(MaterialPalette.slot(state), world instanceof World w ? w : null);
+        return slabStack(state, MaterialPalette.slot(state), world instanceof World w ? w : null);
     }
 }

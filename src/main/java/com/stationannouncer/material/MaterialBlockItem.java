@@ -89,7 +89,7 @@ public class MaterialBlockItem extends BlockItem {
         if (getBlock() instanceof MaterialRampBlock) {
             tooltip.add(Text.translatable("tooltip.station_announcer.material.ramp").formatted(Formatting.DARK_GRAY));
         }
-        if (getBlock() instanceof MaterialSlabBlock) {
+        if (getBlock() instanceof MaterialSlabBlock || getBlock() instanceof MaterialVerticalSlabBlock) {
             tooltip.add(Text.translatable("tooltip.station_announcer.material.slab").formatted(Formatting.DARK_GRAY));
         }
     }
