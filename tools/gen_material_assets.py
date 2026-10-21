@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Material ramps / stairs + curved platform edges (2026-09-25): item models,
+"""Material ramps / stairs / slabs / walls / fences + curved platform edges (2026-09-25): item models,
 the creator icon, loot, recipes, lang and pickaxe-tag entries.
 
 Run from anywhere:  python3 tools/gen_material_assets.py
@@ -32,10 +32,18 @@ LANG = {
     "block.station_announcer.material_ramp.named": "%s Ramp",
     "block.station_announcer.material_stairs": "Stairs (any texture)",
     "block.station_announcer.material_stairs.named": "%s Stairs",
+    "block.station_announcer.material_slab": "Slab (any texture)",
+    "block.station_announcer.material_slab.named": "%s Slab",
+    "block.station_announcer.material_mixed_slab": "Mixed Slab",
+    "tooltip.station_announcer.material.slab": "Place a slab of another texture onto it: both textures in one block. Mining takes the half you look at",
+    "block.station_announcer.material_wall": "Wall (any texture)",
+    "block.station_announcer.material_wall.named": "%s Wall",
+    "block.station_announcer.material_fence": "Fence (any texture)",
+    "block.station_announcer.material_fence.named": "%s Fence",
     "block.station_announcer.curved_platform_edge": "Curved Platform Edge",
     "item.station_announcer.curved_platform_creator": "Curved Platform Creator",
     "tooltip.station_announcer.material.pick": "Right-click the air: choose the texture",
-    "tooltip.station_announcer.material.copy": "Sneak-right-click any block: copy its texture (a placed ramp/stair: retexture it)",
+    "tooltip.station_announcer.material.copy": "Sneak-right-click any block: copy its texture (a placed one: retexture it)",
     "tooltip.station_announcer.material.ramp": "ADA 1:12: one block up every 12 blocks. Place in a line and the segments continue; the 13th is a level landing",
     "tooltip.station_announcer.curved_platform_creator": "Stand on the platform and click the platform track's two nodes: the edge is cut to follow the curve",
     "tooltip.station_announcer.curved_platform_creator.undo": "Right-click the air: undo the last build · sneak-right-click the air: filler mode",
@@ -46,7 +54,7 @@ LANG = {
     "msg.station_announcer.curved_platform.mode.2": "Builds: curved edges + South Ferry gap fillers",
     "msg.station_announcer.material.not_full_block": "%s is not a full block",
     "msg.station_announcer.material.picked": "Texture: %s",
-    "msg.station_announcer.material.palette_full": "This world already uses %s textures for ramps and stairs; reuse one of them",
+    "msg.station_announcer.material.palette_full": "This world already uses %s textures for material blocks; reuse one of them",
     "msg.station_announcer.material.retextured": "Retextured %s block(s) to %s",
     "msg.station_announcer.curved_platform.side": "Stand on the platform side of the track (not on it) to build",
     "msg.station_announcer.curved_platform.built": "Curved platform: %s edge blocks placed, %s trimmed",
@@ -119,6 +127,10 @@ def main():
     recipes = {
         "material_ramp": {"pattern": ["  S", " SS", "SSS"], "key": {"S": "minecraft:smooth_stone_slab"}, "count": 6},
         "material_stairs": {"pattern": ["S  ", "SS ", "SSS"], "key": {"S": "minecraft:smooth_stone"}, "count": 4},
+        "material_slab": {"pattern": ["SSS"], "key": {"S": "minecraft:smooth_stone"}, "count": 6},
+        "material_wall": {"pattern": ["SSS", "SSS"], "key": {"S": "minecraft:smooth_stone"}, "count": 6},
+        "material_fence": {"pattern": ["S|S", "S|S"], "key": {"S": "minecraft:smooth_stone", "|": "minecraft:stick"},
+                           "count": 3},
         "curved_platform_edge": {"pattern": ["EE"], "key": {"E": f"{MOD}:platform_edge"}, "count": 2},
         "curved_gap_filler": {"pattern": ["F"], "key": {"F": f"{MOD}:gap_filler"}, "count": 1},
         "curved_gap_filler_loop": {"pattern": ["F"], "key": {"F": f"{MOD}:gap_filler_loop"}, "count": 1},
@@ -139,8 +151,19 @@ def main():
         shared.insert_before_last_brace(lang_path, json.dumps(key) + ":",
                                         f"  {json.dumps(key)}: {json.dumps(value, ensure_ascii=False)}")
     shared.insert_into_tag(os.path.join(DATA, "minecraft/tags/blocks/mineable/pickaxe.json"),
-                           [f"{MOD}:material_ramp", f"{MOD}:material_stairs", f"{MOD}:curved_platform_edge",
+                           [f"{MOD}:material_ramp", f"{MOD}:material_stairs", f"{MOD}:material_slab",
+                            f"{MOD}:material_mixed_slab", f"{MOD}:material_wall", f"{MOD}:material_fence", f"{MOD}:curved_platform_edge",
                             f"{MOD}:curved_gap_filler", f"{MOD}:curved_gap_filler_loop"])
+    # Vanilla tags so they behave like vanilla walls / fences / slabs: walls join
+    # walls, the fence joins wooden fences (FenceBlock only joins fences of the
+    # same "wooden" flag), slabs count as slabs.
+    for tag, block in (("walls", "material_wall"), ("fences", "material_fence"),
+                       ("wooden_fences", "material_fence"), ("slabs", "material_slab")):
+        path = os.path.join(DATA, f"minecraft/tags/blocks/{tag}.json")
+        if not os.path.exists(path):
+            write_json(path, {"replace": False, "values": [f"{MOD}:{block}"]})
+        else:
+            shared.insert_into_tag(path, [f"{MOD}:{block}"])
     json.load(open(os.path.join(ASSETS, "lang/en_us.json")))
     print("material + curved platform assets written")
 

@@ -49,9 +49,13 @@ import java.util.function.Function;
 @Environment(EnvType.CLIENT)
 public final class ShapeModel implements UnbakedModel, BakedModel {
     /** Where a face's texture comes from. */
-    public sealed interface Tex permits Tex.Material, Tex.Fixed {
+    public sealed interface Tex permits Tex.Material, Tex.Second, Tex.Fixed {
         /** The block's material, the sprite it uses on {@code face}'s side. */
         record Material() implements Tex {
+        }
+
+        /** The block's second material ({@link Geometry#secondMaterial}: a mixed slab's top half). */
+        record Second() implements Tex {
         }
 
         /** A fixed sprite by name (a key of the model's texture map). */
@@ -59,6 +63,7 @@ public final class ShapeModel implements UnbakedModel, BakedModel {
         }
 
         Tex MATERIAL = new Material();
+        Tex SECOND = new Second();
     }
 
     /**
@@ -84,6 +89,12 @@ public final class ShapeModel implements UnbakedModel, BakedModel {
             return null;
         }
 
+        /** The second material, for faces textured {@link Tex#SECOND} (null = none). */
+        @Nullable
+        default BlockState secondMaterial(BlockState state) {
+            return null;
+        }
+
         /**
          * Smooth-lighting AO for this geometry. Vanilla samples AO for a face that
          * is not flush with the block side from the block's OWN cell and treats any
@@ -95,6 +106,9 @@ public final class ShapeModel implements UnbakedModel, BakedModel {
             return true;
         }
     }
+
+    /** Tint indices at or above this belong to the second material (index − offset). */
+    public static final int SECOND_TINT_OFFSET = 1000;
 
     private final Geometry geometry;
     private final Map<String, Identifier> textures;
@@ -163,11 +177,17 @@ public final class ShapeModel implements UnbakedModel, BakedModel {
         }
         BlockState material = geometry.material(state);
         MaterialSprites.Set materialSprites = material == null ? null : MaterialSprites.of(material);
+        BlockState second = geometry.secondMaterial(state);
+        MaterialSprites.Set secondSprites = second == null ? null : MaterialSprites.of(second);
         for (Face face : geometry.faces(state)) {
             Sprite sprite;
             int tint = -1;
             if (face.tex() instanceof Tex.Fixed fixed) {
                 sprite = sprites.getOrDefault(fixed.key(), particle);
+            } else if (face.tex() instanceof Tex.Second && secondSprites != null) {
+                sprite = secondSprites.sprite(face.face());
+                int t = secondSprites.tint(face.face());
+                tint = t < 0 ? -1 : t + SECOND_TINT_OFFSET; // the colour provider maps it back to the second material
             } else if (materialSprites != null) {
                 sprite = materialSprites.sprite(face.face());
                 tint = materialSprites.tint(face.face());

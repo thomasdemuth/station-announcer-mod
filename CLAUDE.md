@@ -50,6 +50,27 @@ rig's Gradle wrappers (and sometimes the JVMs) get SIGKILLed — forbid agents f
 entirely and check rig health after each one finishes; an orphaned JVM keeps serving but
 loses the console fifo.
 
+### MATERIAL SLAB / MIXED SLAB / WALL / FENCE (2026-10-21) — RELEASE 3.4.12, DEPLOYED to both profiles (built from a scratchpad clone); server-tested, NOT seen in a client, uncommitted
+
+Thomas: "a block that can do any texture like stairs and ramps but as a slab, and for walls/fences", then "a block
+that can be two different kinds of slab together". Same pattern as `MaterialStairsBlock` (vanilla class + palette
+slot, drawn by `ShapeModel`): `material/MaterialSlabBlock` / `MaterialWallBlock` / `MaterialFenceBlock`, geometry
+`MaterialGeometry.SLAB/WALL/FENCE` (+ `_ITEM`, vanilla template coordinates), assets via `tools/gen_material_assets.py`
+(adds `#minecraft:walls`, `#fences` + `#wooden_fences` (FenceBlock only joins fences with the same wooden flag),
+`#slabs`). **WallBlock builds its shape maps from getDefaultState() only** → every other slot had a null shape and
+the server crashed at boot; `MaterialWallBlock` looks shapes up on the slot-0 twin. Wall = 324 × 64 = 20,736 states.
+- `MaterialMixedSlabBlock` (no item, 4096 states): bottom = mat_hi/lo, top = `top_hi/top_lo`. Made when a material
+  slab of ANOTHER texture completes a slab (`MaterialSlabBlock.getPlacementState`; same texture = plain double).
+  Mining: onBreak raycasts which half → onBroken puts the other half back as a single slab → afterBreak drops only
+  the mined half (creative: no afterBreak, map entry cleared in onBroken); explosions drop both. Second material is
+  `ShapeModel.Tex.SECOND` + `Geometry.secondMaterial`; its tint indices are offset by `SECOND_TINT_OFFSET` (1000).
+  Retexture is per half: `BLOCK_PICKER_OPENER` is a BiConsumer (pos, top), SET_BLOCK_MATERIAL_C2S gained an
+  OPTIONAL trailing `top` boolean; a retexture that makes both halves equal turns it into a plain double.
+- Verified (scratch-clone server, RCON 25582): boot clean, material walls join each other + cobblestone walls and
+  keep their slot through updates (state logic identical to a vanilla control row), fence joins oak fences + solid
+  blocks, double slab drops 2, mixed slab drops both halves, /fill works, slot 63 states OK. NOT verified: anything
+  needing a player (placing slab-on-slab, half mining, picker per half) and every model in a client.
+
 ### RELEASE 3.4.11 (2026-10-16) — platform screen + route screen + line folders + dashboard tool rail, DEPLOYED to both profiles, uncommitted
 
 Built from a `cp -c` clone in the session scratchpad (`./gradlew build --offline`), whole working tree as it stood

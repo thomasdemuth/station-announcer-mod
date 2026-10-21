@@ -5,6 +5,7 @@ import com.google.gson.JsonParser;
 import com.stationannouncer.StationAnnouncer;
 import com.stationannouncer.client.mtraddon.FlatUi;
 import com.stationannouncer.material.MaterialBlocks;
+import com.stationannouncer.material.MaterialMixedSlabBlock;
 import com.stationannouncer.material.MaterialPalette;
 import net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking;
 import net.fabricmc.fabric.api.networking.v1.PacketByteBufs;
@@ -62,6 +63,8 @@ public class MaterialPickerScreen extends Screen {
     private String lastFilter = null;
     private int lastCategory = -1;
     private final List<String> recent = loadRecent();
+    /** Retexturing a mixed slab's top half (its second slot). */
+    private boolean topHalf;
 
     // hit rectangles recorded while drawing
     private final List<int[]> hits = new ArrayList<>();
@@ -80,11 +83,15 @@ public class MaterialPickerScreen extends Screen {
         return new MaterialPickerScreen(hand, null, stack.getItem(), MaterialPalette.materialOf(stack));
     }
 
-    /** For a placed ramp / stair at {@code pos}. */
-    public static @Nullable MaterialPickerScreen forBlock(BlockPos pos, BlockState state) {
-        Item item = state.getBlock().asItem();
-        String current = MaterialPalette.materialAt(MaterialPalette.slot(state), true);
-        return new MaterialPickerScreen(null, pos.toImmutable(), item, current);
+    /** For a placed material block at {@code pos}; {@code top} = a mixed slab's top half. */
+    public static @Nullable MaterialPickerScreen forBlock(BlockPos pos, BlockState state, boolean top) {
+        boolean mixed = state.getBlock() instanceof MaterialMixedSlabBlock;
+        Item item = mixed ? MaterialBlocks.MATERIAL_SLAB_ITEM : state.getBlock().asItem();
+        int slot = mixed && top ? MaterialMixedSlabBlock.topSlot(state) : MaterialPalette.slot(state);
+        String current = MaterialPalette.materialAt(slot, true);
+        MaterialPickerScreen screen = new MaterialPickerScreen(null, pos.toImmutable(), item, current);
+        screen.topHalf = mixed && top;
+        return screen;
     }
 
     @Override
@@ -388,6 +395,7 @@ public class MaterialPickerScreen extends Screen {
             buf.writeBlockPos(pos);
             buf.writeString(chosen, MaterialPalette.MAX_MATERIAL_LENGTH);
             buf.writeBoolean(wholeRun);
+            buf.writeBoolean(topHalf);
             ClientPlayNetworking.send(MaterialBlocks.SET_BLOCK_MATERIAL_C2S, buf);
         } else if (hand != null && client != null && client.player != null) {
             buf.writeByte(hand == Hand.OFF_HAND ? 1 : 0);

@@ -44,7 +44,9 @@ public class MaterialBlockItem extends BlockItem {
             if (clicked.getBlock() instanceof MaterialBlock) {
                 // Sneak-clicking a placed ramp / stair retextures IT (or its whole run).
                 if (context.getWorld().isClient) {
-                    MaterialBlocks.BLOCK_PICKER_OPENER.accept(context.getBlockPos());
+                    boolean top = clicked.getBlock() instanceof MaterialMixedSlabBlock
+                            && context.getHitPos().y - context.getBlockPos().getY() >= 0.5;
+                    MaterialBlocks.BLOCK_PICKER_OPENER.accept(context.getBlockPos(), top);
                 }
                 return ActionResult.success(context.getWorld().isClient);
             }
@@ -86,6 +88,9 @@ public class MaterialBlockItem extends BlockItem {
         tooltip.add(Text.translatable("tooltip.station_announcer.material.copy").formatted(Formatting.DARK_GRAY));
         if (getBlock() instanceof MaterialRampBlock) {
             tooltip.add(Text.translatable("tooltip.station_announcer.material.ramp").formatted(Formatting.DARK_GRAY));
+        }
+        if (getBlock() instanceof MaterialSlabBlock) {
+            tooltip.add(Text.translatable("tooltip.station_announcer.material.slab").formatted(Formatting.DARK_GRAY));
         }
     }
 }

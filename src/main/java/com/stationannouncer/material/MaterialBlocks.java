@@ -28,7 +28,7 @@ import java.util.Set;
 import java.util.function.Consumer;
 
 /**
- * Material ramps and stairs: registration, the picker's packets and the
+ * Material ramps, stairs, slabs, walls and fences: registration, the picker's packets and the
  * {@link MaterialPalette} lifecycle. Common code (no MTR); the client half is
  * {@code client.material.MaterialClient}.
  */
@@ -37,8 +37,20 @@ public final class MaterialBlocks {
             new MaterialRampBlock(AbstractBlock.Settings.copy(Blocks.SMOOTH_STONE));
     public static final MaterialStairsBlock MATERIAL_STAIRS =
             new MaterialStairsBlock(AbstractBlock.Settings.copy(Blocks.SMOOTH_STONE));
+    public static final MaterialSlabBlock MATERIAL_SLAB =
+            new MaterialSlabBlock(AbstractBlock.Settings.copy(Blocks.SMOOTH_STONE_SLAB));
+    /** Two different textures in one cell; made by placing a slab on a slab, no item of its own. */
+    public static final MaterialMixedSlabBlock MATERIAL_MIXED_SLAB =
+            new MaterialMixedSlabBlock(AbstractBlock.Settings.copy(Blocks.SMOOTH_STONE_SLAB));
+    public static final MaterialWallBlock MATERIAL_WALL =
+            new MaterialWallBlock(AbstractBlock.Settings.copy(Blocks.SMOOTH_STONE).solid());
+    public static final MaterialFenceBlock MATERIAL_FENCE =
+            new MaterialFenceBlock(AbstractBlock.Settings.copy(Blocks.SMOOTH_STONE).solid());
     public static final Item MATERIAL_RAMP_ITEM = new MaterialBlockItem(MATERIAL_RAMP, new Item.Settings());
     public static final Item MATERIAL_STAIRS_ITEM = new MaterialBlockItem(MATERIAL_STAIRS, new Item.Settings());
+    public static final Item MATERIAL_SLAB_ITEM = new MaterialBlockItem(MATERIAL_SLAB, new Item.Settings());
+    public static final Item MATERIAL_WALL_ITEM = new MaterialBlockItem(MATERIAL_WALL, new Item.Settings());
+    public static final Item MATERIAL_FENCE_ITEM = new MaterialBlockItem(MATERIAL_FENCE, new Item.Settings());
 
     /** C2S: the picker set the held item's material (hand ordinal, material). */
     public static final Identifier SET_ITEM_MATERIAL_C2S = StationAnnouncer.id("set_item_material");
@@ -49,7 +61,8 @@ public final class MaterialBlocks {
     /** Client hooks, installed by MaterialClient; no-ops on a dedicated server. */
     public static Consumer<Hand> PICKER_OPENER = hand -> {
     };
-    public static Consumer<BlockPos> BLOCK_PICKER_OPENER = pos -> {
+    /** Opens the picker for a placed block; the flag = the top half of a mixed slab. */
+    public static java.util.function.BiConsumer<BlockPos, Boolean> BLOCK_PICKER_OPENER = (pos, top) -> {
     };
     /** Client: re-mesh around a broken code-modelled block a moment later (see {@link #clientRemesh}). */
     public static Consumer<BlockPos> CLIENT_REMESH = pos -> {
@@ -79,6 +92,10 @@ public final class MaterialBlocks {
         Registry.register(Registries.ITEM, StationAnnouncer.id("material_stairs"), MATERIAL_STAIRS_ITEM);
         ModContent.DECORATION_ENTRIES.add(MATERIAL_RAMP_ITEM);
         ModContent.DECORATION_ENTRIES.add(MATERIAL_STAIRS_ITEM);
+        register("material_slab", MATERIAL_SLAB, MATERIAL_SLAB_ITEM);
+        Registry.register(Registries.BLOCK, StationAnnouncer.id("material_mixed_slab"), MATERIAL_MIXED_SLAB);
+        register("material_wall", MATERIAL_WALL, MATERIAL_WALL_ITEM);
+        register("material_fence", MATERIAL_FENCE, MATERIAL_FENCE_ITEM);
         RampRails.register();
 
         ServerLifecycleEvents.SERVER_STARTED.register(MaterialPalette::load);
@@ -100,11 +117,18 @@ public final class MaterialBlocks {
             BlockPos pos = buf.readBlockPos();
             String material = buf.readString(MaterialPalette.MAX_MATERIAL_LENGTH);
             boolean run = buf.readBoolean();
-            server.execute(() -> retexture(player, pos, material, run));
+            boolean top = buf.isReadable() && buf.readBoolean(); // mixed slab: which half (older senders omit it)
+            server.execute(() -> retexture(player, pos, material, run, top));
         });
     }
 
-    private static void retexture(ServerPlayerEntity player, BlockPos pos, String material, boolean run) {
+    private static void register(String name, Block block, Item item) {
+        Registry.register(Registries.BLOCK, StationAnnouncer.id(name), block);
+        Registry.register(Registries.ITEM, StationAnnouncer.id(name), item);
+        ModContent.DECORATION_ENTRIES.add(item);
+    }
+
+    private static void retexture(ServerPlayerEntity player, BlockPos pos, String material, boolean run, boolean top) {
         ServerWorld world = player.getServerWorld();
         BlockState start = world.getBlockState(pos);
         if (player.squaredDistanceTo(Vec3d.ofCenter(pos)) > 64.0 * 64.0 || !world.canPlayerModifyAt(player, pos)
@@ -115,7 +139,8 @@ public final class MaterialBlocks {
             player.sendMessage(Text.translatable("msg.station_announcer.material.palette_full", MaterialPalette.SLOTS), true);
             return;
         }
-        int oldSlot = MaterialPalette.slot(start);
+        boolean upper = top && start.getBlock() instanceof MaterialMixedSlabBlock;
+        int oldSlot = upper ? MaterialMixedSlabBlock.topSlot(start) : MaterialPalette.slot(start);
         int newSlot = MaterialPalette.slotFor(material, false);
         Block block = start.getBlock();
         Set<BlockPos> seen = new HashSet<>();
@@ -126,10 +151,16 @@ public final class MaterialBlocks {
         while (!queue.isEmpty() && changed < MAX_RUN) {
             BlockPos at = queue.poll();
             BlockState state = world.getBlockState(at);
-            if (state.getBlock() != block || MaterialPalette.slot(state) != oldSlot) {
+            if (state.getBlock() != block
+                    || (upper ? MaterialMixedSlabBlock.topSlot(state) : MaterialPalette.slot(state)) != oldSlot) {
                 continue;
             }
-            world.setBlockState(at, MaterialPalette.withSlot(state, newSlot), Block.NOTIFY_ALL);
+            BlockState updated = upper ? MaterialMixedSlabBlock.withTopSlot(state, newSlot) : MaterialPalette.withSlot(state, newSlot);
+            if (state.getBlock() instanceof MaterialMixedSlabBlock) {
+                // both halves now the same texture: a plain double slab
+                updated = MaterialMixedSlabBlock.of(MaterialPalette.slot(updated), MaterialMixedSlabBlock.topSlot(updated));
+            }
+            world.setBlockState(at, updated, Block.NOTIFY_ALL);
             changed++;
             if (!run) {
                 break;

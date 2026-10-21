@@ -337,6 +337,10 @@
     "station_announcer:sidewalk_shed_post",
     "station_announcer:sidewalk_shed_light",
     "station_announcer:work_light",
-    "station_announcer:caged_work_lamp"
+    "station_announcer:caged_work_lamp",
+    "station_announcer:material_slab",
+    "station_announcer:material_wall",
+    "station_announcer:material_fence",
+    "station_announcer:material_mixed_slab"
   ]
 }
