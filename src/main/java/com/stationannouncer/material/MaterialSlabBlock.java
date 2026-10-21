@@ -46,6 +46,21 @@ public class MaterialSlabBlock extends SlabBlock implements MaterialBlock {
         return MaterialBlock.withPlacedMaterial(state, context);
     }
 
+    /** The MTR brush flips a single slab between the bottom and top half. */
+    @Override
+    public net.minecraft.util.ActionResult onUse(BlockState state, World world, BlockPos pos,
+                                                 net.minecraft.entity.player.PlayerEntity player,
+                                                 net.minecraft.util.Hand hand, net.minecraft.util.hit.BlockHitResult hit) {
+        if (state.get(TYPE) == SlabType.DOUBLE || !MaterialBlock.isBrush(player.getStackInHand(hand))) {
+            return net.minecraft.util.ActionResult.PASS;
+        }
+        if (!world.isClient) {
+            world.setBlockState(pos, state.with(TYPE, state.get(TYPE) == SlabType.BOTTOM ? SlabType.TOP : SlabType.BOTTOM),
+                    net.minecraft.block.Block.NOTIFY_ALL);
+        }
+        return net.minecraft.util.ActionResult.success(world.isClient);
+    }
+
     @Override
     public List<ItemStack> getDroppedStacks(BlockState state, LootContextParameterSet.Builder builder) {
         ItemStack stack = stackFor(this, state, builder.getWorld());

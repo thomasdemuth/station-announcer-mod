@@ -19,6 +19,13 @@ public interface MaterialBlock {
         return MaterialPalette.stackWith(self, MaterialPalette.materialAt(MaterialPalette.slot(state), client));
     }
 
+    /** The MTR brush (id {@code mtr:brush}); compared by id so this common code needs no MTR import. */
+    static boolean isBrush(ItemStack stack) {
+        return BRUSH_ID.equals(net.minecraft.registry.Registries.ITEM.getId(stack.getItem()));
+    }
+
+    net.minecraft.util.Identifier BRUSH_ID = new net.minecraft.util.Identifier("mtr", "brush");
+
     /** The placement state with the placing item's material. */
     static BlockState withPlacedMaterial(BlockState state, ItemPlacementContext context) {
         if (state == null) {

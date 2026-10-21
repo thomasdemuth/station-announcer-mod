@@ -199,12 +199,18 @@ public final class MaterialGeometry {
         }
     };
 
-    /** A mixed slab: bottom half in the first material, top half in the second. */
+    /**
+     * A mixed slab: the second material fills the half on FACING's side, the
+     * base material the other half (up = as placed, base below).
+     */
     public static final ShapeModel.Geometry MIXED_SLAB = new ShapeModel.Geometry() {
         @Override
         public List<ShapeModel.Face> faces(BlockState state) {
-            List<ShapeModel.Face> out = new ArrayList<>(Geo.cube(0, 0, 0, 16, 8, 16, MAT));
-            out.addAll(Geo.cube(0, 8, 0, 16, 16, 16, ShapeModel.Tex.SECOND));
+            Direction side = state.get(MaterialMixedSlabBlock.FACING);
+            float[] second = halfBox(side);
+            float[] base = halfBox(side.getOpposite());
+            List<ShapeModel.Face> out = new ArrayList<>(Geo.cube(base[0], base[1], base[2], base[3], base[4], base[5], MAT));
+            out.addAll(Geo.cube(second[0], second[1], second[2], second[3], second[4], second[5], ShapeModel.Tex.SECOND));
             return out;
         }
 
@@ -218,6 +224,18 @@ public final class MaterialGeometry {
             return ClientMaterialPalette.state(MaterialMixedSlabBlock.topSlot(state));
         }
     };
+
+    /** The half of the block on {@code side}: x0 y0 z0 x1 y1 z1 in px. */
+    static float[] halfBox(Direction side) {
+        return switch (side) {
+            case UP -> new float[]{0, 8, 0, 16, 16, 16};
+            case DOWN -> new float[]{0, 0, 0, 16, 8, 16};
+            case NORTH -> new float[]{0, 0, 0, 16, 16, 8};
+            case SOUTH -> new float[]{0, 0, 8, 16, 16, 16};
+            case WEST -> new float[]{0, 0, 0, 8, 16, 16};
+            case EAST -> new float[]{8, 0, 0, 16, 16, 16};
+        };
+    }
 
     public static final ShapeModel.Geometry SLAB_ITEM = state -> Geo.cube(0, 0, 0, 16, 8, 16, MAT);
 

@@ -50,7 +50,7 @@ rig's Gradle wrappers (and sometimes the JVMs) get SIGKILLed — forbid agents f
 entirely and check rig health after each one finishes; an orphaned JVM keeps serving but
 loses the console fifo.
 
-### MATERIAL SLAB / MIXED SLAB / WALL / FENCE (2026-10-21) — RELEASE 3.4.12, DEPLOYED to both profiles (built from a scratchpad clone); server-tested, NOT seen in a client, uncommitted
+### MATERIAL SLAB / MIXED SLAB / WALL / FENCE (2026-10-21) — RELEASE 3.4.12 (commit 3ad42f9), brush orientation in 3.4.13 (DEPLOYED, committed); server-tested
 
 Thomas: "a block that can do any texture like stairs and ramps but as a slab, and for walls/fences", then "a block
 that can be two different kinds of slab together". Same pattern as `MaterialStairsBlock` (vanilla class + palette
@@ -66,6 +66,11 @@ the server crashed at boot; `MaterialWallBlock` looks shapes up on the slot-0 tw
   `ShapeModel.Tex.SECOND` + `Geometry.secondMaterial`; its tint indices are offset by `SECOND_TINT_OFFSET` (1000).
   Retexture is per half: `BLOCK_PICKER_OPENER` is a BiConsumer (pos, top), SET_BLOCK_MATERIAL_C2S gained an
   OPTIONAL trailing `top` boolean; a retexture that makes both halves equal turns it into a plain double.
+- 3.4.13 (Thomas, screenshot of a stone-over-oak beam: "right click with a brush"): mixed slab gained `FACING`
+  (Properties.FACING = side the SECOND half is on; up = as placed) → 24,576 states; MTR brush (`MaterialBlock.isBrush`,
+  by item id `mtr:brush`, no MTR import) cycles up/down/N/E/S/W (sneak = back) with an action-bar line; brush on a
+  single material slab flips bottom/top. Half picking (mining, per-half retexture) is `isSecondHalf` along FACING's
+  axis; mining one half of a SIDEWAYS split breaks it whole (no vertical plain slab) and drops both.
 - Verified (scratch-clone server, RCON 25582): boot clean, material walls join each other + cobblestone walls and
   keep their slot through updates (state logic identical to a vanilla control row), fence joins oak fences + solid
   blocks, double slab drops 2, mixed slab drops both halves, /fill works, slot 63 states OK. NOT verified: anything

@@ -45,7 +45,7 @@ public class MaterialBlockItem extends BlockItem {
                 // Sneak-clicking a placed ramp / stair retextures IT (or its whole run).
                 if (context.getWorld().isClient) {
                     boolean top = clicked.getBlock() instanceof MaterialMixedSlabBlock
-                            && context.getHitPos().y - context.getBlockPos().getY() >= 0.5;
+                            && MaterialMixedSlabBlock.isSecondHalf(clicked, context.getBlockPos(), context.getHitPos());
                     MaterialBlocks.BLOCK_PICKER_OPENER.accept(context.getBlockPos(), top);
                 }
                 return ActionResult.success(context.getWorld().isClient);

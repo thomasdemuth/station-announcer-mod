@@ -1342,5 +1342,11 @@
   "block.station_announcer.material_fence": "Fence (any texture)",
   "block.station_announcer.material_fence.named": "%s Fence",
   "block.station_announcer.material_mixed_slab": "Mixed Slab",
-  "tooltip.station_announcer.material.slab": "Place a slab of another texture onto it: both textures in one block. Mining takes the half you look at"
+  "tooltip.station_announcer.material.slab": "Place a slab of another texture onto it: both textures in one block. Mining takes the half you look at. MTR brush: flip a slab / turn a mixed slab",
+  "msg.station_announcer.material.mixed_facing.up": "%1$s on top, %2$s below",
+  "msg.station_announcer.material.mixed_facing.down": "%1$s below, %2$s on top",
+  "msg.station_announcer.material.mixed_facing.north": "%1$s on the north side, %2$s on the south",
+  "msg.station_announcer.material.mixed_facing.south": "%1$s on the south side, %2$s on the north",
+  "msg.station_announcer.material.mixed_facing.east": "%1$s on the east side, %2$s on the west",
+  "msg.station_announcer.material.mixed_facing.west": "%1$s on the west side, %2$s on the east"
 }
