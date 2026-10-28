@@ -47,7 +47,8 @@ public final class TrainRowsEditor {
     private static final String[][] TOKENS = {
             {"{station}", PaText.STATION}, {"{dest}", PaText.DEST}, {"{route}", PaText.ROUTE},
             {"{next}", PaText.NEXT}, {"{nextstop}", PaText.NEXT_STOP}, {"{access}", PaText.ACCESS},
-            {"{platform}", PaText.PLATFORM}};
+            {"{platform}", PaText.PLATFORM}, {"{transfer}", PaText.TRANSFER},
+            {"{nexttransfer}", PaText.NEXT_TRANSFER}};
 
     private final FlatPaScreen host;
     /** true = a route's on-board set (riders hear it at every stop); false = a station PA source. */
@@ -116,8 +117,8 @@ public final class TrainRowsEditor {
             y += 18;
         }
         String foot = onboard
-                ? "{station} is the stop being served. ▶ uses a sample stop. {access} stays silent until the station has a layout scan."
-                : "▶ uses a sample train. {access} stays silent until the station has a layout scan.";
+                ? "{station} is the stop being served. {transfer} / {nexttransfer} name the other lines at this / the next stop. ▶ uses a sample stop. {access} stays silent until the station has a layout scan."
+                : "{transfer} / {nexttransfer} name the other lines at this / the next stop. ▶ uses a sample train. {access} stays silent until the station has a layout scan.";
         for (OrderedText line : font().wrapLines(Text.literal(foot), w)) {
             c.drawText(font(), line, x, y, FlatUi.TEXT_FAINT, false);
             y += 10;
@@ -328,11 +329,11 @@ public final class TrainRowsEditor {
             add(new TrainAnnouncements.Row(TrainAnnouncements.Event.BEFORE_ARRIVAL, 15, 1, 20, true,
                     "The next stop is {station}. {access}"));
             add(new TrainAnnouncements.Row(TrainAnnouncements.Event.DOORS_OPEN, 1, 1, 20, true,
-                    "This is {station}. {nextstop}"));
+                    "This is {station}. {transfer} {nextstop}"));
             add(new TrainAnnouncements.Row(TrainAnnouncements.Event.DOORS_CLOSING, 4, 1, 20, true,
                     "Stand clear of the closing doors, please."));
             add(new TrainAnnouncements.Row(TrainAnnouncements.Event.AFTER_DEPARTURE, 5, 1, 20, true,
-                    "This is a {dest}-bound {route} train. The next stop is {next}."));
+                    "This is a {dest}-bound {route} train. The next stop is {next}. {nexttransfer}"));
         } else {
             add(new TrainAnnouncements.Row(TrainAnnouncements.Event.BEFORE_ARRIVAL, 30, 1, 20, true,
                     "There is a {dest}-bound {route} train approaching the station. Please stand away from the platform edge."));

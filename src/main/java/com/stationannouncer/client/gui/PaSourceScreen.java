@@ -505,10 +505,14 @@ public class PaSourceScreen extends FlatPaScreen {
         if (tx + textWidth("+ {access}") + 8 + 3 + textWidth("Say as…") + 8 <= edX + edW) {
             tx += tokenButton(c, mx, my, "+ {access}", tx, y, 3) + 3;
         }
+        if (tx + textWidth("+ {transfer}") + 8 + 3 + textWidth("Say as…") + 8 <= edX + edW) {
+            tx += tokenButton(c, mx, my, "+ {transfer}", tx, y, 4) + 3;
+        }
         tokenButton(c, mx, my, "Say as…", tx, y, 2);
         y += 14;
         if (showReads) {
-            String readsLabel = PaText.usesTrainTokens(m.text) || m.text.contains(PaText.ACCESS) ? "Sample: " : "Reads: ";
+            String readsLabel = PaText.usesTrainTokens(m.text) || m.text.contains(PaText.ACCESS)
+                    || m.text.contains(PaText.TRANSFER) ? "Sample: " : "Reads: ";
             c.drawText(textRenderer, trim(readsLabel + reads, edW), edX, y + 1, FlatUi.TEXT_FAINT, false);
             y += 10;
         }
@@ -1259,6 +1263,7 @@ public class PaSourceScreen extends FlatPaScreen {
             case 0 -> editor.insertToken(PaText.STATION);
             case 1 -> editor.insertToken(PaText.TIME);
             case 3 -> editor.insertToken(PaText.ACCESS);
+            case 4 -> editor.insertToken(PaText.TRANSFER);
             default -> {
                 String word = editor.getSelectedText().replaceAll("[{}|]", "").trim();
                 if (word.isEmpty()) {

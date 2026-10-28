@@ -107,9 +107,9 @@ public final class PaTrains {
     /** Dev runs log every firing ("[pa train] …") so a headless rig can see them without a listener. */
     private static final boolean DEV_LOG = net.fabricmc.loader.api.FabricLoader.getInstance().isDevelopmentEnvironment();
 
-    /** One platform as trains run through it. */
+    /** One platform as trains run through it; {@code lines} = labels of the routes that call there. */
     record Plat(long id, String name, long stationId, double[] rear, double[] front, boolean directionKnown,
-                boolean served) {
+                boolean served, List<String> lines) {
     }
 
     /**
@@ -176,6 +176,8 @@ public final class PaTrains {
     private static final ConcurrentHashMap<Long, Stop> STOPS = new ConcurrentHashMap<>();
     /** dimension → platform id → geometry; inner maps immutable. */
     private static final ConcurrentHashMap<String, Map<Long, Plat>> PLATFORMS = new ConcurrentHashMap<>();
+    /** dimension → station id → line labels there and at its connected stations ({transfer}); inner maps immutable. */
+    private static final ConcurrentHashMap<String, Map<Long, List<String>>> STATION_LINES = new ConcurrentHashMap<>();
     /** vehicle id → its riders (vehicles on routes with on-board announcements only). */
     private static final ConcurrentHashMap<Long, Riders> RIDERS = new ConcurrentHashMap<>();
     /** vehicle id → {path index of the stop it approaches, last post wall millis} (on-board "before arrival"). */
@@ -217,6 +219,7 @@ public final class PaTrains {
         RIDERS.clear();
         APPROACH.clear();
         PLATFORMS.clear();
+        STATION_LINES.clear();
         NEXT_TRAIN.clear();
         PENDING.clear();
         ACCESS_CACHE.clear();
@@ -503,11 +506,37 @@ public final class PaTrains {
         }
         String access = accessFor(dimension, nearest.id(), null, null);
         PaText.Train next = NEXT_TRAIN.get(nearest.id());
+        // An ordinary message's {transfer}: the station's lines other than the ones at this platform.
+        Set<String> own = new HashSet<>(nearest.lines());
+        if (next != null) {
+            own.add(next.route());
+        }
+        String transfer = transferAt(dimension, nearest.stationId(), own);
         if (next == null) {
-            return new PaText.Train(nearest.id(), "", "", "", false, nearest.name(), access);
+            return new PaText.Train(nearest.id(), "", "", "", false, nearest.name(), access).withTransfer(transfer);
         }
         return new PaText.Train(next.platformId(), next.route(), next.destination(), next.next(), next.terminating(),
-                next.platform(), access);
+                next.platform(), access, "", transfer, next.nextTransfer());
+    }
+
+    /** The {transfer} sentence for a station: its lines (and its connected stations'), minus {@code exclude}. */
+    static String transferAt(String dimension, long stationId, java.util.Collection<String> exclude) {
+        Map<Long, List<String>> stations = dimension == null || stationId == 0 ? null : STATION_LINES.get(dimension);
+        List<String> lines = stations == null ? null : stations.get(stationId);
+        if (lines == null || lines.isEmpty()) {
+            return "";
+        }
+        List<String> out = new ArrayList<>();
+        for (String line : lines) {
+            boolean skip = false;
+            for (String own : exclude) {
+                skip |= own != null && own.equalsIgnoreCase(line);
+            }
+            if (!skip) {
+                out.add(line);
+            }
+        }
+        return PaText.transferPhrase(out);
     }
 
     /**
@@ -567,6 +596,7 @@ public final class PaTrains {
             simulator.run(() -> {
                 try {
                     PLATFORMS.put(simulator.dimension, snapshot(simulator));
+                    STATION_LINES.put(simulator.dimension, stationLines(simulator));
                 } catch (Throwable t) {
                     StationAnnouncer.LOGGER.debug("PA: platform snapshot failed", t);
                 }
@@ -601,16 +631,73 @@ public final class PaTrains {
             double[][] seen = ends.get(platform.getId());
             Station station = platform.area;
             String name = FareLane.firstLang(platform.getName());
+            List<String> lines = new ArrayList<>();
+            addLines(platform, lines);
+            lines = List.copyOf(lines);
             if (seen != null) {
                 out.put(platform.getId(), new Plat(platform.getId(), name, station == null ? 0 : station.getId(),
-                        seen[0], seen[1], seen[2][0] == 0, true));
+                        seen[0], seen[1], seen[2][0] == 0, true, lines));
             } else {
                 double[] mid = vec(platform.getMidPosition());
                 out.put(platform.getId(), new Plat(platform.getId(), name, station == null ? 0 : station.getId(),
-                        mid, mid, false, false));
+                        mid, mid, false, false, lines));
             }
         }
         return Map.copyOf(out);
+    }
+
+    /**
+     * Simulator thread: every station's line labels, MTR's interchange rule (the routes
+     * calling at the station or a station connected to it, hidden routes left out), sorted
+     * numbers first ("2, 3, 4, A, C").
+     */
+    private static Map<Long, List<String>> stationLines(Simulator simulator) {
+        Map<Long, List<String>> out = new HashMap<>();
+        for (Station station : simulator.stations) {
+            if (station == null) {
+                continue;
+            }
+            List<String> lines = new ArrayList<>();
+            for (Platform platform : station.savedRails) {
+                addLines(platform, lines);
+            }
+            for (Station connected : station.connectedStations) {
+                for (Platform platform : connected.savedRails) {
+                    addLines(platform, lines);
+                }
+            }
+            if (!lines.isEmpty()) {
+                lines.sort(PaTrains::compareLines);
+                out.put(station.getId(), List.copyOf(lines));
+            }
+        }
+        return Map.copyOf(out);
+    }
+
+    /** Adds the labels of a platform's visible routes, once each (case-insensitive). */
+    private static void addLines(Platform platform, List<String> into) {
+        for (Route route : platform.routes) {
+            if (route == null || route.getHidden()) {
+                continue;
+            }
+            String label = routeLabel(route.getRouteNumber(), route.getName());
+            if (!label.isEmpty() && into.stream().noneMatch(label::equalsIgnoreCase)) {
+                into.add(label);
+            }
+        }
+    }
+
+    /** Numbers first and in numeric order, then the rest alphabetically. */
+    private static int compareLines(String a, String b) {
+        boolean na = a.chars().allMatch(Character::isDigit);
+        boolean nb = b.chars().allMatch(Character::isDigit);
+        if (na != nb) {
+            return na ? -1 : 1;
+        }
+        if (na && a.length() != b.length()) {
+            return Integer.compare(a.length(), b.length());
+        }
+        return String.CASE_INSENSITIVE_ORDER.compare(a, b);
     }
 
     private static double[] vec(Position position) {
@@ -921,6 +1008,9 @@ public final class PaTrains {
                                          boolean terminating, String routeNumber, String routeName) {
         Route route = simulator.routeIdMap.get(routeId);
         String next = "";
+        String label = routeLabel(routeNumber, routeName);
+        List<String> own = List.of(label);
+        String nextTransfer = "";
         if (route != null && !terminating) {
             int at = indexOf(route, platform.getId());
             ObjectArrayList<RoutePlatformData> stops = route.getRoutePlatforms();
@@ -928,12 +1018,15 @@ public final class PaTrains {
                 Platform nextPlatform = stops.get(at + 1).platform;
                 Station station = nextPlatform == null ? null : nextPlatform.area;
                 next = station == null ? "" : FareLane.firstLang(station.getName());
+                nextTransfer = station == null ? "" : transferAt(simulator.dimension, station.getId(), own);
             }
         }
         Station here = platform.area;
-        return new PaText.Train(platform.getId(), routeLabel(routeNumber, routeName),
+        String transfer = here == null ? "" : transferAt(simulator.dimension, here.getId(), own);
+        return new PaText.Train(platform.getId(), label,
                 FareLane.firstLang(destination == null ? "" : destination), next, terminating,
-                FareLane.firstLang(platform.getName()), "", here == null ? "" : FareLane.firstLang(here.getName()));
+                FareLane.firstLang(platform.getName()), "", here == null ? "" : FareLane.firstLang(here.getName()),
+                transfer, nextTransfer);
     }
 
     private static int indexOf(Route route, long platformId) {

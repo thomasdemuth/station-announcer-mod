@@ -211,7 +211,7 @@ public class SignEditScreen extends Screen {
     private static final int TOGGLE_EXIT_NAME = 6;
     private static final int TOGGLE_STACKED = 7;
 
-    private enum Popup { LINE_BULLET, LINE_DIAMOND, LINE_TOKEN, LINE_TOKEN_DIAMOND, ROUTE, EXIT }
+    private enum Popup { LINE_BULLET, LINE_DIAMOND, LINE_TOKEN, LINE_TOKEN_DIAMOND, ROUTE, ROUTE_TOKEN, EXIT }
 
     private Popup popup;
     private int popupScroll;
@@ -596,7 +596,7 @@ public class SignEditScreen extends Screen {
         popup = mode;
         popupScroll = 0;
         switch (mode) {
-            case ROUTE -> popupRoutes = SignContext.routes();
+            case ROUTE, ROUTE_TOKEN -> popupRoutes = SignContext.routes();
             case EXIT -> popupExits = ctx.exits();
             default -> popupLines = PosterLayout.lines();
         }
@@ -629,6 +629,11 @@ public class SignEditScreen extends Screen {
                 if (index < popupRoutes.size()) {
                     String name = popupRoutes.get(index).routeName();
                     updateTile(t -> t.withRoutes(List.of(name)));
+                }
+            }
+            case ROUTE_TOKEN -> {
+                if (index < popupRoutes.size()) {
+                    insertToken("{to:" + popupRoutes.get(index).routeName() + "}");
                 }
             }
             case EXIT -> {
@@ -887,6 +892,7 @@ public class SignEditScreen extends Screen {
                 switch (arg) {
                     case 0 -> openPopup(Popup.LINE_TOKEN);
                     case 1 -> openPopup(Popup.LINE_TOKEN_DIAMOND);
+                    case 7 -> openPopup(Popup.ROUTE_TOKEN);
                     case 2 -> insertToken("{wc}");
                     case 3 -> insertToken("{<}");
                     case 4 -> insertToken("{^}");
@@ -1727,7 +1733,7 @@ public class SignEditScreen extends Screen {
                             tile.num() == 1 ? 0 : tile.num() == 2 ? 2 : 1, x, y, w, SEG_TEXT_SIZE);
                     int deleteY = rightY + rightH - 6 - FlatUi.BUTTON_HEIGHT;
                     y = colorField(c, mx, my, "Colour field", tile.arg(), true, x, y, w);
-                    int toolbarH = 12 + FIELD + 4 + FIELD + 4 + 2 * 20 + 8;
+                    int toolbarH = 12 + 3 * (FIELD + 4) + 2 * 20 + 8;
                     int geometryH = 3 * (FIELD + 15) + 14 + (FIELD + 15) + (FIELD + 5);
                     int boxH = Math.max(24, Math.min(60, deleteY - 6 - toolbarH - geometryH - (y + inspectorScroll)));
                     textBox.setBounds(x, y, w, boxH);
@@ -1741,6 +1747,9 @@ public class SignEditScreen extends Screen {
                     hit(x, y, half, FIELD, HIT_TOKEN, 0, 0);
                     FlatUi.button(c, textRenderer, "◆ Express", x + half + 4, y, w - half - 4, FIELD, mx, my, ButtonStyle.FLAT);
                     hit(x + half + 4, y, w - half - 4, FIELD, HIT_TOKEN, 1, 0);
+                    y += FIELD + 4;
+                    FlatUi.button(c, textRenderer, "⇒ Line destination", x, y, w, FIELD, mx, my, ButtonStyle.FLAT);
+                    hit(x, y, w, FIELD, HIT_TOKEN, 7, 0);
                     y += FIELD + 4;
                     String[] glyphs = {"♿", "←", "↑", "↓", "→"};
                     int gw = (w - 4 * 4) / 5;
@@ -2032,7 +2041,7 @@ public class SignEditScreen extends Screen {
 
     private int popupCount() {
         return switch (popup) {
-            case ROUTE -> popupRoutes.size();
+            case ROUTE, ROUTE_TOKEN -> popupRoutes.size();
             case EXIT -> popupExits.size();
             default -> popupLines.size();
         };
@@ -2054,6 +2063,7 @@ public class SignEditScreen extends Screen {
         hit(px, py, pw, ph, HIT_POPUP, 0, 0);
         String heading = switch (popup) {
             case ROUTE -> "Pick a route";
+            case ROUTE_TOKEN -> "Pick a route: its destination follows the line";
             case EXIT -> "Pick an exit (from MTR's station settings)";
             case LINE_DIAMOND, LINE_TOKEN_DIAMOND -> "Pick a line (express diamond)";
             default -> "Pick a line";
@@ -2063,7 +2073,7 @@ public class SignEditScreen extends Screen {
         int count = popupCount();
         if (count == 0) {
             String none = switch (popup) {
-                case ROUTE -> "No routes with generated paths yet";
+                case ROUTE, ROUTE_TOKEN -> "No routes with generated paths yet";
                 case EXIT -> "This station has no exits yet";
                 default -> "No lines in this world yet";
             };
@@ -2081,10 +2091,13 @@ public class SignEditScreen extends Screen {
                 FlatUi.rect(c, px + 1, ry, pw - 2, 16, FlatUi.HOVER);
             }
             switch (popup) {
-                case ROUTE -> {
+                case ROUTE, ROUTE_TOKEN -> {
                     SignContext.RouteOption option = popupRoutes.get(index);
                     int cw = FlatUi.chip(c, textRenderer, RouteBullets.label(option.routeName()), px + 8, ry + 2, option.color(), false);
                     String label = option.line() + (option.direction().isEmpty() ? "" : " · " + option.direction());
+                    if (popup == Popup.ROUTE_TOKEN) {
+                        label += "  ⇒ " + SignLayout.expandDestinations("{to:" + option.routeName() + "}");
+                    }
                     c.drawText(textRenderer, textRenderer.trimToWidth(label, pw - cw - 24), px + 8 + cw + 6, ry + 4, FlatUi.TEXT, false);
                 }
                 case EXIT -> {

@@ -67,6 +67,8 @@ public final class PaTemplates {
             line("Accessibility", "{access}"),
             line("Accessible boarding", "Customers needing step-free access: {access}"),
             line("Next train", "The next train is a {dest}-bound {route} train."),
+            // {transfer}: the station's other lines (MTR interchanges), silent when there are none
+            line("Transfers", "This is {station}. {transfer}"),
             new Template("Station loop", List.of(
                     new PaText.Entry("Welcome to {station}.", true),
                     new PaText.Entry("Please stand behind the yellow line.", true),

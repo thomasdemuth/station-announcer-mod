@@ -446,6 +446,7 @@ public final class SignLayout {
 
     /** Explicit lines of a text tile (at most three), or a two-line wrap when the row asked for one. */
     private static String[] lines(String text, boolean wrap) {
+        text = expandDestinations(text);
         String[] split = text.split("\n", -1);
         if (split.length > 1) {
             return split.length > 3 ? new String[]{split[0], split[1], split[2]} : split;
@@ -826,6 +827,40 @@ public final class SignLayout {
             case 2 -> tile.text();
             default -> toDestination(routeName);
         };
+    }
+
+    /** {@code {to:ROUTE}} inline token: the route's destination, looked up each time the sign is drawn. */
+    private static final java.util.regex.Pattern DESTINATION_TOKEN =
+            java.util.regex.Pattern.compile("\\{to:([^}]*)}", java.util.regex.Pattern.CASE_INSENSITIVE);
+
+    /**
+     * Replaces every {@code {to:ROUTE}} with that route's destination as plain
+     * words, before lines are split and wrapped, so a long destination wraps and
+     * shrinks like typed text. Unknown route: its direction wording, else its line name.
+     */
+    public static String expandDestinations(String text) {
+        if (text == null || text.indexOf('{') < 0) {
+            return text;
+        }
+        java.util.regex.Matcher matcher = DESTINATION_TOKEN.matcher(text);
+        if (!matcher.find()) {
+            return text;
+        }
+        StringBuilder out = new StringBuilder();
+        do {
+            matcher.appendReplacement(out, java.util.regex.Matcher.quoteReplacement(destinationName(matcher.group(1))));
+        } while (matcher.find());
+        matcher.appendTail(out);
+        return out.toString();
+    }
+
+    private static String destinationName(String routeName) {
+        String destination = SignContext.destination(routeName);
+        if (!destination.isEmpty()) {
+            return destination;
+        }
+        String direction = SignContext.direction(routeName);
+        return direction.isEmpty() ? com.stationannouncer.client.mtraddon.AddonUi.splitLineAndDirection(routeName)[0] : direction;
     }
 
     private static String toDestination(String routeName) {

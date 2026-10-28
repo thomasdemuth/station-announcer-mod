@@ -34,6 +34,12 @@ import java.util.regex.Pattern;
  *       last stop on this train.") and {@code {platform}}: the train a
  *       train-timed announcement is about; in an ordinary message the next train
  *       due at the source's platform when known, else "". SERVER-filled.</li>
+ *   <li>{@code {transfer}} / {@code {nexttransfer}}: a whole sentence naming the
+ *       other lines at this stop / the train's next stop ("Transfer is available to
+ *       the 4 and 5 trains."), MTR's interchange rule (routes at the station and its
+ *       connected stations, hidden ones left out); "" when there are none. The
+ *       train's own line is never listed, nor, in an ordinary message, the lines of
+ *       the source's own platform. SERVER-filled.</li>
  * </ul>
  * Anything else in braces is left alone, so ordinary text never breaks.
  */
@@ -48,9 +54,12 @@ public final class PaText {
     public static final String NEXT = "{next}";
     public static final String NEXT_STOP = "{nextstop}";
     public static final String PLATFORM = "{platform}";
+    public static final String TRANSFER = "{transfer}";
+    public static final String NEXT_TRANSFER = "{nexttransfer}";
     /** Every server-filled token besides {station}, for cheap "anything to do?" tests. */
-    private static final String[] CONTEXT_TOKENS = {ACCESS, ROUTE, DEST, NEXT, NEXT_STOP, PLATFORM};
-    private static final String[] TRAIN_TOKENS = {ROUTE, DEST, NEXT, NEXT_STOP, PLATFORM};
+    private static final String[] CONTEXT_TOKENS = {ACCESS, ROUTE, DEST, NEXT, NEXT_STOP, PLATFORM, TRANSFER,
+            NEXT_TRANSFER};
+    private static final String[] TRAIN_TOKENS = {ROUTE, DEST, NEXT, NEXT_STOP, PLATFORM, NEXT_TRANSFER};
 
     /**
      * What a train-timed announcement knows about its train (or, for an ordinary
@@ -58,7 +67,7 @@ public final class PaText {
      * common code never sees an MTR type; any field may be "".
      */
     public record Train(long platformId, String route, String destination, String next, boolean terminating,
-                        String platform, String access, String station) {
+                        String platform, String access, String station, String transfer, String nextTransfer) {
         public static final Train NONE = new Train(0, "", "", "", false, "", "");
 
         /** Without a station: {station} then stays the PA source's own (filled from its position). */
@@ -67,14 +76,40 @@ public final class PaText {
             this(platformId, route, destination, next, terminating, platform, access, "");
         }
 
+        /** Without transfers. */
+        public Train(long platformId, String route, String destination, String next, boolean terminating,
+                     String platform, String access, String station) {
+            this(platformId, route, destination, next, terminating, platform, access, station, "", "");
+        }
+
         public Train withAccess(String value) {
-            return new Train(platformId, route, destination, next, terminating, platform, value, station);
+            return new Train(platformId, route, destination, next, terminating, platform, value, station, transfer,
+                    nextTransfer);
         }
 
         /** On a train, {station} is the stop being served — set here. */
         public Train withStation(String value) {
-            return new Train(platformId, route, destination, next, terminating, platform, access, value);
+            return new Train(platformId, route, destination, next, terminating, platform, access, value, transfer,
+                    nextTransfer);
         }
+
+        public Train withTransfer(String value) {
+            return new Train(platformId, route, destination, next, terminating, platform, access, station, value,
+                    nextTransfer);
+        }
+    }
+
+    /**
+     * The {transfer} sentence for some line labels: "" for none, else "Transfer is
+     * available to the 4 train." / "… to the 2, 4 and 5 trains."
+     */
+    public static String transferPhrase(List<String> lines) {
+        if (lines == null || lines.isEmpty()) {
+            return "";
+        }
+        String joined = lines.size() == 1 ? lines.get(0)
+                : String.join(", ", lines.subList(0, lines.size() - 1)) + " and " + lines.get(lines.size() - 1);
+        return "Transfer is available to the " + joined + (lines.size() == 1 ? " train." : " trains.");
     }
 
     /**
@@ -203,6 +238,8 @@ public final class PaText {
         String withStation = train.station() == null || train.station().isBlank() ? text
                 : text.replace(STATION, train.station());
         String filled = tidy(withStation.replace(ACCESS, train.access())
+                .replace(NEXT_TRANSFER, train.nextTransfer() == null ? "" : train.nextTransfer())
+                .replace(TRANSFER, train.transfer() == null ? "" : train.transfer())
                 .replace(ROUTE, train.route())
                 .replace(DEST, train.destination())
                 .replace(NEXT_STOP, nextStop)
@@ -272,7 +309,8 @@ public final class PaText {
 
     /** Stand-in train for editor previews (the client cannot see the server's trains). */
     public static final Train SAMPLE = new Train(0, "2", "Flatbush Avenue", "Park Place", false, "Platform 1",
-            "The elevator is at the center of the platform.");
+            "The elevator is at the center of the platform.", "", "Transfer is available to the 3, 4 and 5 trains.",
+            "Transfer is available to the S train.");
 
     public static String clock() {
         LocalTime now = LocalTime.now();
