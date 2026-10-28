@@ -39,7 +39,7 @@ LANG = {
     "msg.station_announcer.earthworks.skipped_bridge": "~%s blocks of track left too high (a bridge's job)",
     "msg.station_announcer.earthworks.skipped_tunnel": "~%s blocks of track left too deep (a tunnel's job)",
     "msg.station_announcer.earthworks.kept": "%s non-natural blocks left in place",
-    "msg.station_announcer.earthworks.progress": "Earthworks: %s%% (%s / %s blocks)",
+    "msg.station_announcer.earthworks.progress": "Building: %s%% (%s / %s blocks)",
     "msg.station_announcer.earthworks.undone": "Undid %s block changes",
     "msg.station_announcer.earthworks.picked": "%s → %s (replaces the mix)",
     "msg.station_announcer.earthworks.picked_add": "%s added to %s",

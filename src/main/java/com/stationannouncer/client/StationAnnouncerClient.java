@@ -176,6 +176,9 @@ public class StationAnnouncerClient implements ClientModInitializer {
                                     // Dev-only: the Bridge Creator screen for the held item.
                                     client.setScreen(new com.stationannouncer.client.mtr.BridgeCreatorScreen(
                                             net.minecraft.util.Hand.MAIN_HAND, client.player.getMainHandStack()));
+                                } else if (cmd.startsWith("#sweep-")) {
+                                    // Dev-only: Structure Sweeper screens (#sweep-editor [view], #sweep-save, #sweep-close).
+                                    com.stationannouncer.client.mtr.SweepClient.devHook(client, cmd);
                                 } else if (cmd.startsWith("#earthworks-editor")) {
                                     // Dev-only: the earthworks screen for the held tool
                                     // (#earthworks-editor [part] [before]).

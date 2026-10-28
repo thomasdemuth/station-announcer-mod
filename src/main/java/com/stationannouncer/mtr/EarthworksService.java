@@ -47,6 +47,8 @@ public final class EarthworksService {
         final boolean undo;
         final String summary;
         int cursor;
+        boolean fixShapes;
+        int fixCursor;
 
         Job(UUID player, ServerWorld world, BlockPos[] pos, BlockState[] target, boolean undo, String summary) {
             this.player = player;
@@ -181,7 +183,58 @@ public final class EarthworksService {
             player.sendMessage(Text.translatable("msg.station_announcer.earthworks.nothing", what), true);
             return;
         }
-        // removals top-down, then placements bottom-up
+        int removalCount = 0;
+        for (BlockState s : changes.values()) {
+            if (s.isAir()) {
+                removalCount++;
+            }
+        }
+        StringBuilder summary = new StringBuilder(Text.translatable("msg.station_announcer.earthworks.done",
+                what, removalCount, changes.size() - removalCount).getString());
+        if (result.trees() > 0) {
+            summary.append(" · ").append(Text.translatable("msg.station_announcer.earthworks.trees", result.trees()).getString());
+        }
+        if (result.skipped() > 0) {
+            summary.append(" · ").append(Text.translatable(spec.kind == EarthworksSpec.Kind.TRENCH
+                    ? "msg.station_announcer.earthworks.skipped_tunnel" : "msg.station_announcer.earthworks.skipped_bridge",
+                    (result.skipped() + 3) / 4).getString());
+        }
+        if (result.keptBuilds() > 0) {
+            summary.append(" · ").append(Text.translatable("msg.station_announcer.earthworks.kept", result.keptBuilds()).getString());
+        }
+        StationAnnouncer.LOGGER.info("Earthworks: {} planned {} for {} ({} removals, {} placements, {} trees, {} samples skipped) in {} ms",
+                player.getName().getString(), spec.kind, what, removalCount, changes.size() - removalCount, result.trees(),
+                result.skipped(), (System.nanoTime() - started) / 1_000_000);
+        submit(player, world, changes, summary.toString(), false);
+    }
+
+    /** True while this player's job (build or undo) is still being applied. */
+    public static boolean isBusy(ServerPlayerEntity player) {
+        return RUNNING.containsKey(player.getUuid());
+    }
+
+    /** Same, by owner id (the console builds as {@link net.minecraft.util.Util#NIL_UUID}). */
+    public static boolean isBusy(UUID owner) {
+        return RUNNING.containsKey(owner);
+    }
+
+    /**
+     * Queues planned changes to be applied a slice per tick, with one undo
+     * per player (shared by every tool that uses this applier: the
+     * earthworks and the Structure Sweeper). Removals go top-down first,
+     * placements bottom-up after. {@code fixShapes}: once everything is
+     * placed, fences / walls / panes / stairs and connecting blocks are
+     * re-shaped against their new neighbours (blocks are set without
+     * neighbour updates, so they would keep the template's connections).
+     */
+    public static void submit(ServerPlayerEntity player, ServerWorld world, Map<BlockPos, BlockState> changes,
+                              String summary, boolean fixShapes) {
+        submit(player.getUuid(), world, changes, summary, fixShapes);
+    }
+
+    /** {@link #submit} for any owner (a player's UUID, or the console's NIL_UUID — the summary then goes to the log). */
+    public static void submit(UUID owner, ServerWorld world, Map<BlockPos, BlockState> changes,
+                              String summary, boolean fixShapes) {
         List<Map.Entry<BlockPos, BlockState>> removals = new ArrayList<>();
         List<Map.Entry<BlockPos, BlockState>> placements = new ArrayList<>();
         for (Map.Entry<BlockPos, BlockState> e : changes.entrySet()) {
@@ -200,23 +253,9 @@ public final class EarthworksService {
                 i++;
             }
         }
-        StringBuilder summary = new StringBuilder(Text.translatable("msg.station_announcer.earthworks.done",
-                what, removals.size(), placements.size()).getString());
-        if (result.trees() > 0) {
-            summary.append(" · ").append(Text.translatable("msg.station_announcer.earthworks.trees", result.trees()).getString());
-        }
-        if (result.skipped() > 0) {
-            summary.append(" · ").append(Text.translatable(spec.kind == EarthworksSpec.Kind.TRENCH
-                    ? "msg.station_announcer.earthworks.skipped_tunnel" : "msg.station_announcer.earthworks.skipped_bridge",
-                    (result.skipped() + 3) / 4).getString());
-        }
-        if (result.keptBuilds() > 0) {
-            summary.append(" · ").append(Text.translatable("msg.station_announcer.earthworks.kept", result.keptBuilds()).getString());
-        }
-        StationAnnouncer.LOGGER.info("Earthworks: {} planned {} for {} ({} removals, {} placements, {} trees, {} samples skipped) in {} ms",
-                player.getName().getString(), spec.kind, what, removals.size(), placements.size(), result.trees(),
-                result.skipped(), (System.nanoTime() - started) / 1_000_000);
-        RUNNING.put(player.getUuid(), new Job(player.getUuid(), world, pos, target, false, summary.toString()));
+        Job job = new Job(owner, world, pos, target, false, summary);
+        job.fixShapes = fixShapes;
+        RUNNING.put(owner, job);
     }
 
     // ------------------------------------------------------------- applying
@@ -232,17 +271,28 @@ public final class EarthworksService {
             while (job.cursor < end) {
                 step(job);
             }
+            if (job.cursor >= job.pos.length && job.fixShapes && job.fixCursor < job.pos.length) {
+                int fixEnd = Math.min(job.pos.length, job.fixCursor + BUDGET);
+                while (job.fixCursor < fixEnd) {
+                    fixShape(job, job.fixCursor++);
+                }
+                continue;
+            }
             ServerPlayerEntity player = server.getPlayerManager().getPlayer(job.player);
             if (job.cursor >= job.pos.length) {
                 it.remove();
                 if (job.undo) {
                     if (player != null) {
                         player.sendMessage(Text.translatable("msg.station_announcer.earthworks.undone", job.pos.length), true);
+                    } else {
+                        StationAnnouncer.LOGGER.info("Build undone: {} block changes", job.pos.length);
                     }
                 } else {
                     LAST.put(job.player, new Undo(job.world, job.pos, job.before));
                     if (player != null) {
                         player.sendMessage(Text.literal(job.summary), false);
+                    } else {
+                        StationAnnouncer.LOGGER.info("Build finished: {}", job.summary);
                     }
                 }
             } else if (player != null && server.getTicks() % 10 == 0) {
@@ -258,19 +308,45 @@ public final class EarthworksService {
         job.world.setBlockState(job.pos[i], job.target[i], Block.NOTIFY_LISTENERS | Block.FORCE_STATE);
     }
 
+    /** Re-shapes one placed block against its neighbours; never lets that turn it to air. */
+    private static void fixShape(Job job, int i) {
+        BlockState placed = job.target[i];
+        if (placed.isAir()) {
+            return;
+        }
+        BlockPos p = job.pos[i];
+        BlockState now = job.world.getBlockState(p);
+        if (now != placed) {
+            return;
+        }
+        try {
+            BlockState shaped = Block.postProcessState(now, job.world, p);
+            if (shaped != now && !shaped.isAir()) {
+                job.world.setBlockState(p, shaped, Block.NOTIFY_LISTENERS | Block.FORCE_STATE);
+            }
+        } catch (RuntimeException e) {
+            // a block that cannot re-shape here keeps the template's shape
+        }
+    }
+
     public static void undo(ServerPlayerEntity player) {
-        if (RUNNING.containsKey(player.getUuid())) {
-            player.sendMessage(Text.translatable("msg.station_announcer.earthworks.busy"), true);
+        undo(player.getUuid(), player.getServerWorld(), text -> player.sendMessage(text, true));
+    }
+
+    /** Puts back the owner's last build (in that build's world, which must be {@code world}). */
+    public static void undo(UUID owner, ServerWorld world, java.util.function.Consumer<Text> feedback) {
+        if (RUNNING.containsKey(owner)) {
+            feedback.accept(Text.translatable("msg.station_announcer.earthworks.busy"));
             return;
         }
-        Undo undo = LAST.remove(player.getUuid());
+        Undo undo = LAST.remove(owner);
         if (undo == null) {
-            player.sendMessage(Text.translatable("msg.station_announcer.bridge.nothing_to_undo"), true);
+            feedback.accept(Text.translatable("msg.station_announcer.bridge.nothing_to_undo"));
             return;
         }
-        if (player.getServerWorld() != undo.world) {
-            LAST.put(player.getUuid(), undo);
-            player.sendMessage(Text.translatable("msg.station_announcer.bridge.undo_other_world"), true);
+        if (world != undo.world) {
+            LAST.put(owner, undo);
+            feedback.accept(Text.translatable("msg.station_announcer.bridge.undo_other_world"));
             return;
         }
         int n = undo.pos.length;
@@ -280,7 +356,7 @@ public final class EarthworksService {
             pos[i] = undo.pos[n - 1 - i];
             target[i] = undo.before[n - 1 - i];
         }
-        RUNNING.put(player.getUuid(), new Job(player.getUuid(), undo.world, pos, target, true, ""));
+        RUNNING.put(owner, new Job(owner, undo.world, pos, target, true, ""));
     }
 
     public static String itemId(EarthworksSpec.Kind kind) {

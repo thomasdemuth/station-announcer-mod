@@ -175,6 +175,8 @@ public final class MtrPidsClient {
         CurvedPlatformsClient.register();
         // Wayfinding: exit/place marker pins + their editors.
         WayfindingClient.register();
+        // Structure Sweeper: template list/cells, wand save screen + selection outline.
+        SweepClient.register();
 
         // The brush's full PIDS settings screen (the bare-click mini toggle
         // stays on the shared GUI opener below).
@@ -186,6 +188,8 @@ public final class MtrPidsClient {
                     client.setScreen(new BridgeCreatorScreen(hand, held));
                 } else if (held.getItem() instanceof com.stationannouncer.mtr.ItemEarthworksCreator earthworks) {
                     client.setScreen(new EarthworksScreen(hand, held, earthworks.kind));
+                } else if (held.getItem() instanceof com.stationannouncer.mtr.ItemStructureSweeper) {
+                    client.setScreen(new SweepScreen(hand, held));
                 } else {
                     client.setScreen(new CreatorSettingsScreen(hand, held));
                 }

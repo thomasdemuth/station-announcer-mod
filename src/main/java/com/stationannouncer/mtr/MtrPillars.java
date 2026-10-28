@@ -141,5 +141,6 @@ public final class MtrPillars {
         net.fabricmc.fabric.api.event.lifecycle.v1.ServerLifecycleEvents.SERVER_STOPPED.register(server -> BridgeService.clearAll());
         BridgeCommand.register();
         Earthworks.register();
+        Sweep.register();
     }
 }

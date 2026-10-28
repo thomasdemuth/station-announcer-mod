@@ -1,0 +1,23 @@
+{
+  "type": "minecraft:crafting_shaped",
+  "category": "tools",
+  "key": {
+    "B": {
+      "item": "minecraft:stone_bricks"
+    },
+    "R": {
+      "item": "minecraft:rail"
+    },
+    "C": {
+      "item": "minecraft:compass"
+    }
+  },
+  "pattern": [
+    "BRB",
+    " C "
+  ],
+  "result": {
+    "item": "station_announcer:structure_sweeper",
+    "count": 1
+  }
+}

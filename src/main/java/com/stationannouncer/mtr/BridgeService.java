@@ -330,6 +330,42 @@ public final class BridgeService {
         return null;
     }
 
+    /**
+     * The rail whose two ends are at these node positions (within a block),
+     * looked up in the world's simulator; the callback runs on the server
+     * thread with the rail or null. For callers without a player (MTR's own
+     * lookup wants one).
+     */
+    public static void findRail(ServerWorld world, BlockPos a, BlockPos b, Consumer<Rail> callback) {
+        Simulator simulator = simulatorFor(world);
+        MinecraftServer server = world.getServer();
+        if (simulator == null) {
+            callback.accept(null);
+            return;
+        }
+        simulator.run(() -> {
+            Rail found = null;
+            try {
+                for (Rail rail : simulator.railIdMap.values()) {
+                    RailMath m = rail.railMath;
+                    Vector p = m.getPosition(0, false), q = m.getPosition(m.getLength(), false);
+                    if ((near(p, a) && near(q, b)) || (near(p, b) && near(q, a))) {
+                        found = rail;
+                        break;
+                    }
+                }
+            } catch (Throwable t) {
+                StationAnnouncer.LOGGER.warn("Rail lookup failed", t);
+            }
+            Rail result = found;
+            server.execute(() -> callback.accept(result));
+        });
+    }
+
+    private static boolean near(Vector v, BlockPos pos) {
+        return Math.abs(v.x - (pos.getX() + 0.5)) <= 1.0 && Math.abs(v.y - pos.getY()) <= 1.5 && Math.abs(v.z - (pos.getZ() + 0.5)) <= 1.0;
+    }
+
     static boolean boxesOverlap(RailMath a, RailMath b, int reach) {
         return b.maxX >= a.minX - reach && b.minX <= a.maxX + reach
                 && b.maxZ >= a.minZ - reach && b.minZ <= a.maxZ + reach

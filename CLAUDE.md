@@ -50,6 +50,20 @@ rig's Gradle wrappers (and sometimes the JVMs) get SIGKILLed — forbid agents f
 entirely and check rig health after each one finishes; an orphaned JVM keeps serving but
 loses the console fifo.
 
+### STRUCTURE SWEEP (2026-10-21, redesigned 2026-10-27) — RELEASE 3.4.17 DEPLOYED to both profiles, client-verified on a scratch clone, uncommitted — READ `STRUCTURE_SWEEP_PLAN.md` §7–§8
+
+3.4.16 was "totally broken and hard to use" (capture needed a rail cell inside a box you could only click
+on blocks). Now: **Template Wand = two corners** (a block, or the air where you stand), save screen trims
+empty space; the template is a plain box with an AUTO-suggested rail column/level (rail node inside the
+box wins, else the deck top). **Structure Sweeper: click two rail nodes = PICK the track** → see-through
+ghost of the result on the real rails (client runs the same `SweepMapper`; `SweepGhostRenderer`) + a
+side panel over the world (turn 0/90/180/270, rail column/level with Auto, offsets, flip, repeat mode,
+legs, what empty cells dig) → Build sends the spec and the server builds along the SAME sampled polyline
+(preview == build). `/sweep pick|build|line|template capture <c1> <c2> trim|full <name>|…` work from the
+console. Shared earthworks applier (`EarthworksService.submit(UUID…)`). 3.4.17 also carries another
+session's uncommitted PA edits (PaSourceScreen/PaTemplates/PaText/PaTrains/TrainRowsEditor). Phases 2–6
+(ends, lanes, paint editor, truss, suspension) not started.
+
 ### MATERIAL SLAB / MIXED SLAB / WALL / FENCE (2026-10-21) — RELEASE 3.4.12 (commit 3ad42f9), brush orientation in 3.4.13 (DEPLOYED, committed); server-tested
 
 Thomas: "a block that can do any texture like stairs and ramps but as a slab, and for walls/fences", then "a block
@@ -974,6 +988,12 @@ destination first; FULL editor from day one; the old text signs migrate onto it.
   `num` 0..7 arrows, `SignSymbols.FIRST`(16)+i = wheelchair / ramp / elevator / escalator /
   stairs / do not enter / information / bus / train (`client/mtr/SignSymbols`, 100-unit
   glyphs on Surface primitives; no storage change). Rig-verified (screenshots 20:05–20:07).
+- **`{to:ROUTE}` inline token (2026-10-21)**: "⇒ Line destination" in the TEXT tile's Insert toolbar
+  picks a ROUTE (destination is per direction) and inserts `{to:<full route name>}`;
+  `SignLayout.expandDestinations` swaps it for the live destination (`SignContext.destination`, else the
+  direction wording, else the line name) inside `lines()`, BEFORE wrapping, so it wraps/shrinks like typed
+  text. Shipped in 3.4.15 (built from a clone of c929818 + the two sign files ONLY — the uncommitted
+  sweep work was NOT in it), deployed to both profiles 2026-10-21, uncommitted; not seen in game.
 - **Edit-from-any-tile fix (2026-09-25)**: `MtaSignPainter.signOwner` only redirected el_sign /
   el_wall_sign / el_railing_sign runs, so on `mta_sign(_half)`, `entrance_railing_sign` and
   `el_entrance_sign` a click on a non-owner cell edited THAT cell's sign, which the run never draws
